@@ -21,7 +21,8 @@ function main()
 logmsg("NGen started.")
 
 # BEGIN: Connect to SQLite database.
-dbpath = "C:\\temp\\TEMBA_datafile.sl3"
+# dbpath = "C:\\temp\\TEMBA_datafile.sl3"
+dbpath = "C:\\temp\\TEMBA_datafile_2010_only.sl3"
 # dbpath = "C:\\temp\\SAMBA_datafile.sl3"
 # dbpath = "C:\\temp\\utopia_2015_08_27.sl3"
 db = SQLite.DB(dbpath)
