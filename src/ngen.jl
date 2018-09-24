@@ -4,7 +4,7 @@ module NGen
 =#
 
 # BEGIN: Access other modules and code files.
-using JuMP, SQLite, DataFrames, NullableArrays, IterTools, DataStreams
+using JuMP, SQLite, DataFrames, NullableArrays, IterTools
 # using Clp
 # using Cbc
 using CPLEX
@@ -22,9 +22,9 @@ logmsg("NGen started.")
 
 # BEGIN: Connect to SQLite database.
 # dbpath = "C:\\temp\\TEMBA_datafile.sl3"
-dbpath = "C:\\temp\\TEMBA_datafile_2010_only.sl3"
+# dbpath = "C:\\temp\\TEMBA_datafile_2010_only.sl3"
 # dbpath = "C:\\temp\\SAMBA_datafile.sl3"
-# dbpath = "C:\\temp\\utopia_2015_08_27.sl3"
+dbpath = "C:\\temp\\utopia_2015_08_27.sl3"
 db = SQLite.DB(dbpath)
 logmsg("Connected to model database. Path = " * dbpath * ".")
 # END: Connect to SQLite database.
