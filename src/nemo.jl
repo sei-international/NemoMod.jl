@@ -1,4 +1,4 @@
-module Nemo
+module NemoMod
 #=
     Core module for NEMO: Next-generation Energy Modeling system for Optimization.
     https://github.com/sei-international/NEMO.jl
@@ -2181,4 +2181,4 @@ logmsg("Finished saving results to database.")
 logmsg("NEMO finished.")
 end  # main(dbpath::String, solver::String)
 
-end  # module Nemo
+end  # module NemoMod
