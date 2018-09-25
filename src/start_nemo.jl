@@ -37,7 +37,7 @@ function startnemo(dbpath::String, solver::String = "Cbc", numprocs::Int = Sys.C
     # END: Add worker processes.
 
     # BEGIN: Call main function for NEMO.
-    @everywhere include("nemo.jl")
+    @everywhere include("nemomod.jl")
 
     @time Nemo.main()
     # END: Call main function for NEMO.
