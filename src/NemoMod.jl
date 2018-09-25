@@ -2182,6 +2182,8 @@ logmsg("Finished saving results to database.")
 logmsg("NEMO finished.")
 end  # nemomain(dbpath::String, solver::String)
 
-end  # module NemoMod
+function __init__()
+    include("start_nemo.jl")
+end
 
-include("start_nemo.jl")
+end  # module NemoMod
