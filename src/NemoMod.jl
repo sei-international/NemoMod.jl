@@ -2216,8 +2216,7 @@ function startnemo(dbpath::String, solver::String = "Cbc", numprocs::Int = Sys.C
     # END: Add worker processes.
 
     # BEGIN: Call main function for NEMO.
-    using NemoMod
-    # @everywhere include("NemoMod.jl")  # Note that @everywhere loads file in Main module on all processes
+    @everywhere include(joinpath(Pkg.dir(), "NemoMod\\src\\NemoMod.jl"))  # Note that @everywhere loads file in Main module on all processes
 
     @time NemoMod.nemomain(dbpath, solver)
     # END: Call main function for NEMO.
