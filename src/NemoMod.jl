@@ -2226,6 +2226,7 @@ function __init__()
 
         @time NemoMod.nemomain(dbpath, solver)
         # END: Call main function for NEMO.
+    end
 end
 
 end  # module NemoMod
