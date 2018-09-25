@@ -1,4 +1,4 @@
-# Custom types that implement DataStreams.Data.Source interface - used for streaming results into NGen database.
+# Custom types that implement DataStreams.Data.Source interface - used for streaming results into NEMO database.
 
 # BEGIN: Source type for JuMP data containers.
 struct jumpsource <: Data.Source
@@ -123,6 +123,6 @@ An interesting implementation of the DataStreams source interface for JuMP, but 
 function savevarresultsds(vars::Array{JuMP.JuMPContainer,1}, modelvarindices::Dict{JuMP.JuMPContainer, Tuple{String,Array{String,1}}}, db::SQLite.DB)
     for v in vars
         # Need to modify code to capture variable name
-        SQLite.load(db, modelvarindices[v][1], NGen.jumpsource(JuMP.getvalue(v), modelvarindices[v][2]))
+        SQLite.load(db, modelvarindices[v][1], NEMO.jumpsource(JuMP.getvalue(v), modelvarindices[v][2]))
     end
 end  # savevarresultsds(vars::Array{JuMP.JuMPContainer,1}, modelvarindices::Dict{JuMP.JuMPContainer, Tuple{String,Array{String,1}}}, db::SQLite.DB)

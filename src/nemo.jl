@@ -1,38 +1,42 @@
-module NGen
+module Nemo
 #=
-    Core module for next-generation model. For now, it's just replicating OSeMOSYS (version 2017_11_08).
+    Core module for NEMO: Next-generation Energy Modeling system for Optimization.
+    https://github.com/sei-international/NEMO.jl
+
+    Copyright © 2018: Stockholm Environment Institute.
+
+    Release 0.1:  Reproduction of OSeMOSYS version 2017_11_08.  http://www.osemosys.org/
 =#
 
 # BEGIN: Access other modules and code files.
 using JuMP, SQLite, DataFrames, NullableArrays, IterTools
-# using Clp
-# using Cbc
-using CPLEX
+using Cbc, CPLEX
 
-include("ngen_functions.jl")  # Contains NGen functions
+include("nemo_functions.jl")  # Contains NEMO functions
 # END: Access other modules and code files.
 
-"""Runs NGen model."""
-function main()
-# Lines within main() are not indented since the function comprises all other code in this file. To make
-# an otherwise local variable visible outside the function, prefix it with global. For JuMP constraint
-# references, create a new global variable and assign to it the constraint reference.
+"""Runs NEMO for a single set of inputs (a scenario). Arguments:
+    • dbpath - Path to SQLite database for scenario to be modeled.
+    • solver - Name of solver to be used (currently, CPLEX or Cbc).
+Normally called from startnemo function in start_nemo.jl."""
+function main(dbpath::String, solver::String)
+# Lines within main() are not indented since the function is so lengthy. To make an otherwise local
+# variable visible outside the function, prefix it with global. For JuMP constraint references,
+# create a new global variable and assign to it the constraint reference.
 
-logmsg("NGen started.")
+logmsg("NEMO started.")
 
 # BEGIN: Connect to SQLite database.
-# dbpath = "C:\\temp\\TEMBA_datafile.sl3"
-# dbpath = "C:\\temp\\TEMBA_datafile_2010_only.sl3"
-# dbpath = "C:\\temp\\SAMBA_datafile.sl3"
-dbpath = "C:\\temp\\utopia_2015_08_27.sl3"
 db = SQLite.DB(dbpath)
 logmsg("Connected to model database. Path = " * dbpath * ".")
 # END: Connect to SQLite database.
 
 # Instantiate JuMP model
-# global model = Model(solver = CbcSolver(threads = nprocs(), logLevel = 1))
-# global model = Model(solver = ClpSolver(LogLevel = 4, SolveType = 5))
-global model = Model(solver = CplexSolver())
+if solver == "Cbc"
+    global model = Model(solver = CbcSolver(threads = nprocs(), logLevel = 1))
+elseif solver == "CPLEX"
+    global model = Model(solver = CplexSolver())
+end
 
 # BEGIN: Create parameter views showing default values.
 createviewwithdefaults(db, ["OutputActivityRatio", "InputActivityRatio", "ResidualCapacity", "OperationalLife", "FixedCost", "YearSplit", "SpecifiedAnnualDemand", "SpecifiedDemandProfile", "VariableCost", "DiscountRate", "CapitalCost", "CapitalCostStorage", "CapacityFactor", "CapacityToActivityUnit", "CapacityOfOneTechnologyUnit", "AvailabilityFactor", "TradeRoute", "TechnologyToStorage", "Conversionls",
@@ -65,7 +69,7 @@ logmsg("Defined OSeMOSYS sets.")
 # END: Define OSeMOSYS sets.
 
 # BEGIN: Define OSeMOSYS variables.
-modelvarindices::Dict{JuMP.JuMPContainer, Tuple{String,Array{String,1}}} = Dict{JuMP.JuMPContainer, Tuple{String,Array{String,1}}}()  # Dictionary mapping model variables to tuples of (variable name, [index column names]); must have an entry here in order to save variable's results back to NGen database
+modelvarindices::Dict{JuMP.JuMPContainer, Tuple{String,Array{String,1}}} = Dict{JuMP.JuMPContainer, Tuple{String,Array{String,1}}}()  # Dictionary mapping model variables to tuples of (variable name, [index column names]); must have an entry here in order to save variable's results back to NEMO database
 
 # Demands
 @variable(model, vrateofdemand[sregion, stimeslice, sfuel, syear] >= 0)
@@ -2174,7 +2178,7 @@ savevarresults(Array{JuMP.JuMPContainer,1}([vdemand, vproduction, vuse, vtrade, 
 logmsg("Finished saving results to database.")
 # END: Save results to database.
 
-logmsg("NGen finished.")
-end  # main()
+logmsg("NEMO finished.")
+end  # main(dbpath::String, solver::String)
 
-end  # module NGen
+end  # module Nemo

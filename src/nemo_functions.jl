@@ -187,6 +187,7 @@ m = Model()
 @variable(m, vtest[stechnology])
 createconstraint(m, "TestConstraint", abc, eachrow(SQLite.query(db, "select t.val as t from technology t limit 10")), ["t"], "vtest[t]", ">=", "0")
 =#
+
 # Demonstration function - performance is too poor for production use
 function createconstraint(model::JuMP.Model, logname::String, constraintref::Array{JuMP.ConstraintRef,1}, rows::DataFrames.DFRowIterator,
     keyfields::Array{String,1}, lh::String, operator::String, rh::String)
