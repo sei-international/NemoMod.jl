@@ -1,7 +1,8 @@
 julia 0.6 0.7-
 JuMP
 SQLite
-DataFrames 0.10.1
-NullableArrays
-IterTools
+DataFrames
+# NullableArrays
+# IterTools
 CPLEX
+Cbc

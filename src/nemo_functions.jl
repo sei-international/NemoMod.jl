@@ -48,13 +48,13 @@ function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
 
         # BEGIN: Extract foreign key fields and default value from t.
         for row in eachrow(SQLite.query(db, "PRAGMA table_info('" * t *"')"))
-            local rowname::String = get(row[:name])  # Value in name field for row
+            local rowname::String = row[:name]  # Value in name field for row
 
             if rowname == "id"
                 continue
             elseif rowname == "val"
-                if !isnull(row[:dflt_value])
-                    defaultval = get(row[:dflt_value])
+                if !ismissing(row[:dflt_value])
+                    defaultval = row[:dflt_value]
 
                     # Some special handling here to avoid creating large views where they're not necessary, given OSeMOSYS's logic
                     if (t == "OutputActivityRatio" || t == "InputActivityRatio") && defaultval == "0"
@@ -127,11 +127,11 @@ function keydicts(df::DataFrames.DataFrame, numdicts::Int)
     # Populate dictionaries using df
     for row in eachrow(df)
         for j in 1:numdicts
-            if !haskey(returnval[j], [get(row[k]) for k = 1:j])
-                returnval[j][[get(row[k]) for k = 1:j]] = Set{String}()
+            if !haskey(returnval[j], [row[k] for k = 1:j])
+                returnval[j][[row[k] for k = 1:j]] = Set{String}()
             end
 
-            push!(returnval[j][[get(row[k]) for k = 1:j]], get(row[j+1]))
+            push!(returnval[j][[row[k] for k = 1:j]], row[j+1])
         end
     end
 
@@ -199,7 +199,7 @@ function createconstraint(model::JuMP.Model, logname::String, constraintref::Arr
         row = rw
 
         for kf in keyfields
-            eval(parse(kf * " = get(row[:" * kf * "])"))
+            eval(parse(kf * " = row[:" * kf * "]"))
         end
 
         if operator == "=="
@@ -269,7 +269,7 @@ end  # savevarresults(vars::Array{JuMP.JuMPContainer,1}, modelvarindices::Dict{J
 """Drops all tables in db whose name begins with "v" or "sqlite_stat" (both case-sensitive)."""
 function dropresulttables(db::SQLite.DB)
     for row in eachrow(SQLite.tables(db))
-        local name = get(row[:name])
+        local name = row[:name]
 
         if name[1:1] == "v" || (length(name) >= 11 && name[1:11] == "sqlite_stat")
             SQLite.execute!(db, "drop table " * name)
@@ -321,44 +321,3 @@ function startnemo(dbpath::String, solver::String = "Cbc", numprocs::Int = Sys.C
     @time NemoMod.nemomain(dbpath, solver)
     # END: Call main function for NEMO.
 end  # startnemo(dbpath::String, solver::String = "Cbc", numprocs::Int = Sys.CPU_CORES)
-
-"""Clone of startnemo function that runs NEMO using a local copy of NemoMod.jl (i.e., a copy at pwd())."""
-function startnemolocal(dbpath::String, solver::String = "Cbc", numprocs::Int = Sys.CPU_CORES)
-    # Note: Sys.CPU_CORES has been renamed to Sys.CPU_THREADS in Julia 1.0
-
-    # Sample paths
-    # dbpath = "C:\\temp\\TEMBA_datafile.sl3"
-    # dbpath = "C:\\temp\\TEMBA_datafile_2010_only.sl3"
-    # dbpath = "C:\\temp\\SAMBA_datafile.sl3"
-    # dbpath = "C:\\temp\\utopia_2015_08_27.sl3"
-
-    # BEGIN: Parameter validation.
-    if !ispath(dbpath)
-        error("dbpath must refer to a valid file system path.")
-    end
-
-    if uppercase(solver) == "CPLEX"
-        solver = "CPLEX"
-    elseif uppercase(solver) == "CBC"
-        solver = "Cbc"
-    else
-        error("Requested solver (" * solver * ") is not supported.")
-    end
-
-    if numprocs < 1
-        error("numprocs must be >= 1.")
-    end
-    # END: Parameter validation.
-
-    # BEGIN: Add worker processes.
-    while nprocs() < numprocs
-        addprocs(1)
-    end
-    # END: Add worker processes.
-
-    # BEGIN: Call main function for NEMO.
-    @everywhere include("NemoMod.jl")  # Note that @everywhere loads file in Main module on all processes
-
-    @time NemoMod.nemomain(dbpath, solver)
-    # END: Call main function for NEMO.
-end  # startnemolocal()

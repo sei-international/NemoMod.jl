@@ -8,18 +8,16 @@ module NemoMod
     Copyright © 2018: Stockholm Environment Institute.
 
     Release 0.1:  Reproduction of OSeMOSYS version 2017_11_08.  http://www.osemosys.org/
-
 =#
 
 # BEGIN: Access other modules and code files.
-using JuMP, SQLite, DataFrames, NullableArrays, IterTools, Cbc, CPLEX
+using JuMP, SQLite, DataFrames, Cbc, CPLEX
 include("nemo_functions.jl")  # Contains NEMO functions
 # END: Access other modules and code files.
 
 """Runs NEMO for a single set of inputs (a scenario). Arguments:
     • dbpath - Path to SQLite database for scenario to be modeled.
-    • solver - Name of solver to be used (currently, CPLEX or Cbc).
-Normally called from startnemo function in start_nemo.jl."""
+    • solver - Name of solver to be used (currently, CPLEX or Cbc)."""
 function nemomain(dbpath::String, solver::String)
 # Lines within nemomain() are not indented since the function is so lengthy. To make an otherwise local
 # variable visible outside the function, prefix it with global. For JuMP constraint references,
@@ -52,19 +50,19 @@ logmsg("Created parameter views.")
 
 # BEGIN: Define OSeMOSYS sets.
 # Query results are DataFrame variables; data in DataFrame are Nullables
-syear = dropnull(SQLite.query(db, "select val from YEAR order by val")[:val])  # YEAR set
-stechnology = dropnull(SQLite.query(db, "select val from TECHNOLOGY")[:val])  # TECHNOLOGY set
-stimeslice = dropnull(SQLite.query(db, "select val from TIMESLICE")[:val])  # TIMESLICE set
-sfuel = dropnull(SQLite.query(db, "select val from FUEL")[:val])  # FUEL set
-semission = dropnull(SQLite.query(db, "select val from EMISSION")[:val])  # EMISSION set
-smode_of_operation = dropnull(SQLite.query(db, "select val from MODE_OF_OPERATION")[:val])  # MODE_OF_OPERATION set
-sregion = dropnull(SQLite.query(db, "select val from REGION")[:val])  # REGION set
-sseason = dropnull(SQLite.query(db, "select val from SEASON order by val")[:val])  # SEASON set
-sdaytype = dropnull(SQLite.query(db, "select val from DAYTYPE order by val")[:val])  # DAYTYPE set
-sdailytimebracket = dropnull(SQLite.query(db, "select val from DAILYTIMEBRACKET")[:val])  # DAILYTIMEBRACKET set
+syear = [v for v = skipmissing(SQLite.query(db, "select val from YEAR order by val")[:val])]  # YEAR set
+stechnology = [v for v = skipmissing(SQLite.query(db, "select val from TECHNOLOGY")[:val])]  # TECHNOLOGY set
+stimeslice = [v for v = skipmissing(SQLite.query(db, "select val from TIMESLICE")[:val])]  # TIMESLICE set
+sfuel = [v for v = skipmissing(SQLite.query(db, "select val from FUEL")[:val])]  # FUEL set
+semission = [v for v = skipmissing(SQLite.query(db, "select val from EMISSION")[:val])]  # EMISSION set
+smode_of_operation = [v for v = skipmissing(SQLite.query(db, "select val from MODE_OF_OPERATION")[:val])]  # MODE_OF_OPERATION set
+sregion = [v for v = skipmissing(SQLite.query(db, "select val from REGION")[:val])]  # REGION set
+sseason = [v for v = skipmissing(SQLite.query(db, "select val from SEASON order by val")[:val])]  # SEASON set
+sdaytype = [v for v = skipmissing(SQLite.query(db, "select val from DAYTYPE order by val")[:val])]  # DAYTYPE set
+sdailytimebracket = [v for v = skipmissing(SQLite.query(db, "select val from DAILYTIMEBRACKET")[:val])]  # DAILYTIMEBRACKET set
 # FLEXIBLEDEMANDTYPE not used in Utopia example; substitute empty value
 sflexibledemandtype = Array{String,1}()  # FLEXIBLEDEMANDTYPE set
-sstorage = dropnull(SQLite.query(db, "select val from STORAGE")[:val])  # STORAGE set
+sstorage = [v for v = skipmissing(SQLite.query(db, "select val from STORAGE")[:val])]  # STORAGE set
 
 logmsg("Defined OSeMOSYS sets.")
 # END: Define OSeMOSYS sets.
@@ -165,7 +163,6 @@ indexdicts = keydicts_parallel(queryvrateofproductionbytechnology,4)  # Array of
 
 @variable(model, vproductionbytechnology[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
     f=indexdicts[3][[r,l,t]], y=indexdicts[4][[r,l,t,f]]] >= 0)
-modelvarindices[vproductionbytechnology] = ("vproductionbytechnology", ["r","l","t","f","y"])
 
 # la included because it's needed for some later constraints based on this query
 queryproductionbytechnologyannual = SQLite.query(db, "select r.val as r, t.val as t, f.val as f, y.val as y, group_concat(distinct l.val) as la
@@ -178,11 +175,9 @@ indexdicts = keydicts_parallel(queryproductionbytechnologyannual,3)  # Array of 
 
 @variable(model, vproductionbytechnologyannual[r=[k[1] for k = keys(indexdicts[1])], t=indexdicts[1][[r]], f=indexdicts[2][[r,t]],
     y=indexdicts[3][[r,t,f]]] >= 0)
-modelvarindices[vproductionbytechnologyannual] = ("vproductionbytechnologyannual", ["r","t","f","y"])
 
 @variable(model, vrateofproduction[sregion, stimeslice, sfuel, syear] >= 0)
 @variable(model, vproduction[sregion, stimeslice, sfuel, syear] >= 0)
-modelvarindices[vproduction] = ("vproduction", ["r","l","f","y"])
 
 queryvrateofusebytechnologybymode = SQLite.query(db, "select r.val as r, l.val as l, t.val as t, m.val as m, f.val as f, y.val as y, cast(iar.val as real) as iar
 from region r, timeslice l, technology t, MODE_OF_OPERATION m, fuel f, year y, InputActivityRatio_def iar
@@ -209,7 +204,6 @@ indexdicts = keydicts_parallel(queryvrateofusebytechnology,4)  # Array of Dicts 
 
 @variable(model, vusebytechnology[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
     f=indexdicts[3][[r,l,t]], y=indexdicts[4][[r,l,t,f]]] >= 0)
-modelvarindices[vusebytechnology] = ("vusebytechnology", ["r","l","t","f","y"])
 
 indexdicts = keydicts_parallel(SQLite.query(db, "select r.val as r, t.val as t, f.val as f, y.val as y
 from REGION r, TECHNOLOGY t, FUEL f, YEAR y, InputActivityRatio_def iar
@@ -314,26 +308,6 @@ logmsg("Defined emissions variables.")
 logmsg("Finished defining model variables.")
 # END: Define OSeMOSYS variables.
 
-# BEGIN: Unpack OSeMOSYS parameters.
-#= poperationallife = buildparam(SQLite.query(db, "select * from OperationalLife"), 2)
-presidualcapacity = buildparam(SQLite.query(db, "select * from ResidualCapacity"), 3)
-pcapacityfactor = buildparam(SQLite.query(db, "select * from CapacityFactor"), 4)
-pcapacitytoactivityunit = buildparam(SQLite.query(db, "select * from CapacityToActivityUnit"), 2)
-pyearsplit = buildparam(SQLite.query(db, "select * from YearSplit"), 2)
-pavailabilityfactor = buildparam(SQLite.query(db, "select * from AvailabilityFactor"), 3)
-poutputactivityratio = buildparam(SQLite.query(db, "select * from OutputActivityRatio"), 5)
-pinputactivityratio = buildparam(SQLite.query(db, "select * from InputActivityRatio"), 5)
-pspecifiedannualdemand = buildparam(SQLite.query(db, "select * from SpecifiedAnnualDemand"), 3)
-pspecifieddemandprofile = buildparam(SQLite.query(db, "select * from SpecifiedDemandProfile"), 4)
-paccumulatedannualdemand = buildparam(SQLite.query(db, "select * from AccumulatedAnnualDemand"), 3)
-pconversionls = buildparam(SQLite.query(db, "select * from Conversionls"), 2)
-pconversionld = buildparam(SQLite.query(db, "select * from Conversionld"), 2)
-pconversionlh = buildparam(SQLite.query(db, "select * from Conversionlh"), 2)
-ptechnologytostorage = buildparam(SQLite.query(db, "select * from TechnologyToStorage"), 4)
-ptechnologyfromstorage = buildparam(SQLite.query(db, "select * from TechnologyFromStorage"), 4)
-=#
-# END: Unpack OSeMOSYS parameters.
-
 # BEGIN: Define OSeMOSYS constraints.
 
 # BEGIN: EQ_SpecifiedDemand.
@@ -348,9 +322,8 @@ where sad.r = sdp.r and sad.f = sdp.f and sad.y = sdp.y
 and ys.l = sdp.l and ys.y = sdp.y")
 
 for row in eachrow(queryvrateofdemand)
-
-    ceq_specifieddemand[constraintnum] = @constraint(model, get(row[:specifiedannualdemand]) * get(row[:specifieddemandprofile]) / get(row[:ys])
-        == vrateofdemand[get(row[:r]), get(row[:l]), get(row[:f]), get(row[:y])])
+    ceq_specifieddemand[constraintnum] = @constraint(model, row[:specifiedannualdemand] * row[:specifieddemandprofile] / row[:ys]
+        == vrateofdemand[row[:r], row[:l], row[:f], row[:y]])
     constraintnum += 1
 end
 
@@ -366,11 +339,11 @@ from REGION r, TECHNOLOGY t, YEAR y, OperationalLife_def ol, YEAR yy
 where ol.r = r.val and ol.t = t.val
 and y.val - yy.val < ol.val and y.val - yy.val >=0
 group by r.val, t.val, y.val"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
 
-    caa1_totalnewcapacity[constraintnum] = @constraint(model, sum([vnewcapacity[r,t,yy] for yy = split(get(row[:yya]), ",")])
+    caa1_totalnewcapacity[constraintnum] = @constraint(model, sum([vnewcapacity[r,t,yy] for yy = split(row[:yya], ",")])
         == vaccumulatednewcapacity[r,t,y])
     constraintnum += 1
 end
@@ -385,10 +358,10 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db,"select r.val as r, t.val as t, y.val as y, cast(rc.val as real) as rc
 from REGION r, TECHNOLOGY t, YEAR y
 left join ResidualCapacity_def rc on rc.r = r.val and rc.t = t.val and rc.y = y.val"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
-    local rc = isnull(row[:rc]) ? 0 : get(row[:rc])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
+    local rc = ismissing(row[:rc]) ? 0 : row[:rc]
 
     caa2_totalannualcapacity[constraintnum] = @constraint(model, vaccumulatednewcapacity[r,t,y] + rc == vtotalcapacityannual[r,t,y])
     constraintnum += 1
@@ -401,7 +374,7 @@ logmsg("Created constraint CAa2_TotalAnnualCapacity.")
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref caa3_totalactivityofeachtechnology[1:length(sregion) * length(stechnology) * length(stimeslice) * length(syear)]
 
-for (r, t, l, y) in product(sregion, stechnology, stimeslice, syear)
+for (r, t, l, y) in Base.product(sregion, stechnology, stimeslice, syear)
     caa3_totalactivityofeachtechnology[constraintnum] = @constraint(model, sum([vrateofactivity[r,l,t,m,y] for m = smode_of_operation])
         == vrateoftotalactivity[r,t,l,y])
     constraintnum += 1
@@ -419,13 +392,13 @@ for row in eachrow(SQLite.query(db,"select r.val as r, l.val as l, t.val as t, y
 from REGION r, TIMESLICE l, TECHNOLOGY t, YEAR y, CapacityFactor_def cf, CapacityToActivityUnit_def cta
 where cf.r = r.val and cf.t = t.val and cf.l = l.val and cf.y = y.val
 and cta.r = r.val and cta.t = t.val"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local l = get(row[:l])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local l = row[:l]
+    local y = row[:y]
 
     caa4_constraint_capacity[constraintnum] = @constraint(model, vrateoftotalactivity[r,t,l,y]
-        <= vtotalcapacityannual[r,t,y] * get(row[:cf]) * get(row[:cta]))
+        <= vtotalcapacityannual[r,t,y] * row[:cf] * row[:cta])
     constraintnum += 1
 end
 
@@ -438,11 +411,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 for row in eachrow(SQLite.query(db,"select cot.r as r, cot.t as t, cot.y as y, cast(cot.val as real) as cot
 from CapacityOfOneTechnologyUnit_def cot where cot.val <> 0"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
 
-    caa5_totalnewcapacity[constraintnum] = @constraint(model, get(row[:cot]) * vnumberofnewtechnologyunits[r,t,y]
+    caa5_totalnewcapacity[constraintnum] = @constraint(model, row[:cot] * vnumberofnewtechnologyunits[r,t,y]
         == vnewcapacity[r,t,y])
     constraintnum += 1
 end
@@ -467,13 +440,13 @@ and cf.r = r.val and cf.t = t.val and cf.y = y.val
 and af.r = r.val and af.t = t.val and af.y = y.val
 and cta.r = r.val and cta.t = t.val
 group by r.val, t.val, y.val"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
 
-    cab1_plannedmaintenance[constraintnum] = @constraint(model, sum([vrateoftotalactivity[r,t,split(ys,";")[1],y] * parse(split(ys,";")[2]) for ys = split(get(row[:ysa]), ",")])
-        <= sum([vtotalcapacityannual[r,t,y] * parse(split(cf,";")[1]) * parse(split(cf,";")[2]) for cf = split(get(row[:cfa]), ",")])
-        * get(row[:af]) * get(row[:cta]))
+    cab1_plannedmaintenance[constraintnum] = @constraint(model, sum([vrateoftotalactivity[r,t,split(ys,";")[1],y] * parse(split(ys,";")[2]) for ys = split(row[:ysa], ",")])
+        <= sum([vtotalcapacityannual[r,t,y] * parse(split(cf,";")[1]) * parse(split(cf,";")[2]) for cf = split(row[:cfa], ",")])
+        * row[:af] * row[:cta])
     constraintnum += 1
 end
 
@@ -485,14 +458,14 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba1_rateoffuelproduction1[1:size(queryvrateofproductionbytechnologybymode)[1]]
 
 for row in eachrow(queryvrateofproductionbytechnologybymode)
-    local r = get(row[:r])
-    local l = get(row[:l])
-    local t = get(row[:t])
-    local m = get(row[:m])
-    local f = get(row[:f])
-    local y = get(row[:y])
+    local r = row[:r]
+    local l = row[:l]
+    local t = row[:t]
+    local m = row[:m]
+    local f = row[:f]
+    local y = row[:y]
 
-    eba1_rateoffuelproduction1[constraintnum] = @constraint(model, vrateofactivity[r,l,t,m,y] * get(row[:oar]) == vrateofproductionbytechnologybymode[r,l,t,m,f,y])
+    eba1_rateoffuelproduction1[constraintnum] = @constraint(model, vrateofactivity[r,l,t,m,y] * row[:oar] == vrateofproductionbytechnologybymode[r,l,t,m,f,y])
     constraintnum += 1
 end
 
@@ -504,11 +477,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba2_rateoffuelproduction2[1:size(queryvrateofproductionbytechnology)[1]]
 
 for row in eachrow(queryvrateofproductionbytechnology)
-    local r = get(row[:r])
-    local l = get(row[:l])
-    local t = get(row[:t])
-    local f = get(row[:f])
-    local y = get(row[:y])
+    local r = row[:r]
+    local l = row[:l]
+    local t = row[:t]
+    local f = row[:f]
+    local y = row[:y]
 
     # vrateofproductionbytechnologybymode is JuMP.JuMPDict because it was defined with triangular indexing
     eba2_rateoffuelproduction2[constraintnum] = @constraint(model, sum([(haskey(vrateofproductionbytechnologybymode.tupledict, (r,l,t,m,f,y)) ? vrateofproductionbytechnologybymode[r,l,t,m,f,y] : 0) for m = smode_of_operation]) == vrateofproductionbytechnology[r,l,t,f,y])
@@ -532,12 +505,12 @@ left join YearSplit_def ys on ys.l = rpt.l and ys.y = rpt.y
 group by rpt.r, rpt.l, rpt.f, rpt.y, ys")
 
 for row in eachrow(queryvrateofproduction)
-    local r = get(row[:r])
-    local l = get(row[:l])
-    local f = get(row[:f])
-    local y = get(row[:y])
+    local r = row[:r]
+    local l = row[:l]
+    local f = row[:f]
+    local y = row[:y]
 
-    eba3_rateoffuelproduction3[constraintnum] = @constraint(model, sum([vrateofproductionbytechnology[r,l,t,f,y] for t = split(get(row[:ta]), ",")]) == vrateofproduction[r,l,f,y])
+    eba3_rateoffuelproduction3[constraintnum] = @constraint(model, sum([vrateofproductionbytechnology[r,l,t,f,y] for t = split(row[:ta], ",")]) == vrateofproduction[r,l,f,y])
     constraintnum += 1
 end
 
@@ -549,14 +522,14 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba4_rateoffueluse1[1:size(queryvrateofusebytechnologybymode)[1]]
 
 for row in eachrow(queryvrateofusebytechnologybymode)
-    local r = get(row[:r])
-    local l = get(row[:l])
-    local f = get(row[:f])
-    local t = get(row[:t])
-    local m = get(row[:m])
-    local y = get(row[:y])
+    local r = row[:r]
+    local l = row[:l]
+    local f = row[:f]
+    local t = row[:t]
+    local m = row[:m]
+    local y = row[:y]
 
-    eba4_rateoffueluse1[constraintnum] = @constraint(model, vrateofactivity[r,l,t,m,y] * get(row[:iar]) == vrateofusebytechnologybymode[r,l,t,m,f,y])
+    eba4_rateoffueluse1[constraintnum] = @constraint(model, vrateofactivity[r,l,t,m,y] * row[:iar] == vrateofusebytechnologybymode[r,l,t,m,f,y])
     constraintnum += 1
 end
 
@@ -568,11 +541,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba5_rateoffueluse2[1:size(queryvrateofusebytechnology)[1]]
 
 for row in eachrow(queryvrateofusebytechnology)
-    local r = get(row[:r])
-    local l = get(row[:l])
-    local f = get(row[:f])
-    local t = get(row[:t])
-    local y = get(row[:y])
+    local r = row[:r]
+    local l = row[:l]
+    local f = row[:f]
+    local t = row[:t]
+    local y = row[:y]
 
     # vrateofusebytechnologybymode is JuMP.JuMPDict because it was defined with triangular indexing
     eba5_rateoffueluse2[constraintnum] = @constraint(model, sum([(haskey(vrateofusebytechnologybymode.tupledict, (r,l,t,m,f,y)) ? vrateofusebytechnologybymode[r,l,t,m,f,y] : 0) for m = smode_of_operation]) == vrateofusebytechnology[r,l,t,f,y])
@@ -597,12 +570,12 @@ group by rut.r, rut.l, rut.f, rut.y, ys")
 @constraintref eba6_rateoffueluse3[1:size(queryvrateofuse)[1]]
 
 for row in eachrow(queryvrateofuse)
-    local r = get(row[:r])
-    local l = get(row[:l])
-    local f = get(row[:f])
-    local y = get(row[:y])
+    local r = row[:r]
+    local l = row[:l]
+    local f = row[:f]
+    local y = row[:y]
 
-    eba6_rateoffueluse3[constraintnum] = @constraint(model, sum([vrateofusebytechnology[r,l,t,f,y] for t = split(get(row[:ta]), ",")]) == vrateofuse[r,l,f,y])
+    eba6_rateoffueluse3[constraintnum] = @constraint(model, sum([vrateofusebytechnology[r,l,t,f,y] for t = split(row[:ta], ",")]) == vrateofuse[r,l,f,y])
     constraintnum += 1
 end
 
@@ -614,13 +587,13 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba7_energybalanceeachts1[1:size(queryvrateofproduction)[1]]
 
 for row in eachrow(queryvrateofproduction)
-    local r = get(row[:r])
-    local l = get(row[:l])
-    local f = get(row[:f])
-    local y = get(row[:y])
+    local r = row[:r]
+    local l = row[:l]
+    local f = row[:f]
+    local y = row[:y]
 
-    if !isnull(get(row[:ys]))
-        eba7_energybalanceeachts1[constraintnum] = @constraint(model, vrateofproduction[r,l,f,y] * get(row[:ys]) == vproduction[r,l,f,y])
+    if !ismissing(row[:ys])
+        eba7_energybalanceeachts1[constraintnum] = @constraint(model, vrateofproduction[r,l,f,y] * row[:ys] == vproduction[r,l,f,y])
         constraintnum += 1
     end
 end
@@ -633,13 +606,13 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba8_energybalanceeachts2[1:size(queryvrateofuse)[1]]
 
 for row in eachrow(queryvrateofuse)
-    local r = get(row[:r])
-    local l = get(row[:l])
-    local f = get(row[:f])
-    local y = get(row[:y])
+    local r = row[:r]
+    local l = row[:l]
+    local f = row[:f]
+    local y = row[:y]
 
-    if !isnull(get(row[:ys]))
-        eba8_energybalanceeachts2[constraintnum] = @constraint(model, vrateofuse[r,l,f,y] * get(row[:ys]) == vuse[r,l,f,y])
+    if !ismissing(row[:ys])
+        eba8_energybalanceeachts2[constraintnum] = @constraint(model, vrateofuse[r,l,f,y] * row[:ys] == vuse[r,l,f,y])
         constraintnum += 1
     end
 end
@@ -652,12 +625,12 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba9_energybalanceeachts3[1:size(queryvrateofdemand)[1]]
 
 for row in eachrow(queryvrateofdemand)
-    local r = get(row[:r])
-    local l = get(row[:l])
-    local f = get(row[:f])
-    local y = get(row[:y])
+    local r = row[:r]
+    local l = row[:l]
+    local f = row[:f]
+    local y = row[:y]
 
-    eba9_energybalanceeachts3[constraintnum] = @constraint(model, vrateofdemand[r,l,f,y] * get(row[:ys]) == vdemand[r,l,f,y])
+    eba9_energybalanceeachts3[constraintnum] = @constraint(model, vrateofdemand[r,l,f,y] * row[:ys] == vdemand[r,l,f,y])
     constraintnum += 1
 end
 
@@ -668,7 +641,7 @@ logmsg("Created constraint EBa9_EnergyBalanceEachTS3.")
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba10_energybalanceeachts4[1:length(sregion)^2 * length(stimeslice) * length(sfuel) * length(syear)]
 
-for (r, rr, l, f, y) in product(sregion, sregion, stimeslice, sfuel, syear)
+for (r, rr, l, f, y) in Base.product(sregion, sregion, stimeslice, sfuel, syear)
     eba10_energybalanceeachts4[constraintnum] = @constraint(model, vtrade[r,rr,l,f,y] == -vtrade[rr,r,l,f,y])
     constraintnum += 1
 end
@@ -684,13 +657,13 @@ for row in eachrow(SQLite.query(db, "select r.val as r, l.val as l, f.val as f, 
 from region r, timeslice l, fuel f, year y
 left join traderoute_def tr on tr.r = r.val and tr.f = f.val and tr.y = y.val
 group by r.val, l.val, f.val, y.val"))
-    local r = get(row[:r])
-    local l = get(row[:l])
-    local f = get(row[:f])
-    local y = get(row[:y])
+    local r = row[:r]
+    local l = row[:l]
+    local f = row[:f]
+    local y = row[:y]
 
     eba11_energybalanceeachts5[constraintnum] = @constraint(model, vproduction[r,l,f,y] >= vdemand[r,l,f,y] + vuse[r,l,f,y] +
-        (isnull(row[:tra]) ? 0 : sum([vtrade[r,split(tr,";")[1],l,f,y] * parse(split(tr,";")[2]) for tr = split(get(row[:tra]), ",")])))
+        (ismissing(row[:tra]) ? 0 : sum([vtrade[r,split(tr,";")[1],l,f,y] * parse(split(tr,";")[2]) for tr = split(row[:tra], ",")])))
     constraintnum += 1
 end
 
@@ -701,7 +674,7 @@ logmsg("Created constraint EBa11_EnergyBalanceEachTS5.")
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref ebb1_energybalanceeachyear1[1:length(sregion) * length(sfuel) * length(syear)]
 
-for (r, f, y) in product(sregion, sfuel, syear)
+for (r, f, y) in Base.product(sregion, sfuel, syear)
     ebb1_energybalanceeachyear1[constraintnum] = @constraint(model, sum([vproduction[r,l,f,y] for l = stimeslice]) == vproductionannual[r,f,y])
     constraintnum += 1
 end
@@ -713,7 +686,7 @@ logmsg("Created constraint EBb1_EnergyBalanceEachYear1.")
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref ebb2_energybalanceeachyear2[1:length(sregion) * length(sfuel) * length(syear)]
 
-for (r, f, y) in product(sregion, sfuel, syear)
+for (r, f, y) in Base.product(sregion, sfuel, syear)
     ebb2_energybalanceeachyear2[constraintnum] = @constraint(model, sum([vuse[r,l,f,y] for l = stimeslice]) == vuseannual[r,f,y])
     constraintnum += 1
 end
@@ -725,7 +698,7 @@ logmsg("Created constraint EBb2_EnergyBalanceEachYear2.")
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref ebb3_energybalanceeachyear3[1:length(sregion) * length(sfuel) * length(syear)]
 
-for (r, rr, f, y) in product(sregion, sregion, sfuel, syear)
+for (r, rr, f, y) in Base.product(sregion, sregion, sfuel, syear)
     ebb3_energybalanceeachyear3[constraintnum] = @constraint(model, sum([vtrade[r,rr,l,f,y] for l = stimeslice]) == vtradeannual[r,rr,f,y])
     constraintnum += 1
 end
@@ -743,13 +716,13 @@ from region r, fuel f, year y
 left join traderoute_def tr on tr.r = r.val and tr.f = f.val and tr.y = y.val
 left join AccumulatedAnnualDemand_def aad on aad.r = r.val and aad.f = f.val and aad.y = y.val
 group by r.val, f.val, y.val, aad"))
-    local r = get(row[:r])
-    local f = get(row[:f])
-    local y = get(row[:y])
+    local r = row[:r]
+    local f = row[:f]
+    local y = row[:y]
 
     ebb4_energybalanceeachyear4[constraintnum] = @constraint(model, vproductionannual[r,f,y] >= vuseannual[r,f,y] +
-        (isnull(row[:tra]) ? 0 : sum([vtradeannual[r,split(tr,";")[1],f,y] * parse(split(tr,";")[2]) for tr = split(get(row[:tra]), ",")])) +
-        (isnull(row[:aad]) ? 0 : get(row[:aad])))
+        (ismissing(row[:tra]) ? 0 : sum([vtradeannual[r,split(tr,";")[1],f,y] * parse(split(tr,";")[2]) for tr = split(row[:tra], ",")])) +
+        (ismissing(row[:aad]) ? 0 : row[:aad]))
     constraintnum += 1
 end
 
@@ -761,14 +734,14 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref acc1_fuelproductionbytechnology[1:size(queryvrateofproductionbytechnology)[1]]
 
 for row in eachrow(queryvrateofproductionbytechnology)
-    local r = get(row[:r])
-    local l = get(row[:l])
-    local t = get(row[:t])
-    local f = get(row[:f])
-    local y = get(row[:y])
+    local r = row[:r]
+    local l = row[:l]
+    local t = row[:t]
+    local f = row[:f]
+    local y = row[:y]
 
-    if !isnull(row[:ys])
-        acc1_fuelproductionbytechnology[constraintnum] = @constraint(model, vrateofproductionbytechnology[r,l,t,f,y] * get(row[:ys]) == vproductionbytechnology[r,l,t,f,y])
+    if !ismissing(row[:ys])
+        acc1_fuelproductionbytechnology[constraintnum] = @constraint(model, vrateofproductionbytechnology[r,l,t,f,y] * row[:ys] == vproductionbytechnology[r,l,t,f,y])
         constraintnum += 1
     end
 end
@@ -781,14 +754,14 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref acc2_fuelusebytechnology[1:size(queryvrateofusebytechnology)[1]]
 
 for row in eachrow(queryvrateofusebytechnology)
-    local r = get(row[:r])
-    local l = get(row[:l])
-    local t = get(row[:t])
-    local f = get(row[:f])
-    local y = get(row[:y])
+    local r = row[:r]
+    local l = row[:l]
+    local t = row[:t]
+    local f = row[:f]
+    local y = row[:y]
 
-    if !isnull(row[:ys])
-        acc2_fuelusebytechnology[constraintnum] = @constraint(model, vrateofusebytechnology[r,l,t,f,y] * get(row[:ys]) == vusebytechnology[r,l,t,f,y])
+    if !ismissing(row[:ys])
+        acc2_fuelusebytechnology[constraintnum] = @constraint(model, vrateofusebytechnology[r,l,t,f,y] * row[:ys] == vusebytechnology[r,l,t,f,y])
         constraintnum += 1
     end
 end
@@ -804,12 +777,12 @@ for row in eachrow(SQLite.query(db, "select r.val as r, t.val as t, m.val as m, 
 from region r, technology t, mode_of_operation m, year y, timeslice l, YearSplit_def ys
 where ys.l = l.val and ys.y = y.val
 group by r.val, t.val, m.val, y.val"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local m = get(row[:m])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local m = row[:m]
+    local y = row[:y]
 
-    acc3_averageannualrateofactivity[constraintnum] = @constraint(model, sum([vrateofactivity[r,split(l,";")[1],t,m,y] * parse(split(l,";")[2]) for l = split(get(row[:la]), ",")]) == vtotalannualtechnologyactivitybymode[r,t,m,y])
+    acc3_averageannualrateofactivity[constraintnum] = @constraint(model, sum([vrateofactivity[r,split(l,";")[1],t,m,y] * parse(split(l,";")[2]) for l = split(row[:la], ",")]) == vtotalannualtechnologyactivitybymode[r,t,m,y])
     constraintnum += 1
 end
 
@@ -842,14 +815,14 @@ and cls.l = l.val and cls.ls = ls.val
 and cld.l = l.val and cld.ld = ld.val
 and clh.l = l.val and clh.lh = lh.val
 group by r.val, s.val, ls.val, ld.val, lh.val, y.val"))
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local ls = get(row[:ls])
-    local ld = get(row[:ld])
-    local lh = get(row[:lh])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local ls = row[:ls]
+    local ld = row[:ld]
+    local lh = row[:lh]
+    local y = row[:y]
 
-    s1_rateofstoragecharge[constraintnum] = @constraint(model, sum([vrateofactivity[r,split(i,";")[3],split(i,";")[1],split(i,";")[2],y] * parse(split(i,";")[4]) for i = split(get(row[:ia]), ",")]) == vrateofstoragecharge[r,s,ls,ld,lh,y])
+    s1_rateofstoragecharge[constraintnum] = @constraint(model, sum([vrateofactivity[r,split(i,";")[3],split(i,";")[1],split(i,";")[2],y] * parse(split(i,";")[4]) for i = split(row[:ia], ",")]) == vrateofstoragecharge[r,s,ls,ld,lh,y])
     constraintnum += 1
 end
 
@@ -870,14 +843,14 @@ and cls.l = l.val and cls.ls = ls.val
 and cld.l = l.val and cld.ld = ld.val
 and clh.l = l.val and clh.lh = lh.val
 group by r.val, s.val, ls.val, ld.val, lh.val, y.val"))
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local ls = get(row[:ls])
-    local ld = get(row[:ld])
-    local lh = get(row[:lh])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local ls = row[:ls]
+    local ld = row[:ld]
+    local lh = row[:lh]
+    local y = row[:y]
 
-    s2_rateofstoragedischarge[constraintnum] = @constraint(model, sum([vrateofactivity[r,split(i,";")[3],split(i,";")[1],split(i,";")[2],y] * parse(split(i,";")[4]) for i = split(get(row[:ia]), ",")]) == vrateofstoragedischarge[r,s,ls,ld,lh,y])
+    s2_rateofstoragedischarge[constraintnum] = @constraint(model, sum([vrateofactivity[r,split(i,";")[3],split(i,";")[1],split(i,";")[2],y] * parse(split(i,";")[4]) for i = split(row[:ia], ",")]) == vrateofstoragedischarge[r,s,ls,ld,lh,y])
     constraintnum += 1
 end
 
@@ -897,14 +870,14 @@ and cls.l = l.val and cls.ls = ls.val and cls.val > 0
 and cld.l = l.val and cld.ld = ld.val and cld.val > 0
 and clh.l = l.val and clh.lh = lh.val and clh.val > 0
 group by r.val, s.val, ls.val, ld.val, lh.val, y.val"))
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local ls = get(row[:ls])
-    local ld = get(row[:ld])
-    local lh = get(row[:lh])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local ls = row[:ls]
+    local ld = row[:ld]
+    local lh = row[:lh]
+    local y = row[:y]
 
-    s3_netchargewithinyear[constraintnum] = @constraint(model, (vrateofstoragecharge[r,s,ls,ld,lh,y] - vrateofstoragedischarge[r,s,ls,ld,lh,y]) * sum([parse(i) for i = split(get(row[:ia]), ",")]) == vnetchargewithinyear[r,s,ls,ld,lh,y])
+    s3_netchargewithinyear[constraintnum] = @constraint(model, (vrateofstoragecharge[r,s,ls,ld,lh,y] - vrateofstoragedischarge[r,s,ls,ld,lh,y]) * sum([parse(i) for i = split(row[:ia], ",")]) == vnetchargewithinyear[r,s,ls,ld,lh,y])
     constraintnum += 1
 end
 
@@ -918,14 +891,14 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y, cast(ds.val as real) as ds
 from region r, storage s, season ls, daytype ld, dailytimebracket lh, year y, daysplit_def ds
 where ds.lh = lh.val and ds.y = y.val"))
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local ls = get(row[:ls])
-    local ld = get(row[:ld])
-    local lh = get(row[:lh])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local ls = row[:ls]
+    local ld = row[:ld]
+    local lh = row[:lh]
+    local y = row[:y]
 
-    s4_netchargewithinday[constraintnum] = @constraint(model, (vrateofstoragecharge[r,s,ls,ld,lh,y] - vrateofstoragedischarge[r,s,ls,ld,lh,y]) * get(row[:ds]) == vnetchargewithinday[r,s,ls,ld,lh,y])
+    s4_netchargewithinday[constraintnum] = @constraint(model, (vrateofstoragecharge[r,s,ls,ld,lh,y] - vrateofstoragedischarge[r,s,ls,ld,lh,y]) * row[:ds] == vnetchargewithinday[r,s,ls,ld,lh,y])
     constraintnum += 1
 end
 
@@ -939,11 +912,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(sls.val as real) as sls
 from region r, storage s, year y, StorageLevelStart_def sls
 where sls.r = r.val and sls.s = s.val"))
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local y = row[:y]
 
-    s5_and_s6_storagelevelyearstart[constraintnum] = @constraint(model, (y == first(syear) ? get(row[:sls]) : vstoragelevelyearstart[r,s,string(parse(y)-1)] + sum([vnetchargewithinyear[r,s,ls,ld,lh,string(parse(y)-1)] for ls = sseason, ld = sdaytype, lh = sdailytimebracket])) == vstoragelevelyearstart[r,s,y])
+    s5_and_s6_storagelevelyearstart[constraintnum] = @constraint(model, (y == first(syear) ? row[:sls] : vstoragelevelyearstart[r,s,string(parse(y)-1)] + sum([vnetchargewithinyear[r,s,ls,ld,lh,string(parse(y)-1)] for ls = sseason, ld = sdaytype, lh = sdailytimebracket])) == vstoragelevelyearstart[r,s,y])
     constraintnum += 1
 end
 
@@ -954,7 +927,7 @@ logmsg("Created constraint S5_and_S6_StorageLevelYearStart.")
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref s7_and_s8_storagelevelyearfinish[1:length(sregion) * length(sstorage) * length(syear)]
 
-for (r, s, y) in product(sregion, sstorage, syear)
+for (r, s, y) in Base.product(sregion, sstorage, syear)
     s7_and_s8_storagelevelyearfinish[constraintnum] = @constraint(model, (y < last(syear) ? vstoragelevelyearstart[r,s,string(parse(y)+1)] : vstoragelevelyearstart[r,s,y] + sum([vnetchargewithinyear[r,s,ls,ld,lh,y] for ls = sseason, ld = sdaytype, lh = sdailytimebracket])) == vstoragelevelyearfinish[r,s,y])
     constraintnum += 1
 end
@@ -966,7 +939,7 @@ logmsg("Created constraint S7_and_S8_StorageLevelYearFinish.")
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref s9_and_s10_storagelevelseasonstart[1:length(sregion) * length(sstorage) * length(sseason) * length(syear)]
 
-for (r, s, ls, y) in product(sregion, sstorage, sseason, syear)
+for (r, s, ls, y) in Base.product(sregion, sstorage, sseason, syear)
     s9_and_s10_storagelevelseasonstart[constraintnum] = @constraint(model, (ls == first(sseason) ? vstoragelevelyearstart[r,s,y] : vstoragelevelseasonstart[r,s,string(parse(ls)-1),y] + sum([vnetchargewithinyear[r,s,string(parse(ls)-1),ld,lh,y] for ld = sdaytype, lh = sdailytimebracket])) == vstoragelevelseasonstart[r,s,ls,y])
     constraintnum += 1
 end
@@ -981,13 +954,13 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, y.val as y, cast(did.val as real) as did
 from region r, storage s, season ls, daytype ld, year y
 left join DaysInDayType_def did on did.ls = ls.val and did.ld = ld.val - 1 and did.y = y.val"))
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local ls = get(row[:ls])
-    local ld = get(row[:ld])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local ls = row[:ls]
+    local ld = row[:ld]
+    local y = row[:y]
 
-    s11_and_s12_storageleveldaytypestart[constraintnum] = @constraint(model, (ld == first(sdaytype) ? vstoragelevelseasonstart[r,s,ls,y] : vstorageleveldaytypestart[r,s,ls,string(parse(ld)-1),y] + sum([vnetchargewithinday[r,s,ls,string(parse(ld)-1),lh,y] * get(row[:did]) for lh = sdailytimebracket])) == vstorageleveldaytypestart[r,s,ls,ld,y])
+    s11_and_s12_storageleveldaytypestart[constraintnum] = @constraint(model, (ld == first(sdaytype) ? vstoragelevelseasonstart[r,s,ls,y] : vstorageleveldaytypestart[r,s,ls,string(parse(ld)-1),y] + sum([vnetchargewithinday[r,s,ls,string(parse(ld)-1),lh,y] * row[:did] for lh = sdailytimebracket])) == vstorageleveldaytypestart[r,s,ls,ld,y])
     constraintnum += 1
 end
 
@@ -1001,13 +974,13 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, y.val as y, cast(did.val as real) as did
 from region r, storage s, season ls, daytype ld, year y
 left join DaysInDayType_def did on did.ls = ls.val and did.ld = ld.val + 1 and did.y = y.val"))
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local ls = get(row[:ls])
-    local ld = get(row[:ld])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local ls = row[:ls]
+    local ld = row[:ld]
+    local y = row[:y]
 
-    s13_and_s14_and_s15_storageleveldaytypefinish[constraintnum] = @constraint(model, (ls == last(sseason) && ld == last(sdaytype) ? vstoragelevelyearfinish[r,s,y] : (ld == last(sdaytype) ? vstoragelevelseasonstart[r,s,string(parse(ls)+1),y] : vstorageleveldaytypefinish[r,s,ls,string(parse(ld)+1),y] - sum([vnetchargewithinday[r,s,ls,string(parse(ld)+1),lh,y] * get(row[:did]) for lh = sdailytimebracket]))) == vstorageleveldaytypefinish[r,s,ls,ld,y])
+    s13_and_s14_and_s15_storageleveldaytypefinish[constraintnum] = @constraint(model, (ls == last(sseason) && ld == last(sdaytype) ? vstoragelevelyearfinish[r,s,y] : (ld == last(sdaytype) ? vstoragelevelseasonstart[r,s,string(parse(ls)+1),y] : vstorageleveldaytypefinish[r,s,ls,string(parse(ld)+1),y] - sum([vnetchargewithinday[r,s,ls,string(parse(ld)+1),lh,y] * row[:did] for lh = sdailytimebracket]))) == vstorageleveldaytypefinish[r,s,ls,ld,y])
     constraintnum += 1
 end
 
@@ -1026,14 +999,14 @@ left join dailytimebracket lhlh on lh.val > lhlh.val
 group by r.val, s.val, ls.val, ld.val, lh.val, y.val")
 
 for row in eachrow(querysc1)
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local ls = get(row[:ls])
-    local ld = get(row[:ld])
-    local lh = get(row[:lh])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local ls = row[:ls]
+    local ld = row[:ld]
+    local lh = row[:lh]
+    local y = row[:y]
 
-    sc1_lowerlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(model, 0 <= vstorageleveldaytypestart[r,s,ls,ld,y] + (isnull(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(get(row[:lhlha]), ",")])) - vstoragelowerlimit[r,s,y])
+    sc1_lowerlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(model, 0 <= vstorageleveldaytypestart[r,s,ls,ld,y] + (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstoragelowerlimit[r,s,y])
     constraintnum += 1
 end
 
@@ -1046,14 +1019,14 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref sc1_upperlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinfirstweekconstraint[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
 
 for row in eachrow(querysc1)
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local ls = get(row[:ls])
-    local ld = get(row[:ld])
-    local lh = get(row[:lh])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local ls = row[:ls]
+    local ld = row[:ld]
+    local lh = row[:lh]
+    local y = row[:y]
 
-    sc1_upperlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(model, vstorageleveldaytypestart[r,s,ls,ld,y] + (isnull(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(get(row[:lhlha]), ",")])) - vstorageupperlimit[r,s,y] <= 0)
+    sc1_upperlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(model, vstorageleveldaytypestart[r,s,ls,ld,y] + (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstorageupperlimit[r,s,y] <= 0)
     constraintnum += 1
 end
 
@@ -1073,14 +1046,14 @@ where ld.val > (select min(val) from daytype)
 group by r.val, s.val, ls.val, ld.val, lh.val, y.val")
 
 for row in eachrow(querysc2)
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local ls = get(row[:ls])
-    local ld = get(row[:ld])
-    local lh = get(row[:lh])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local ls = row[:ls]
+    local ld = row[:ld]
+    local lh = row[:lh]
+    local y = row[:y]
 
-    sc2_lowerlimit_endofdailytimebracketoflastinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(model, 0 <= vstorageleveldaytypestart[r,s,ls,ld,y] - (isnull(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,string(parse(ld)-1),lhlh,y] for lhlh = split(get(row[:lhlha]), ",")])) - vstoragelowerlimit[r,s,y])
+    sc2_lowerlimit_endofdailytimebracketoflastinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(model, 0 <= vstorageleveldaytypestart[r,s,ls,ld,y] - (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,string(parse(ld)-1),lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstoragelowerlimit[r,s,y])
     constraintnum += 1
 end
 
@@ -1093,14 +1066,14 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref sc2_upperlimit_endofdailytimebracketoflastinstanceofdaytypeinfirstweekconstraint[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
 
 for row in eachrow(querysc2)
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local ls = get(row[:ls])
-    local ld = get(row[:ld])
-    local lh = get(row[:lh])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local ls = row[:ls]
+    local ld = row[:ld]
+    local lh = row[:lh]
+    local y = row[:y]
 
-    sc2_upperlimit_endofdailytimebracketoflastinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(model, vstorageleveldaytypestart[r,s,ls,ld,y] - (isnull(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,string(parse(ld)-1),lhlh,y] for lhlh = split(get(row[:lhlha]), ",")])) - vstorageupperlimit[r,s,y] <= 0)
+    sc2_upperlimit_endofdailytimebracketoflastinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(model, vstorageleveldaytypestart[r,s,ls,ld,y] - (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,string(parse(ld)-1),lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstorageupperlimit[r,s,y] <= 0)
     constraintnum += 1
 end
 
@@ -1119,14 +1092,14 @@ left join dailytimebracket lhlh on lh.val < lhlh.val
 group by r.val, s.val, ls.val, ld.val, lh.val, y.val")
 
 for row in eachrow(querysc3)
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local ls = get(row[:ls])
-    local ld = get(row[:ld])
-    local lh = get(row[:lh])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local ls = row[:ls]
+    local ld = row[:ld]
+    local lh = row[:lh]
+    local y = row[:y]
 
-    sc3_lowerlimit_endofdailytimebracketoflastinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(model, 0 <= vstorageleveldaytypefinish[r,s,ls,ld,y] - (isnull(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(get(row[:lhlha]), ",")])) - vstoragelowerlimit[r,s,y])
+    sc3_lowerlimit_endofdailytimebracketoflastinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(model, 0 <= vstorageleveldaytypefinish[r,s,ls,ld,y] - (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstoragelowerlimit[r,s,y])
     constraintnum += 1
 end
 
@@ -1139,14 +1112,14 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref sc3_upperlimit_endofdailytimebracketoflastinstanceofdaytypeinlastweekconstraint[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
 
 for row in eachrow(querysc3)
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local ls = get(row[:ls])
-    local ld = get(row[:ld])
-    local lh = get(row[:lh])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local ls = row[:ls]
+    local ld = row[:ld]
+    local lh = row[:lh]
+    local y = row[:y]
 
-    sc3_upperlimit_endofdailytimebracketoflastinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(model, vstorageleveldaytypefinish[r,s,ls,ld,y] - (isnull(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(get(row[:lhlha]), ",")])) - vstorageupperlimit[r,s,y] <= 0)
+    sc3_upperlimit_endofdailytimebracketoflastinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(model, vstorageleveldaytypefinish[r,s,ls,ld,y] - (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstorageupperlimit[r,s,y] <= 0)
     constraintnum += 1
 end
 
@@ -1166,14 +1139,14 @@ where ld.val > (select min(val) from daytype)
 group by r.val, s.val, ls.val, ld.val, lh.val, y.val")
 
 for row in eachrow(querysc4)
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local ls = get(row[:ls])
-    local ld = get(row[:ld])
-    local lh = get(row[:lh])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local ls = row[:ls]
+    local ld = row[:ld]
+    local lh = row[:lh]
+    local y = row[:y]
 
-    sc4_lowerlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(model, 0 <= vstorageleveldaytypefinish[r,s,ls,string(parse(ld)-1),y] + (isnull(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(get(row[:lhlha]), ",")])) - vstoragelowerlimit[r,s,y])
+    sc4_lowerlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(model, 0 <= vstorageleveldaytypefinish[r,s,ls,string(parse(ld)-1),y] + (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstoragelowerlimit[r,s,y])
     constraintnum += 1
 end
 
@@ -1186,14 +1159,14 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref sc4_upperlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinlastweekconstraint[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
 
 for row in eachrow(querysc4)
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local ls = get(row[:ls])
-    local ld = get(row[:ld])
-    local lh = get(row[:lh])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local ls = row[:ls]
+    local ld = row[:ld]
+    local lh = row[:lh]
+    local y = row[:y]
 
-    sc4_upperlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(model, vstorageleveldaytypefinish[r,s,ls,string(parse(ld)-1),y] + (isnull(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(get(row[:lhlha]), ",")])) - vstorageupperlimit[r,s,y] <= 0)
+    sc4_upperlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(model, vstorageleveldaytypefinish[r,s,ls,string(parse(ld)-1),y] + (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstorageupperlimit[r,s,y] <= 0)
     constraintnum += 1
 end
 
@@ -1208,14 +1181,14 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y, cast(smx.val as real) as smx
 from region r, storage s, season ls, daytype ld, dailytimebracket lh, year y, StorageMaxChargeRate_def smx
 where smx.r = r.val and smx.s = s.val"))
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local ls = get(row[:ls])
-    local ld = get(row[:ld])
-    local lh = get(row[:lh])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local ls = row[:ls]
+    local ld = row[:ld]
+    local lh = row[:lh]
+    local y = row[:y]
 
-    sc5_maxchargeconstraint[constraintnum] = @constraint(model, vrateofstoragecharge[r,s,ls,ld,lh,y] <= get(row[:smx]))
+    sc5_maxchargeconstraint[constraintnum] = @constraint(model, vrateofstoragecharge[r,s,ls,ld,lh,y] <= row[:smx])
     constraintnum += 1
 end
 
@@ -1230,14 +1203,14 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y, cast(smx.val as real) as smx
 from region r, storage s, season ls, daytype ld, dailytimebracket lh, year y, StorageMaxDischargeRate_def smx
 where smx.r = r.val and smx.s = s.val"))
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local ls = get(row[:ls])
-    local ld = get(row[:ld])
-    local lh = get(row[:lh])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local ls = row[:ls]
+    local ld = row[:ld]
+    local lh = row[:lh]
+    local y = row[:y]
 
-    sc6_maxdischargeconstraint[constraintnum] = @constraint(model, vrateofstoragedischarge[r,s,ls,ld,lh,y] <= get(row[:smx]))
+    sc6_maxdischargeconstraint[constraintnum] = @constraint(model, vrateofstoragedischarge[r,s,ls,ld,lh,y] <= row[:smx])
     constraintnum += 1
 end
 
@@ -1252,11 +1225,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(rsc.val as real) as rsc
 from region r, storage s, year y
 left join ResidualStorageCapacity_def rsc on rsc.r = r.val and rsc.s = s.val and rsc.y = y.val"))
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local y = row[:y]
 
-    si1_storageupperlimit[constraintnum] = @constraint(model, vaccumulatednewstoragecapacity[r,s,y] + (isnull(row[:rsc]) ? 0 : get(row[:rsc])) == vstorageupperlimit[r,s,y])
+    si1_storageupperlimit[constraintnum] = @constraint(model, vaccumulatednewstoragecapacity[r,s,y] + (ismissing(row[:rsc]) ? 0 : row[:rsc]) == vstorageupperlimit[r,s,y])
     constraintnum += 1
 end
 
@@ -1271,11 +1244,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(msc.val as real) as msc
 from region r, storage s, year y, MinStorageCharge_def msc
 where msc.r = r.val and msc.s = s.val and msc.y = y.val"))
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local y = row[:y]
 
-    si2_storagelowerlimit[constraintnum] = @constraint(model, get(row[:msc]) * vstorageupperlimit[r,s,y] == vstoragelowerlimit[r,s,y])
+    si2_storagelowerlimit[constraintnum] = @constraint(model, row[:msc] * vstorageupperlimit[r,s,y] == vstoragelowerlimit[r,s,y])
     constraintnum += 1
 end
 
@@ -1292,11 +1265,11 @@ from region r, storage s, year y, OperationalLifeStorage_def ols, year yy
 where ols.r = r.val and ols.s = s.val
 and y.val - yy.val < ols.val and y.val - yy.val >= 0
 group by r.val, s.val, y.val"))
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local y = row[:y]
 
-    si3_totalnewstorage[constraintnum] = @constraint(model, sum([vnewstoragecapacity[r,s,yy] for yy = split(get(row[:yya]), ",")]) == vaccumulatednewstoragecapacity[r,s,y])
+    si3_totalnewstorage[constraintnum] = @constraint(model, sum([vnewstoragecapacity[r,s,yy] for yy = split(row[:yya], ",")]) == vaccumulatednewstoragecapacity[r,s,y])
     constraintnum += 1
 end
 
@@ -1311,11 +1284,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(ccs.val as real) as ccs
 from region r, storage s, year y, CapitalCostStorage_def ccs
 where ccs.r = r.val and ccs.s = s.val and ccs.y = y.val"))
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local y = row[:y]
 
-    si4_undiscountedcapitalinvestmentstorage[constraintnum] = @constraint(model, get(row[:ccs]) * vnewstoragecapacity[r,s,y] == vcapitalinvestmentstorage[r,s,y])
+    si4_undiscountedcapitalinvestmentstorage[constraintnum] = @constraint(model, row[:ccs] * vnewstoragecapacity[r,s,y] == vcapitalinvestmentstorage[r,s,y])
     constraintnum += 1
 end
 
@@ -1330,11 +1303,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr
 from region r, storage s, year y, DiscountRate_def dr
 where dr.r = r.val"))
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local y = row[:y]
 
-    si5_discountingcapitalinvestmentstorage[constraintnum] = @constraint(model, vcapitalinvestmentstorage[r,s,y] / ((1 + get(row[:dr]))^(parse(y) - parse(first(syear)))) == vdiscountedcapitalinvestmentstorage[r,s,y])
+    si5_discountingcapitalinvestmentstorage[constraintnum] = @constraint(model, vcapitalinvestmentstorage[r,s,y] / ((1 + row[:dr])^(parse(y) - parse(first(syear)))) == vdiscountedcapitalinvestmentstorage[r,s,y])
     constraintnum += 1
 end
 
@@ -1350,9 +1323,9 @@ for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y
 from region r, storage s, year y, OperationalLifeStorage_def ols
 where ols.r = r.val and ols.s = s.val
 and y.val + ols.val - 1 <= " * last(syear)))
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local y = row[:y]
 
     si6_salvagevaluestorageatendofperiod1[constraintnum] = @constraint(model, 0 == vsalvagevaluestorage[r,s,y])
     constraintnum += 1
@@ -1378,11 +1351,11 @@ from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStor
 where dm.r = r.val and dm.val = 2
 and ols.r = r.val and ols.s = s.val
 and y.val + ols.val - 1 > " * last(syear)))
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local y = row[:y]
 
-    si7_salvagevaluestorageatendofperiod2[constraintnum] = @constraint(model, vcapitalinvestmentstorage[r,s,y] * (1 - (parse(last(syear)) - parse(y) + 1) / get(row[:ols])) == vsalvagevaluestorage[r,s,y])
+    si7_salvagevaluestorageatendofperiod2[constraintnum] = @constraint(model, vcapitalinvestmentstorage[r,s,y] * (1 - (parse(last(syear)) - parse(y) + 1) / row[:ols]) == vsalvagevaluestorage[r,s,y])
     constraintnum += 1
 end
 
@@ -1400,12 +1373,12 @@ where dm.r = r.val and dm.val = 1
 and ols.r = r.val and ols.s = s.val
 and y.val + ols.val - 1 > " * last(syear) *
 " and dr.r = r.val and dr.val > 0"))
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local y = get(row[:y])
-    local dr = get(row[:dr])
+    local r = row[:r]
+    local s = row[:s]
+    local y = row[:y]
+    local dr = row[:dr]
 
-    si8_salvagevaluestorageatendofperiod3[constraintnum] = @constraint(model, vcapitalinvestmentstorage[r,s,y] * (1 - (((1 + dr)^(parse(last(syear)) - parse(y) + 1) - 1) / ((1 + dr)^(get(row[:ols])) - 1))) == vsalvagevaluestorage[r,s,y])
+    si8_salvagevaluestorageatendofperiod3[constraintnum] = @constraint(model, vcapitalinvestmentstorage[r,s,y] * (1 - (((1 + dr)^(parse(last(syear)) - parse(y) + 1) - 1) / ((1 + dr)^(row[:ols]) - 1))) == vsalvagevaluestorage[r,s,y])
     constraintnum += 1
 end
 
@@ -1420,11 +1393,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr
 from region r, storage s, year y, DiscountRate_def dr
 where dr.r = r.val"))
-    local r = get(row[:r])
-    local s = get(row[:s])
-    local y = get(row[:y])
+    local r = row[:r]
+    local s = row[:s]
+    local y = row[:y]
 
-    si9_salvagevaluestoragediscountedtostartyear[constraintnum] = @constraint(model, vsalvagevaluestorage[r,s,y] / ((1 + get(row[:dr]))^(parse(last(syear)) - parse(first(syear)) + 1)) == vdiscountedsalvagevaluestorage[r,s,y])
+    si9_salvagevaluestoragediscountedtostartyear[constraintnum] = @constraint(model, vsalvagevaluestorage[r,s,y] / ((1 + row[:dr])^(parse(last(syear)) - parse(first(syear)) + 1)) == vdiscountedsalvagevaluestorage[r,s,y])
     constraintnum += 1
 end
 
@@ -1435,7 +1408,7 @@ logmsg("Created constraint SI9_SalvageValueStorageDiscountedToStartYear.")
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref si10_totaldiscountedcostbystorage[1:length(sregion) * length(sstorage) * length(syear)]
 
-for (r, s, y) in product(sregion, sstorage, syear)
+for (r, s, y) in Base.product(sregion, sstorage, syear)
     si10_totaldiscountedcostbystorage[constraintnum] = @constraint(model, vdiscountedcapitalinvestmentstorage[r,s,y] - vdiscountedsalvagevaluestorage[r,s,y] == vtotaldiscountedstoragecost[r,s,y])
     constraintnum += 1
 end
@@ -1451,11 +1424,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc
 from region r, technology t, year y, CapitalCost_def cc
 where cc.r = r.val and cc.t = t.val and cc.y = y.val"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
 
-    cc1_undiscountedcapitalinvestment[constraintnum] = @constraint(model, get(row[:cc]) * vnewcapacity[r,t,y] == vcapitalinvestment[r,t,y])
+    cc1_undiscountedcapitalinvestment[constraintnum] = @constraint(model, row[:cc] * vnewcapacity[r,t,y] == vcapitalinvestment[r,t,y])
     constraintnum += 1
 end
 
@@ -1472,11 +1445,11 @@ where dr.r = r.val")
 @constraintref cc2_discountingcapitalinvestment[1:size(queryrtydr)[1]]
 
 for row in eachrow(queryrtydr)
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
 
-    cc2_discountingcapitalinvestment[constraintnum] = @constraint(model, vcapitalinvestment[r,t,y] / ((1 + get(row[:dr]))^(parse(y) - parse(first(syear)))) == vdiscountedcapitalinvestment[r,t,y])
+    cc2_discountingcapitalinvestment[constraintnum] = @constraint(model, vcapitalinvestment[r,t,y] / ((1 + row[:dr])^(parse(y) - parse(first(syear)))) == vdiscountedcapitalinvestment[r,t,y])
     constraintnum += 1
 end
 
@@ -1497,12 +1470,12 @@ and ol.r = r.val and ol.t = t.val
 and y.val + ol.val - 1 > " * last(syear) *
 " and dr.r = r.val and dr.val > 0
 and cc.r = r.val and cc.t = t.val and cc.y = y.val"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
-    local dr = get(row[:dr])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
+    local dr = row[:dr]
 
-    sv1_salvagevalueatendofperiod1[constraintnum] = @constraint(model, vsalvagevalue[r,t,y] == get(row[:cc]) * vnewcapacity[r,t,y] * (1 - (((1 + dr)^(parse(last(syear)) - parse(y) + 1) - 1) / ((1 + dr)^(get(row[:ol])) - 1))))
+    sv1_salvagevalueatendofperiod1[constraintnum] = @constraint(model, vsalvagevalue[r,t,y] == row[:cc] * vnewcapacity[r,t,y] * (1 - (((1 + dr)^(parse(last(syear)) - parse(y) + 1) - 1) / ((1 + dr)^(row[:ol]) - 1))))
     constraintnum += 1
 end
 
@@ -1530,11 +1503,11 @@ where dm.r = r.val and dm.val = 2
 and ol.r = r.val and ol.t = t.val
 and y.val + ol.val - 1 > " * last(syear) *
 " and cc.r = r.val and cc.t = t.val and cc.y = y.val"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
 
-    sv2_salvagevalueatendofperiod2[constraintnum] = @constraint(model, vsalvagevalue[r,t,y] == get(row[:cc]) * vnewcapacity[r,t,y] * (1 - (parse(last(syear)) - parse(y) + 1) / get(row[:ol])))
+    sv2_salvagevalueatendofperiod2[constraintnum] = @constraint(model, vsalvagevalue[r,t,y] == row[:cc] * vnewcapacity[r,t,y] * (1 - (parse(last(syear)) - parse(y) + 1) / row[:ol]))
     constraintnum += 1
 end
 
@@ -1550,9 +1523,9 @@ for row in eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y
 from region r, technology t, year y, OperationalLife_def ol
 where ol.r = r.val and ol.t = t.val
 and y.val + ol.val - 1 <= " * last(syear)))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
 
     sv3_salvagevalueatendofperiod3[constraintnum] = @constraint(model, vsalvagevalue[r,t,y] == 0)
     constraintnum += 1
@@ -1567,11 +1540,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref sv4_salvagevaluediscountedtostartyear[1:size(queryrtydr)[1]]
 
 for row in eachrow(queryrtydr)
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
 
-    sv4_salvagevaluediscountedtostartyear[constraintnum] = @constraint(model, vdiscountedsalvagevalue[r,t,y] == vsalvagevalue[r,t,y] / ((1 + get(row[:dr]))^(1 + parse(last(syear)) - parse(first(syear)))))
+    sv4_salvagevaluediscountedtostartyear[constraintnum] = @constraint(model, vdiscountedsalvagevalue[r,t,y] == vsalvagevalue[r,t,y] / ((1 + row[:dr])^(1 + parse(last(syear)) - parse(first(syear)))))
     constraintnum += 1
 end
 
@@ -1587,11 +1560,11 @@ for row in eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, 
 from region r, technology t, year y, mode_of_operation m, VariableCost_def vc
 where vc.r = r.val and vc.t = t.val and vc.m = m.val and vc.y = y.val
 group by r.val, t.val, y.val"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
 
-    oc1_operatingcostsvariable[constraintnum] = @constraint(model, sum([vtotalannualtechnologyactivitybymode[r,t,split(mv,";")[1],y] * parse(split(mv,";")[2]) for mv = split(get(row[:mva]), ",")]) == vannualvariableoperatingcost[r,t,y])
+    oc1_operatingcostsvariable[constraintnum] = @constraint(model, sum([vtotalannualtechnologyactivitybymode[r,t,split(mv,";")[1],y] * parse(split(mv,";")[2]) for mv = split(row[:mva], ",")]) == vannualvariableoperatingcost[r,t,y])
     constraintnum += 1
 end
 
@@ -1606,11 +1579,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(fc.val as real) as fc
 from region r, technology t, year y, FixedCost_def fc
 where fc.r = r.val and fc.t = t.val and fc.y = y.val"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
 
-    oc2_operatingcostsfixedannual[constraintnum] = @constraint(model, vtotalcapacityannual[r,t,y] * get(row[:fc]) == vannualfixedoperatingcost[r,t,y])
+    oc2_operatingcostsfixedannual[constraintnum] = @constraint(model, vtotalcapacityannual[r,t,y] * row[:fc] == vannualfixedoperatingcost[r,t,y])
     constraintnum += 1
 end
 
@@ -1621,7 +1594,7 @@ logmsg("Created constraint OC2_OperatingCostsFixedAnnual.")
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref oc3_operatingcoststotalannual[1:length(sregion) * length(stechnology) * length(syear)]
 
-for (r, t, y) in product(sregion, stechnology, syear)
+for (r, t, y) in Base.product(sregion, stechnology, syear)
     oc3_operatingcoststotalannual[constraintnum] = @constraint(model, vannualfixedoperatingcost[r,t,y] + vannualvariableoperatingcost[r,t,y] == voperatingcost[r,t,y])
     constraintnum += 1
 end
@@ -1635,10 +1608,10 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref oc4_discountedoperatingcoststotalannual[1:length(sregion) * length(stechnology) * length(syear)]
 
 for row in eachrow(queryrtydr)
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
-    local dr = get(row[:dr])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
+    local dr = row[:dr]
 
     oc4_discountedoperatingcoststotalannual[constraintnum] = @constraint(model, voperatingcost[r,t,y] / ((1 + dr)^(parse(y) - parse(first(syear)) + 0.5)) == vdiscountedoperatingcost[r,t,y])
     constraintnum += 1
@@ -1651,7 +1624,7 @@ logmsg("Created constraint OC4_DiscountedOperatingCostsTotalAnnual.")
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref tdc1_totaldiscountedcostbytechnology[1:length(sregion) * length(stechnology) * length(syear)]
 
-for (r, t, y) in product(sregion, stechnology, syear)
+for (r, t, y) in Base.product(sregion, stechnology, syear)
     tdc1_totaldiscountedcostbytechnology[constraintnum] = @constraint(model, vdiscountedoperatingcost[r,t,y] + vdiscountedcapitalinvestment[r,t,y] + vdiscountedtechnologyemissionspenalty[r,t,y] - vdiscountedsalvagevalue[r,t,y] == vtotaldiscountedcostbytechnology[r,t,y])
     constraintnum += 1
 end
@@ -1663,7 +1636,7 @@ logmsg("Created constraint TDC1_TotalDiscountedCostByTechnology.")
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref tdc2_totaldiscountedcost[1:length(sregion) * length(syear)]
 
-for (r, y) in product(sregion, syear)
+for (r, y) in Base.product(sregion, syear)
     tdc2_totaldiscountedcost[constraintnum] = @constraint(model, (length(stechnology) == 0 ? 0 : sum([vtotaldiscountedcostbytechnology[r,t,y] for t = stechnology])) + (length(sstorage) == 0 ? 0 : sum([vtotaldiscountedstoragecost[r,s,y] for s = sstorage])) == vtotaldiscountedcost[r,y])
     constraintnum += 1
 end
@@ -1677,11 +1650,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 for row in eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmx
 from TotalAnnualMaxCapacity_def"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
 
-    tcc1_totalannualmaxcapacityconstraint[constraintnum] = @constraint(model, vtotalcapacityannual[r,t,y] <= get(row[:tmx]))
+    tcc1_totalannualmaxcapacityconstraint[constraintnum] = @constraint(model, vtotalcapacityannual[r,t,y] <= row[:tmx])
     constraintnum += 1
 end
 
@@ -1695,11 +1668,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmn
 from TotalAnnualMinCapacity_def
 where val > 0"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
 
-    tcc2_totalannualmincapacityconstraint[constraintnum] = @constraint(model, vtotalcapacityannual[r,t,y] >= get(row[:tmn]))
+    tcc2_totalannualmincapacityconstraint[constraintnum] = @constraint(model, vtotalcapacityannual[r,t,y] >= row[:tmn])
     constraintnum += 1
 end
 
@@ -1712,11 +1685,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 for row in eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmx
 from TotalAnnualMaxCapacityInvestment_def"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
 
-    ncc1_totalannualmaxnewcapacityconstraint[constraintnum] = @constraint(model, vnewcapacity[r,t,y] <= get(row[:tmx]))
+    ncc1_totalannualmaxnewcapacityconstraint[constraintnum] = @constraint(model, vnewcapacity[r,t,y] <= row[:tmx])
     constraintnum += 1
 end
 
@@ -1730,11 +1703,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmn
 from TotalAnnualMinCapacityInvestment_def
 where val > 0"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
 
-    ncc2_totalannualminnewcapacityconstraint[constraintnum] = @constraint(model, vnewcapacity[r,t,y] >= get(row[:tmn]))
+    ncc2_totalannualminnewcapacityconstraint[constraintnum] = @constraint(model, vnewcapacity[r,t,y] >= row[:tmn])
     constraintnum += 1
 end
 
@@ -1750,11 +1723,11 @@ for row in eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, 
 from region r, technology t, year y, timeslice l, YearSplit_def ys
 where ys.l = l.val and ys.y = y.val
 group by r.val, t.val, y.val"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
 
-    aac1_totalannualtechnologyactivity[constraintnum] = @constraint(model, sum([vrateoftotalactivity[r,t,split(ly,";")[1],y] * parse(split(ly,";")[2]) for ly = split(get(row[:lya]), ",")]) == vtotaltechnologyannualactivity[r,t,y])
+    aac1_totalannualtechnologyactivity[constraintnum] = @constraint(model, sum([vrateoftotalactivity[r,t,split(ly,";")[1],y] * parse(split(ly,";")[2]) for ly = split(row[:lya], ",")]) == vtotaltechnologyannualactivity[r,t,y])
     constraintnum += 1
 end
 
@@ -1767,11 +1740,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 for row in eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as amx
 from TotalTechnologyAnnualActivityUpperLimit_def"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
 
-    aac2_totalannualtechnologyactivityupperlimit[constraintnum] = @constraint(model, vtotaltechnologyannualactivity[r,t,y] <= get(row[:amx]))
+    aac2_totalannualtechnologyactivityupperlimit[constraintnum] = @constraint(model, vtotaltechnologyannualactivity[r,t,y] <= row[:amx])
     constraintnum += 1
 end
 
@@ -1785,11 +1758,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as amn
 from TotalTechnologyAnnualActivityLowerLimit_def
 where val > 0"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
 
-    aac3_totalannualtechnologyactivitylowerlimit[constraintnum] = @constraint(model, vtotaltechnologyannualactivity[r,t,y] >= get(row[:amn]))
+    aac3_totalannualtechnologyactivitylowerlimit[constraintnum] = @constraint(model, vtotaltechnologyannualactivity[r,t,y] >= row[:amn])
     constraintnum += 1
 end
 
@@ -1800,7 +1773,7 @@ logmsg("Created constraint AAC3_TotalAnnualTechnologyActivityLowerLimit.")
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref tac1_totalmodelhorizontechnologyactivity[1:length(sregion) * length(stechnology)]
 
-for (r, t) in product(sregion, stechnology)
+for (r, t) in Base.product(sregion, stechnology)
     tac1_totalmodelhorizontechnologyactivity[constraintnum] = @constraint(model, sum([vtotaltechnologyannualactivity[r,t,y] for y = syear]) == vtotaltechnologymodelperiodactivity[r,t])
     constraintnum += 1
 end
@@ -1815,10 +1788,10 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r, t, cast(val as real) as mmx
 from TotalTechnologyModelPeriodActivityUpperLimit_def
 where val > 0"))
-    local r = get(row[:r])
-    local t = get(row[:t])
+    local r = row[:r]
+    local t = row[:t]
 
-    tac2_totalmodelhorizontechnologyactivityupperlimit[constraintnum] = @constraint(model, vtotaltechnologymodelperiodactivity[r,t] <= get(row[:mmx]))
+    tac2_totalmodelhorizontechnologyactivityupperlimit[constraintnum] = @constraint(model, vtotaltechnologymodelperiodactivity[r,t] <= row[:mmx])
     constraintnum += 1
 end
 
@@ -1832,10 +1805,10 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r, t, cast(val as real) as mmn
 from TotalTechnologyModelPeriodActivityLowerLimit_def
 where val > 0"))
-    local r = get(row[:r])
-    local t = get(row[:t])
+    local r = row[:r]
+    local t = row[:t]
 
-    tac3_totalmodelhorizentechnologyactivitylowerlimit[constraintnum] = @constraint(model, vtotaltechnologymodelperiodactivity[r,t] >= get(row[:mmn]))
+    tac3_totalmodelhorizentechnologyactivitylowerlimit[constraintnum] = @constraint(model, vtotaltechnologymodelperiodactivity[r,t] >= row[:mmn])
     constraintnum += 1
 end
 
@@ -1851,10 +1824,10 @@ from region r, year y, technology t, ReserveMarginTagTechnology_def rmt, Capacit
 where rmt.r = r.val and rmt.t = t.val and rmt.y = y.val
 and cau.r = r.val and cau.t = t.val
 group by r.val, y.val"))
-    local r = get(row[:r])
-    local y = get(row[:y])
+    local r = row[:r]
+    local y = row[:y]
 
-    rm1_reservemargin_technologiesincluded_in_activity_units[constraintnum] = @constraint(model, sum([vtotalcapacityannual[r,split(trc,";")[1],y] * parse(split(trc,";")[2]) * parse(split(trc,";")[3]) for trc = split(get(row[:trca]), ",")]) == vtotalcapacityinreservemargin[r,y])
+    rm1_reservemargin_technologiesincluded_in_activity_units[constraintnum] = @constraint(model, sum([vtotalcapacityannual[r,split(trc,";")[1],y] * parse(split(trc,";")[2]) * parse(split(trc,";")[3]) for trc = split(row[:trca], ",")]) == vtotalcapacityinreservemargin[r,y])
     constraintnum += 1
 end
 
@@ -1869,11 +1842,11 @@ for row in eachrow(SQLite.query(db, "select r.val as r, l.val as l, y.val as y, 
 from region r, timeslice l, year y, fuel f, ReserveMarginTagFuel_def rmf
 where rmf.r = r.val and rmf.f = f.val and rmf.y = y.val
 group by r.val, l.val, y.val"))
-    local r = get(row[:r])
-    local l = get(row[:l])
-    local y = get(row[:y])
+    local r = row[:r]
+    local l = row[:l]
+    local y = row[:y]
 
-    rm2_reservemargin_fuelsincluded[constraintnum] = @constraint(model, sum([vrateofproduction[r,l,split(fr,";")[1],y] * parse(split(fr,";")[2]) for fr = split(get(row[:fra]), ",")]) == vdemandneedingreservemargin[r,l,y])
+    rm2_reservemargin_fuelsincluded[constraintnum] = @constraint(model, sum([vrateofproduction[r,l,split(fr,";")[1],y] * parse(split(fr,";")[2]) for fr = split(row[:fra], ",")]) == vdemandneedingreservemargin[r,l,y])
     constraintnum += 1
 end
 
@@ -1887,11 +1860,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r.val as r, l.val as l, y.val as y, cast(rm.val as real) as rm
 from region r, timeslice l, year y, ReserveMargin_def rm
 where rm.r = r.val and rm.y = y.val"))
-    local r = get(row[:r])
-    local l = get(row[:l])
-    local y = get(row[:y])
+    local r = row[:r]
+    local l = row[:l]
+    local y = row[:y]
 
-    rm3_reservemargin_constraint[constraintnum] = @constraint(model, vdemandneedingreservemargin[r,l,y] * get(row[:rm]) <= vtotalcapacityinreservemargin[r,y])
+    rm3_reservemargin_constraint[constraintnum] = @constraint(model, vdemandneedingreservemargin[r,l,y] * row[:rm] <= vtotalcapacityinreservemargin[r,y])
     constraintnum += 1
 end
 
@@ -1903,12 +1876,12 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref re1_fuelproductionbytechnologyannual[1:size(queryproductionbytechnologyannual)[1]]
 
 for row in eachrow(queryproductionbytechnologyannual)
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local f = get(row[:f])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local f = row[:f]
+    local y = row[:y]
 
-    re1_fuelproductionbytechnologyannual[constraintnum] = @constraint(model, sum([vproductionbytechnology[r,l,t,f,y] for l = split(get(row[:la]), ",")]) == vproductionbytechnologyannual[r,t,f,y])
+    re1_fuelproductionbytechnologyannual[constraintnum] = @constraint(model, sum([vproductionbytechnology[r,l,t,f,y] for l = split(row[:la], ",")]) == vproductionbytechnologyannual[r,t,f,y])
     constraintnum += 1
 end
 
@@ -1925,10 +1898,10 @@ from REGION r, TECHNOLOGY t, FUEL f, YEAR y, OutputActivityRatio_def oar, RETagT
 where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val and oar.val <> 0
 and ret.r = r.val and ret.t = t.val and ret.y = y.val and ret.val <> 0
 group by r.val, y.val"))
-    local r = get(row[:r])
-    local y = get(row[:y])
+    local r = row[:r]
+    local y = row[:y]
 
-    re2_techincluded[constraintnum] = @constraint(model, sum([vproductionbytechnologyannual[r,split(tf,";")[1],split(tf,";")[2],y] * parse(split(tf,";")[3]) for tf = split(get(row[:tfa]), ",")]) == vtotalreproductionannual[r,y])
+    re2_techincluded[constraintnum] = @constraint(model, sum([vproductionbytechnologyannual[r,split(tf,";")[1],split(tf,";")[2],y] * parse(split(tf,";")[3]) for tf = split(row[:tfa], ",")]) == vtotalreproductionannual[r,y])
     constraintnum += 1
 end
 
@@ -1945,10 +1918,10 @@ from REGION r, YEAR y, TIMESLICE l, FUEL f, YearSplit_def ys, RETagFuel_def rtf
 where ys.l = l.val and ys.y = y.val
 and rtf.r = r.val and rtf.f = f.val and rtf.y = y.val and rtf.val <> 0
 group by r.val, y.val"))
-    local r = get(row[:r])
-    local y = get(row[:y])
+    local r = row[:r]
+    local y = row[:y]
 
-    re3_fuelincluded[constraintnum] = @constraint(model, sum([vrateofproduction[r,split(lf,";")[1],split(lf,";")[2],y] * parse(split(lf,";")[3]) * parse(split(lf,";")[4]) for lf = split(get(row[:lfa]), ",")]) == vretotalproductionoftargetfuelannual[r,y])
+    re3_fuelincluded[constraintnum] = @constraint(model, sum([vrateofproduction[r,split(lf,";")[1],split(lf,";")[2],y] * parse(split(lf,";")[3]) * parse(split(lf,";")[4]) for lf = split(row[:lfa], ",")]) == vretotalproductionoftargetfuelannual[r,y])
     constraintnum += 1
 end
 
@@ -1974,10 +1947,10 @@ where ys.l = l.val and ys.y = y.val
 and rtf.r = r.val and rtf.f = f.val and rtf.y = y.val and rtf.val <> 0
 group by r.val, y.val) ry, REMinProductionTarget_def rmp
 where rmp.r = ry.r and rmp.y = ry.y"))
-    local r = get(row[:r])
-    local y = get(row[:y])
+    local r = row[:r]
+    local y = row[:y]
 
-    re4_energyconstraint[constraintnum] = @constraint(model, get(row[:rmp]) * vretotalproductionoftargetfuelannual[r,y] <= vtotalreproductionannual[r,y])
+    re4_energyconstraint[constraintnum] = @constraint(model, row[:rmp] * vretotalproductionoftargetfuelannual[r,y] <= vtotalreproductionannual[r,y])
     constraintnum += 1
 end
 
@@ -1993,13 +1966,13 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 for row in eachrow(SQLite.query(db, "select r, t, e, m, y, cast(val as real) as ear
 from EmissionActivityRatio_def ear"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local e = get(row[:e])
-    local m = get(row[:m])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local e = row[:e]
+    local m = row[:m]
+    local y = row[:y]
 
-    e1_annualemissionproductionbymode[constraintnum] = @constraint(model, get(row[:ear]) * vtotalannualtechnologyactivitybymode[r,t,m,y] == vannualtechnologyemissionbymode[r,t,e,m,y])
+    e1_annualemissionproductionbymode[constraintnum] = @constraint(model, row[:ear] * vtotalannualtechnologyactivitybymode[r,t,m,y] == vannualtechnologyemissionbymode[r,t,e,m,y])
     constraintnum += 1
 end
 
@@ -2014,12 +1987,12 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r, t, e, y, group_concat(m) as ma
 from EmissionActivityRatio_def ear
 group by r, t, e, y"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local e = get(row[:e])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local e = row[:e]
+    local y = row[:y]
 
-    e2_annualemissionproduction[constraintnum] = @constraint(model, sum([vannualtechnologyemissionbymode[r,t,e,m,y] for m = split(get(row[:ma]), ",")]) == vannualtechnologyemission[r,t,e,y])
+    e2_annualemissionproduction[constraintnum] = @constraint(model, sum([vannualtechnologyemissionbymode[r,t,e,m,y] for m = split(row[:ma], ",")]) == vannualtechnologyemission[r,t,e,y])
     constraintnum += 1
 end
 
@@ -2035,12 +2008,12 @@ for row in eachrow(SQLite.query(db, "select ear.r as r, ear.t as t, ear.e as e, 
 from EmissionActivityRatio_def ear, EmissionsPenalty_def ep
 where ep.r = ear.r and ep.e = ear.e and ep.y = ear.y
 group by ear.r, ear.t, ear.e, ear.y, ep.val"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local e = get(row[:e])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local e = row[:e]
+    local y = row[:y]
 
-    e3_emissionspenaltybytechandemission[constraintnum] = @constraint(model, vannualtechnologyemission[r,t,e,y] * get(row[:ep]) == vannualtechnologyemissionpenaltybyemission[r,t,e,y])
+    e3_emissionspenaltybytechandemission[constraintnum] = @constraint(model, vannualtechnologyemission[r,t,e,y] * row[:ep] == vannualtechnologyemissionpenaltybyemission[r,t,e,y])
     constraintnum += 1
 end
 
@@ -2056,11 +2029,11 @@ for row in eachrow(SQLite.query(db, "select ear.r as r, ear.t as t, ear.y as y, 
 from EmissionActivityRatio_def ear, EmissionsPenalty_def ep
 where ep.r = ear.r and ep.e = ear.e and ep.y = ear.y
 group by ear.r, ear.t, ear.y"))
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
 
-    e4_emissionspenaltybytechnology[constraintnum] = @constraint(model, sum([vannualtechnologyemissionpenaltybyemission[r,t,e,y] for e = split(get(row[:ea]), ",")]) == vannualtechnologyemissionspenalty[r,t,y])
+    e4_emissionspenaltybytechnology[constraintnum] = @constraint(model, sum([vannualtechnologyemissionpenaltybyemission[r,t,e,y] for e = split(row[:ea], ",")]) == vannualtechnologyemissionspenalty[r,t,y])
     constraintnum += 1
 end
 
@@ -2072,10 +2045,10 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref e5_discountedemissionspenaltybytechnology[1:size(queryrtydr)[1]]
 
 for row in eachrow(queryrtydr)
-    local r = get(row[:r])
-    local t = get(row[:t])
-    local y = get(row[:y])
-    local dr = get(row[:dr])
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
+    local dr = row[:dr]
 
     e5_discountedemissionspenaltybytechnology[constraintnum] = @constraint(model, vannualtechnologyemissionspenalty[r,t,y] / ((1 + dr)^(parse(y) - parse(first(syear)) + 0.5)) == vdiscountedtechnologyemissionspenalty[r,t,y])
     constraintnum += 1
@@ -2092,11 +2065,11 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r, e, y, group_concat(distinct t) as ta
 from EmissionActivityRatio_def ear
 group by r, e, y"))
-    local r = get(row[:r])
-    local e = get(row[:e])
-    local y = get(row[:y])
+    local r = row[:r]
+    local e = row[:e]
+    local y = row[:y]
 
-    e6_emissionsaccounting1[constraintnum] = @constraint(model, sum([vannualtechnologyemission[r,t,e,y] for t = split(get(row[:ta]), ",")]) == vannualemissions[r,e,y])
+    e6_emissionsaccounting1[constraintnum] = @constraint(model, sum([vannualtechnologyemission[r,t,e,y] for t = split(row[:ta], ",")]) == vannualemissions[r,e,y])
     constraintnum += 1
 end
 
@@ -2111,9 +2084,9 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r.val as r, e.val as e, cast(mpe.val as real) as mpe
 from region r, emission e
 left join ModelPeriodExogenousEmission_def mpe on mpe.r = r.val and mpe.e = e.val"))
-    local r = get(row[:r])
-    local e = get(row[:e])
-    local mpe = isnull(row[:mpe]) ? 0 : get(row[:mpe])
+    local r = row[:r]
+    local e = row[:e]
+    local mpe = ismissing(row[:mpe]) ? 0 : row[:mpe]
 
     e7_emissionsaccounting2[constraintnum] = @constraint(model, sum([vannualemissions[r,e,y] for y = syear]) == vmodelperiodemissions[r,e] - mpe)
     constraintnum += 1
@@ -2131,12 +2104,12 @@ for row in eachrow(SQLite.query(db, "select r.val as r, e.val as e, y.val as y, 
 from region r, emission e, year y, AnnualEmissionLimit_def ael
 left join AnnualExogenousEmission_def aee on aee.r = r.val and aee.e = e.val and aee.y = y.val
 where ael.r = r.val and ael.e = e.val and ael.y = y.val"))
-    local r = get(row[:r])
-    local e = get(row[:e])
-    local y = get(row[:y])
-    local aee = isnull(row[:aee]) ? 0 : get(row[:aee])
+    local r = row[:r]
+    local e = row[:e]
+    local y = row[:y]
+    local aee = ismissing(row[:aee]) ? 0 : row[:aee]
 
-    e8_annualemissionslimit[constraintnum] = @constraint(model, vannualemissions[r,e,y] + aee <= get(row[:ael]))
+    e8_annualemissionslimit[constraintnum] = @constraint(model, vannualemissions[r,e,y] + aee <= row[:ael])
     constraintnum += 1
 end
 
@@ -2151,10 +2124,10 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 for row in eachrow(SQLite.query(db, "select r.val as r, e.val as e, cast(mpl.val as real) as mpl
 from region r, emission e, ModelPeriodEmissionLimit_def mpl
 where mpl.r = r.val and mpl.e = e.val"))
-    local r = get(row[:r])
-    local e = get(row[:e])
+    local r = row[:r]
+    local e = row[:e]
 
-    e9_modelperiodemissionslimit[constraintnum] = @constraint(model, vmodelperiodemissions[r,e] <= get(row[:mpl]))
+    e9_modelperiodemissionslimit[constraintnum] = @constraint(model, vmodelperiodemissions[r,e] <= row[:mpl])
     constraintnum += 1
 end
 
