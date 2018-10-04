@@ -1,6 +1,6 @@
 """Prints a log message (msg) to STDOUT."""
 function logmsg(msg::String, dtm=now()::DateTime)
-    println(Base.Dates.format(dtm,"YYYY-dd-u HH:MM:SS.sss ") * msg)
+    println(STDOUT, Base.Dates.format(dtm,"YYYY-dd-u HH:MM:SS.sss ") * msg)
 end  # logmsg(msg::String)
 
 """Translates an OSeMOSYS set abbreviation (a) into the set's name."""

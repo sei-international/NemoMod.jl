@@ -8,6 +8,9 @@ module NemoMod
     Copyright © 2018: Stockholm Environment Institute.
 
     Release 0.1:  Reproduction of OSeMOSYS version 2017_11_08.  http://www.osemosys.org/
+
+    To do:
+        > Annotate types of local variables, starting with constraints.
 =#
 
 # BEGIN: Access other modules and code files.
@@ -49,20 +52,19 @@ logmsg("Created parameter views.")
 # END: Create parameter views showing default values.
 
 # BEGIN: Define OSeMOSYS sets.
-# Query results are DataFrame variables; data in DataFrame are Nullables
-syear = [v for v = skipmissing(SQLite.query(db, "select val from YEAR order by val")[:val])]  # YEAR set
-stechnology = [v for v = skipmissing(SQLite.query(db, "select val from TECHNOLOGY")[:val])]  # TECHNOLOGY set
-stimeslice = [v for v = skipmissing(SQLite.query(db, "select val from TIMESLICE")[:val])]  # TIMESLICE set
-sfuel = [v for v = skipmissing(SQLite.query(db, "select val from FUEL")[:val])]  # FUEL set
-semission = [v for v = skipmissing(SQLite.query(db, "select val from EMISSION")[:val])]  # EMISSION set
-smode_of_operation = [v for v = skipmissing(SQLite.query(db, "select val from MODE_OF_OPERATION")[:val])]  # MODE_OF_OPERATION set
-sregion = [v for v = skipmissing(SQLite.query(db, "select val from REGION")[:val])]  # REGION set
-sseason = [v for v = skipmissing(SQLite.query(db, "select val from SEASON order by val")[:val])]  # SEASON set
-sdaytype = [v for v = skipmissing(SQLite.query(db, "select val from DAYTYPE order by val")[:val])]  # DAYTYPE set
-sdailytimebracket = [v for v = skipmissing(SQLite.query(db, "select val from DAILYTIMEBRACKET")[:val])]  # DAILYTIMEBRACKET set
+syear::Array{String,1} = [v for v = skipmissing(SQLite.query(db, "select val from YEAR order by val")[:val])]  # YEAR set
+stechnology::Array{String,1} = [v for v = skipmissing(SQLite.query(db, "select val from TECHNOLOGY")[:val])]  # TECHNOLOGY set
+stimeslice::Array{String,1} = [v for v = skipmissing(SQLite.query(db, "select val from TIMESLICE")[:val])]  # TIMESLICE set
+sfuel::Array{String,1} = [v for v = skipmissing(SQLite.query(db, "select val from FUEL")[:val])]  # FUEL set
+semission::Array{String,1} = [v for v = skipmissing(SQLite.query(db, "select val from EMISSION")[:val])]  # EMISSION set
+smode_of_operation::Array{String,1} = [v for v = skipmissing(SQLite.query(db, "select val from MODE_OF_OPERATION")[:val])]  # MODE_OF_OPERATION set
+sregion::Array{String,1} = [v for v = skipmissing(SQLite.query(db, "select val from REGION")[:val])]  # REGION set
+sseason::Array{String,1} = [v for v = skipmissing(SQLite.query(db, "select val from SEASON order by val")[:val])]  # SEASON set
+sdaytype::Array{String,1} = [v for v = skipmissing(SQLite.query(db, "select val from DAYTYPE order by val")[:val])]  # DAYTYPE set
+sdailytimebracket::Array{String,1} = [v for v = skipmissing(SQLite.query(db, "select val from DAILYTIMEBRACKET")[:val])]  # DAILYTIMEBRACKET set
 # FLEXIBLEDEMANDTYPE not used in Utopia example; substitute empty value
-sflexibledemandtype = Array{String,1}()  # FLEXIBLEDEMANDTYPE set
-sstorage = [v for v = skipmissing(SQLite.query(db, "select val from STORAGE")[:val])]  # STORAGE set
+sflexibledemandtype::Array{String,1} = Array{String,1}()  # FLEXIBLEDEMANDTYPE set
+sstorage::Array{String,1} = [v for v = skipmissing(SQLite.query(db, "select val from STORAGE")[:val])]  # STORAGE set
 
 logmsg("Defined OSeMOSYS sets.")
 # END: Define OSeMOSYS sets.
@@ -137,7 +139,7 @@ logmsg("Defined capacity variables.")
 @variable(model, vtotalannualtechnologyactivitybymode[sregion, stechnology, smode_of_operation, syear] >= 0)
 @variable(model, vtotaltechnologymodelperiodactivity[sregion, stechnology])
 
-queryvrateofproductionbytechnologybymode = SQLite.query(db, "select r.val as r, l.val as l, t.val as t, m.val as m, f.val as f, y.val as y,
+queryvrateofproductionbytechnologybymode::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, l.val as l, t.val as t, m.val as m, f.val as f, y.val as y,
 cast(oar.val as real) as oar
 from region r, timeslice l, technology t, MODE_OF_OPERATION m, fuel f, year y, OutputActivityRatio_def oar
 where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.m = m.val and oar.y = y.val
@@ -149,7 +151,7 @@ indexdicts = keydicts_parallel(queryvrateofproductionbytechnologybymode,5)  # Ar
     m=indexdicts[3][[r,l,t]], f=indexdicts[4][[r,l,t,m]], y=indexdicts[5][[r,l,t,m,f]]] >= 0)
 
 # ys included because it's needed for some later constraints based on this query
-queryvrateofproductionbytechnology = SQLite.query(db, "select r.val as r, l.val as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
+queryvrateofproductionbytechnology::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, l.val as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
 from region r, timeslice l, technology t, fuel f, year y, OutputActivityRatio_def oar
 left join YearSplit_def ys on ys.l = l.val and ys.y = y.val
 where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val
@@ -165,7 +167,7 @@ indexdicts = keydicts_parallel(queryvrateofproductionbytechnology,4)  # Array of
     f=indexdicts[3][[r,l,t]], y=indexdicts[4][[r,l,t,f]]] >= 0)
 
 # la included because it's needed for some later constraints based on this query
-queryproductionbytechnologyannual = SQLite.query(db, "select r.val as r, t.val as t, f.val as f, y.val as y, group_concat(distinct l.val) as la
+queryproductionbytechnologyannual::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, t.val as t, f.val as f, y.val as y, group_concat(distinct l.val) as la
 from REGION r, TECHNOLOGY t, FUEL f, YEAR y, OutputActivityRatio_def oar, TIMESLICE l
 where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val
 and oar.val <> 0
@@ -179,7 +181,7 @@ indexdicts = keydicts_parallel(queryproductionbytechnologyannual,3)  # Array of 
 @variable(model, vrateofproduction[sregion, stimeslice, sfuel, syear] >= 0)
 @variable(model, vproduction[sregion, stimeslice, sfuel, syear] >= 0)
 
-queryvrateofusebytechnologybymode = SQLite.query(db, "select r.val as r, l.val as l, t.val as t, m.val as m, f.val as f, y.val as y, cast(iar.val as real) as iar
+queryvrateofusebytechnologybymode::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, l.val as l, t.val as t, m.val as m, f.val as f, y.val as y, cast(iar.val as real) as iar
 from region r, timeslice l, technology t, MODE_OF_OPERATION m, fuel f, year y, InputActivityRatio_def iar
 where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.m = m.val and iar.y = y.val
 and iar.val <> 0")
@@ -190,7 +192,7 @@ indexdicts = keydicts_parallel(queryvrateofusebytechnologybymode,5)  # Array of 
     m=indexdicts[3][[r,l,t]], f=indexdicts[4][[r,l,t,m]], y=indexdicts[5][[r,l,t,m,f]]] >= 0)
 
 # ys included because it's needed for some later constraints based on this query
-queryvrateofusebytechnology = SQLite.query(db, "select r.val as r, l.val as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
+queryvrateofusebytechnology::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, l.val as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
 from region r, timeslice l, technology t, fuel f, year y, InputActivityRatio_def iar
 left join YearSplit_def ys on ys.l = l.val and ys.y = y.val
 where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
