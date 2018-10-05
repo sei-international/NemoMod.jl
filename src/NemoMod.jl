@@ -1,5 +1,3 @@
-# __precompile__()  As of Julia 0.7, module precompilation happens by default.
-
 module NemoMod
 #=
     NEMO: Next-generation Energy Modeling system for Optimization.
