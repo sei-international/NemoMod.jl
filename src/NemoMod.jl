@@ -35,9 +35,9 @@ logmsg("Connected to model database. Path = " * dbpath * ".")
 
 # Instantiate JuMP model
 if solver == "Cbc"
-    global model = Model(solver = CbcSolver(threads = nprocs(), logLevel = 1))
+    model = Model(solver = CbcSolver(threads = nprocs(), logLevel = 1))
 elseif solver == "CPLEX"
-    global model = Model(solver = CplexSolver())
+    model = Model(solver = CplexSolver())
 end
 
 # BEGIN: Create parameter views showing default values.
@@ -2144,13 +2144,13 @@ logmsg("Defined model objective.")
 # END: Define model objective.
 
 # Solve model
-global status = solve(model)
-global solvedtm = now()  # Date/time of last solve operation
-global solvedtmstr = Base.Dates.format(solvedtm,"yyyy-mm-dd HH:MM:SS.sss")  # solvedtm as a formatted string
+status::Symbol = solve(model)
+solvedtm::DateTime = now()  # Date/time of last solve operation
+solvedtmstr::String = Base.Dates.format(solvedtm,"yyyy-mm-dd HH:MM:SS.sss")  # solvedtm as a formatted string
 logmsg("Solved model.", solvedtm)
 
 # BEGIN: Save results to database.
-savevarresults(Array{JuMP.JuMPContainer,1}([vdemand, vproduction, vuse, vtrade, vproductionannual, vuseannual, vtradeannual, vproductionbytechnology, vproductionbytechnologyannual, vusebytechnology, vtotalcapacityannual, vnewcapacity, vannualvariableoperatingcost, vannualfixedoperatingcost, voperatingcost, vdiscountedoperatingcost, vtotaldiscountedcostbytechnology, vtotaldiscountedcost, vsalvagevalue, vcapitalinvestment, vmodelperiodemissions, vannualtechnologyemission, vannualemissions]), modelvarindices, db)
+savevarresults(Array{JuMP.JuMPContainer,1}([vdemand, vproduction, vuse, vtrade, vproductionannual, vuseannual, vtradeannual, vproductionbytechnology, vproductionbytechnologyannual, vusebytechnology, vtotalcapacityannual, vnewcapacity, vannualvariableoperatingcost, vannualfixedoperatingcost, voperatingcost, vdiscountedoperatingcost, vtotaldiscountedcostbytechnology, vtotaldiscountedcost, vsalvagevalue, vcapitalinvestment, vmodelperiodemissions, vannualtechnologyemission, vannualemissions]), modelvarindices, db, solvedtmstr)
 logmsg("Finished saving results to database.")
 # END: Save results to database.
 

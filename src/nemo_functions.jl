@@ -219,8 +219,9 @@ end  # createconstraint
 """Saves model results to a SQLite database using SQL inserts with transaction batching. Requires three arguments:
     1) vars - Array of model variables for which results will be retrieved and saved to SQLite.
     2) modelvarindices - Dictionary mapping model variables to tuples of (variable name, [index column names]).
-    3) db - SQLite database."""
-function savevarresults(vars::Array{JuMP.JuMPContainer,1}, modelvarindices::Dict{JuMP.JuMPContainer, Tuple{String,Array{String,1}}}, db::SQLite.DB)
+    3) db - SQLite database.
+    4) solvedtmstr - String to write into solvedtm field in result tables."""
+function savevarresults(vars::Array{JuMP.JuMPContainer,1}, modelvarindices::Dict{JuMP.JuMPContainer, Tuple{String,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String)
     for v in vars
         local gvv = JuMP.getvalue(v)
         local indices::Array{Tuple}  # Array of tuples of index values for v
