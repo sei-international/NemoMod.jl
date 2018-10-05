@@ -1,4 +1,4 @@
-__precompile__()
+# __precompile__()  As of Julia 0.7, module precompilation happens by default.
 
 module NemoMod
 #=
@@ -14,7 +14,8 @@ module NemoMod
 =#
 
 # BEGIN: Access other modules and code files.
-using JuMP, SQLite, DataFrames, Cbc, CPLEX
+using JuMP, SQLite, DataFrames, CPLEX
+# Cbc - not yet available for Julia 0.7
 include("nemo_functions.jl")  # Contains NEMO functions
 # END: Access other modules and code files.
 
@@ -34,10 +35,11 @@ logmsg("Connected to model database. Path = " * dbpath * ".")
 # END: Connect to SQLite database.
 
 # Instantiate JuMP model
-if solver == "Cbc"
-    model = Model(solver = CbcSolver(threads = nprocs(), logLevel = 1))
-elseif solver == "CPLEX"
+if solver == "CPLEX"
     model = Model(solver = CplexSolver())
+# Cbc not yet available for Julia 0.7
+#elseif solver == "Cbc"
+#    model = Model(solver = CbcSolver(threads = nprocs(), logLevel = 1))
 end
 
 # BEGIN: Create parameter views showing default values.
