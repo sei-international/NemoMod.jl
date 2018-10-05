@@ -36,7 +36,7 @@ logmsg("Connected to model database. Path = " * dbpath * ".")
 
 # Instantiate JuMP model
 if solver == "GLPK"
-    model = Model(solver = GLPKSolverMIP())
+    model = Model(solver = GLPKSolverMIP(presolve=true))
 # CPLEX not yet available for Julia 0.7
 #elseif solver == "CPLEX"
 #    model = Model(solver = CplexSolver())
