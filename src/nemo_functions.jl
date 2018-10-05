@@ -1,6 +1,6 @@
 """Prints a log message (msg) to STDOUT."""
 function logmsg(msg::String, dtm=now()::DateTime)
-    println(STDOUT, Base.Dates.format(dtm,"YYYY-dd-u HH:MM:SS.sss ") * msg)
+    println(stdout, Dates.format(dtm, @dateformat_str "YYYY-dd-u HH:MM:SS.sss ") * msg)
 end  # logmsg(msg::String)
 
 """Translates an OSeMOSYS set abbreviation (a) into the set's name."""
@@ -283,8 +283,8 @@ end  # dropresulttables(db::SQLite.DB)
     • dbpath - Path to SQLite database for scenario to be modeled.
     • solver - Name of solver to be used (currently, CPLEX or Cbc).
     • numprocs - Number of worker processes to use for NEMO run."""
-function startnemo(dbpath::String, solver::String = "Cbc", numprocs::Int = Sys.CPU_CORES)
-    # Note: Sys.CPU_CORES has been renamed to Sys.CPU_THREADS in Julia 1.0
+function startnemo(dbpath::String, solver::String = "Cbc", numprocs::Int = Sys.CPU_THREADS)
+    # Note: Sys.CPU_THREADS was Sys.CPU_CORES in Julia 0.6
 
     # Sample paths
     # dbpath = "C:\\temp\\TEMBA_datafile.sl3"
