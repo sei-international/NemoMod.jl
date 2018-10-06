@@ -9,7 +9,7 @@ cp(dbfile, dbfile2; force=true)
 NemoMod.nemomain(dbfile2, "GLPK")
 
 db = SQLite.DB(dbfile2)
-testqry = SQLite.DB(db, "select * from vtotaldiscountedcost")
+testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
 
 @test testqry[1,:y] == "1990"
 @test testqry[2,:y] == "1991"
