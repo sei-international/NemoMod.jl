@@ -41,18 +41,18 @@ testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
 @test round(testqry[6,:val], 6) == 1214.807617
 @test round(testqry[7,:val], 6) == 1196.944055
 @test round(testqry[8,:val], 6) == 1207.676216
-@test round(testqry[9,:val], 6) == 1098.527585
+@test round(testqry[9,:val], 6) == 1098.252384
 @test round(testqry[10,:val], 6) == 1117.595158
 @test round(testqry[11,:val], 6) == 1047.769294
 @test round(testqry[12,:val], 6) == 1125.578368
 @test round(testqry[13,:val], 6) == 1047.590383
 @test round(testqry[14,:val], 6) == 1023.135753
 @test round(testqry[15,:val], 6) == 937.081597
-@test round(testqry[16,:val], 6) == 2029.877324
+@test round(testqry[16,:val], 6) == 2029.877355
 @test round(testqry[17,:val], 6) == 885.294875
-@test round(testqry[18,:val], 6) == 838.923585
+@test round(testqry[18,:val], 6) == 838.923596
 @test round(testqry[19,:val], 6) == 777.346299
-@test round(testqry[20,:val], 6) == 718.539524
-@test round(testqry[21,:val], 6) == 659.775303
+@test round(testqry[20,:val], 6) == 718.732469
+@test round(testqry[21,:val], 6) == 659.805869
 
 rm(dbfile2)
