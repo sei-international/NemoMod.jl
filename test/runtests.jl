@@ -54,3 +54,5 @@ testqry = SQLite.DB(db, "select * from vtotaldiscountedcost")
 @test round(testqry[19,:val], 6) == 777.346299
 @test round(testqry[20,:val], 6) == 718.539524
 @test round(testqry[21,:val], 6) == 659.775303
+
+rm(dbfile2)
