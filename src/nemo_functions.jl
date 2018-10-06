@@ -72,10 +72,7 @@ function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
 
         # BEGIN: Create unique index on t for foreign key fields.
         # This step significantly improves performance for many queries on new view for t
-        if length(SQLite.query(db, "PRAGMA index_info('" * t * "_fks_unique')")) > 0
-            SQLite.query(db,"drop index " * t * "_fks_unique")
-        end
-
+        SQLite.query(db,"drop index if exists " * t * "_fks_unique")
         SQLite.query(db,"create unique index " * t * "_fks_unique on " * t * " (" * join(pks, ",") * ")")
         # END: Create unique index on t for foreign key fields.
 
@@ -242,9 +239,7 @@ function savevarresults(vars::Array{JuMP.JuMPContainer,1}, modelvarindices::Dict
             SQLite.execute!(db, "BEGIN")
 
             # Create target table for v (drop any existing table for v)
-            if length(SQLite.query(db, "PRAGMA table_info('" * modelvarindices[v][1] * "')")) > 0
-                SQLite.query(db,"drop table " * modelvarindices[v][1])
-            end
+            SQLite.query(db,"drop table if exists " * modelvarindices[v][1])
 
             SQLite.execute!(db, "create table '" * modelvarindices[v][1] * "' ('" * join(modelvarindices[v][2], "' text, '") * "' text, 'val' real, 'solvedtm' text)")
 
