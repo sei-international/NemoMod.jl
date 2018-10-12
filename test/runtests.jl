@@ -58,7 +58,7 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
         @test isapprox(testqry[20,:val], 718.732469; atol=TOL)
         @test isapprox(testqry[21,:val], 659.805869; atol=TOL)
 
-        # Vacuum
-
+        # Re-compact the test database
+        testqry = SQLite.query(db, "VACUUM")
     end  # "Solving UTOPIA"
 end  # @testset "Solving a scenario"
