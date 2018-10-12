@@ -5,3 +5,4 @@ DataFrames
 GLPKMathProgInterface
 # CPLEX not yet supported in Julia 0.7
 # Cbc not yet supported in Julia 0.7
+PackageCompiler
