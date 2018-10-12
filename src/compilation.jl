@@ -15,5 +15,5 @@ using PackageCompiler
     based on the use cases in NemoMod/test/runtests.jl (i.e., the standard NemoMod test cases). The existing system image is replaced unless
     the replacesysimage argument is false."""
 function compilenemo(replacesysimage::Bool = true)
-    PackageCompiler.compile_package("NemoMod"; force = replacesysimage, cpu_target = "native")
+    # PackageCompiler.compile_package("NemoMod"; force = replacesysimage, cpu_target = "native")
 end  # compilenemo()

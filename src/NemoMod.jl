@@ -15,7 +15,6 @@ module NemoMod
 using JuMP, SQLite, DataFrames, Distributed, Dates, GLPKMathProgInterface
 # CPLEX, Cbc - not yet available for Julia 0.7
 include("nemo_functions.jl")  # Core NEMO functions
-include("compilation.jl")  # Functions for ahead-of-time compilation of NEMO
 # END: Access other modules and code files.
 
 """Runs NEMO for a single set of inputs (a scenario). Arguments:
