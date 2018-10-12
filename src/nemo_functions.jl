@@ -285,6 +285,12 @@ function dropresulttables(db::SQLite.DB)
     end
 end  # dropresulttables(db::SQLite.DB)
 
+"""Returns the absolute path of the directory for the NemoMod package (specifically, one level above the directory
+    containing the file in which this function is declared)."""
+function packagedirectory()
+    return normpath(joinpath(@__DIR__, ".."))
+end  # packagedirectory()
+
 """Runs NEMO for a scenario. Arguments:
     • dbpath - Path to SQLite database for scenario to be modeled.
     • solver - Name of solver to be used (currently, CPLEX or Cbc).
