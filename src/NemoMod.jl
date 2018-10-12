@@ -1,25 +1,26 @@
-module NemoMod
 #=
     NEMO: Next-generation Energy Modeling system for Optimization.
-    https://github.com/sei-international/NEMO.jl
+    https://github.com/sei-international/NemoMod.jl
 
-    Copyright © 2018: Stockholm Environment Institute.
+    Copyright © 2018: Stockholm Environment Institute U.S.
 
-    Release 0.1:  Reproduction of OSeMOSYS version 2017_11_08.  http://www.osemosys.org/
+    Release 0.1: Julia version of OSeMOSYS version 2017_11_08.  http://www.osemosys.org/
 
-    To do:
-        > Annotate types of local variables, starting with constraints.
+    File description: NemoMod module and main modeling code.
 =#
+
+module NemoMod
 
 # BEGIN: Access other modules and code files.
 using JuMP, SQLite, DataFrames, Distributed, Dates, GLPKMathProgInterface
 # CPLEX, Cbc - not yet available for Julia 0.7
-include("nemo_functions.jl")  # Contains NEMO functions
+include("nemo_functions.jl")  # Core NEMO functions
+include("compilation.jl")  # Functions for ahead-of-time compilation of NEMO
 # END: Access other modules and code files.
 
 """Runs NEMO for a single set of inputs (a scenario). Arguments:
     • dbpath - Path to SQLite database for scenario to be modeled.
-    • solver - Name of solver to be used (currently, CPLEX or Cbc)."""
+    • solver - Name of solver to be used (currently, GLPK only)."""
 function nemomain(dbpath::String, solver::String)
 # Lines within nemomain() are not indented since the function is so lengthy. To make an otherwise local
 # variable visible outside the function, prefix it with global. For JuMP constraint references,
@@ -316,10 +317,10 @@ logmsg("Finished defining model variables.")
 # BEGIN: Define OSeMOSYS constraints.
 
 # BEGIN: EQ_SpecifiedDemand.
-constraintnum = 1  # Number of next constraint to be added to constraint array
+constraintnum::Int = 1  # Number of next constraint to be added to constraint array
 @constraintref ceq_specifieddemand[1:length(sregion) * length(stimeslice) * length(sfuel) * length(syear)]
 
-queryvrateofdemand = SQLite.query(db,"select sdp.r as r, sdp.f as f, sdp.l as l, sdp.y as y,
+queryvrateofdemand::DataFrames.DataFrame = SQLite.query(db,"select sdp.r as r, sdp.f as f, sdp.l as l, sdp.y as y,
 cast(sdp.val as real) as specifieddemandprofile, cast(sad.val as real) as specifiedannualdemand,
 cast(ys.val as real) as ys
 from SpecifiedDemandProfile_def sdp, SpecifiedAnnualDemand_def sad, YearSplit_def ys
@@ -563,7 +564,7 @@ logmsg("Created constraint EBa5_RateOfFuelUse2.")
 # BEGIN: EBa6_RateOfFuelUse3.
 constraintnum = 1  # Number of next constraint to be added to constraint array
 
-queryvrateofuse = SQLite.query(db, "select rut.r as r, rut.l as l, rut.f as f, rut.y as y, cast(ys.val as real) as ys, group_concat(rut.t) as ta from
+queryvrateofuse::DataFrames.DataFrame = SQLite.query(db, "select rut.r as r, rut.l as l, rut.f as f, rut.y as y, cast(ys.val as real) as ys, group_concat(rut.t) as ta from
 (select r.val as r, l.val as l, t.val as t, f.val as f, y.val as y
 from region r, timeslice l, technology t, fuel f, year y, InputActivityRatio_def iar
 where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
@@ -997,7 +998,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref sc1_lowerlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinfirstweekconstraint[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
 
-querysc1 = SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y,
+querysc1::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y,
 group_concat(lhlh.val) as lhlha
 from region r, storage s, season ls, daytype ld, dailytimebracket lh, year y
 left join dailytimebracket lhlh on lh.val > lhlh.val
@@ -1043,7 +1044,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref sc2_lowerlimit_endofdailytimebracketoflastinstanceofdaytypeinfirstweekconstraint[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
 
-querysc2 = SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y,
+querysc2::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y,
 group_concat(lhlh.val) as lhlha
 from region r, storage s, season ls, daytype ld, dailytimebracket lh, year y
 left join dailytimebracket lhlh on lh.val < lhlh.val
@@ -1090,7 +1091,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref sc3_lowerlimit_endofdailytimebracketoflastinstanceofdaytypeinlastweekconstraint[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
 
-querysc3 = SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y,
+querysc3::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y,
 group_concat(lhlh.val) as lhlha
 from region r, storage s, season ls, daytype ld, dailytimebracket lh, year y
 left join dailytimebracket lhlh on lh.val < lhlh.val
@@ -1136,7 +1137,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref sc4_lowerlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinlastweekconstraint[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
 
-querysc4 = SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y,
+querysc4::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y,
 group_concat(lhlh.val) as lhlha
 from region r, storage s, season ls, daytype ld, dailytimebracket lh, year y
 left join dailytimebracket lhlh on lh.val > lhlh.val
@@ -1443,7 +1444,7 @@ logmsg("Created constraint CC1_UndiscountedCapitalInvestment.")
 # BEGIN: CC2_DiscountingCapitalInvestment.
 constraintnum = 1  # Number of next constraint to be added to constraint array
 
-queryrtydr = SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(dr.val as real) as dr
+queryrtydr::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(dr.val as real) as dr
 from region r, technology t, year y, DiscountRate_def dr
 where dr.r = r.val")
 

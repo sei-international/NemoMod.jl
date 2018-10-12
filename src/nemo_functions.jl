@@ -1,3 +1,14 @@
+#=
+    NEMO: Next-generation Energy Modeling system for Optimization.
+    https://github.com/sei-international/NemoMod.jl
+
+    Copyright © 2018: Stockholm Environment Institute U.S.
+
+    Release 0.1: Julia version of OSeMOSYS version 2017_11_08.  http://www.osemosys.org/
+
+    File description: Main function library for NEMO.
+=#
+
 """Prints a log message (msg) to STDOUT."""
 function logmsg(msg::String, dtm=now()::DateTime)
     println(stdout, Dates.format(dtm, @dateformat_str "YYYY-dd-u HH:MM:SS.sss ") * msg)
