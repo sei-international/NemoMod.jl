@@ -5,7 +5,6 @@ using Test, SQLite, DataFrames
 const TOL = 1e-4  # Default tolerance for isapprox() comparisons
 
 @testset "Solving a scenario" begin
-
     @testset "Solving UTOPIA" begin
         dbfile = normpath(joinpath(dirname(pathof(NemoMod)),"../test/utopia.sqlite"))
 
