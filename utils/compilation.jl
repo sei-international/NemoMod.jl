@@ -6,13 +6,16 @@
 
     Release 0.1: Julia version of OSeMOSYS version 2017_11_08.  http://www.osemosys.org/
 
-    File description: Utilities for ahead-of-time compilation of NEMO.
+    File description: Utilities for ahead-of-time compilation of NEMO. Typical usage in a REPL session:
+        using NemoMod
+        include(joinpath(NemoMod.packagedirectory(), "utils", "compilation.jl"))
+        compilenemo()
 =#
 
 using PackageCompiler
 
 """Clone of PackageCompiler.snoop_userimg(). Implemented here in order to allow a custom blacklist to be passed to PackageCompiler.snoop().
-    This should be a temporary measure eventually obviated by upgrades to PackageCompiler ensuring compatability with Julia 1.0."""
+    This should be a temporary measure eventually obviated by upgrades to PackageCompiler (i.e., for compatability with Julia 1.0)."""
 function snoop_userimg_nemo(userimg, packages::Tuple{String, String}...)
     snooped_precompiles = map(packages) do package_snoopfile
         package, snoopfile = package_snoopfile
@@ -58,7 +61,7 @@ end  # snoop_userimg_nemo(userimg, packages::Tuple{String, String}...)
 
 """Generates a new Julia system image that includes the NemoMod package. The package is optimized and compiled into the system image
     based on the use cases in NemoMod/test/runtests.jl (i.e., the standard NemoMod test cases). The existing system image is replaced unless
-    the replacesysimage argument is false."""
+    replacesysimage = false."""
 function compilenemo(replacesysimage::Bool = true)
     snoop_userimg_nemo(PackageCompiler.sysimg_folder("precompile.jl"), ("NemoMod", normpath(joinpath(@__DIR__, "..", "test", "runtests.jl"))))
     PackageCompiler.compile_package("NemoMod"; reuse = true, force = replacesysimage, cpu_target = "native")
