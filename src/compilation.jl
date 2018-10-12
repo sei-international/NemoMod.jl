@@ -14,6 +14,6 @@ using PackageCompiler
 """Generates a new Julia system image that includes the NemoMod package. The package is optimized and compiled into the system image
     based on the use cases in NemoMod/test/runtests.jl (i.e., the standard NemoMod test cases). The existing system image is replaced unless
     the replacesysimage argument is false."""
-function compilenemo(replacesysimage::String = true)
+function compilenemo(replacesysimage::Bool = true)
     PackageCompiler.compile_package("NemoMod"; force = replacesysimage, cpu_target = "native")
 end  # compilenemo()
