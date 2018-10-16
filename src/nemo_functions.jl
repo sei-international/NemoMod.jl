@@ -146,28 +146,29 @@ function keydicts(df::DataFrames.DataFrame, numdicts::Int)
     return returnval
 end  # keydicts(df::DataFrames.DataFrame, numdicts::Int)
 
-"""Runs keydicts using parallel worker processes if available and there are at least 10,000 rows in df for each
-worker process."""
-function keydicts_parallel(df::DataFrames.DataFrame, numdicts::Int)
+"""Runs keydicts using parallel processes identified in targetprocs. If there are not at least 10,000 rows in df for each
+target process, resorts to running keydicts on process that called keydicts_parallel."""
+function keydicts_parallel(df::DataFrames.DataFrame, numdicts::Int, targetprocs::Array{Int,1})
     local returnval = Array{Dict{Array{String,1},Set{String}},1}()  # Function return value
-    local np = nprocs()  # Number of active processes
-    local dfrows = size(df)[1]  # Number of rows in df
+    local availprocs::Array{Int, 1} = intersect(procs(), targetprocs)  # Targeted processes that actually exist
+    local np::Int = length(availprocs)  # Number of targeted processes that actually exist
+    local dfrows::Int = size(df)[1]  # Number of rows in df
 
-    if np == 1 || div(dfrows, np-1) < 10000
+    if np <= 1 || div(dfrows, np) < 10000
         # Run keydicts for entire df
         returnval = keydicts(df, numdicts)
     else
-        # Divide operation among worker processes
-        local blockdivrem = divrem(dfrows, np-1)  # Quotient and remainder from dividing dfrows by np-1; element 1 = quotient, element 2 = remainder
-        local results = Array{typeof(returnval), 1}(np-1)  # Collection of results from async processing
+        # Divide operation among available processes
+        local blockdivrem = divrem(dfrows, np)  # Quotient and remainder from dividing dfrows by np; element 1 = quotient, element 2 = remainder
+        local results = Array{typeof(returnval), 1}(np)  # Collection of results from async processing
 
-        # Dispatch async tasks in main process, each of which performs a remotecall_fetch on a worker process. Wrap in sync block to wait until all async processes
+        # Dispatch async tasks in main process, each of which performs a remotecall_fetch on an available process. Wrap in sync block to wait until all async processes
         #   finish before proceeding.
         @sync begin
-            for p=2:np
+            for p=1:np
                 @async begin
                     # Pass each process a block of rows from df
-                    results[p-1] = remotecall_fetch(keydicts, workers()[p-1], df[((p-2) * blockdivrem[1] + 1):((p-1) * blockdivrem[1] + (p == np ? blockdivrem[2] : 0)),:], numdicts)
+                    results[p] = remotecall_fetch(keydicts, availprocs[p], df[((p-1) * blockdivrem[1] + 1):((p) * blockdivrem[1] + (p == np ? blockdivrem[2] : 0)),:], numdicts)
                 end
             end
         end
@@ -176,14 +177,14 @@ function keydicts_parallel(df::DataFrames.DataFrame, numdicts::Int)
         for i = 1:numdicts
             push!(returnval, Dict{Array{String,1},Set{String}}())
 
-            for j = 1:np-1
+            for j = 1:np
                 returnval[i] = merge(union, returnval[i], results[j][i])
             end
         end
     end
 
     return returnval
-end  # keydicts_parallel(df::DataFrames.DataFrame, numdicts::Int)
+end  # keydicts_parallel(df::DataFrames.DataFrame, numdicts::Int, targetprocs::Array{Int,1})
 
 #= Testing code:
 using JuMP, SQLite, IterTools, NullableArrays, DataFrames
@@ -224,14 +225,31 @@ function createconstraint(model::JuMP.Model, logname::String, constraintref::Arr
     logmsg("Created constraint " * logname * ".")
 end  # createconstraint
 
+"""Returns an array of model variables corresponding to the names in varnames. Excludes any variables not convertible to
+    JuMP.JuMPContainer."""
+function getvars(varnames::Array{String, 1})
+    local returnval::Array{JuMP.JuMPContainer, 1} = Array{JuMP.JuMPContainer, 1}()  # Function's return value
+
+    for v in varnames
+        try
+            push!(returnval, Core.eval(@__MODULE__, Symbol(v)))
+        catch ex
+            throw(ex)
+        end
+    end
+
+    return returnval
+end  # getvars(varnames::Array{String, 1})
+
 """Saves model results to a SQLite database using SQL inserts with transaction batching. Requires three arguments:
-    1) vars - Array of model variables for which results will be retrieved and saved to SQLite.
-    2) modelvarindices - Dictionary mapping model variables to tuples of (variable name, [index column names]).
+    1) vars - Names of model variables for which results will be retrieved and saved to database.
+    2) modelvarindices - Dictionary mapping model variable names to tuples of (variable, [index column names]).
     3) db - SQLite database.
     4) solvedtmstr - String to write into solvedtm field in result tables."""
-function savevarresults(vars::Array{JuMP.JuMPContainer,1}, modelvarindices::Dict{JuMP.JuMPContainer, Tuple{String,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String)
-    for v in vars
-        local gvv = JuMP.getvalue(v)
+function savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String)
+    for vname in intersect(vars, keys(modelvarindices))
+        local v = modelvarindices[vname][1]  # Model variable corresponding to vname
+        local gvv = JuMP.getvalue(v)  # Value of v in model solution
         local indices::Array{Tuple}  # Array of tuples of index values for v
         local vals::Array{Float64}  # Array of model results for v
 
@@ -250,18 +268,18 @@ function savevarresults(vars::Array{JuMP.JuMPContainer,1}, modelvarindices::Dict
             SQLite.execute!(db, "BEGIN")
 
             # Create target table for v (drop any existing table for v)
-            SQLite.query(db,"drop table if exists " * modelvarindices[v][1])
+            SQLite.query(db,"drop table if exists " * vname)
 
-            SQLite.execute!(db, "create table '" * modelvarindices[v][1] * "' ('" * join(modelvarindices[v][2], "' text, '") * "' text, 'val' real, 'solvedtm' text)")
+            SQLite.execute!(db, "create table '" * vname * "' ('" * join(modelvarindices[vname][2], "' text, '") * "' text, 'val' real, 'solvedtm' text)")
 
             # Insert data from gvv
             for i = 1:length(vals)
-                SQLite.execute!(db, "insert into " * modelvarindices[v][1] * " values('" * join(indices[i], "', '") * "', '" * string(vals[i]) * "', '" * solvedtmstr * "')")
+                SQLite.execute!(db, "insert into " * vname * " values('" * join(indices[i], "', '") * "', '" * string(vals[i]) * "', '" * solvedtmstr * "')")
             end
 
             # Complete SQLite transaction
             SQLite.execute!(db, "COMMIT")
-            logmsg("Saved results for " * modelvarindices[v][1] * " to database.")
+            logmsg("Saved results for " * vname * " to database.")
         catch
             # Rollback db transaction
             SQLite.execute!(db, "ROLLBACK")
@@ -271,7 +289,7 @@ function savevarresults(vars::Array{JuMP.JuMPContainer,1}, modelvarindices::Dict
         end
         # END: Wrap database operations in try-catch block to allow rollback on error.
     end
-end  # savevarresults(vars::Array{JuMP.JuMPContainer,1}, modelvarindices::Dict{JuMP.JuMPContainer, Tuple{String,Array{String,1}}}, db::SQLite.DB)
+end  # savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String)
 
 """Drops all tables in db whose name begins with "v" or "sqlite_stat" (both case-sensitive)."""
 function dropresulttables(db::SQLite.DB)
@@ -291,10 +309,7 @@ function packagedirectory()
     return normpath(joinpath(@__DIR__, ".."))
 end  # packagedirectory()
 
-"""Runs NEMO for a scenario. Arguments:
-    • dbpath - Path to SQLite database for scenario to be modeled.
-    • solver - Name of solver to be used (currently, CPLEX or Cbc).
-    • numprocs - Number of worker processes to use for NEMO run."""
+"""This function is deprecated."""
 function startnemo(dbpath::String, solver::String = "Cbc", numprocs::Int = Sys.CPU_THREADS)
     # Note: Sys.CPU_THREADS was Sys.CPU_CORES in Julia 0.6
 
