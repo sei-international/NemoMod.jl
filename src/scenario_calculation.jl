@@ -11,7 +11,7 @@
 
 """Runs NEMO for a scenario specified in a SQLite database. Arguments:
     • dbpath - Path to SQLite database.
-    • solver - Name of solver to be used (currently, GLPK only).
+    • solver - Name of solver to be used (currently, GLPK or CPLEX).
     • varstosave - Comma-delimited list of model variables whose results should be saved in SQLite database.
     • targetprocs - Processes that should be used for parallelized operations within this function."""
 function calculatescenario(
@@ -32,6 +32,8 @@ end
 
 if uppercase(solver) == "GLPK"
     solver = "GLPK"
+elseif uppercase(solver) == "CPLEX"
+    solver = "CPLEX"
 else
     error("Requested solver (" * solver * ") is not supported.")
 end
@@ -47,10 +49,9 @@ logmsg("Connected to model database. Path = " * dbpath * ".")
 # Instantiate JuMP model
 if solver == "GLPK"
     model = Model(solver = GLPKSolverMIP(presolve=true))
-# CPLEX not yet available for Julia 0.7
-#elseif solver == "CPLEX"
-#    model = Model(solver = CplexSolver())
-# Cbc not yet available for Julia 0.7
+elseif solver == "CPLEX"
+    model = Model(solver = CplexSolver())
+# Cbc not yet available for Julia 1.0
 #elseif solver == "Cbc"
 #    model = Model(solver = CbcSolver(threads = nprocs(), logLevel = 1))
 end
@@ -2175,7 +2176,7 @@ end  # calculatescenario()
 """Runs NEMO for a scenario specified in a GNU MathProg data file. Saves results in a NEMO-compatible SQLite database in same
     directory as GNU MathProg data file. Arguments:
     • gmpdatapath - Path to GNU MathProg data file.
-    • solver - Name of solver to be used (currently, GLPK only).
+    • solver - Name of solver to be used (currently, GLPK or CPLEX).
     • gmpmodelpath - Path to GNU MathProg model file corresponding to data file.
     • varstosave - Comma-delimited list of model variables whose results should be saved in SQLite database.
     • targetprocs - Processes that should be used for parallelized operations within this function."""
