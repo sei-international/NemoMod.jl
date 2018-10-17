@@ -53,9 +53,7 @@ function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
         local createviewstmt::String  # Create view SQL statement that will be executed for t
 
         # Delete view if existing already
-        if length(SQLite.query(db, "PRAGMA table_info('" * t * "_def')")) > 0
-            SQLite.query(db,"drop view " * t * "_def")
-        end
+        SQLite.query(db,"drop view if exists " * t * "_def")
 
         # BEGIN: Extract foreign key fields and default value from t.
         for row in eachrow(SQLite.query(db, "PRAGMA table_info('" * t *"')"))

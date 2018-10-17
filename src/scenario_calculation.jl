@@ -14,7 +14,9 @@
     • solver - Name of solver to be used (currently, GLPK only).
     • varstosave - Comma-delimited list of model variables whose results should be saved in SQLite database.
     • targetprocs - Processes that should be used for parallelized operations within this function."""
-function calculatescenario(dbpath::String, solver::String,
+function calculatescenario(
+    dbpath::String,
+    solver::String,
     varstosave::String = "vdemand, vnewstoragecapacity, vaccumulatednewstoragecapacity, vstorageupperlimit, vstoragelowerlimit, vcapitalinvestmentstorage, vdiscountedcapitalinvestmentstorage, vsalvagevaluestorage, vdiscountedsalvagevaluestorage, vnewcapacity, vaccumulatednewcapacity, vtotalcapacityannual, vtotaltechnologyannualactivity, vtotalannualtechnologyactivitybymode, vproductionbytechnologyannual, vproduction, vusebytechnologyannual, vuse, vtrade, vtradeannual, vproductionannual, vuseannual, vcapitalinvestment, vdiscountedcapitalinvestment, vsalvagevalue, vdiscountedsalvagevalue, voperatingcost, vdiscountedoperatingcost, vtotaldiscountedcost",
     targetprocs::Array{Int, 1} = Array{Int, 1}([1]))
 # Lines within calculatescenario() are not indented since the function is so lengthy. To make an otherwise local
@@ -2177,13 +2179,14 @@ end  # calculatescenario()
     • gmpmodelpath - Path to GNU MathProg model file corresponding to data file.
     • varstosave - Comma-delimited list of model variables whose results should be saved in SQLite database.
     • targetprocs - Processes that should be used for parallelized operations within this function."""
-function calculategmpscenario(gmpdatapath::String,
+function calculategmpscenario(
+    gmpdatapath::String,
     solver::String,
     gmpmodelpath::String = normpath(joinpath(@__DIR__, "..", "utils", "gmpl2sql", "osemosys_2017_11_08_long.txt")),
     varstosave::String = "vdemand, vnewstoragecapacity, vaccumulatednewstoragecapacity, vstorageupperlimit, vstoragelowerlimit, vcapitalinvestmentstorage, vdiscountedcapitalinvestmentstorage, vsalvagevaluestorage, vdiscountedsalvagevaluestorage, vnewcapacity, vaccumulatednewcapacity, vtotalcapacityannual, vtotaltechnologyannualactivity, vtotalannualtechnologyactivitybymode, vproductionbytechnologyannual, vproduction, vusebytechnologyannual, vuse, vtrade, vtradeannual, vproductionannual, vuseannual, vcapitalinvestment, vdiscountedcapitalinvestment, vsalvagevalue, vdiscountedsalvagevalue, voperatingcost, vdiscountedoperatingcost, vtotaldiscountedcost",
     targetprocs::Array{Int, 1} = Array{Int, 1}([1]))
 
-    logmsg("Started conversion of MathProg file.")
+    logmsg("Started conversion of MathProg data file.")
 
     # BEGIN: Validate arguments.
     if !ispath(gmpdatapath)
@@ -2192,21 +2195,18 @@ function calculategmpscenario(gmpdatapath::String,
 
     if !ispath(gmpmodelpath)
         error("gmpmodelpath must refer to a valid file system path.")
-
     end
+
     logmsg("Validated run-time arguments.")
     # END: Validate arguments.
 
     # BEGIN: Convert data file into NEMO SQLite database.
-    local cmd::String = normpath(joinpath(@__DIR__, "..", "utils", "gmpl2sql", "gmpl2sql.exe -d \"" * gmpdatapath * "\" -m \"" * gmpmodelpath * "\""))
-    println(cmd)
-    Cmd(`$cmd`)
+    local gmp2sqlprog::String = normpath(joinpath(@__DIR__, "..", "utils", "gmpl2sql", "gmpl2sql.exe"))  # Full path to gmp2sql.exe
+    run(`$gmp2sqlprog -d $gmpdatapath -m $gmpmodelpath`)
     # END: Convert data file into NEMO SQLite database.
 
-    # Start here.
-
-    logmsg("Finished conversion of MathProg file.")
+    logmsg("Finished conversion of MathProg data file.")
 
     # Call calculatescenario()
-
+    calculatescenario(splitext(gmpdatapath)[1] * ".sl3", solver, varstosave, targetprocs)
 end  # calculategmpscenario()
