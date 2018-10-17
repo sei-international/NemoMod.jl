@@ -5,7 +5,7 @@
     Copyright © 2018: Stockholm Environment Institute U.S.
 
     Release 0.1: Julia version of OSeMOSYS version 2017_11_08.  http://www.osemosys.org/
-	
+
 	File description: Tests for NemoMod package.
 =#
 
@@ -18,7 +18,7 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
     @testset "Solving UTOPIA" begin
         dbfile = normpath(joinpath(dirname(pathof(NemoMod)),"../test/utopia.sqlite"))
 
-        NemoMod.nemomain(dbfile, "GLPK")
+        NemoMod.calculatescenario(dbfile, "GLPK")
 
         db = SQLite.DB(dbfile)
         testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
