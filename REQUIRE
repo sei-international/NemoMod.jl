@@ -3,7 +3,7 @@ JuMP
 SQLite
 DataFrames
 GLPKMathProgInterface
-# CPLEX not yet supported in Julia 0.7
+CPLEX
 # Cbc not yet supported in Julia 0.7
 PackageCompiler
 Libdl
