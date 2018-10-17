@@ -53,7 +53,7 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
         @test isapprox(testqry[6,:val], 1214.807617; atol=TOL)
         @test isapprox(testqry[7,:val], 1196.944055; atol=TOL)
         @test isapprox(testqry[8,:val], 1207.676216; atol=TOL)
-        @test isapprox(testqry[9,:val], 1098.527585; atol=TOL)
+        @test isapprox(testqry[9,:val], 1098.252384; atol=TOL)
         @test isapprox(testqry[10,:val], 1117.595158; atol=TOL)
         @test isapprox(testqry[11,:val], 1047.769294; atol=TOL)
         @test isapprox(testqry[12,:val], 1125.578368; atol=TOL)
@@ -64,8 +64,8 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
         @test isapprox(testqry[17,:val], 885.294875; atol=TOL)
         @test isapprox(testqry[18,:val], 838.923596; atol=TOL)
         @test isapprox(testqry[19,:val], 777.346299; atol=TOL)
-        @test isapprox(testqry[20,:val], 718.539524; atol=TOL)
-        @test isapprox(testqry[21,:val], 659.775303; atol=TOL)
+        @test isapprox(testqry[20,:val], 718.732469; atol=TOL)
+        @test isapprox(testqry[21,:val], 659.805869; atol=TOL)
 
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
