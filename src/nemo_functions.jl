@@ -301,12 +301,6 @@ function dropresulttables(db::SQLite.DB)
     end
 end  # dropresulttables(db::SQLite.DB)
 
-"""Returns the absolute path of the directory for the NemoMod package (specifically, one level above the directory
-    containing the file in which this function is declared)."""
-function packagedirectory()
-    return normpath(joinpath(@__DIR__, ".."))
-end  # packagedirectory()
-
 """This function is deprecated."""
 function startnemo(dbpath::String, solver::String = "Cbc", numprocs::Int = Sys.CPU_THREADS)
     # Note: Sys.CPU_THREADS was Sys.CPU_CORES in Julia 0.6

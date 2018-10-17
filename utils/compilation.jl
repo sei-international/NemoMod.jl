@@ -8,7 +8,7 @@
 
     File description: Utilities for ahead-of-time compilation of NEMO. Typical usage in a REPL session:
         using NemoMod
-        include(joinpath(NemoMod.packagedirectory(), "utils", "compilation.jl"))
+        include(normpath(joinpath(pathof(NemoMod), "..", "..", "utils", "compilation.jl")))
         compilenemo()
 =#
 
