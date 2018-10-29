@@ -16,7 +16,8 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
 
 @testset "Solving a scenario" begin
     @testset "Solving UTOPIA with GLPK" begin
-        dbfile = normpath(joinpath(dirname(pathof(NemoMod)),"../test/utopia.sqlite"))
+        # dbfile = normpath(joinpath(dirname(pathof(NemoMod)),"../test/utopia.sqlite"))
+        dbfile = joinpath(@__DIR__, "utopia.sqlite")
 
         NemoMod.calculatescenario(dbfile, "GLPK")
 
@@ -73,7 +74,8 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
     end  # "Solving UTOPIA with GLPK"
 
     @testset "Solving UTOPIA with CPLEX" begin
-        dbfile = normpath(joinpath(dirname(pathof(NemoMod)),"../test/utopia.sqlite"))
+        # dbfile = normpath(joinpath(dirname(pathof(NemoMod)),"../test/utopia.sqlite"))
+        dbfile = joinpath(@__DIR__, "utopia.sqlite")
 
         NemoMod.calculatescenario(dbfile, "CPLEX")
 
@@ -128,5 +130,15 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
         NemoMod.dropresulttables(db)
         testqry = SQLite.query(db, "VACUUM")
     end  # "Solving UTOPIA with CPLEX"
-
 end  # @testset "Solving a scenario"
+
+@testset "Other database operations" begin
+    # createnemodb(path::String), setparamdefault(db::SQLite.DB, table::String, val::Float64)
+    @testset "Create a new NEMO database" begin
+
+
+    end  # @testset "Create a new NEMO database"
+
+
+
+end  # @testset "Other database operations"

@@ -353,8 +353,6 @@ function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
         local pks::Array{String,1} = Array{String,1}()  # Names of foreign key fields in t
         local createviewstmt::String  # Create view SQL statement that will be executed for t
 
-        println("Table " * t)
-
         # Delete view if existing already
         SQLite.query(db,"drop view if exists " * t * "_def")
 
@@ -365,8 +363,6 @@ function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
             if rowname == "id"
                 continue
             elseif rowname == "val"
-                println("Default = " * string(row[:dflt_value]))
-
                 if !ismissing(row[:dflt_value])
                     defaultval = row[:dflt_value]
 
