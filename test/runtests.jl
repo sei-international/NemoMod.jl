@@ -14,9 +14,25 @@ using Test, SQLite, DataFrames
 
 const TOL = 1e-4  # Default tolerance for isapprox() comparisons
 
+"""Helper function for deleting a SQLite database file after Julia has been told to release it (e.g.,
+    with finalize(db); db = nothing; GC.gc())."""
+function delete_dbfile(path::String, max_del_attempts::Int)
+    del_attempts::Int = 0  # Number of deletions that have been attempted
+
+    while isfile(path) && del_attempts < max_del_attempts
+        try
+            del_attempts += 1
+            rm(path; force = true)
+            sleep(0.5)  # Without this, the next isfile() test sometimes throws an I/O error
+        catch
+            # Wait and continue
+            sleep(0.5)
+        end
+    end
+end  # delete_dbfile(path::String)
+
 @testset "Solving a scenario" begin
     @testset "Solving UTOPIA with GLPK" begin
-        # dbfile = normpath(joinpath(dirname(pathof(NemoMod)),"../test/utopia.sqlite"))
         dbfile = joinpath(@__DIR__, "utopia.sqlite")
 
         NemoMod.calculatescenario(dbfile, "GLPK")
@@ -74,7 +90,6 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
     end  # "Solving UTOPIA with GLPK"
 
     @testset "Solving UTOPIA with CPLEX" begin
-        # dbfile = normpath(joinpath(dirname(pathof(NemoMod)),"../test/utopia.sqlite"))
         dbfile = joinpath(@__DIR__, "utopia.sqlite")
 
         NemoMod.calculatescenario(dbfile, "CPLEX")
@@ -133,12 +148,40 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
 end  # @testset "Solving a scenario"
 
 @testset "Other database operations" begin
-    # createnemodb(path::String), setparamdefault(db::SQLite.DB, table::String, val::Float64)
+    # setparamdefault(db::SQLite.DB, table::String, val::Float64)
     @testset "Create a new NEMO database" begin
+        db = NemoMod.createnemodb(joinpath(@__DIR__, "new_nemo.sqlite"))
 
+        @test isfile(joinpath(@__DIR__, "new_nemo.sqlite"))
+        # Test that there are rows in AccumulatedAnnualDemand table
+        @test size(SQLite.query(db, "PRAGMA table_info('AccumulatedAnnualDemand')"))[1] > 0
 
+        # BEGIN: Delete new database file.
+        # Get Julia to release file
+        finalize(db); db = nothing; GC.gc()
+
+        # Try up to 20 times to delete file
+        delete_dbfile(joinpath(@__DIR__, "new_nemo.sqlite"), 20)
+
+        @test !isfile(joinpath(@__DIR__, "new_nemo.sqlite"))
+        # END: Delete new database file.
     end  # @testset "Create a new NEMO database"
 
+    @testset "Set parameter default" begin
+        db = NemoMod.createnemodb(joinpath(@__DIR__, "param_default.sqlite"))
+        @test ismissing(SQLite.query(db, "PRAGMA table_info('VariableCost')")[6,:dflt_value])
 
+        NemoMod.setparamdefault(db, "VariableCost", 1.0)
+        @test SQLite.query(db, "PRAGMA table_info('VariableCost')")[6,:dflt_value] == "1.0"
 
+        # BEGIN: Delete new database file.
+        # Get Julia to release file
+        finalize(db); db = nothing; GC.gc()
+
+        # Try up to 20 times to delete file
+        delete_dbfile(joinpath(@__DIR__, "param_default.sqlite"), 20)
+
+        @test !isfile(joinpath(@__DIR__, "param_default.sqlite"))
+        # END: Delete new database file.
+    end  # @testset "Set parameter default"
 end  # @testset "Other database operations"

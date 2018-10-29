@@ -309,6 +309,7 @@ function setparamdefault(db::SQLite.DB, table::String, val::Float64)
         # Update view showing default values for table
         SQLite.execute!(db, "VACUUM")  # Appears to be necessary to make default visible in current Julia session
         createviewwithdefaults(db, [table])
+        logmsg("Updated default value for parameter " * table * ". New default = " * string(val) * ".")
     catch
         # Rollback transaction and rethrow error
         SQLite.execute!(db, "ROLLBACK")
