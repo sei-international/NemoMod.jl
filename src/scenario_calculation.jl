@@ -53,7 +53,8 @@ elseif solver == "CPLEX"
     try
         model = Model(solver = CplexSolver())
     catch ex
-        error("Could not instantiate CPLEX - make sure CPLEX package is installed.")
+        error("Could not instantiate CPLEX - make sure CPLEX package is installed. After installing CPLEX package, run "
+            * "Base.compilecache(Base.PkgId(Base.UUID(\"a3c327a0-d2f0-11e8-37fd-d12fd35c3c72\"), \"NemoMod\"))")
     end
 # Cbc not yet available for Julia 1.0
 #elseif solver == "Cbc"
