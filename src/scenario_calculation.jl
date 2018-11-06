@@ -26,8 +26,8 @@ function calculatescenario(
 logmsg("Started scenario calculation.")
 
 # BEGIN: Validate arguments.
-if !ispath(dbpath)
-    error("dbpath must refer to a valid file system path.")
+if !isfile(dbpath)
+    error("dbpath must refer to a file.")
 end
 
 if uppercase(solver) == "GLPK"
@@ -50,7 +50,11 @@ logmsg("Connected to model database. Path = " * dbpath * ".")
 if solver == "GLPK"
     model = Model(solver = GLPKSolverMIP(presolve=true))
 elseif solver == "CPLEX"
-    model = Model(solver = CplexSolver())
+    try
+        model = Model(solver = CplexSolver())
+    catch ex
+        error("Could not instantiate CPLEX - make sure CPLEX package is installed.")
+    end
 # Cbc not yet available for Julia 1.0
 #elseif solver == "Cbc"
 #    model = Model(solver = CbcSolver(threads = nprocs(), logLevel = 1))
