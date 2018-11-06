@@ -25,12 +25,6 @@ git-tree-sha1 = "5d55b9486590fdda5905c275bb21ce1f0754020f"
 uuid = "e1450e63-4bb3-523b-b2a4-4ffa8c0fd77d"
 version = "1.0.0"
 
-[[CPLEX]]
-deps = ["Compat", "Libdl", "LinQuadOptInterface", "MathProgBase"]
-git-tree-sha1 = "0822c69f570d647f9886d20461c80657e85dac17"
-uuid = "a076750e-1247-5638-91d2-ce28b192dca0"
-version = "0.4.1"
-
 [[Calculus]]
 deps = ["Compat"]
 git-tree-sha1 = "f60954495a7afcee4136f78d1d60350abd37a409"
