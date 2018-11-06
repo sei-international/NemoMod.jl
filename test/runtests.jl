@@ -89,6 +89,7 @@ end  # delete_dbfile(path::String)
         testqry = SQLite.query(db, "VACUUM")
     end  # "Solving UTOPIA with GLPK"
 
+    println("key test = " * string(haskey(Pkg.installed(), "CPLEX")))
     if haskey(Pkg.installed(), "CPLEX")
         @testset "Solving UTOPIA with CPLEX" begin
             dbfile = joinpath(@__DIR__, "utopia.sqlite")
