@@ -59,15 +59,28 @@ function snoop_userimg_nemo(userimg, packages::Tuple{String, String}...)
     nothing
 end  # snoop_userimg_nemo(userimg, packages::Tuple{String, String}...)
 
-"""Generates a new Julia system image that includes the NemoMod package. The package is optimized and compiled into the system image
-    based on the use cases in usecases (a path to a Julia script of use cases). usecases defaults to the standard NemoMod test cases
-    (see NemoMod test directory for other options). The existing system image is replaced unless replacesysimage = false."""
-function compilenemo(replacesysimage::Bool = true, usecases::String = normpath(joinpath(pathof(NemoMod), "..", "..", "test", "runtests.jl")))
+"""Generates a new Julia system image including specified additional packages. Arguments:
+    • replacesysimage - Indicates whether the existing system image should be overwritten with the new image. If false, the new image is saved
+        in a different directory (reported at the end of the function's execution).
+    • packagesandusecases - One or more tuples of the following form:
+        > First item - Name of the additional package to be included in the new system image.
+        > Second item - Use cases that determine what functionality of the package is included in the new system image.
+Example invocations:
+    • compilenemo() - New system image includes NemoMod with compiled functionality based on standard NemoMod test cases. Support for GLPK solver is included
+        in new system image since it's NEMO's default solver. Existing system image is overwritten.
+    • compilenemo(true, ("NemoMod", normpath(joinpath(pathof(NemoMod), "..", "..", "test", "runtests.jl"))),
+        ("CPLEX", normpath(joinpath(pathof(NemoMod), "..", "..", "test", "test_cplex.jl")))) - New system image includes NemoMod and CPLEX; compiled functionality
+        is based on standard NemoMod test cases plus a supplemental test case for CPLEX. Support for GLPK and CPLEX solvers is included in new system image.
+        Existing system image is overwritten.
+    • compilenemo(false, ("NemoMod", normpath(joinpath(pathof(NemoMod), "..", "..", "test", "runtests.jl"))),
+        ("CPLEX", normpath(joinpath(pathof(NemoMod), "..", "..", "test", "test_cplex.jl")))) - Same as above but existing system image is not overwritten. New
+        system image is saved in a directory reported at end of function execution."""
+function compilenemo(replacesysimage::Bool = true, packagesandusecases::Tuple{String, String}...=("NemoMod", normpath(joinpath(pathof(NemoMod), "..", "..", "test", "runtests.jl"))))
     # Restore stock system image to avoid conflicts
     PackageCompiler.revert()
 
     # Create snooping file
-    snoop_userimg_nemo(PackageCompiler.sysimg_folder("precompile.jl"), ("NemoMod", usecases))
+    snoop_userimg_nemo(PackageCompiler.sysimg_folder("precompile.jl"), packagesandusecases...)
 
     # To avoid a copying error at the end of compile_package(), manually remove any pre-existing back-up of system image in Julia system image folder
     rm(joinpath(PackageCompiler.default_sysimg_path(false), "sys.$(Libdl.dlext)") * ".packagecompiler_backup"; force = true)
