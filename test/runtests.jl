@@ -35,7 +35,7 @@ end  # delete_dbfile(path::String)
     @testset "Solving UTOPIA with GLPK" begin
         dbfile = joinpath(@__DIR__, "utopia.sqlite")
 
-        NemoMod.calculatescenario(dbfile, "GLPK")
+        NemoMod.calculatescenario(dbfile; solver = "GLPK")
 
         db = SQLite.DB(dbfile)
         testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
@@ -93,7 +93,7 @@ end  # delete_dbfile(path::String)
         @testset "Solving UTOPIA with CPLEX" begin
             dbfile = joinpath(@__DIR__, "utopia.sqlite")
 
-            NemoMod.calculatescenario(dbfile, "CPLEX")
+            NemoMod.calculatescenario(dbfile; solver = "CPLEX")
 
             db = SQLite.DB(dbfile)
             testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
