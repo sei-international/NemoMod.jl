@@ -15,14 +15,6 @@ module NemoMod
 using JuMP, SQLite, DataFrames, Distributed, Dates
 using GLPKMathProgInterface  # Default solver
 
-# Optional solvers - enabled if user has separately installed them
-try
-    using CPLEX
-catch
-    # Continue
-end
-
-# Cbc - not yet available for Julia 1.0
 include("nemo_functions.jl")  # Core NEMO functions
 include("scenario_calculation.jl")  # Functions for calculating a scenario with NEMO
 # END: Access other modules and code files.

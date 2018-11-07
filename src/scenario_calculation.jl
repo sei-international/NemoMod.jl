@@ -6,18 +6,19 @@
 
     Release 0.1: Julia version of OSeMOSYS version 2017_11_08.  http://www.osemosys.org/
 
-    File description: Functions for calculating a scenario with NEMO.
+    File description: Functions JuMP model object to be used.
 =#
 
 """Runs NEMO for a scenario specified in a SQLite database. Arguments:
     • dbpath - Path to SQLite database.
-    • solver - Name of solver to be used (currently, GLPK or CPLEX [case-insensitive]).
+    • jumpmodel - JuMP model object specifying MIP solver to be used. Examples: Model(solver = GLPKSolverMIP(presolve=true)),
+        Model(solver = CplexSolver()). Note that solver package must be installed (GLPK is installed with NEMO by default).
     • varstosave - Comma-delimited list of model variables whose results should be saved in SQLite database.
     • targetprocs - Processes that should be used for parallelized operations within this function.
     • quiet - Suppresses low-priority status messages (which are otherwise printed to STDOUT)."""
 function calculatescenario(
     dbpath::String;
-    solver::String = "GLPK",
+    jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
     varstosave::String = "vdemand, vnewstoragecapacity, vaccumulatednewstoragecapacity, vstorageupperlimit, vstoragelowerlimit, vcapitalinvestmentstorage, vdiscountedcapitalinvestmentstorage, vsalvagevaluestorage, vdiscountedsalvagevaluestorage, vnewcapacity, vaccumulatednewcapacity, vtotalcapacityannual, vtotaltechnologyannualactivity, vtotalannualtechnologyactivitybymode, vproductionbytechnologyannual, vproduction, vusebytechnologyannual, vuse, vtrade, vtradeannual, vproductionannual, vuseannual, vcapitalinvestment, vdiscountedcapitalinvestment, vsalvagevalue, vdiscountedsalvagevalue, voperatingcost, vdiscountedoperatingcost, vtotaldiscountedcost",
     targetprocs::Array{Int, 1} = Array{Int, 1}([1]),
     quiet::Bool = false)
@@ -32,14 +33,6 @@ if !isfile(dbpath)
     error("dbpath must refer to a file.")
 end
 
-if uppercase(solver) == "GLPK"
-    solver = "GLPK"
-elseif uppercase(solver) == "CPLEX"
-    solver = "CPLEX"
-else
-    error("Requested solver (" * solver * ") is not supported.")
-end
-
 logmsg("Validated run-time arguments.", quiet)
 # END: Validate arguments.
 
@@ -47,21 +40,6 @@ logmsg("Validated run-time arguments.", quiet)
 db = SQLite.DB(dbpath)
 logmsg("Connected to model database. Path = " * dbpath * ".", quiet)
 # END: Connect to SQLite database.
-
-# Instantiate JuMP model
-if solver == "GLPK"
-    model = Model(solver = GLPKSolverMIP(presolve=true))
-elseif solver == "CPLEX"
-    try
-        model = Model(solver = CplexSolver())
-    catch ex
-        error("Could not instantiate CPLEX - make sure CPLEX package is installed. After installing CPLEX package, "
-            * "restart Julia and run Base.compilecache(Base.PkgId(Base.UUID(\"a3c327a0-d2f0-11e8-37fd-d12fd35c3c72\"), \"NemoMod\")).")
-    end
-# Cbc not yet available for Julia 1.0
-#elseif solver == "Cbc"
-#    model = Model(solver = CbcSolver(threads = nprocs(), logLevel = 1))
-end
 
 # BEGIN: Create parameter views showing default values.
 createviewwithdefaults(db, ["OutputActivityRatio", "InputActivityRatio", "ResidualCapacity", "OperationalLife", "FixedCost", "YearSplit", "SpecifiedAnnualDemand", "SpecifiedDemandProfile", "VariableCost", "DiscountRate", "CapitalCost", "CapitalCostStorage", "CapacityFactor", "CapacityToActivityUnit", "CapacityOfOneTechnologyUnit", "AvailabilityFactor", "TradeRoute", "TechnologyToStorage", "Conversionls",
@@ -96,32 +74,32 @@ logmsg("Defined OSeMOSYS sets.", quiet)
 modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}} = Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}}()  # Dictionary mapping model variable names to tuples of (variable, [index column names]); must have an entry here in order to save variable's results back to database
 
 # Demands
-@variable(model, vrateofdemand[sregion, stimeslice, sfuel, syear] >= 0)
-@variable(model, vdemand[sregion, stimeslice, sfuel, syear] >= 0)
+@variable(jumpmodel, vrateofdemand[sregion, stimeslice, sfuel, syear] >= 0)
+@variable(jumpmodel, vdemand[sregion, stimeslice, sfuel, syear] >= 0)
 
 modelvarindices["vrateofdemand"] = (vrateofdemand, ["r","l","f","y"])
 modelvarindices["vdemand"] = (vdemand, ["r","l","f","y"])
 logmsg("Defined demand variables.", quiet)
 
 # Storage
-@variable(model, vrateofstoragecharge[sregion, sstorage, sseason, sdaytype, sdailytimebracket, syear])
-@variable(model, vrateofstoragedischarge[sregion, sstorage, sseason, sdaytype, sdailytimebracket, syear])
-@variable(model, vnetchargewithinyear[sregion, sstorage, sseason, sdaytype, sdailytimebracket, syear])
-@variable(model, vnetchargewithinday[sregion, sstorage, sseason, sdaytype, sdailytimebracket, syear])
-@variable(model, vstoragelevelyearstart[sregion, sstorage, syear] >= 0)
-@variable(model, vstoragelevelyearfinish[sregion, sstorage, syear] >= 0)
-@variable(model, vstoragelevelseasonstart[sregion, sstorage, sseason, syear] >= 0)
-@variable(model, vstorageleveldaytypestart[sregion, sstorage, sseason, sdaytype, syear] >= 0)
-@variable(model, vstorageleveldaytypefinish[sregion, sstorage, sseason, sdaytype, syear] >= 0)
-@variable(model, vstoragelowerlimit[sregion, sstorage, syear] >= 0)
-@variable(model, vstorageupperlimit[sregion, sstorage, syear] >= 0)
-@variable(model, vaccumulatednewstoragecapacity[sregion, sstorage, syear] >= 0)
-@variable(model, vnewstoragecapacity[sregion, sstorage, syear] >= 0)
-@variable(model, vcapitalinvestmentstorage[sregion, sstorage, syear] >= 0)
-@variable(model, vdiscountedcapitalinvestmentstorage[sregion, sstorage, syear] >= 0)
-@variable(model, vsalvagevaluestorage[sregion, sstorage, syear] >= 0)
-@variable(model, vdiscountedsalvagevaluestorage[sregion, sstorage, syear] >= 0)
-@variable(model, vtotaldiscountedstoragecost[sregion, sstorage, syear] >= 0)
+@variable(jumpmodel, vrateofstoragecharge[sregion, sstorage, sseason, sdaytype, sdailytimebracket, syear])
+@variable(jumpmodel, vrateofstoragedischarge[sregion, sstorage, sseason, sdaytype, sdailytimebracket, syear])
+@variable(jumpmodel, vnetchargewithinyear[sregion, sstorage, sseason, sdaytype, sdailytimebracket, syear])
+@variable(jumpmodel, vnetchargewithinday[sregion, sstorage, sseason, sdaytype, sdailytimebracket, syear])
+@variable(jumpmodel, vstoragelevelyearstart[sregion, sstorage, syear] >= 0)
+@variable(jumpmodel, vstoragelevelyearfinish[sregion, sstorage, syear] >= 0)
+@variable(jumpmodel, vstoragelevelseasonstart[sregion, sstorage, sseason, syear] >= 0)
+@variable(jumpmodel, vstorageleveldaytypestart[sregion, sstorage, sseason, sdaytype, syear] >= 0)
+@variable(jumpmodel, vstorageleveldaytypefinish[sregion, sstorage, sseason, sdaytype, syear] >= 0)
+@variable(jumpmodel, vstoragelowerlimit[sregion, sstorage, syear] >= 0)
+@variable(jumpmodel, vstorageupperlimit[sregion, sstorage, syear] >= 0)
+@variable(jumpmodel, vaccumulatednewstoragecapacity[sregion, sstorage, syear] >= 0)
+@variable(jumpmodel, vnewstoragecapacity[sregion, sstorage, syear] >= 0)
+@variable(jumpmodel, vcapitalinvestmentstorage[sregion, sstorage, syear] >= 0)
+@variable(jumpmodel, vdiscountedcapitalinvestmentstorage[sregion, sstorage, syear] >= 0)
+@variable(jumpmodel, vsalvagevaluestorage[sregion, sstorage, syear] >= 0)
+@variable(jumpmodel, vdiscountedsalvagevaluestorage[sregion, sstorage, syear] >= 0)
+@variable(jumpmodel, vtotaldiscountedstoragecost[sregion, sstorage, syear] >= 0)
 
 modelvarindices["vrateofstoragecharge"] = (vrateofstoragecharge, ["r", "s", "ls", "ld", "lh", "y"])
 modelvarindices["vrateofstoragedischarge"] = (vrateofstoragedischarge, ["r", "s", "ls", "ld", "lh", "y"])
@@ -144,10 +122,10 @@ modelvarindices["vtotaldiscountedstoragecost"] = (vtotaldiscountedstoragecost, [
 logmsg("Defined storage variables.", quiet)
 
 # Capacity
-@variable(model, vnumberofnewtechnologyunits[sregion, stechnology, syear] >= 0, Int)
-@variable(model, vnewcapacity[sregion, stechnology, syear] >= 0)
-@variable(model, vaccumulatednewcapacity[sregion, stechnology, syear] >= 0)
-@variable(model, vtotalcapacityannual[sregion, stechnology, syear] >= 0)
+@variable(jumpmodel, vnumberofnewtechnologyunits[sregion, stechnology, syear] >= 0, Int)
+@variable(jumpmodel, vnewcapacity[sregion, stechnology, syear] >= 0)
+@variable(jumpmodel, vaccumulatednewcapacity[sregion, stechnology, syear] >= 0)
+@variable(jumpmodel, vtotalcapacityannual[sregion, stechnology, syear] >= 0)
 
 modelvarindices["vnumberofnewtechnologyunits"] = (vnumberofnewtechnologyunits, ["r", "t", "y"])
 modelvarindices["vnewcapacity"] = (vnewcapacity, ["r", "t", "y"])
@@ -156,11 +134,11 @@ modelvarindices["vtotalcapacityannual"] = (vtotalcapacityannual, ["r", "t", "y"]
 logmsg("Defined capacity variables.", quiet)
 
 # Activity
-@variable(model, vrateofactivity[sregion, stimeslice, stechnology, smode_of_operation, syear] >= 0)
-@variable(model, vrateoftotalactivity[sregion, stechnology, stimeslice, syear] >= 0)
-@variable(model, vtotaltechnologyannualactivity[sregion, stechnology, syear] >= 0)
-@variable(model, vtotalannualtechnologyactivitybymode[sregion, stechnology, smode_of_operation, syear] >= 0)
-@variable(model, vtotaltechnologymodelperiodactivity[sregion, stechnology])
+@variable(jumpmodel, vrateofactivity[sregion, stimeslice, stechnology, smode_of_operation, syear] >= 0)
+@variable(jumpmodel, vrateoftotalactivity[sregion, stechnology, stimeslice, syear] >= 0)
+@variable(jumpmodel, vtotaltechnologyannualactivity[sregion, stechnology, syear] >= 0)
+@variable(jumpmodel, vtotalannualtechnologyactivitybymode[sregion, stechnology, smode_of_operation, syear] >= 0)
+@variable(jumpmodel, vtotaltechnologymodelperiodactivity[sregion, stechnology])
 
 queryvrateofproductionbytechnologybymode::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, l.val as l, t.val as t, m.val as m, f.val as f, y.val as y,
 cast(oar.val as real) as oar
@@ -170,7 +148,7 @@ and oar.val <> 0")
 
 indexdicts = keydicts_parallel(queryvrateofproductionbytechnologybymode, 5, targetprocs)  # Array of Dicts used to restrict indices of following variable
 
-@variable(model, vrateofproductionbytechnologybymode[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
+@variable(jumpmodel, vrateofproductionbytechnologybymode[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
     m=indexdicts[3][[r,l,t]], f=indexdicts[4][[r,l,t,m]], y=indexdicts[5][[r,l,t,m,f]]] >= 0)
 
 # ys included because it's needed for some later constraints based on this query
@@ -183,10 +161,10 @@ group by r.val, l.val, t.val, f.val, y.val")
 
 indexdicts = keydicts_parallel(queryvrateofproductionbytechnology, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
 
-@variable(model, vrateofproductionbytechnology[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
+@variable(jumpmodel, vrateofproductionbytechnology[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
     f=indexdicts[3][[r,l,t]], y=indexdicts[4][[r,l,t,f]]] >= 0)
 
-@variable(model, vproductionbytechnology[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
+@variable(jumpmodel, vproductionbytechnology[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
     f=indexdicts[3][[r,l,t]], y=indexdicts[4][[r,l,t,f]]] >= 0)
 
 # la included because it's needed for some later constraints based on this query
@@ -198,11 +176,11 @@ group by r.val, t.val, f.val, y.val")
 
 indexdicts = keydicts_parallel(queryproductionbytechnologyannual, 3, targetprocs)  # Array of Dicts used to restrict indices of vproductionbytechnologyannual
 
-@variable(model, vproductionbytechnologyannual[r=[k[1] for k = keys(indexdicts[1])], t=indexdicts[1][[r]], f=indexdicts[2][[r,t]],
+@variable(jumpmodel, vproductionbytechnologyannual[r=[k[1] for k = keys(indexdicts[1])], t=indexdicts[1][[r]], f=indexdicts[2][[r,t]],
     y=indexdicts[3][[r,t,f]]] >= 0)
 
-@variable(model, vrateofproduction[sregion, stimeslice, sfuel, syear] >= 0)
-@variable(model, vproduction[sregion, stimeslice, sfuel, syear] >= 0)
+@variable(jumpmodel, vrateofproduction[sregion, stimeslice, sfuel, syear] >= 0)
+@variable(jumpmodel, vproduction[sregion, stimeslice, sfuel, syear] >= 0)
 
 queryvrateofusebytechnologybymode::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, l.val as l, t.val as t, m.val as m, f.val as f, y.val as y, cast(iar.val as real) as iar
 from region r, timeslice l, technology t, MODE_OF_OPERATION m, fuel f, year y, InputActivityRatio_def iar
@@ -211,7 +189,7 @@ and iar.val <> 0")
 
 indexdicts = keydicts_parallel(queryvrateofusebytechnologybymode, 5, targetprocs)  # Array of Dicts used to restrict indices of following variable
 
-@variable(model, vrateofusebytechnologybymode[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
+@variable(jumpmodel, vrateofusebytechnologybymode[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
     m=indexdicts[3][[r,l,t]], f=indexdicts[4][[r,l,t,m]], y=indexdicts[5][[r,l,t,m,f]]] >= 0)
 
 # ys included because it's needed for some later constraints based on this query
@@ -224,10 +202,10 @@ group by r.val, l.val, t.val, f.val, y.val")
 
 indexdicts = keydicts_parallel(queryvrateofusebytechnology, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
 
-@variable(model, vrateofusebytechnology[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
+@variable(jumpmodel, vrateofusebytechnology[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
     f=indexdicts[3][[r,l,t]], y=indexdicts[4][[r,l,t,f]]] >= 0)
 
-@variable(model, vusebytechnology[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
+@variable(jumpmodel, vusebytechnology[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
     f=indexdicts[3][[r,l,t]], y=indexdicts[4][[r,l,t,f]]] >= 0)
 
 indexdicts = keydicts_parallel(SQLite.query(db, "select r.val as r, t.val as t, f.val as f, y.val as y
@@ -236,16 +214,16 @@ where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
 and iar.val <> 0
 group by r.val, t.val, f.val, y.val"), 3, targetprocs)  # Array of Dicts used to restrict indices of vusebytechnologyannual
 
-@variable(model, vusebytechnologyannual[r=[k[1] for k = keys(indexdicts[1])], t=indexdicts[1][[r]], f=indexdicts[2][[r,t]],
+@variable(jumpmodel, vusebytechnologyannual[r=[k[1] for k = keys(indexdicts[1])], t=indexdicts[1][[r]], f=indexdicts[2][[r,t]],
     y=indexdicts[3][[r,t,f]]] >= 0)
 
-@variable(model, vrateofuse[sregion, stimeslice, sfuel, syear] >= 0)
-@variable(model, vuse[sregion, stimeslice, sfuel, syear] >= 0)
+@variable(jumpmodel, vrateofuse[sregion, stimeslice, sfuel, syear] >= 0)
+@variable(jumpmodel, vuse[sregion, stimeslice, sfuel, syear] >= 0)
 
-@variable(model, vtrade[sregion, sregion, stimeslice, sfuel, syear])
-@variable(model, vtradeannual[sregion, sregion, sfuel, syear])
-@variable(model, vproductionannual[sregion, sfuel, syear] >= 0)
-@variable(model, vuseannual[sregion, sfuel, syear] >= 0)
+@variable(jumpmodel, vtrade[sregion, sregion, stimeslice, sfuel, syear])
+@variable(jumpmodel, vtradeannual[sregion, sregion, sfuel, syear])
+@variable(jumpmodel, vproductionannual[sregion, sfuel, syear] >= 0)
+@variable(jumpmodel, vuseannual[sregion, sfuel, syear] >= 0)
 
 modelvarindices["vrateofactivity"] = (vrateofactivity, ["r", "l", "t", "m", "y"])
 modelvarindices["vrateoftotalactivity"] = (vrateoftotalactivity, ["r", "t", "l", "y"])
@@ -271,17 +249,17 @@ modelvarindices["vuseannual"] = (vuseannual, ["r", "f", "y"])
 logmsg("Defined activity variables.", quiet)
 
 # Costing
-@variable(model, vcapitalinvestment[sregion, stechnology, syear] >= 0)
-@variable(model, vdiscountedcapitalinvestment[sregion, stechnology, syear] >= 0)
-@variable(model, vsalvagevalue[sregion, stechnology, syear] >= 0)
-@variable(model, vdiscountedsalvagevalue[sregion, stechnology, syear] >= 0)
-@variable(model, voperatingcost[sregion, stechnology, syear] >= 0)
-@variable(model, vdiscountedoperatingcost[sregion, stechnology, syear] >= 0)
-@variable(model, vannualvariableoperatingcost[sregion, stechnology, syear] >= 0)
-@variable(model, vannualfixedoperatingcost[sregion, stechnology, syear] >= 0)
-@variable(model, vtotaldiscountedcostbytechnology[sregion, stechnology, syear] >= 0)
-@variable(model, vtotaldiscountedcost[sregion, syear] >= 0)
-@variable(model, vmodelperiodcostbyregion[sregion] >= 0)
+@variable(jumpmodel, vcapitalinvestment[sregion, stechnology, syear] >= 0)
+@variable(jumpmodel, vdiscountedcapitalinvestment[sregion, stechnology, syear] >= 0)
+@variable(jumpmodel, vsalvagevalue[sregion, stechnology, syear] >= 0)
+@variable(jumpmodel, vdiscountedsalvagevalue[sregion, stechnology, syear] >= 0)
+@variable(jumpmodel, voperatingcost[sregion, stechnology, syear] >= 0)
+@variable(jumpmodel, vdiscountedoperatingcost[sregion, stechnology, syear] >= 0)
+@variable(jumpmodel, vannualvariableoperatingcost[sregion, stechnology, syear] >= 0)
+@variable(jumpmodel, vannualfixedoperatingcost[sregion, stechnology, syear] >= 0)
+@variable(jumpmodel, vtotaldiscountedcostbytechnology[sregion, stechnology, syear] >= 0)
+@variable(jumpmodel, vtotaldiscountedcost[sregion, syear] >= 0)
+@variable(jumpmodel, vmodelperiodcostbyregion[sregion] >= 0)
 
 modelvarindices["vcapitalinvestment"] = (vcapitalinvestment, ["r", "t", "y"])
 modelvarindices["vdiscountedcapitalinvestment"] = (vdiscountedcapitalinvestment, ["r", "t", "y"])
@@ -297,29 +275,29 @@ modelvarindices["vmodelperiodcostbyregion"] = (vmodelperiodcostbyregion, ["r"])
 logmsg("Defined costing variables.", quiet)
 
 # Reserve margin
-@variable(model, vtotalcapacityinreservemargin[sregion, syear] >= 0)
-@variable(model, vdemandneedingreservemargin[sregion, stimeslice, syear] >= 0)
+@variable(jumpmodel, vtotalcapacityinreservemargin[sregion, syear] >= 0)
+@variable(jumpmodel, vdemandneedingreservemargin[sregion, stimeslice, syear] >= 0)
 
 modelvarindices["vtotalcapacityinreservemargin"] = (vtotalcapacityinreservemargin, ["r", "y"])
 modelvarindices["vdemandneedingreservemargin"] = (vdemandneedingreservemargin, ["r", "l", "y"])
 logmsg("Defined reserve margin variables.", quiet)
 
 # RE target
-@variable(model, vtotalreproductionannual[sregion, syear])
-@variable(model, vretotalproductionoftargetfuelannual[sregion, syear])
+@variable(jumpmodel, vtotalreproductionannual[sregion, syear])
+@variable(jumpmodel, vretotalproductionoftargetfuelannual[sregion, syear])
 
 modelvarindices["vtotalreproductionannual"] = (vtotalreproductionannual, ["r", "y"])
 modelvarindices["vretotalproductionoftargetfuelannual"] = (vretotalproductionoftargetfuelannual, ["r", "y"])
 logmsg("Defined renewable energy target variables.", quiet)
 
 # Emissions
-@variable(model, vannualtechnologyemissionbymode[sregion, stechnology, semission, smode_of_operation, syear] >= 0)
-@variable(model, vannualtechnologyemission[sregion, stechnology, semission, syear] >= 0)
-@variable(model, vannualtechnologyemissionpenaltybyemission[sregion, stechnology, semission, syear] >= 0)
-@variable(model, vannualtechnologyemissionspenalty[sregion, stechnology, syear] >= 0)
-@variable(model, vdiscountedtechnologyemissionspenalty[sregion, stechnology, syear] >= 0)
-@variable(model, vannualemissions[sregion, semission, syear] >= 0)
-@variable(model, vmodelperiodemissions[sregion, semission] >= 0)
+@variable(jumpmodel, vannualtechnologyemissionbymode[sregion, stechnology, semission, smode_of_operation, syear] >= 0)
+@variable(jumpmodel, vannualtechnologyemission[sregion, stechnology, semission, syear] >= 0)
+@variable(jumpmodel, vannualtechnologyemissionpenaltybyemission[sregion, stechnology, semission, syear] >= 0)
+@variable(jumpmodel, vannualtechnologyemissionspenalty[sregion, stechnology, syear] >= 0)
+@variable(jumpmodel, vdiscountedtechnologyemissionspenalty[sregion, stechnology, syear] >= 0)
+@variable(jumpmodel, vannualemissions[sregion, semission, syear] >= 0)
+@variable(jumpmodel, vmodelperiodemissions[sregion, semission] >= 0)
 
 modelvarindices["vannualtechnologyemissionbymode"] = (vannualtechnologyemissionbymode, ["r", "t", "e", "m", "y"])
 modelvarindices["vannualtechnologyemission"] = (vannualtechnologyemission, ["r", "t", "e", "y"])
@@ -347,7 +325,7 @@ where sad.r = sdp.r and sad.f = sdp.f and sad.y = sdp.y
 and ys.l = sdp.l and ys.y = sdp.y")
 
 for row in eachrow(queryvrateofdemand)
-    ceq_specifieddemand[constraintnum] = @constraint(model, row[:specifiedannualdemand] * row[:specifieddemandprofile] / row[:ys]
+    ceq_specifieddemand[constraintnum] = @constraint(jumpmodel, row[:specifiedannualdemand] * row[:specifieddemandprofile] / row[:ys]
         == vrateofdemand[row[:r], row[:l], row[:f], row[:y]])
     constraintnum += 1
 end
@@ -368,7 +346,7 @@ group by r.val, t.val, y.val"))
     local t = row[:t]
     local y = row[:y]
 
-    caa1_totalnewcapacity[constraintnum] = @constraint(model, sum([vnewcapacity[r,t,yy] for yy = split(row[:yya], ",")])
+    caa1_totalnewcapacity[constraintnum] = @constraint(jumpmodel, sum([vnewcapacity[r,t,yy] for yy = split(row[:yya], ",")])
         == vaccumulatednewcapacity[r,t,y])
     constraintnum += 1
 end
@@ -388,7 +366,7 @@ left join ResidualCapacity_def rc on rc.r = r.val and rc.t = t.val and rc.y = y.
     local y = row[:y]
     local rc = ismissing(row[:rc]) ? 0 : row[:rc]
 
-    caa2_totalannualcapacity[constraintnum] = @constraint(model, vaccumulatednewcapacity[r,t,y] + rc == vtotalcapacityannual[r,t,y])
+    caa2_totalannualcapacity[constraintnum] = @constraint(jumpmodel, vaccumulatednewcapacity[r,t,y] + rc == vtotalcapacityannual[r,t,y])
     constraintnum += 1
 end
 
@@ -400,7 +378,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref caa3_totalactivityofeachtechnology[1:length(sregion) * length(stechnology) * length(stimeslice) * length(syear)]
 
 for (r, t, l, y) in Base.product(sregion, stechnology, stimeslice, syear)
-    caa3_totalactivityofeachtechnology[constraintnum] = @constraint(model, sum([vrateofactivity[r,l,t,m,y] for m = smode_of_operation])
+    caa3_totalactivityofeachtechnology[constraintnum] = @constraint(jumpmodel, sum([vrateofactivity[r,l,t,m,y] for m = smode_of_operation])
         == vrateoftotalactivity[r,t,l,y])
     constraintnum += 1
 end
@@ -422,7 +400,7 @@ and cta.r = r.val and cta.t = t.val"))
     local l = row[:l]
     local y = row[:y]
 
-    caa4_constraint_capacity[constraintnum] = @constraint(model, vrateoftotalactivity[r,t,l,y]
+    caa4_constraint_capacity[constraintnum] = @constraint(jumpmodel, vrateoftotalactivity[r,t,l,y]
         <= vtotalcapacityannual[r,t,y] * row[:cf] * row[:cta])
     constraintnum += 1
 end
@@ -440,7 +418,7 @@ from CapacityOfOneTechnologyUnit_def cot where cot.val <> 0"))
     local t = row[:t]
     local y = row[:y]
 
-    caa5_totalnewcapacity[constraintnum] = @constraint(model, row[:cot] * vnumberofnewtechnologyunits[r,t,y]
+    caa5_totalnewcapacity[constraintnum] = @constraint(jumpmodel, row[:cot] * vnumberofnewtechnologyunits[r,t,y]
         == vnewcapacity[r,t,y])
     constraintnum += 1
 end
@@ -469,7 +447,7 @@ group by r.val, t.val, y.val"))
     local t = row[:t]
     local y = row[:y]
 
-    cab1_plannedmaintenance[constraintnum] = @constraint(model, sum([vrateoftotalactivity[r,t,split(ys,";")[1],y] * Meta.parse(split(ys,";")[2]) for ys = split(row[:ysa], ",")])
+    cab1_plannedmaintenance[constraintnum] = @constraint(jumpmodel, sum([vrateoftotalactivity[r,t,split(ys,";")[1],y] * Meta.parse(split(ys,";")[2]) for ys = split(row[:ysa], ",")])
         <= sum([vtotalcapacityannual[r,t,y] * Meta.parse(split(cf,";")[1]) * Meta.parse(split(cf,";")[2]) for cf = split(row[:cfa], ",")])
         * row[:af] * row[:cta])
     constraintnum += 1
@@ -490,7 +468,7 @@ for row in eachrow(queryvrateofproductionbytechnologybymode)
     local f = row[:f]
     local y = row[:y]
 
-    eba1_rateoffuelproduction1[constraintnum] = @constraint(model, vrateofactivity[r,l,t,m,y] * row[:oar] == vrateofproductionbytechnologybymode[r,l,t,m,f,y])
+    eba1_rateoffuelproduction1[constraintnum] = @constraint(jumpmodel, vrateofactivity[r,l,t,m,y] * row[:oar] == vrateofproductionbytechnologybymode[r,l,t,m,f,y])
     constraintnum += 1
 end
 
@@ -509,7 +487,7 @@ for row in eachrow(queryvrateofproductionbytechnology)
     local y = row[:y]
 
     # vrateofproductionbytechnologybymode is JuMP.JuMPDict because it was defined with triangular indexing
-    eba2_rateoffuelproduction2[constraintnum] = @constraint(model, sum([(haskey(vrateofproductionbytechnologybymode.tupledict, (r,l,t,m,f,y)) ? vrateofproductionbytechnologybymode[r,l,t,m,f,y] : 0) for m = smode_of_operation]) == vrateofproductionbytechnology[r,l,t,f,y])
+    eba2_rateoffuelproduction2[constraintnum] = @constraint(jumpmodel, sum([(haskey(vrateofproductionbytechnologybymode.tupledict, (r,l,t,m,f,y)) ? vrateofproductionbytechnologybymode[r,l,t,m,f,y] : 0) for m = smode_of_operation]) == vrateofproductionbytechnology[r,l,t,f,y])
     constraintnum += 1
 end
 
@@ -535,7 +513,7 @@ for row in eachrow(queryvrateofproduction)
     local f = row[:f]
     local y = row[:y]
 
-    eba3_rateoffuelproduction3[constraintnum] = @constraint(model, sum([vrateofproductionbytechnology[r,l,t,f,y] for t = split(row[:ta], ",")]) == vrateofproduction[r,l,f,y])
+    eba3_rateoffuelproduction3[constraintnum] = @constraint(jumpmodel, sum([vrateofproductionbytechnology[r,l,t,f,y] for t = split(row[:ta], ",")]) == vrateofproduction[r,l,f,y])
     constraintnum += 1
 end
 
@@ -554,7 +532,7 @@ for row in eachrow(queryvrateofusebytechnologybymode)
     local m = row[:m]
     local y = row[:y]
 
-    eba4_rateoffueluse1[constraintnum] = @constraint(model, vrateofactivity[r,l,t,m,y] * row[:iar] == vrateofusebytechnologybymode[r,l,t,m,f,y])
+    eba4_rateoffueluse1[constraintnum] = @constraint(jumpmodel, vrateofactivity[r,l,t,m,y] * row[:iar] == vrateofusebytechnologybymode[r,l,t,m,f,y])
     constraintnum += 1
 end
 
@@ -573,7 +551,7 @@ for row in eachrow(queryvrateofusebytechnology)
     local y = row[:y]
 
     # vrateofusebytechnologybymode is JuMP.JuMPDict because it was defined with triangular indexing
-    eba5_rateoffueluse2[constraintnum] = @constraint(model, sum([(haskey(vrateofusebytechnologybymode.tupledict, (r,l,t,m,f,y)) ? vrateofusebytechnologybymode[r,l,t,m,f,y] : 0) for m = smode_of_operation]) == vrateofusebytechnology[r,l,t,f,y])
+    eba5_rateoffueluse2[constraintnum] = @constraint(jumpmodel, sum([(haskey(vrateofusebytechnologybymode.tupledict, (r,l,t,m,f,y)) ? vrateofusebytechnologybymode[r,l,t,m,f,y] : 0) for m = smode_of_operation]) == vrateofusebytechnology[r,l,t,f,y])
     constraintnum += 1
 end
 
@@ -600,7 +578,7 @@ for row in eachrow(queryvrateofuse)
     local f = row[:f]
     local y = row[:y]
 
-    eba6_rateoffueluse3[constraintnum] = @constraint(model, sum([vrateofusebytechnology[r,l,t,f,y] for t = split(row[:ta], ",")]) == vrateofuse[r,l,f,y])
+    eba6_rateoffueluse3[constraintnum] = @constraint(jumpmodel, sum([vrateofusebytechnology[r,l,t,f,y] for t = split(row[:ta], ",")]) == vrateofuse[r,l,f,y])
     constraintnum += 1
 end
 
@@ -618,7 +596,7 @@ for row in eachrow(queryvrateofproduction)
     local y = row[:y]
 
     if !ismissing(row[:ys])
-        eba7_energybalanceeachts1[constraintnum] = @constraint(model, vrateofproduction[r,l,f,y] * row[:ys] == vproduction[r,l,f,y])
+        eba7_energybalanceeachts1[constraintnum] = @constraint(jumpmodel, vrateofproduction[r,l,f,y] * row[:ys] == vproduction[r,l,f,y])
         constraintnum += 1
     end
 end
@@ -637,7 +615,7 @@ for row in eachrow(queryvrateofuse)
     local y = row[:y]
 
     if !ismissing(row[:ys])
-        eba8_energybalanceeachts2[constraintnum] = @constraint(model, vrateofuse[r,l,f,y] * row[:ys] == vuse[r,l,f,y])
+        eba8_energybalanceeachts2[constraintnum] = @constraint(jumpmodel, vrateofuse[r,l,f,y] * row[:ys] == vuse[r,l,f,y])
         constraintnum += 1
     end
 end
@@ -655,7 +633,7 @@ for row in eachrow(queryvrateofdemand)
     local f = row[:f]
     local y = row[:y]
 
-    eba9_energybalanceeachts3[constraintnum] = @constraint(model, vrateofdemand[r,l,f,y] * row[:ys] == vdemand[r,l,f,y])
+    eba9_energybalanceeachts3[constraintnum] = @constraint(jumpmodel, vrateofdemand[r,l,f,y] * row[:ys] == vdemand[r,l,f,y])
     constraintnum += 1
 end
 
@@ -667,7 +645,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba10_energybalanceeachts4[1:length(sregion)^2 * length(stimeslice) * length(sfuel) * length(syear)]
 
 for (r, rr, l, f, y) in Base.product(sregion, sregion, stimeslice, sfuel, syear)
-    eba10_energybalanceeachts4[constraintnum] = @constraint(model, vtrade[r,rr,l,f,y] == -vtrade[rr,r,l,f,y])
+    eba10_energybalanceeachts4[constraintnum] = @constraint(jumpmodel, vtrade[r,rr,l,f,y] == -vtrade[rr,r,l,f,y])
     constraintnum += 1
 end
 
@@ -687,7 +665,7 @@ group by r.val, l.val, f.val, y.val"))
     local f = row[:f]
     local y = row[:y]
 
-    eba11_energybalanceeachts5[constraintnum] = @constraint(model, vproduction[r,l,f,y] >= vdemand[r,l,f,y] + vuse[r,l,f,y] +
+    eba11_energybalanceeachts5[constraintnum] = @constraint(jumpmodel, vproduction[r,l,f,y] >= vdemand[r,l,f,y] + vuse[r,l,f,y] +
         (ismissing(row[:tra]) ? 0 : sum([vtrade[r,split(tr,";")[1],l,f,y] * Meta.parse(split(tr,";")[2]) for tr = split(row[:tra], ",")])))
     constraintnum += 1
 end
@@ -700,7 +678,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref ebb1_energybalanceeachyear1[1:length(sregion) * length(sfuel) * length(syear)]
 
 for (r, f, y) in Base.product(sregion, sfuel, syear)
-    ebb1_energybalanceeachyear1[constraintnum] = @constraint(model, sum([vproduction[r,l,f,y] for l = stimeslice]) == vproductionannual[r,f,y])
+    ebb1_energybalanceeachyear1[constraintnum] = @constraint(jumpmodel, sum([vproduction[r,l,f,y] for l = stimeslice]) == vproductionannual[r,f,y])
     constraintnum += 1
 end
 
@@ -712,7 +690,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref ebb2_energybalanceeachyear2[1:length(sregion) * length(sfuel) * length(syear)]
 
 for (r, f, y) in Base.product(sregion, sfuel, syear)
-    ebb2_energybalanceeachyear2[constraintnum] = @constraint(model, sum([vuse[r,l,f,y] for l = stimeslice]) == vuseannual[r,f,y])
+    ebb2_energybalanceeachyear2[constraintnum] = @constraint(jumpmodel, sum([vuse[r,l,f,y] for l = stimeslice]) == vuseannual[r,f,y])
     constraintnum += 1
 end
 
@@ -724,7 +702,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref ebb3_energybalanceeachyear3[1:length(sregion) * length(sfuel) * length(syear)]
 
 for (r, rr, f, y) in Base.product(sregion, sregion, sfuel, syear)
-    ebb3_energybalanceeachyear3[constraintnum] = @constraint(model, sum([vtrade[r,rr,l,f,y] for l = stimeslice]) == vtradeannual[r,rr,f,y])
+    ebb3_energybalanceeachyear3[constraintnum] = @constraint(jumpmodel, sum([vtrade[r,rr,l,f,y] for l = stimeslice]) == vtradeannual[r,rr,f,y])
     constraintnum += 1
 end
 
@@ -745,7 +723,7 @@ group by r.val, f.val, y.val, aad"))
     local f = row[:f]
     local y = row[:y]
 
-    ebb4_energybalanceeachyear4[constraintnum] = @constraint(model, vproductionannual[r,f,y] >= vuseannual[r,f,y] +
+    ebb4_energybalanceeachyear4[constraintnum] = @constraint(jumpmodel, vproductionannual[r,f,y] >= vuseannual[r,f,y] +
         (ismissing(row[:tra]) ? 0 : sum([vtradeannual[r,split(tr,";")[1],f,y] * Meta.parse(split(tr,";")[2]) for tr = split(row[:tra], ",")])) +
         (ismissing(row[:aad]) ? 0 : row[:aad]))
     constraintnum += 1
@@ -766,7 +744,7 @@ for row in eachrow(queryvrateofproductionbytechnology)
     local y = row[:y]
 
     if !ismissing(row[:ys])
-        acc1_fuelproductionbytechnology[constraintnum] = @constraint(model, vrateofproductionbytechnology[r,l,t,f,y] * row[:ys] == vproductionbytechnology[r,l,t,f,y])
+        acc1_fuelproductionbytechnology[constraintnum] = @constraint(jumpmodel, vrateofproductionbytechnology[r,l,t,f,y] * row[:ys] == vproductionbytechnology[r,l,t,f,y])
         constraintnum += 1
     end
 end
@@ -786,7 +764,7 @@ for row in eachrow(queryvrateofusebytechnology)
     local y = row[:y]
 
     if !ismissing(row[:ys])
-        acc2_fuelusebytechnology[constraintnum] = @constraint(model, vrateofusebytechnology[r,l,t,f,y] * row[:ys] == vusebytechnology[r,l,t,f,y])
+        acc2_fuelusebytechnology[constraintnum] = @constraint(jumpmodel, vrateofusebytechnology[r,l,t,f,y] * row[:ys] == vusebytechnology[r,l,t,f,y])
         constraintnum += 1
     end
 end
@@ -807,7 +785,7 @@ group by r.val, t.val, m.val, y.val"))
     local m = row[:m]
     local y = row[:y]
 
-    acc3_averageannualrateofactivity[constraintnum] = @constraint(model, sum([vrateofactivity[r,split(l,";")[1],t,m,y] * Meta.parse(split(l,";")[2]) for l = split(row[:la], ",")]) == vtotalannualtechnologyactivitybymode[r,t,m,y])
+    acc3_averageannualrateofactivity[constraintnum] = @constraint(jumpmodel, sum([vrateofactivity[r,split(l,";")[1],t,m,y] * Meta.parse(split(l,";")[2]) for l = split(row[:la], ",")]) == vtotalannualtechnologyactivitybymode[r,t,m,y])
     constraintnum += 1
 end
 
@@ -819,7 +797,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref acc4_modelperiodcostbyregion[1:length(sregion)]
 
 for r in sregion
-    acc4_modelperiodcostbyregion[constraintnum] = @constraint(model, sum([vtotaldiscountedcost[r,y] for y in syear]) == vmodelperiodcostbyregion[r])
+    acc4_modelperiodcostbyregion[constraintnum] = @constraint(jumpmodel, sum([vtotaldiscountedcost[r,y] for y in syear]) == vmodelperiodcostbyregion[r])
     constraintnum += 1
 end
 
@@ -847,7 +825,7 @@ group by r.val, s.val, ls.val, ld.val, lh.val, y.val"))
     local lh = row[:lh]
     local y = row[:y]
 
-    s1_rateofstoragecharge[constraintnum] = @constraint(model, sum([vrateofactivity[r,split(i,";")[3],split(i,";")[1],split(i,";")[2],y] * Meta.parse(split(i,";")[4]) for i = split(row[:ia], ",")]) == vrateofstoragecharge[r,s,ls,ld,lh,y])
+    s1_rateofstoragecharge[constraintnum] = @constraint(jumpmodel, sum([vrateofactivity[r,split(i,";")[3],split(i,";")[1],split(i,";")[2],y] * Meta.parse(split(i,";")[4]) for i = split(row[:ia], ",")]) == vrateofstoragecharge[r,s,ls,ld,lh,y])
     constraintnum += 1
 end
 
@@ -875,7 +853,7 @@ group by r.val, s.val, ls.val, ld.val, lh.val, y.val"))
     local lh = row[:lh]
     local y = row[:y]
 
-    s2_rateofstoragedischarge[constraintnum] = @constraint(model, sum([vrateofactivity[r,split(i,";")[3],split(i,";")[1],split(i,";")[2],y] * Meta.parse(split(i,";")[4]) for i = split(row[:ia], ",")]) == vrateofstoragedischarge[r,s,ls,ld,lh,y])
+    s2_rateofstoragedischarge[constraintnum] = @constraint(jumpmodel, sum([vrateofactivity[r,split(i,";")[3],split(i,";")[1],split(i,";")[2],y] * Meta.parse(split(i,";")[4]) for i = split(row[:ia], ",")]) == vrateofstoragedischarge[r,s,ls,ld,lh,y])
     constraintnum += 1
 end
 
@@ -902,7 +880,7 @@ group by r.val, s.val, ls.val, ld.val, lh.val, y.val"))
     local lh = row[:lh]
     local y = row[:y]
 
-    s3_netchargewithinyear[constraintnum] = @constraint(model, (vrateofstoragecharge[r,s,ls,ld,lh,y] - vrateofstoragedischarge[r,s,ls,ld,lh,y]) * sum([Meta.parse(i) for i = split(row[:ia], ",")]) == vnetchargewithinyear[r,s,ls,ld,lh,y])
+    s3_netchargewithinyear[constraintnum] = @constraint(jumpmodel, (vrateofstoragecharge[r,s,ls,ld,lh,y] - vrateofstoragedischarge[r,s,ls,ld,lh,y]) * sum([Meta.parse(i) for i = split(row[:ia], ",")]) == vnetchargewithinyear[r,s,ls,ld,lh,y])
     constraintnum += 1
 end
 
@@ -923,7 +901,7 @@ where ds.lh = lh.val and ds.y = y.val"))
     local lh = row[:lh]
     local y = row[:y]
 
-    s4_netchargewithinday[constraintnum] = @constraint(model, (vrateofstoragecharge[r,s,ls,ld,lh,y] - vrateofstoragedischarge[r,s,ls,ld,lh,y]) * row[:ds] == vnetchargewithinday[r,s,ls,ld,lh,y])
+    s4_netchargewithinday[constraintnum] = @constraint(jumpmodel, (vrateofstoragecharge[r,s,ls,ld,lh,y] - vrateofstoragedischarge[r,s,ls,ld,lh,y]) * row[:ds] == vnetchargewithinday[r,s,ls,ld,lh,y])
     constraintnum += 1
 end
 
@@ -941,7 +919,7 @@ where sls.r = r.val and sls.s = s.val"))
     local s = row[:s]
     local y = row[:y]
 
-    s5_and_s6_storagelevelyearstart[constraintnum] = @constraint(model, (y == first(syear) ? row[:sls] : vstoragelevelyearstart[r,s,string(Meta.parse(y)-1)] + sum([vnetchargewithinyear[r,s,ls,ld,lh,string(Meta.parse(y)-1)] for ls = sseason, ld = sdaytype, lh = sdailytimebracket])) == vstoragelevelyearstart[r,s,y])
+    s5_and_s6_storagelevelyearstart[constraintnum] = @constraint(jumpmodel, (y == first(syear) ? row[:sls] : vstoragelevelyearstart[r,s,string(Meta.parse(y)-1)] + sum([vnetchargewithinyear[r,s,ls,ld,lh,string(Meta.parse(y)-1)] for ls = sseason, ld = sdaytype, lh = sdailytimebracket])) == vstoragelevelyearstart[r,s,y])
     constraintnum += 1
 end
 
@@ -953,7 +931,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref s7_and_s8_storagelevelyearfinish[1:length(sregion) * length(sstorage) * length(syear)]
 
 for (r, s, y) in Base.product(sregion, sstorage, syear)
-    s7_and_s8_storagelevelyearfinish[constraintnum] = @constraint(model, (y < last(syear) ? vstoragelevelyearstart[r,s,string(Meta.parse(y)+1)] : vstoragelevelyearstart[r,s,y] + sum([vnetchargewithinyear[r,s,ls,ld,lh,y] for ls = sseason, ld = sdaytype, lh = sdailytimebracket])) == vstoragelevelyearfinish[r,s,y])
+    s7_and_s8_storagelevelyearfinish[constraintnum] = @constraint(jumpmodel, (y < last(syear) ? vstoragelevelyearstart[r,s,string(Meta.parse(y)+1)] : vstoragelevelyearstart[r,s,y] + sum([vnetchargewithinyear[r,s,ls,ld,lh,y] for ls = sseason, ld = sdaytype, lh = sdailytimebracket])) == vstoragelevelyearfinish[r,s,y])
     constraintnum += 1
 end
 
@@ -965,7 +943,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref s9_and_s10_storagelevelseasonstart[1:length(sregion) * length(sstorage) * length(sseason) * length(syear)]
 
 for (r, s, ls, y) in Base.product(sregion, sstorage, sseason, syear)
-    s9_and_s10_storagelevelseasonstart[constraintnum] = @constraint(model, (ls == first(sseason) ? vstoragelevelyearstart[r,s,y] : vstoragelevelseasonstart[r,s,string(Meta.parse(ls)-1),y] + sum([vnetchargewithinyear[r,s,string(Meta.parse(ls)-1),ld,lh,y] for ld = sdaytype, lh = sdailytimebracket])) == vstoragelevelseasonstart[r,s,ls,y])
+    s9_and_s10_storagelevelseasonstart[constraintnum] = @constraint(jumpmodel, (ls == first(sseason) ? vstoragelevelyearstart[r,s,y] : vstoragelevelseasonstart[r,s,string(Meta.parse(ls)-1),y] + sum([vnetchargewithinyear[r,s,string(Meta.parse(ls)-1),ld,lh,y] for ld = sdaytype, lh = sdailytimebracket])) == vstoragelevelseasonstart[r,s,ls,y])
     constraintnum += 1
 end
 
@@ -985,7 +963,7 @@ left join DaysInDayType_def did on did.ls = ls.val and did.ld = ld.val - 1 and d
     local ld = row[:ld]
     local y = row[:y]
 
-    s11_and_s12_storageleveldaytypestart[constraintnum] = @constraint(model, (ld == first(sdaytype) ? vstoragelevelseasonstart[r,s,ls,y] : vstorageleveldaytypestart[r,s,ls,string(Meta.parse(ld)-1),y] + sum([vnetchargewithinday[r,s,ls,string(Meta.parse(ld)-1),lh,y] * row[:did] for lh = sdailytimebracket])) == vstorageleveldaytypestart[r,s,ls,ld,y])
+    s11_and_s12_storageleveldaytypestart[constraintnum] = @constraint(jumpmodel, (ld == first(sdaytype) ? vstoragelevelseasonstart[r,s,ls,y] : vstorageleveldaytypestart[r,s,ls,string(Meta.parse(ld)-1),y] + sum([vnetchargewithinday[r,s,ls,string(Meta.parse(ld)-1),lh,y] * row[:did] for lh = sdailytimebracket])) == vstorageleveldaytypestart[r,s,ls,ld,y])
     constraintnum += 1
 end
 
@@ -1005,7 +983,7 @@ left join DaysInDayType_def did on did.ls = ls.val and did.ld = ld.val + 1 and d
     local ld = row[:ld]
     local y = row[:y]
 
-    s13_and_s14_and_s15_storageleveldaytypefinish[constraintnum] = @constraint(model, (ls == last(sseason) && ld == last(sdaytype) ? vstoragelevelyearfinish[r,s,y] : (ld == last(sdaytype) ? vstoragelevelseasonstart[r,s,string(Meta.parse(ls)+1),y] : vstorageleveldaytypefinish[r,s,ls,string(Meta.parse(ld)+1),y] - sum([vnetchargewithinday[r,s,ls,string(Meta.parse(ld)+1),lh,y] * row[:did] for lh = sdailytimebracket]))) == vstorageleveldaytypefinish[r,s,ls,ld,y])
+    s13_and_s14_and_s15_storageleveldaytypefinish[constraintnum] = @constraint(jumpmodel, (ls == last(sseason) && ld == last(sdaytype) ? vstoragelevelyearfinish[r,s,y] : (ld == last(sdaytype) ? vstoragelevelseasonstart[r,s,string(Meta.parse(ls)+1),y] : vstorageleveldaytypefinish[r,s,ls,string(Meta.parse(ld)+1),y] - sum([vnetchargewithinday[r,s,ls,string(Meta.parse(ld)+1),lh,y] * row[:did] for lh = sdailytimebracket]))) == vstorageleveldaytypefinish[r,s,ls,ld,y])
     constraintnum += 1
 end
 
@@ -1031,7 +1009,7 @@ for row in eachrow(querysc1)
     local lh = row[:lh]
     local y = row[:y]
 
-    sc1_lowerlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(model, 0 <= vstorageleveldaytypestart[r,s,ls,ld,y] + (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstoragelowerlimit[r,s,y])
+    sc1_lowerlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(jumpmodel, 0 <= vstorageleveldaytypestart[r,s,ls,ld,y] + (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstoragelowerlimit[r,s,y])
     constraintnum += 1
 end
 
@@ -1051,7 +1029,7 @@ for row in eachrow(querysc1)
     local lh = row[:lh]
     local y = row[:y]
 
-    sc1_upperlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(model, vstorageleveldaytypestart[r,s,ls,ld,y] + (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstorageupperlimit[r,s,y] <= 0)
+    sc1_upperlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(jumpmodel, vstorageleveldaytypestart[r,s,ls,ld,y] + (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstorageupperlimit[r,s,y] <= 0)
     constraintnum += 1
 end
 
@@ -1078,7 +1056,7 @@ for row in eachrow(querysc2)
     local lh = row[:lh]
     local y = row[:y]
 
-    sc2_lowerlimit_endofdailytimebracketoflastinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(model, 0 <= vstorageleveldaytypestart[r,s,ls,ld,y] - (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,string(Meta.parse(ld)-1),lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstoragelowerlimit[r,s,y])
+    sc2_lowerlimit_endofdailytimebracketoflastinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(jumpmodel, 0 <= vstorageleveldaytypestart[r,s,ls,ld,y] - (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,string(Meta.parse(ld)-1),lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstoragelowerlimit[r,s,y])
     constraintnum += 1
 end
 
@@ -1098,7 +1076,7 @@ for row in eachrow(querysc2)
     local lh = row[:lh]
     local y = row[:y]
 
-    sc2_upperlimit_endofdailytimebracketoflastinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(model, vstorageleveldaytypestart[r,s,ls,ld,y] - (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,string(Meta.parse(ld)-1),lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstorageupperlimit[r,s,y] <= 0)
+    sc2_upperlimit_endofdailytimebracketoflastinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(jumpmodel, vstorageleveldaytypestart[r,s,ls,ld,y] - (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,string(Meta.parse(ld)-1),lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstorageupperlimit[r,s,y] <= 0)
     constraintnum += 1
 end
 
@@ -1124,7 +1102,7 @@ for row in eachrow(querysc3)
     local lh = row[:lh]
     local y = row[:y]
 
-    sc3_lowerlimit_endofdailytimebracketoflastinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(model, 0 <= vstorageleveldaytypefinish[r,s,ls,ld,y] - (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstoragelowerlimit[r,s,y])
+    sc3_lowerlimit_endofdailytimebracketoflastinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(jumpmodel, 0 <= vstorageleveldaytypefinish[r,s,ls,ld,y] - (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstoragelowerlimit[r,s,y])
     constraintnum += 1
 end
 
@@ -1144,7 +1122,7 @@ for row in eachrow(querysc3)
     local lh = row[:lh]
     local y = row[:y]
 
-    sc3_upperlimit_endofdailytimebracketoflastinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(model, vstorageleveldaytypefinish[r,s,ls,ld,y] - (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstorageupperlimit[r,s,y] <= 0)
+    sc3_upperlimit_endofdailytimebracketoflastinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(jumpmodel, vstorageleveldaytypefinish[r,s,ls,ld,y] - (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstorageupperlimit[r,s,y] <= 0)
     constraintnum += 1
 end
 
@@ -1171,7 +1149,7 @@ for row in eachrow(querysc4)
     local lh = row[:lh]
     local y = row[:y]
 
-    sc4_lowerlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(model, 0 <= vstorageleveldaytypefinish[r,s,ls,string(Meta.parse(ld)-1),y] + (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstoragelowerlimit[r,s,y])
+    sc4_lowerlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(jumpmodel, 0 <= vstorageleveldaytypefinish[r,s,ls,string(Meta.parse(ld)-1),y] + (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstoragelowerlimit[r,s,y])
     constraintnum += 1
 end
 
@@ -1191,7 +1169,7 @@ for row in eachrow(querysc4)
     local lh = row[:lh]
     local y = row[:y]
 
-    sc4_upperlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(model, vstorageleveldaytypefinish[r,s,ls,string(Meta.parse(ld)-1),y] + (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstorageupperlimit[r,s,y] <= 0)
+    sc4_upperlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(jumpmodel, vstorageleveldaytypefinish[r,s,ls,string(Meta.parse(ld)-1),y] + (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstorageupperlimit[r,s,y] <= 0)
     constraintnum += 1
 end
 
@@ -1213,7 +1191,7 @@ where smx.r = r.val and smx.s = s.val"))
     local lh = row[:lh]
     local y = row[:y]
 
-    sc5_maxchargeconstraint[constraintnum] = @constraint(model, vrateofstoragecharge[r,s,ls,ld,lh,y] <= row[:smx])
+    sc5_maxchargeconstraint[constraintnum] = @constraint(jumpmodel, vrateofstoragecharge[r,s,ls,ld,lh,y] <= row[:smx])
     constraintnum += 1
 end
 
@@ -1235,7 +1213,7 @@ where smx.r = r.val and smx.s = s.val"))
     local lh = row[:lh]
     local y = row[:y]
 
-    sc6_maxdischargeconstraint[constraintnum] = @constraint(model, vrateofstoragedischarge[r,s,ls,ld,lh,y] <= row[:smx])
+    sc6_maxdischargeconstraint[constraintnum] = @constraint(jumpmodel, vrateofstoragedischarge[r,s,ls,ld,lh,y] <= row[:smx])
     constraintnum += 1
 end
 
@@ -1254,7 +1232,7 @@ left join ResidualStorageCapacity_def rsc on rsc.r = r.val and rsc.s = s.val and
     local s = row[:s]
     local y = row[:y]
 
-    si1_storageupperlimit[constraintnum] = @constraint(model, vaccumulatednewstoragecapacity[r,s,y] + (ismissing(row[:rsc]) ? 0 : row[:rsc]) == vstorageupperlimit[r,s,y])
+    si1_storageupperlimit[constraintnum] = @constraint(jumpmodel, vaccumulatednewstoragecapacity[r,s,y] + (ismissing(row[:rsc]) ? 0 : row[:rsc]) == vstorageupperlimit[r,s,y])
     constraintnum += 1
 end
 
@@ -1273,7 +1251,7 @@ where msc.r = r.val and msc.s = s.val and msc.y = y.val"))
     local s = row[:s]
     local y = row[:y]
 
-    si2_storagelowerlimit[constraintnum] = @constraint(model, row[:msc] * vstorageupperlimit[r,s,y] == vstoragelowerlimit[r,s,y])
+    si2_storagelowerlimit[constraintnum] = @constraint(jumpmodel, row[:msc] * vstorageupperlimit[r,s,y] == vstoragelowerlimit[r,s,y])
     constraintnum += 1
 end
 
@@ -1294,7 +1272,7 @@ group by r.val, s.val, y.val"))
     local s = row[:s]
     local y = row[:y]
 
-    si3_totalnewstorage[constraintnum] = @constraint(model, sum([vnewstoragecapacity[r,s,yy] for yy = split(row[:yya], ",")]) == vaccumulatednewstoragecapacity[r,s,y])
+    si3_totalnewstorage[constraintnum] = @constraint(jumpmodel, sum([vnewstoragecapacity[r,s,yy] for yy = split(row[:yya], ",")]) == vaccumulatednewstoragecapacity[r,s,y])
     constraintnum += 1
 end
 
@@ -1313,7 +1291,7 @@ where ccs.r = r.val and ccs.s = s.val and ccs.y = y.val"))
     local s = row[:s]
     local y = row[:y]
 
-    si4_undiscountedcapitalinvestmentstorage[constraintnum] = @constraint(model, row[:ccs] * vnewstoragecapacity[r,s,y] == vcapitalinvestmentstorage[r,s,y])
+    si4_undiscountedcapitalinvestmentstorage[constraintnum] = @constraint(jumpmodel, row[:ccs] * vnewstoragecapacity[r,s,y] == vcapitalinvestmentstorage[r,s,y])
     constraintnum += 1
 end
 
@@ -1332,7 +1310,7 @@ where dr.r = r.val"))
     local s = row[:s]
     local y = row[:y]
 
-    si5_discountingcapitalinvestmentstorage[constraintnum] = @constraint(model, vcapitalinvestmentstorage[r,s,y] / ((1 + row[:dr])^(Meta.parse(y) - Meta.parse(first(syear)))) == vdiscountedcapitalinvestmentstorage[r,s,y])
+    si5_discountingcapitalinvestmentstorage[constraintnum] = @constraint(jumpmodel, vcapitalinvestmentstorage[r,s,y] / ((1 + row[:dr])^(Meta.parse(y) - Meta.parse(first(syear)))) == vdiscountedcapitalinvestmentstorage[r,s,y])
     constraintnum += 1
 end
 
@@ -1352,7 +1330,7 @@ and y.val + ols.val - 1 <= " * last(syear)))
     local s = row[:s]
     local y = row[:y]
 
-    si6_salvagevaluestorageatendofperiod1[constraintnum] = @constraint(model, 0 == vsalvagevaluestorage[r,s,y])
+    si6_salvagevaluestorageatendofperiod1[constraintnum] = @constraint(jumpmodel, 0 == vsalvagevaluestorage[r,s,y])
     constraintnum += 1
 end
 
@@ -1380,7 +1358,7 @@ and y.val + ols.val - 1 > " * last(syear)))
     local s = row[:s]
     local y = row[:y]
 
-    si7_salvagevaluestorageatendofperiod2[constraintnum] = @constraint(model, vcapitalinvestmentstorage[r,s,y] * (1 - (Meta.parse(last(syear)) - Meta.parse(y) + 1) / row[:ols]) == vsalvagevaluestorage[r,s,y])
+    si7_salvagevaluestorageatendofperiod2[constraintnum] = @constraint(jumpmodel, vcapitalinvestmentstorage[r,s,y] * (1 - (Meta.parse(last(syear)) - Meta.parse(y) + 1) / row[:ols]) == vsalvagevaluestorage[r,s,y])
     constraintnum += 1
 end
 
@@ -1403,7 +1381,7 @@ and y.val + ols.val - 1 > " * last(syear) *
     local y = row[:y]
     local dr = row[:dr]
 
-    si8_salvagevaluestorageatendofperiod3[constraintnum] = @constraint(model, vcapitalinvestmentstorage[r,s,y] * (1 - (((1 + dr)^(Meta.parse(last(syear)) - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ols]) - 1))) == vsalvagevaluestorage[r,s,y])
+    si8_salvagevaluestorageatendofperiod3[constraintnum] = @constraint(jumpmodel, vcapitalinvestmentstorage[r,s,y] * (1 - (((1 + dr)^(Meta.parse(last(syear)) - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ols]) - 1))) == vsalvagevaluestorage[r,s,y])
     constraintnum += 1
 end
 
@@ -1422,7 +1400,7 @@ where dr.r = r.val"))
     local s = row[:s]
     local y = row[:y]
 
-    si9_salvagevaluestoragediscountedtostartyear[constraintnum] = @constraint(model, vsalvagevaluestorage[r,s,y] / ((1 + row[:dr])^(Meta.parse(last(syear)) - Meta.parse(first(syear)) + 1)) == vdiscountedsalvagevaluestorage[r,s,y])
+    si9_salvagevaluestoragediscountedtostartyear[constraintnum] = @constraint(jumpmodel, vsalvagevaluestorage[r,s,y] / ((1 + row[:dr])^(Meta.parse(last(syear)) - Meta.parse(first(syear)) + 1)) == vdiscountedsalvagevaluestorage[r,s,y])
     constraintnum += 1
 end
 
@@ -1434,7 +1412,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref si10_totaldiscountedcostbystorage[1:length(sregion) * length(sstorage) * length(syear)]
 
 for (r, s, y) in Base.product(sregion, sstorage, syear)
-    si10_totaldiscountedcostbystorage[constraintnum] = @constraint(model, vdiscountedcapitalinvestmentstorage[r,s,y] - vdiscountedsalvagevaluestorage[r,s,y] == vtotaldiscountedstoragecost[r,s,y])
+    si10_totaldiscountedcostbystorage[constraintnum] = @constraint(jumpmodel, vdiscountedcapitalinvestmentstorage[r,s,y] - vdiscountedsalvagevaluestorage[r,s,y] == vtotaldiscountedstoragecost[r,s,y])
     constraintnum += 1
 end
 
@@ -1453,7 +1431,7 @@ where cc.r = r.val and cc.t = t.val and cc.y = y.val"))
     local t = row[:t]
     local y = row[:y]
 
-    cc1_undiscountedcapitalinvestment[constraintnum] = @constraint(model, row[:cc] * vnewcapacity[r,t,y] == vcapitalinvestment[r,t,y])
+    cc1_undiscountedcapitalinvestment[constraintnum] = @constraint(jumpmodel, row[:cc] * vnewcapacity[r,t,y] == vcapitalinvestment[r,t,y])
     constraintnum += 1
 end
 
@@ -1474,7 +1452,7 @@ for row in eachrow(queryrtydr)
     local t = row[:t]
     local y = row[:y]
 
-    cc2_discountingcapitalinvestment[constraintnum] = @constraint(model, vcapitalinvestment[r,t,y] / ((1 + row[:dr])^(Meta.parse(y) - Meta.parse(first(syear)))) == vdiscountedcapitalinvestment[r,t,y])
+    cc2_discountingcapitalinvestment[constraintnum] = @constraint(jumpmodel, vcapitalinvestment[r,t,y] / ((1 + row[:dr])^(Meta.parse(y) - Meta.parse(first(syear)))) == vdiscountedcapitalinvestment[r,t,y])
     constraintnum += 1
 end
 
@@ -1500,7 +1478,7 @@ and cc.r = r.val and cc.t = t.val and cc.y = y.val"))
     local y = row[:y]
     local dr = row[:dr]
 
-    sv1_salvagevalueatendofperiod1[constraintnum] = @constraint(model, vsalvagevalue[r,t,y] == row[:cc] * vnewcapacity[r,t,y] * (1 - (((1 + dr)^(Meta.parse(last(syear)) - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ol]) - 1))))
+    sv1_salvagevalueatendofperiod1[constraintnum] = @constraint(jumpmodel, vsalvagevalue[r,t,y] == row[:cc] * vnewcapacity[r,t,y] * (1 - (((1 + dr)^(Meta.parse(last(syear)) - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ol]) - 1))))
     constraintnum += 1
 end
 
@@ -1532,7 +1510,7 @@ and y.val + ol.val - 1 > " * last(syear) *
     local t = row[:t]
     local y = row[:y]
 
-    sv2_salvagevalueatendofperiod2[constraintnum] = @constraint(model, vsalvagevalue[r,t,y] == row[:cc] * vnewcapacity[r,t,y] * (1 - (Meta.parse(last(syear)) - Meta.parse(y) + 1) / row[:ol]))
+    sv2_salvagevalueatendofperiod2[constraintnum] = @constraint(jumpmodel, vsalvagevalue[r,t,y] == row[:cc] * vnewcapacity[r,t,y] * (1 - (Meta.parse(last(syear)) - Meta.parse(y) + 1) / row[:ol]))
     constraintnum += 1
 end
 
@@ -1552,7 +1530,7 @@ and y.val + ol.val - 1 <= " * last(syear)))
     local t = row[:t]
     local y = row[:y]
 
-    sv3_salvagevalueatendofperiod3[constraintnum] = @constraint(model, vsalvagevalue[r,t,y] == 0)
+    sv3_salvagevalueatendofperiod3[constraintnum] = @constraint(jumpmodel, vsalvagevalue[r,t,y] == 0)
     constraintnum += 1
 end
 
@@ -1569,7 +1547,7 @@ for row in eachrow(queryrtydr)
     local t = row[:t]
     local y = row[:y]
 
-    sv4_salvagevaluediscountedtostartyear[constraintnum] = @constraint(model, vdiscountedsalvagevalue[r,t,y] == vsalvagevalue[r,t,y] / ((1 + row[:dr])^(1 + Meta.parse(last(syear)) - Meta.parse(first(syear)))))
+    sv4_salvagevaluediscountedtostartyear[constraintnum] = @constraint(jumpmodel, vdiscountedsalvagevalue[r,t,y] == vsalvagevalue[r,t,y] / ((1 + row[:dr])^(1 + Meta.parse(last(syear)) - Meta.parse(first(syear)))))
     constraintnum += 1
 end
 
@@ -1589,7 +1567,7 @@ group by r.val, t.val, y.val"))
     local t = row[:t]
     local y = row[:y]
 
-    oc1_operatingcostsvariable[constraintnum] = @constraint(model, sum([vtotalannualtechnologyactivitybymode[r,t,split(mv,";")[1],y] * Meta.parse(split(mv,";")[2]) for mv = split(row[:mva], ",")]) == vannualvariableoperatingcost[r,t,y])
+    oc1_operatingcostsvariable[constraintnum] = @constraint(jumpmodel, sum([vtotalannualtechnologyactivitybymode[r,t,split(mv,";")[1],y] * Meta.parse(split(mv,";")[2]) for mv = split(row[:mva], ",")]) == vannualvariableoperatingcost[r,t,y])
     constraintnum += 1
 end
 
@@ -1608,7 +1586,7 @@ where fc.r = r.val and fc.t = t.val and fc.y = y.val"))
     local t = row[:t]
     local y = row[:y]
 
-    oc2_operatingcostsfixedannual[constraintnum] = @constraint(model, vtotalcapacityannual[r,t,y] * row[:fc] == vannualfixedoperatingcost[r,t,y])
+    oc2_operatingcostsfixedannual[constraintnum] = @constraint(jumpmodel, vtotalcapacityannual[r,t,y] * row[:fc] == vannualfixedoperatingcost[r,t,y])
     constraintnum += 1
 end
 
@@ -1620,7 +1598,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref oc3_operatingcoststotalannual[1:length(sregion) * length(stechnology) * length(syear)]
 
 for (r, t, y) in Base.product(sregion, stechnology, syear)
-    oc3_operatingcoststotalannual[constraintnum] = @constraint(model, vannualfixedoperatingcost[r,t,y] + vannualvariableoperatingcost[r,t,y] == voperatingcost[r,t,y])
+    oc3_operatingcoststotalannual[constraintnum] = @constraint(jumpmodel, vannualfixedoperatingcost[r,t,y] + vannualvariableoperatingcost[r,t,y] == voperatingcost[r,t,y])
     constraintnum += 1
 end
 
@@ -1638,7 +1616,7 @@ for row in eachrow(queryrtydr)
     local y = row[:y]
     local dr = row[:dr]
 
-    oc4_discountedoperatingcoststotalannual[constraintnum] = @constraint(model, voperatingcost[r,t,y] / ((1 + dr)^(Meta.parse(y) - Meta.parse(first(syear)) + 0.5)) == vdiscountedoperatingcost[r,t,y])
+    oc4_discountedoperatingcoststotalannual[constraintnum] = @constraint(jumpmodel, voperatingcost[r,t,y] / ((1 + dr)^(Meta.parse(y) - Meta.parse(first(syear)) + 0.5)) == vdiscountedoperatingcost[r,t,y])
     constraintnum += 1
 end
 
@@ -1650,7 +1628,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref tdc1_totaldiscountedcostbytechnology[1:length(sregion) * length(stechnology) * length(syear)]
 
 for (r, t, y) in Base.product(sregion, stechnology, syear)
-    tdc1_totaldiscountedcostbytechnology[constraintnum] = @constraint(model, vdiscountedoperatingcost[r,t,y] + vdiscountedcapitalinvestment[r,t,y] + vdiscountedtechnologyemissionspenalty[r,t,y] - vdiscountedsalvagevalue[r,t,y] == vtotaldiscountedcostbytechnology[r,t,y])
+    tdc1_totaldiscountedcostbytechnology[constraintnum] = @constraint(jumpmodel, vdiscountedoperatingcost[r,t,y] + vdiscountedcapitalinvestment[r,t,y] + vdiscountedtechnologyemissionspenalty[r,t,y] - vdiscountedsalvagevalue[r,t,y] == vtotaldiscountedcostbytechnology[r,t,y])
     constraintnum += 1
 end
 
@@ -1662,7 +1640,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref tdc2_totaldiscountedcost[1:length(sregion) * length(syear)]
 
 for (r, y) in Base.product(sregion, syear)
-    tdc2_totaldiscountedcost[constraintnum] = @constraint(model, (length(stechnology) == 0 ? 0 : sum([vtotaldiscountedcostbytechnology[r,t,y] for t = stechnology])) + (length(sstorage) == 0 ? 0 : sum([vtotaldiscountedstoragecost[r,s,y] for s = sstorage])) == vtotaldiscountedcost[r,y])
+    tdc2_totaldiscountedcost[constraintnum] = @constraint(jumpmodel, (length(stechnology) == 0 ? 0 : sum([vtotaldiscountedcostbytechnology[r,t,y] for t = stechnology])) + (length(sstorage) == 0 ? 0 : sum([vtotaldiscountedstoragecost[r,s,y] for s = sstorage])) == vtotaldiscountedcost[r,y])
     constraintnum += 1
 end
 
@@ -1679,7 +1657,7 @@ from TotalAnnualMaxCapacity_def"))
     local t = row[:t]
     local y = row[:y]
 
-    tcc1_totalannualmaxcapacityconstraint[constraintnum] = @constraint(model, vtotalcapacityannual[r,t,y] <= row[:tmx])
+    tcc1_totalannualmaxcapacityconstraint[constraintnum] = @constraint(jumpmodel, vtotalcapacityannual[r,t,y] <= row[:tmx])
     constraintnum += 1
 end
 
@@ -1697,7 +1675,7 @@ where val > 0"))
     local t = row[:t]
     local y = row[:y]
 
-    tcc2_totalannualmincapacityconstraint[constraintnum] = @constraint(model, vtotalcapacityannual[r,t,y] >= row[:tmn])
+    tcc2_totalannualmincapacityconstraint[constraintnum] = @constraint(jumpmodel, vtotalcapacityannual[r,t,y] >= row[:tmn])
     constraintnum += 1
 end
 
@@ -1714,7 +1692,7 @@ from TotalAnnualMaxCapacityInvestment_def"))
     local t = row[:t]
     local y = row[:y]
 
-    ncc1_totalannualmaxnewcapacityconstraint[constraintnum] = @constraint(model, vnewcapacity[r,t,y] <= row[:tmx])
+    ncc1_totalannualmaxnewcapacityconstraint[constraintnum] = @constraint(jumpmodel, vnewcapacity[r,t,y] <= row[:tmx])
     constraintnum += 1
 end
 
@@ -1732,7 +1710,7 @@ where val > 0"))
     local t = row[:t]
     local y = row[:y]
 
-    ncc2_totalannualminnewcapacityconstraint[constraintnum] = @constraint(model, vnewcapacity[r,t,y] >= row[:tmn])
+    ncc2_totalannualminnewcapacityconstraint[constraintnum] = @constraint(jumpmodel, vnewcapacity[r,t,y] >= row[:tmn])
     constraintnum += 1
 end
 
@@ -1752,7 +1730,7 @@ group by r.val, t.val, y.val"))
     local t = row[:t]
     local y = row[:y]
 
-    aac1_totalannualtechnologyactivity[constraintnum] = @constraint(model, sum([vrateoftotalactivity[r,t,split(ly,";")[1],y] * Meta.parse(split(ly,";")[2]) for ly = split(row[:lya], ",")]) == vtotaltechnologyannualactivity[r,t,y])
+    aac1_totalannualtechnologyactivity[constraintnum] = @constraint(jumpmodel, sum([vrateoftotalactivity[r,t,split(ly,";")[1],y] * Meta.parse(split(ly,";")[2]) for ly = split(row[:lya], ",")]) == vtotaltechnologyannualactivity[r,t,y])
     constraintnum += 1
 end
 
@@ -1769,7 +1747,7 @@ from TotalTechnologyAnnualActivityUpperLimit_def"))
     local t = row[:t]
     local y = row[:y]
 
-    aac2_totalannualtechnologyactivityupperlimit[constraintnum] = @constraint(model, vtotaltechnologyannualactivity[r,t,y] <= row[:amx])
+    aac2_totalannualtechnologyactivityupperlimit[constraintnum] = @constraint(jumpmodel, vtotaltechnologyannualactivity[r,t,y] <= row[:amx])
     constraintnum += 1
 end
 
@@ -1787,7 +1765,7 @@ where val > 0"))
     local t = row[:t]
     local y = row[:y]
 
-    aac3_totalannualtechnologyactivitylowerlimit[constraintnum] = @constraint(model, vtotaltechnologyannualactivity[r,t,y] >= row[:amn])
+    aac3_totalannualtechnologyactivitylowerlimit[constraintnum] = @constraint(jumpmodel, vtotaltechnologyannualactivity[r,t,y] >= row[:amn])
     constraintnum += 1
 end
 
@@ -1799,7 +1777,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref tac1_totalmodelhorizontechnologyactivity[1:length(sregion) * length(stechnology)]
 
 for (r, t) in Base.product(sregion, stechnology)
-    tac1_totalmodelhorizontechnologyactivity[constraintnum] = @constraint(model, sum([vtotaltechnologyannualactivity[r,t,y] for y = syear]) == vtotaltechnologymodelperiodactivity[r,t])
+    tac1_totalmodelhorizontechnologyactivity[constraintnum] = @constraint(jumpmodel, sum([vtotaltechnologyannualactivity[r,t,y] for y = syear]) == vtotaltechnologymodelperiodactivity[r,t])
     constraintnum += 1
 end
 
@@ -1816,7 +1794,7 @@ where val > 0"))
     local r = row[:r]
     local t = row[:t]
 
-    tac2_totalmodelhorizontechnologyactivityupperlimit[constraintnum] = @constraint(model, vtotaltechnologymodelperiodactivity[r,t] <= row[:mmx])
+    tac2_totalmodelhorizontechnologyactivityupperlimit[constraintnum] = @constraint(jumpmodel, vtotaltechnologymodelperiodactivity[r,t] <= row[:mmx])
     constraintnum += 1
 end
 
@@ -1833,7 +1811,7 @@ where val > 0"))
     local r = row[:r]
     local t = row[:t]
 
-    tac3_totalmodelhorizentechnologyactivitylowerlimit[constraintnum] = @constraint(model, vtotaltechnologymodelperiodactivity[r,t] >= row[:mmn])
+    tac3_totalmodelhorizentechnologyactivitylowerlimit[constraintnum] = @constraint(jumpmodel, vtotaltechnologymodelperiodactivity[r,t] >= row[:mmn])
     constraintnum += 1
 end
 
@@ -1852,7 +1830,7 @@ group by r.val, y.val"))
     local r = row[:r]
     local y = row[:y]
 
-    rm1_reservemargin_technologiesincluded_in_activity_units[constraintnum] = @constraint(model, sum([vtotalcapacityannual[r,split(trc,";")[1],y] * Meta.parse(split(trc,";")[2]) * Meta.parse(split(trc,";")[3]) for trc = split(row[:trca], ",")]) == vtotalcapacityinreservemargin[r,y])
+    rm1_reservemargin_technologiesincluded_in_activity_units[constraintnum] = @constraint(jumpmodel, sum([vtotalcapacityannual[r,split(trc,";")[1],y] * Meta.parse(split(trc,";")[2]) * Meta.parse(split(trc,";")[3]) for trc = split(row[:trca], ",")]) == vtotalcapacityinreservemargin[r,y])
     constraintnum += 1
 end
 
@@ -1871,7 +1849,7 @@ group by r.val, l.val, y.val"))
     local l = row[:l]
     local y = row[:y]
 
-    rm2_reservemargin_fuelsincluded[constraintnum] = @constraint(model, sum([vrateofproduction[r,l,split(fr,";")[1],y] * Meta.parse(split(fr,";")[2]) for fr = split(row[:fra], ",")]) == vdemandneedingreservemargin[r,l,y])
+    rm2_reservemargin_fuelsincluded[constraintnum] = @constraint(jumpmodel, sum([vrateofproduction[r,l,split(fr,";")[1],y] * Meta.parse(split(fr,";")[2]) for fr = split(row[:fra], ",")]) == vdemandneedingreservemargin[r,l,y])
     constraintnum += 1
 end
 
@@ -1889,7 +1867,7 @@ where rm.r = r.val and rm.y = y.val"))
     local l = row[:l]
     local y = row[:y]
 
-    rm3_reservemargin_constraint[constraintnum] = @constraint(model, vdemandneedingreservemargin[r,l,y] * row[:rm] <= vtotalcapacityinreservemargin[r,y])
+    rm3_reservemargin_constraint[constraintnum] = @constraint(jumpmodel, vdemandneedingreservemargin[r,l,y] * row[:rm] <= vtotalcapacityinreservemargin[r,y])
     constraintnum += 1
 end
 
@@ -1906,7 +1884,7 @@ for row in eachrow(queryproductionbytechnologyannual)
     local f = row[:f]
     local y = row[:y]
 
-    re1_fuelproductionbytechnologyannual[constraintnum] = @constraint(model, sum([vproductionbytechnology[r,l,t,f,y] for l = split(row[:la], ",")]) == vproductionbytechnologyannual[r,t,f,y])
+    re1_fuelproductionbytechnologyannual[constraintnum] = @constraint(jumpmodel, sum([vproductionbytechnology[r,l,t,f,y] for l = split(row[:la], ",")]) == vproductionbytechnologyannual[r,t,f,y])
     constraintnum += 1
 end
 
@@ -1926,7 +1904,7 @@ group by r.val, y.val"))
     local r = row[:r]
     local y = row[:y]
 
-    re2_techincluded[constraintnum] = @constraint(model, sum([vproductionbytechnologyannual[r,split(tf,";")[1],split(tf,";")[2],y] * Meta.parse(split(tf,";")[3]) for tf = split(row[:tfa], ",")]) == vtotalreproductionannual[r,y])
+    re2_techincluded[constraintnum] = @constraint(jumpmodel, sum([vproductionbytechnologyannual[r,split(tf,";")[1],split(tf,";")[2],y] * Meta.parse(split(tf,";")[3]) for tf = split(row[:tfa], ",")]) == vtotalreproductionannual[r,y])
     constraintnum += 1
 end
 
@@ -1946,7 +1924,7 @@ group by r.val, y.val"))
     local r = row[:r]
     local y = row[:y]
 
-    re3_fuelincluded[constraintnum] = @constraint(model, sum([vrateofproduction[r,split(lf,";")[1],split(lf,";")[2],y] * Meta.parse(split(lf,";")[3]) * Meta.parse(split(lf,";")[4]) for lf = split(row[:lfa], ",")]) == vretotalproductionoftargetfuelannual[r,y])
+    re3_fuelincluded[constraintnum] = @constraint(jumpmodel, sum([vrateofproduction[r,split(lf,";")[1],split(lf,";")[2],y] * Meta.parse(split(lf,";")[3]) * Meta.parse(split(lf,";")[4]) for lf = split(row[:lfa], ",")]) == vretotalproductionoftargetfuelannual[r,y])
     constraintnum += 1
 end
 
@@ -1975,7 +1953,7 @@ where rmp.r = ry.r and rmp.y = ry.y"))
     local r = row[:r]
     local y = row[:y]
 
-    re4_energyconstraint[constraintnum] = @constraint(model, row[:rmp] * vretotalproductionoftargetfuelannual[r,y] <= vtotalreproductionannual[r,y])
+    re4_energyconstraint[constraintnum] = @constraint(jumpmodel, row[:rmp] * vretotalproductionoftargetfuelannual[r,y] <= vtotalreproductionannual[r,y])
     constraintnum += 1
 end
 
@@ -1997,7 +1975,7 @@ from EmissionActivityRatio_def ear"))
     local m = row[:m]
     local y = row[:y]
 
-    e1_annualemissionproductionbymode[constraintnum] = @constraint(model, row[:ear] * vtotalannualtechnologyactivitybymode[r,t,m,y] == vannualtechnologyemissionbymode[r,t,e,m,y])
+    e1_annualemissionproductionbymode[constraintnum] = @constraint(jumpmodel, row[:ear] * vtotalannualtechnologyactivitybymode[r,t,m,y] == vannualtechnologyemissionbymode[r,t,e,m,y])
     constraintnum += 1
 end
 
@@ -2017,7 +1995,7 @@ group by r, t, e, y"))
     local e = row[:e]
     local y = row[:y]
 
-    e2_annualemissionproduction[constraintnum] = @constraint(model, sum([vannualtechnologyemissionbymode[r,t,e,m,y] for m = split(row[:ma], ",")]) == vannualtechnologyemission[r,t,e,y])
+    e2_annualemissionproduction[constraintnum] = @constraint(jumpmodel, sum([vannualtechnologyemissionbymode[r,t,e,m,y] for m = split(row[:ma], ",")]) == vannualtechnologyemission[r,t,e,y])
     constraintnum += 1
 end
 
@@ -2038,7 +2016,7 @@ group by ear.r, ear.t, ear.e, ear.y, ep.val"))
     local e = row[:e]
     local y = row[:y]
 
-    e3_emissionspenaltybytechandemission[constraintnum] = @constraint(model, vannualtechnologyemission[r,t,e,y] * row[:ep] == vannualtechnologyemissionpenaltybyemission[r,t,e,y])
+    e3_emissionspenaltybytechandemission[constraintnum] = @constraint(jumpmodel, vannualtechnologyemission[r,t,e,y] * row[:ep] == vannualtechnologyemissionpenaltybyemission[r,t,e,y])
     constraintnum += 1
 end
 
@@ -2058,7 +2036,7 @@ group by ear.r, ear.t, ear.y"))
     local t = row[:t]
     local y = row[:y]
 
-    e4_emissionspenaltybytechnology[constraintnum] = @constraint(model, sum([vannualtechnologyemissionpenaltybyemission[r,t,e,y] for e = split(row[:ea], ",")]) == vannualtechnologyemissionspenalty[r,t,y])
+    e4_emissionspenaltybytechnology[constraintnum] = @constraint(jumpmodel, sum([vannualtechnologyemissionpenaltybyemission[r,t,e,y] for e = split(row[:ea], ",")]) == vannualtechnologyemissionspenalty[r,t,y])
     constraintnum += 1
 end
 
@@ -2075,7 +2053,7 @@ for row in eachrow(queryrtydr)
     local y = row[:y]
     local dr = row[:dr]
 
-    e5_discountedemissionspenaltybytechnology[constraintnum] = @constraint(model, vannualtechnologyemissionspenalty[r,t,y] / ((1 + dr)^(Meta.parse(y) - Meta.parse(first(syear)) + 0.5)) == vdiscountedtechnologyemissionspenalty[r,t,y])
+    e5_discountedemissionspenaltybytechnology[constraintnum] = @constraint(jumpmodel, vannualtechnologyemissionspenalty[r,t,y] / ((1 + dr)^(Meta.parse(y) - Meta.parse(first(syear)) + 0.5)) == vdiscountedtechnologyemissionspenalty[r,t,y])
     constraintnum += 1
 end
 
@@ -2094,7 +2072,7 @@ group by r, e, y"))
     local e = row[:e]
     local y = row[:y]
 
-    e6_emissionsaccounting1[constraintnum] = @constraint(model, sum([vannualtechnologyemission[r,t,e,y] for t = split(row[:ta], ",")]) == vannualemissions[r,e,y])
+    e6_emissionsaccounting1[constraintnum] = @constraint(jumpmodel, sum([vannualtechnologyemission[r,t,e,y] for t = split(row[:ta], ",")]) == vannualemissions[r,e,y])
     constraintnum += 1
 end
 
@@ -2113,7 +2091,7 @@ left join ModelPeriodExogenousEmission_def mpe on mpe.r = r.val and mpe.e = e.va
     local e = row[:e]
     local mpe = ismissing(row[:mpe]) ? 0 : row[:mpe]
 
-    e7_emissionsaccounting2[constraintnum] = @constraint(model, sum([vannualemissions[r,e,y] for y = syear]) == vmodelperiodemissions[r,e] - mpe)
+    e7_emissionsaccounting2[constraintnum] = @constraint(jumpmodel, sum([vannualemissions[r,e,y] for y = syear]) == vmodelperiodemissions[r,e] - mpe)
     constraintnum += 1
 end
 
@@ -2134,7 +2112,7 @@ where ael.r = r.val and ael.e = e.val and ael.y = y.val"))
     local y = row[:y]
     local aee = ismissing(row[:aee]) ? 0 : row[:aee]
 
-    e8_annualemissionslimit[constraintnum] = @constraint(model, vannualemissions[r,e,y] + aee <= row[:ael])
+    e8_annualemissionslimit[constraintnum] = @constraint(jumpmodel, vannualemissions[r,e,y] + aee <= row[:ael])
     constraintnum += 1
 end
 
@@ -2152,7 +2130,7 @@ where mpl.r = r.val and mpl.e = e.val"))
     local r = row[:r]
     local e = row[:e]
 
-    e9_modelperiodemissionslimit[constraintnum] = @constraint(model, vmodelperiodemissions[r,e] <= row[:mpl])
+    e9_modelperiodemissionslimit[constraintnum] = @constraint(jumpmodel, vmodelperiodemissions[r,e] <= row[:mpl])
     constraintnum += 1
 end
 
@@ -2162,12 +2140,12 @@ logmsg("Created constraint E9_ModelPeriodEmissionsLimit.", quiet)
 # END: Define OSeMOSYS constraints.
 
 # BEGIN: Define model objective.
-@objective(model, Min, sum([vtotaldiscountedcost[r,y] for r = sregion, y = syear]))
+@objective(jumpmodel, Min, sum([vtotaldiscountedcost[r,y] for r = sregion, y = syear]))
 logmsg("Defined model objective.", quiet)
 # END: Define model objective.
 
 # Solve model
-status::Symbol = solve(model)
+status::Symbol = solve(jumpmodel)
 solvedtm::DateTime = now()  # Date/time of last solve operation
 solvedtmstr::String = Dates.format(solvedtm, "yyyy-mm-dd HH:MM:SS.sss")  # solvedtm as a formatted string
 logmsg("Solved model.", quiet, solvedtm)
@@ -2183,15 +2161,16 @@ end  # calculatescenario()
 """Runs NEMO for a scenario specified in a GNU MathProg data file. Saves results in a NEMO-compatible SQLite database in same
     directory as GNU MathProg data file. Arguments:
     • gmpdatapath - Path to GNU MathProg data file.
-    • solver - Name of solver to be used (currently, GLPK or CPLEX).
     • gmpmodelpath - Path to GNU MathProg model file corresponding to data file.
+    • jumpmodel - JuMP model object specifying MIP solver to be used. Examples: Model(solver = GLPKSolverMIP(presolve=true)),
+        Model(solver = CplexSolver()). Note that solver package must be installed (GLPK is installed with NEMO by default).
     • varstosave - Comma-delimited list of model variables whose results should be saved in SQLite database.
     • targetprocs - Processes that should be used for parallelized operations within this function.
     • quiet - Suppresses low-priority status messages (which are otherwise printed to STDOUT)."""
 function calculategmpscenario(
     gmpdatapath::String,
     gmpmodelpath::String = normpath(joinpath(@__DIR__, "..", "utils", "gmpl2sql", "osemosys_2017_11_08_long.txt"));
-    solver::String = "GLPK",
+    jumpmodel::JuMP.Model = GLPKSolverMIP(presolve=true),
     varstosave::String = "vdemand, vnewstoragecapacity, vaccumulatednewstoragecapacity, vstorageupperlimit, vstoragelowerlimit, vcapitalinvestmentstorage, vdiscountedcapitalinvestmentstorage, vsalvagevaluestorage, vdiscountedsalvagevaluestorage, vnewcapacity, vaccumulatednewcapacity, vtotalcapacityannual, vtotaltechnologyannualactivity, vtotalannualtechnologyactivitybymode, vproductionbytechnologyannual, vproduction, vusebytechnologyannual, vuse, vtrade, vtradeannual, vproductionannual, vuseannual, vcapitalinvestment, vdiscountedcapitalinvestment, vsalvagevalue, vdiscountedsalvagevalue, voperatingcost, vdiscountedoperatingcost, vtotaldiscountedcost",
     targetprocs::Array{Int, 1} = Array{Int, 1}([1]),
     quiet::Bool = false)
@@ -2199,12 +2178,12 @@ function calculategmpscenario(
     logmsg("Started conversion of MathProg data file.")
 
     # BEGIN: Validate arguments.
-    if !ispath(gmpdatapath)
-        error("gmpdatapath must refer to a valid file system path.")
+    if !isfile(gmpdatapath)
+        error("gmpdatapath must refer to a file.")
     end
 
-    if !ispath(gmpmodelpath)
-        error("gmpmodelpath must refer to a valid file system path.")
+    if !isfile(gmpmodelpath)
+        error("gmpmodelpath must refer to a file.")
     end
 
     logmsg("Validated run-time arguments.", quiet)
@@ -2218,5 +2197,5 @@ function calculategmpscenario(
     logmsg("Finished conversion of MathProg data file.")
 
     # Call calculatescenario()
-    calculatescenario(splitext(gmpdatapath)[1] * ".sl3", solver, varstosave, targetprocs)
+    calculatescenario(splitext(gmpdatapath)[1] * ".sl3"; jumpmodel=jumpmodel, varstosave=varstosave, targetprocs=targetprocs, quiet=quiet)
 end  # calculategmpscenario()
