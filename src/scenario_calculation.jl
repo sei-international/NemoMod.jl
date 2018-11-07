@@ -11,14 +11,16 @@
 
 """Runs NEMO for a scenario specified in a SQLite database. Arguments:
     • dbpath - Path to SQLite database.
-    • solver - Name of solver to be used (currently, GLPK or CPLEX).
+    • solver - Name of solver to be used (currently, GLPK or CPLEX [case-insensitive]).
     • varstosave - Comma-delimited list of model variables whose results should be saved in SQLite database.
-    • targetprocs - Processes that should be used for parallelized operations within this function."""
+    • targetprocs - Processes that should be used for parallelized operations within this function.
+    • quiet - Suppresses low-priority status messages (which are otherwise printed to STDOUT)."""
 function calculatescenario(
-    dbpath::String,
-    solver::String,
+    dbpath::String;
+    solver::String = "GLPK",
     varstosave::String = "vdemand, vnewstoragecapacity, vaccumulatednewstoragecapacity, vstorageupperlimit, vstoragelowerlimit, vcapitalinvestmentstorage, vdiscountedcapitalinvestmentstorage, vsalvagevaluestorage, vdiscountedsalvagevaluestorage, vnewcapacity, vaccumulatednewcapacity, vtotalcapacityannual, vtotaltechnologyannualactivity, vtotalannualtechnologyactivitybymode, vproductionbytechnologyannual, vproduction, vusebytechnologyannual, vuse, vtrade, vtradeannual, vproductionannual, vuseannual, vcapitalinvestment, vdiscountedcapitalinvestment, vsalvagevalue, vdiscountedsalvagevalue, voperatingcost, vdiscountedoperatingcost, vtotaldiscountedcost",
-    targetprocs::Array{Int, 1} = Array{Int, 1}([1]))
+    targetprocs::Array{Int, 1} = Array{Int, 1}([1]),
+    quiet::Bool = false)
 # Lines within calculatescenario() are not indented since the function is so lengthy. To make an otherwise local
 # variable visible outside the function, prefix it with global. For JuMP constraint references,
 # create a new global variable and assign to it the constraint reference.
@@ -38,12 +40,12 @@ else
     error("Requested solver (" * solver * ") is not supported.")
 end
 
-logmsg("Validated run-time arguments.")
+logmsg("Validated run-time arguments.", quiet)
 # END: Validate arguments.
 
 # BEGIN: Connect to SQLite database.
 db = SQLite.DB(dbpath)
-logmsg("Connected to model database. Path = " * dbpath * ".")
+logmsg("Connected to model database. Path = " * dbpath * ".", quiet)
 # END: Connect to SQLite database.
 
 # Instantiate JuMP model
@@ -69,7 +71,7 @@ createviewwithdefaults(db, ["OutputActivityRatio", "InputActivityRatio", "Residu
 "TotalTechnologyModelPeriodActivityUpperLimit", "TotalTechnologyModelPeriodActivityLowerLimit", "ReserveMarginTagTechnology", "ReserveMarginTagFuel",
 "ReserveMargin", "RETagTechnology", "RETagFuel", "REMinProductionTarget", "EmissionActivityRatio", "EmissionsPenalty", "ModelPeriodExogenousEmission",
 "AnnualExogenousEmission", "AnnualEmissionLimit", "ModelPeriodEmissionLimit", "AccumulatedAnnualDemand"])
-logmsg("Created parameter views.")
+logmsg("Created parameter views.", quiet)
 # END: Create parameter views showing default values.
 
 # BEGIN: Define OSeMOSYS sets.
@@ -87,7 +89,7 @@ sdailytimebracket::Array{String,1} = collect(skipmissing(SQLite.query(db, "selec
 sflexibledemandtype::Array{String,1} = Array{String,1}()  # FLEXIBLEDEMANDTYPE set
 sstorage::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from STORAGE")[:val]))  # STORAGE set
 
-logmsg("Defined OSeMOSYS sets.")
+logmsg("Defined OSeMOSYS sets.", quiet)
 # END: Define OSeMOSYS sets.
 
 # BEGIN: Define OSeMOSYS variables.
@@ -99,7 +101,7 @@ modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}} = Dict{
 
 modelvarindices["vrateofdemand"] = (vrateofdemand, ["r","l","f","y"])
 modelvarindices["vdemand"] = (vdemand, ["r","l","f","y"])
-logmsg("Defined demand variables.")
+logmsg("Defined demand variables.", quiet)
 
 # Storage
 @variable(model, vrateofstoragecharge[sregion, sstorage, sseason, sdaytype, sdailytimebracket, syear])
@@ -139,7 +141,7 @@ modelvarindices["vdiscountedcapitalinvestmentstorage"] = (vdiscountedcapitalinve
 modelvarindices["vsalvagevaluestorage"] = (vsalvagevaluestorage, ["r", "s", "y"])
 modelvarindices["vdiscountedsalvagevaluestorage"] = (vdiscountedsalvagevaluestorage, ["r", "s", "y"])
 modelvarindices["vtotaldiscountedstoragecost"] = (vtotaldiscountedstoragecost, ["r", "s", "y"])
-logmsg("Defined storage variables.")
+logmsg("Defined storage variables.", quiet)
 
 # Capacity
 @variable(model, vnumberofnewtechnologyunits[sregion, stechnology, syear] >= 0, Int)
@@ -151,7 +153,7 @@ modelvarindices["vnumberofnewtechnologyunits"] = (vnumberofnewtechnologyunits, [
 modelvarindices["vnewcapacity"] = (vnewcapacity, ["r", "t", "y"])
 modelvarindices["vaccumulatednewcapacity"] = (vaccumulatednewcapacity, ["r", "t", "y"])
 modelvarindices["vtotalcapacityannual"] = (vtotalcapacityannual, ["r", "t", "y"])
-logmsg("Defined capacity variables.")
+logmsg("Defined capacity variables.", quiet)
 
 # Activity
 @variable(model, vrateofactivity[sregion, stimeslice, stechnology, smode_of_operation, syear] >= 0)
@@ -266,7 +268,7 @@ modelvarindices["vtrade"] = (vtrade, ["r", "rr", "l", "f", "y"])
 modelvarindices["vtradeannual"] = (vtradeannual, ["r", "rr", "f", "y"])
 modelvarindices["vproductionannual"] = (vproductionannual, ["r", "f", "y"])
 modelvarindices["vuseannual"] = (vuseannual, ["r", "f", "y"])
-logmsg("Defined activity variables.")
+logmsg("Defined activity variables.", quiet)
 
 # Costing
 @variable(model, vcapitalinvestment[sregion, stechnology, syear] >= 0)
@@ -292,7 +294,7 @@ modelvarindices["vannualfixedoperatingcost"] = (vannualfixedoperatingcost, ["r",
 modelvarindices["vtotaldiscountedcostbytechnology"] = (vtotaldiscountedcostbytechnology, ["r", "t", "y"])
 modelvarindices["vtotaldiscountedcost"] = (vtotaldiscountedcost, ["r", "y"])
 modelvarindices["vmodelperiodcostbyregion"] = (vmodelperiodcostbyregion, ["r"])
-logmsg("Defined costing variables.")
+logmsg("Defined costing variables.", quiet)
 
 # Reserve margin
 @variable(model, vtotalcapacityinreservemargin[sregion, syear] >= 0)
@@ -300,7 +302,7 @@ logmsg("Defined costing variables.")
 
 modelvarindices["vtotalcapacityinreservemargin"] = (vtotalcapacityinreservemargin, ["r", "y"])
 modelvarindices["vdemandneedingreservemargin"] = (vdemandneedingreservemargin, ["r", "l", "y"])
-logmsg("Defined reserve margin variables.")
+logmsg("Defined reserve margin variables.", quiet)
 
 # RE target
 @variable(model, vtotalreproductionannual[sregion, syear])
@@ -308,7 +310,7 @@ logmsg("Defined reserve margin variables.")
 
 modelvarindices["vtotalreproductionannual"] = (vtotalreproductionannual, ["r", "y"])
 modelvarindices["vretotalproductionoftargetfuelannual"] = (vretotalproductionoftargetfuelannual, ["r", "y"])
-logmsg("Defined renewable energy target variables.")
+logmsg("Defined renewable energy target variables.", quiet)
 
 # Emissions
 @variable(model, vannualtechnologyemissionbymode[sregion, stechnology, semission, smode_of_operation, syear] >= 0)
@@ -326,9 +328,9 @@ modelvarindices["vannualtechnologyemissionspenalty"] = (vannualtechnologyemissio
 modelvarindices["vdiscountedtechnologyemissionspenalty"] = (vdiscountedtechnologyemissionspenalty, ["r", "t", "y"])
 modelvarindices["vannualemissions"] = (vannualemissions, ["r", "e", "y"])
 modelvarindices["vmodelperiodemissions"] = (vmodelperiodemissions, ["r", "e"])
-logmsg("Defined emissions variables.")
+logmsg("Defined emissions variables.", quiet)
 
-logmsg("Finished defining model variables.")
+logmsg("Finished defining model variables.", quiet)
 # END: Define OSeMOSYS variables.
 
 # BEGIN: Define OSeMOSYS constraints.
@@ -350,7 +352,7 @@ for row in eachrow(queryvrateofdemand)
     constraintnum += 1
 end
 
-logmsg("Created constraint EQ_SpecifiedDemand.")
+logmsg("Created constraint EQ_SpecifiedDemand.", quiet)
 # END: EQ_SpecifiedDemand.
 
 # BEGIN: CAa1_TotalNewCapacity.
@@ -371,7 +373,7 @@ group by r.val, t.val, y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint CAa1_TotalNewCapacity.")
+logmsg("Created constraint CAa1_TotalNewCapacity.", quiet)
 # END: CAa1_TotalNewCapacity.
 
 # BEGIN: CAa2_TotalAnnualCapacity.
@@ -390,7 +392,7 @@ left join ResidualCapacity_def rc on rc.r = r.val and rc.t = t.val and rc.y = y.
     constraintnum += 1
 end
 
-logmsg("Created constraint CAa2_TotalAnnualCapacity.")
+logmsg("Created constraint CAa2_TotalAnnualCapacity.", quiet)
 # END: CAa2_TotalAnnualCapacity.
 
 # BEGIN: CAa3_TotalActivityOfEachTechnology.
@@ -403,7 +405,7 @@ for (r, t, l, y) in Base.product(sregion, stechnology, stimeslice, syear)
     constraintnum += 1
 end
 
-logmsg("Created constraint CAa3_TotalActivityOfEachTechnology.")
+logmsg("Created constraint CAa3_TotalActivityOfEachTechnology.", quiet)
 # END: CAa3_TotalActivityOfEachTechnology.
 
 # BEGIN: CAa4_Constraint_Capacity.
@@ -425,7 +427,7 @@ and cta.r = r.val and cta.t = t.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint CAa4_Constraint_Capacity.")
+logmsg("Created constraint CAa4_Constraint_Capacity.", quiet)
 # END: CAa4_Constraint_Capacity.
 
 # BEGIN: CAa5_TotalNewCapacity.
@@ -443,7 +445,7 @@ from CapacityOfOneTechnologyUnit_def cot where cot.val <> 0"))
     constraintnum += 1
 end
 
-logmsg("Created constraint CAa5_TotalNewCapacity.")
+logmsg("Created constraint CAa5_TotalNewCapacity.", quiet)
 # END: CAa5_TotalNewCapacity.
 
 # BEGIN: CAb1_PlannedMaintenance.
@@ -473,7 +475,7 @@ group by r.val, t.val, y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint CAb1_PlannedMaintenance.")
+logmsg("Created constraint CAb1_PlannedMaintenance.", quiet)
 # END: CAb1_PlannedMaintenance.
 
 # BEGIN: EBa1_RateOfFuelProduction1.
@@ -492,7 +494,7 @@ for row in eachrow(queryvrateofproductionbytechnologybymode)
     constraintnum += 1
 end
 
-logmsg("Created constraint EBa1_RateOfFuelProduction1.")
+logmsg("Created constraint EBa1_RateOfFuelProduction1.", quiet)
 # END: EBa1_RateOfFuelProduction1.
 
 # BEGIN: EBa2_RateOfFuelProduction2.
@@ -511,7 +513,7 @@ for row in eachrow(queryvrateofproductionbytechnology)
     constraintnum += 1
 end
 
-logmsg("Created constraint EBa2_RateOfFuelProduction2.")
+logmsg("Created constraint EBa2_RateOfFuelProduction2.", quiet)
 # END: EBa2_RateOfFuelProduction2.
 
 # BEGIN: EBa3_RateOfFuelProduction3.
@@ -537,7 +539,7 @@ for row in eachrow(queryvrateofproduction)
     constraintnum += 1
 end
 
-logmsg("Created constraint EBa3_RateOfFuelProduction3.")
+logmsg("Created constraint EBa3_RateOfFuelProduction3.", quiet)
 # END: EBa3_RateOfFuelProduction3.
 
 # BEGIN: EBa4_RateOfFuelUse1.
@@ -556,7 +558,7 @@ for row in eachrow(queryvrateofusebytechnologybymode)
     constraintnum += 1
 end
 
-logmsg("Created constraint EBa4_RateOfFuelUse1.")
+logmsg("Created constraint EBa4_RateOfFuelUse1.", quiet)
 # END: EBa4_RateOfFuelUse1.
 
 # BEGIN: EBa5_RateOfFuelUse2.
@@ -575,7 +577,7 @@ for row in eachrow(queryvrateofusebytechnology)
     constraintnum += 1
 end
 
-logmsg("Created constraint EBa5_RateOfFuelUse2.")
+logmsg("Created constraint EBa5_RateOfFuelUse2.", quiet)
 # END: EBa5_RateOfFuelUse2.
 
 # BEGIN: EBa6_RateOfFuelUse3.
@@ -602,7 +604,7 @@ for row in eachrow(queryvrateofuse)
     constraintnum += 1
 end
 
-logmsg("Created constraint EBa6_RateOfFuelUse3.")
+logmsg("Created constraint EBa6_RateOfFuelUse3.", quiet)
 # END: EBa6_RateOfFuelUse3.
 
 # BEGIN: EBa7_EnergyBalanceEachTS1.
@@ -621,7 +623,7 @@ for row in eachrow(queryvrateofproduction)
     end
 end
 
-logmsg("Created constraint EBa7_EnergyBalanceEachTS1.")
+logmsg("Created constraint EBa7_EnergyBalanceEachTS1.", quiet)
 # END: EBa7_EnergyBalanceEachTS1.
 
 # BEGIN: EBa8_EnergyBalanceEachTS2.
@@ -640,7 +642,7 @@ for row in eachrow(queryvrateofuse)
     end
 end
 
-logmsg("Created constraint EBa8_EnergyBalanceEachTS2.")
+logmsg("Created constraint EBa8_EnergyBalanceEachTS2.", quiet)
 # END: EBa8_EnergyBalanceEachTS2.
 
 # BEGIN: EBa9_EnergyBalanceEachTS3.
@@ -657,7 +659,7 @@ for row in eachrow(queryvrateofdemand)
     constraintnum += 1
 end
 
-logmsg("Created constraint EBa9_EnergyBalanceEachTS3.")
+logmsg("Created constraint EBa9_EnergyBalanceEachTS3.", quiet)
 # END: EBa9_EnergyBalanceEachTS3.
 
 # BEGIN: EBa10_EnergyBalanceEachTS4.
@@ -669,7 +671,7 @@ for (r, rr, l, f, y) in Base.product(sregion, sregion, stimeslice, sfuel, syear)
     constraintnum += 1
 end
 
-logmsg("Created constraint EBa10_EnergyBalanceEachTS4.")
+logmsg("Created constraint EBa10_EnergyBalanceEachTS4.", quiet)
 # END: EBa10_EnergyBalanceEachTS4.
 
 # BEGIN: EBa11_EnergyBalanceEachTS5.
@@ -690,7 +692,7 @@ group by r.val, l.val, f.val, y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint EBa11_EnergyBalanceEachTS5.")
+logmsg("Created constraint EBa11_EnergyBalanceEachTS5.", quiet)
 # END: EBa11_EnergyBalanceEachTS5.
 
 # BEGIN: EBb1_EnergyBalanceEachYear1.
@@ -702,7 +704,7 @@ for (r, f, y) in Base.product(sregion, sfuel, syear)
     constraintnum += 1
 end
 
-logmsg("Created constraint EBb1_EnergyBalanceEachYear1.")
+logmsg("Created constraint EBb1_EnergyBalanceEachYear1.", quiet)
 # END: EBb1_EnergyBalanceEachYear1.
 
 # BEGIN: EBb2_EnergyBalanceEachYear2.
@@ -714,7 +716,7 @@ for (r, f, y) in Base.product(sregion, sfuel, syear)
     constraintnum += 1
 end
 
-logmsg("Created constraint EBb2_EnergyBalanceEachYear2.")
+logmsg("Created constraint EBb2_EnergyBalanceEachYear2.", quiet)
 # END: EBb2_EnergyBalanceEachYear2.
 
 # BEGIN: EBb3_EnergyBalanceEachYear3.
@@ -726,7 +728,7 @@ for (r, rr, f, y) in Base.product(sregion, sregion, sfuel, syear)
     constraintnum += 1
 end
 
-logmsg("Created constraint EBb3_EnergyBalanceEachYear3.")
+logmsg("Created constraint EBb3_EnergyBalanceEachYear3.", quiet)
 # END: EBb3_EnergyBalanceEachYear3.
 
 # BEGIN: EBb4_EnergyBalanceEachYear4.
@@ -749,7 +751,7 @@ group by r.val, f.val, y.val, aad"))
     constraintnum += 1
 end
 
-logmsg("Created constraint EBb4_EnergyBalanceEachYear4.")
+logmsg("Created constraint EBb4_EnergyBalanceEachYear4.", quiet)
 # END: EBb4_EnergyBalanceEachYear4.
 
 # BEGIN: Acc1_FuelProductionByTechnology.
@@ -769,7 +771,7 @@ for row in eachrow(queryvrateofproductionbytechnology)
     end
 end
 
-logmsg("Created constraint Acc1_FuelProductionByTechnology.")
+logmsg("Created constraint Acc1_FuelProductionByTechnology.", quiet)
 # END: Acc1_FuelProductionByTechnology.
 
 # BEGIN: Acc2_FuelUseByTechnology.
@@ -789,7 +791,7 @@ for row in eachrow(queryvrateofusebytechnology)
     end
 end
 
-logmsg("Created constraint Acc2_FuelUseByTechnology.")
+logmsg("Created constraint Acc2_FuelUseByTechnology.", quiet)
 # END: Acc2_FuelUseByTechnology.
 
 # BEGIN: Acc3_AverageAnnualRateOfActivity.
@@ -809,7 +811,7 @@ group by r.val, t.val, m.val, y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint Acc3_AverageAnnualRateOfActivity.")
+logmsg("Created constraint Acc3_AverageAnnualRateOfActivity.", quiet)
 # END: Acc3_AverageAnnualRateOfActivity.
 
 # BEGIN: Acc4_ModelPeriodCostByRegion.
@@ -821,7 +823,7 @@ for r in sregion
     constraintnum += 1
 end
 
-logmsg("Created constraint Acc4_ModelPeriodCostByRegion.")
+logmsg("Created constraint Acc4_ModelPeriodCostByRegion.", quiet)
 # END: Acc4_ModelPeriodCostByRegion.
 
 # BEGIN: S1_RateOfStorageCharge.
@@ -849,7 +851,7 @@ group by r.val, s.val, ls.val, ld.val, lh.val, y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint S1_RateOfStorageCharge.")
+logmsg("Created constraint S1_RateOfStorageCharge.", quiet)
 # END: S1_RateOfStorageCharge.
 
 # BEGIN: S2_RateOfStorageDischarge.
@@ -877,7 +879,7 @@ group by r.val, s.val, ls.val, ld.val, lh.val, y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint S2_RateOfStorageDischarge.")
+logmsg("Created constraint S2_RateOfStorageDischarge.", quiet)
 # END: S2_RateOfStorageDischarge.
 
 # BEGIN: S3_NetChargeWithinYear.
@@ -904,7 +906,7 @@ group by r.val, s.val, ls.val, ld.val, lh.val, y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint S3_NetChargeWithinYear.")
+logmsg("Created constraint S3_NetChargeWithinYear.", quiet)
 # END: S3_NetChargeWithinYear.
 
 # BEGIN: S4_NetChargeWithinDay.
@@ -925,7 +927,7 @@ where ds.lh = lh.val and ds.y = y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint S4_NetChargeWithinDay.")
+logmsg("Created constraint S4_NetChargeWithinDay.", quiet)
 # END: S4_NetChargeWithinDay.
 
 # BEGIN: S5_and_S6_StorageLevelYearStart.
@@ -943,7 +945,7 @@ where sls.r = r.val and sls.s = s.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint S5_and_S6_StorageLevelYearStart.")
+logmsg("Created constraint S5_and_S6_StorageLevelYearStart.", quiet)
 # END: S5_and_S6_StorageLevelYearStart.
 
 # BEGIN: S7_and_S8_StorageLevelYearFinish.
@@ -955,7 +957,7 @@ for (r, s, y) in Base.product(sregion, sstorage, syear)
     constraintnum += 1
 end
 
-logmsg("Created constraint S7_and_S8_StorageLevelYearFinish.")
+logmsg("Created constraint S7_and_S8_StorageLevelYearFinish.", quiet)
 # END: S7_and_S8_StorageLevelYearFinish.
 
 # BEGIN: S9_and_S10_StorageLevelSeasonStart.
@@ -967,7 +969,7 @@ for (r, s, ls, y) in Base.product(sregion, sstorage, sseason, syear)
     constraintnum += 1
 end
 
-logmsg("Created constraint S9_and_S10_StorageLevelSeasonStart.")
+logmsg("Created constraint S9_and_S10_StorageLevelSeasonStart.", quiet)
 # END: S9_and_S10_StorageLevelSeasonStart.
 
 # BEGIN: S11_and_S12_StorageLevelDayTypeStart.
@@ -987,7 +989,7 @@ left join DaysInDayType_def did on did.ls = ls.val and did.ld = ld.val - 1 and d
     constraintnum += 1
 end
 
-logmsg("Created constraint S11_and_S12_StorageLevelDayTypeStart.")
+logmsg("Created constraint S11_and_S12_StorageLevelDayTypeStart.", quiet)
 # END: S11_and_S12_StorageLevelDayTypeStart.
 
 # BEGIN: S13_and_S14_and_S15_StorageLevelDayTypeFinish.
@@ -1007,7 +1009,7 @@ left join DaysInDayType_def did on did.ls = ls.val and did.ld = ld.val + 1 and d
     constraintnum += 1
 end
 
-logmsg("Created constraint S13_and_S14_and_S15_StorageLevelDayTypeFinish.")
+logmsg("Created constraint S13_and_S14_and_S15_StorageLevelDayTypeFinish.", quiet)
 # END: S13_and_S14_and_S15_StorageLevelDayTypeFinish.
 
 # BEGIN: SC1_LowerLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInFirstWeekConstraint.
@@ -1033,7 +1035,7 @@ for row in eachrow(querysc1)
     constraintnum += 1
 end
 
-logmsg("Created constraint SC1_LowerLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInFirstWeekConstraint.")
+logmsg("Created constraint SC1_LowerLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInFirstWeekConstraint.", quiet)
 # END: SC1_LowerLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInFirstWeekConstraint.
 
 # BEGIN: SC1_UpperLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInFirstWeekConstraint.
@@ -1053,7 +1055,7 @@ for row in eachrow(querysc1)
     constraintnum += 1
 end
 
-logmsg("Created constraint SC1_UpperLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInFirstWeekConstraint.")
+logmsg("Created constraint SC1_UpperLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInFirstWeekConstraint.", quiet)
 # END: SC1_UpperLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInFirstWeekConstraint.
 
 # BEGIN: SC2_LowerLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInFirstWeekConstraint.
@@ -1080,7 +1082,7 @@ for row in eachrow(querysc2)
     constraintnum += 1
 end
 
-logmsg("Created constraint SC2_LowerLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInFirstWeekConstraint.")
+logmsg("Created constraint SC2_LowerLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInFirstWeekConstraint.", quiet)
 # END: SC2_LowerLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInFirstWeekConstraint.
 
 # BEGIN: SC2_UpperLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInFirstWeekConstraint.
@@ -1100,7 +1102,7 @@ for row in eachrow(querysc2)
     constraintnum += 1
 end
 
-logmsg("Created constraint SC2_UpperLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInFirstWeekConstraint.")
+logmsg("Created constraint SC2_UpperLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInFirstWeekConstraint.", quiet)
 # END: SC2_UpperLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInFirstWeekConstraint.
 
 # BEGIN: SC3_LowerLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInLastWeekConstraint.
@@ -1126,7 +1128,7 @@ for row in eachrow(querysc3)
     constraintnum += 1
 end
 
-logmsg("Created constraint SC3_LowerLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInLastWeekConstraint.")
+logmsg("Created constraint SC3_LowerLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInLastWeekConstraint.", quiet)
 # END: SC3_LowerLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInLastWeekConstraint.
 
 # BEGIN: SC3_UpperLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInLastWeekConstraint.
@@ -1146,7 +1148,7 @@ for row in eachrow(querysc3)
     constraintnum += 1
 end
 
-logmsg("Created constraint SC3_UpperLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInLastWeekConstraint.")
+logmsg("Created constraint SC3_UpperLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInLastWeekConstraint.", quiet)
 # END: SC3_UpperLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInLastWeekConstraint.
 
 # BEGIN: SC4_LowerLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInLastWeekConstraint.
@@ -1173,7 +1175,7 @@ for row in eachrow(querysc4)
     constraintnum += 1
 end
 
-logmsg("Created constraint SC4_LowerLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInLastWeekConstraint.")
+logmsg("Created constraint SC4_LowerLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInLastWeekConstraint.", quiet)
 # END: SC4_LowerLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInLastWeekConstraint.
 
 # BEGIN: SC4_UpperLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInLastWeekConstraint.
@@ -1193,7 +1195,7 @@ for row in eachrow(querysc4)
     constraintnum += 1
 end
 
-logmsg("Created constraint SC4_UpperLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInLastWeekConstraint.")
+logmsg("Created constraint SC4_UpperLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInLastWeekConstraint.", quiet)
 # END: SC4_UpperLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInLastWeekConstraint.
 
 # BEGIN: SC5_MaxChargeConstraint.
@@ -1215,7 +1217,7 @@ where smx.r = r.val and smx.s = s.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint SC5_MaxChargeConstraint.")
+logmsg("Created constraint SC5_MaxChargeConstraint.", quiet)
 # END: SC5_MaxChargeConstraint.
 
 # BEGIN: SC6_MaxDischargeConstraint.
@@ -1237,7 +1239,7 @@ where smx.r = r.val and smx.s = s.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint SC6_MaxDischargeConstraint.")
+logmsg("Created constraint SC6_MaxDischargeConstraint.", quiet)
 # END: SC6_MaxDischargeConstraint.
 
 # BEGIN: SI1_StorageUpperLimit.
@@ -1256,7 +1258,7 @@ left join ResidualStorageCapacity_def rsc on rsc.r = r.val and rsc.s = s.val and
     constraintnum += 1
 end
 
-logmsg("Created constraint SI1_StorageUpperLimit.")
+logmsg("Created constraint SI1_StorageUpperLimit.", quiet)
 # END: SI1_StorageUpperLimit.
 
 # BEGIN: SI2_StorageLowerLimit.
@@ -1275,7 +1277,7 @@ where msc.r = r.val and msc.s = s.val and msc.y = y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint SI2_StorageLowerLimit.")
+logmsg("Created constraint SI2_StorageLowerLimit.", quiet)
 # END: SI2_StorageLowerLimit.
 
 # BEGIN: SI3_TotalNewStorage.
@@ -1296,7 +1298,7 @@ group by r.val, s.val, y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint SI3_TotalNewStorage.")
+logmsg("Created constraint SI3_TotalNewStorage.", quiet)
 # END: SI3_TotalNewStorage.
 
 # BEGIN: SI4_UndiscountedCapitalInvestmentStorage.
@@ -1315,7 +1317,7 @@ where ccs.r = r.val and ccs.s = s.val and ccs.y = y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint SI4_UndiscountedCapitalInvestmentStorage.")
+logmsg("Created constraint SI4_UndiscountedCapitalInvestmentStorage.", quiet)
 # END: SI4_UndiscountedCapitalInvestmentStorage.
 
 # BEGIN: SI5_DiscountingCapitalInvestmentStorage.
@@ -1334,7 +1336,7 @@ where dr.r = r.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint SI5_DiscountingCapitalInvestmentStorage.")
+logmsg("Created constraint SI5_DiscountingCapitalInvestmentStorage.", quiet)
 # END: SI5_DiscountingCapitalInvestmentStorage.
 
 # BEGIN: SI6_SalvageValueStorageAtEndOfPeriod1.
@@ -1354,7 +1356,7 @@ and y.val + ols.val - 1 <= " * last(syear)))
     constraintnum += 1
 end
 
-logmsg("Created constraint SI6_SalvageValueStorageAtEndOfPeriod1.")
+logmsg("Created constraint SI6_SalvageValueStorageAtEndOfPeriod1.", quiet)
 # END: SI6_SalvageValueStorageAtEndOfPeriod1.
 
 # BEGIN: SI7_SalvageValueStorageAtEndOfPeriod2.
@@ -1382,7 +1384,7 @@ and y.val + ols.val - 1 > " * last(syear)))
     constraintnum += 1
 end
 
-logmsg("Created constraint SI7_SalvageValueStorageAtEndOfPeriod2.")
+logmsg("Created constraint SI7_SalvageValueStorageAtEndOfPeriod2.", quiet)
 # END: SI7_SalvageValueStorageAtEndOfPeriod2.
 
 # BEGIN: SI8_SalvageValueStorageAtEndOfPeriod3.
@@ -1405,7 +1407,7 @@ and y.val + ols.val - 1 > " * last(syear) *
     constraintnum += 1
 end
 
-logmsg("Created constraint SI8_SalvageValueStorageAtEndOfPeriod3.")
+logmsg("Created constraint SI8_SalvageValueStorageAtEndOfPeriod3.", quiet)
 # END: SI8_SalvageValueStorageAtEndOfPeriod3.
 
 # BEGIN: SI9_SalvageValueStorageDiscountedToStartYear.
@@ -1424,7 +1426,7 @@ where dr.r = r.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint SI9_SalvageValueStorageDiscountedToStartYear.")
+logmsg("Created constraint SI9_SalvageValueStorageDiscountedToStartYear.", quiet)
 # END: SI9_SalvageValueStorageDiscountedToStartYear.
 
 # BEGIN: SI10_TotalDiscountedCostByStorage.
@@ -1436,7 +1438,7 @@ for (r, s, y) in Base.product(sregion, sstorage, syear)
     constraintnum += 1
 end
 
-logmsg("Created constraint SI10_TotalDiscountedCostByStorage.")
+logmsg("Created constraint SI10_TotalDiscountedCostByStorage.", quiet)
 # END: SI10_TotalDiscountedCostByStorage.
 
 # BEGIN: CC1_UndiscountedCapitalInvestment.
@@ -1455,7 +1457,7 @@ where cc.r = r.val and cc.t = t.val and cc.y = y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint CC1_UndiscountedCapitalInvestment.")
+logmsg("Created constraint CC1_UndiscountedCapitalInvestment.", quiet)
 # END: CC1_UndiscountedCapitalInvestment.
 
 # BEGIN: CC2_DiscountingCapitalInvestment.
@@ -1476,7 +1478,7 @@ for row in eachrow(queryrtydr)
     constraintnum += 1
 end
 
-logmsg("Created constraint CC2_DiscountingCapitalInvestment.")
+logmsg("Created constraint CC2_DiscountingCapitalInvestment.", quiet)
 # END: CC2_DiscountingCapitalInvestment.
 
 # BEGIN: SV1_SalvageValueAtEndOfPeriod1.
@@ -1502,7 +1504,7 @@ and cc.r = r.val and cc.t = t.val and cc.y = y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint SV1_SalvageValueAtEndOfPeriod1.")
+logmsg("Created constraint SV1_SalvageValueAtEndOfPeriod1.", quiet)
 # END: SV1_SalvageValueAtEndOfPeriod1.
 
 # BEGIN: SV2_SalvageValueAtEndOfPeriod2.
@@ -1534,7 +1536,7 @@ and y.val + ol.val - 1 > " * last(syear) *
     constraintnum += 1
 end
 
-logmsg("Created constraint SV2_SalvageValueAtEndOfPeriod2.")
+logmsg("Created constraint SV2_SalvageValueAtEndOfPeriod2.", quiet)
 # END: SV2_SalvageValueAtEndOfPeriod2.
 
 # BEGIN: SV3_SalvageValueAtEndOfPeriod3.
@@ -1554,7 +1556,7 @@ and y.val + ol.val - 1 <= " * last(syear)))
     constraintnum += 1
 end
 
-logmsg("Created constraint SV3_SalvageValueAtEndOfPeriod3.")
+logmsg("Created constraint SV3_SalvageValueAtEndOfPeriod3.", quiet)
 # END: SV3_SalvageValueAtEndOfPeriod3.
 
 # BEGIN: SV4_SalvageValueDiscountedToStartYear.
@@ -1571,7 +1573,7 @@ for row in eachrow(queryrtydr)
     constraintnum += 1
 end
 
-logmsg("Created constraint SV4_SalvageValueDiscountedToStartYear.")
+logmsg("Created constraint SV4_SalvageValueDiscountedToStartYear.", quiet)
 # END: SV4_SalvageValueDiscountedToStartYear.
 
 # BEGIN: OC1_OperatingCostsVariable.
@@ -1591,7 +1593,7 @@ group by r.val, t.val, y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint OC1_OperatingCostsVariable.")
+logmsg("Created constraint OC1_OperatingCostsVariable.", quiet)
 # END: OC1_OperatingCostsVariable.
 
 # BEGIN: OC2_OperatingCostsFixedAnnual.
@@ -1610,7 +1612,7 @@ where fc.r = r.val and fc.t = t.val and fc.y = y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint OC2_OperatingCostsFixedAnnual.")
+logmsg("Created constraint OC2_OperatingCostsFixedAnnual.", quiet)
 # END: OC2_OperatingCostsFixedAnnual.
 
 # BEGIN: OC3_OperatingCostsTotalAnnual.
@@ -1622,7 +1624,7 @@ for (r, t, y) in Base.product(sregion, stechnology, syear)
     constraintnum += 1
 end
 
-logmsg("Created constraint OC3_OperatingCostsTotalAnnual.")
+logmsg("Created constraint OC3_OperatingCostsTotalAnnual.", quiet)
 # END: OC3_OperatingCostsTotalAnnual.
 
 # BEGIN: OC4_DiscountedOperatingCostsTotalAnnual.
@@ -1640,7 +1642,7 @@ for row in eachrow(queryrtydr)
     constraintnum += 1
 end
 
-logmsg("Created constraint OC4_DiscountedOperatingCostsTotalAnnual.")
+logmsg("Created constraint OC4_DiscountedOperatingCostsTotalAnnual.", quiet)
 # END: OC4_DiscountedOperatingCostsTotalAnnual.
 
 # BEGIN: TDC1_TotalDiscountedCostByTechnology.
@@ -1652,7 +1654,7 @@ for (r, t, y) in Base.product(sregion, stechnology, syear)
     constraintnum += 1
 end
 
-logmsg("Created constraint TDC1_TotalDiscountedCostByTechnology.")
+logmsg("Created constraint TDC1_TotalDiscountedCostByTechnology.", quiet)
 # END: TDC1_TotalDiscountedCostByTechnology.
 
 # BEGIN: TDC2_TotalDiscountedCost.
@@ -1664,7 +1666,7 @@ for (r, y) in Base.product(sregion, syear)
     constraintnum += 1
 end
 
-logmsg("Created constraint TDC2_TotalDiscountedCost.")
+logmsg("Created constraint TDC2_TotalDiscountedCost.", quiet)
 # END: TDC2_TotalDiscountedCost.
 
 # BEGIN: TCC1_TotalAnnualMaxCapacityConstraint.
@@ -1681,7 +1683,7 @@ from TotalAnnualMaxCapacity_def"))
     constraintnum += 1
 end
 
-logmsg("Created constraint TCC1_TotalAnnualMaxCapacityConstraint.")
+logmsg("Created constraint TCC1_TotalAnnualMaxCapacityConstraint.", quiet)
 # END: TCC1_TotalAnnualMaxCapacityConstraint.
 
 # BEGIN: TCC2_TotalAnnualMinCapacityConstraint.
@@ -1699,7 +1701,7 @@ where val > 0"))
     constraintnum += 1
 end
 
-logmsg("Created constraint TCC2_TotalAnnualMinCapacityConstraint.")
+logmsg("Created constraint TCC2_TotalAnnualMinCapacityConstraint.", quiet)
 # END: TCC2_TotalAnnualMinCapacityConstraint.
 
 # BEGIN: NCC1_TotalAnnualMaxNewCapacityConstraint.
@@ -1716,7 +1718,7 @@ from TotalAnnualMaxCapacityInvestment_def"))
     constraintnum += 1
 end
 
-logmsg("Created constraint NCC1_TotalAnnualMaxNewCapacityConstraint.")
+logmsg("Created constraint NCC1_TotalAnnualMaxNewCapacityConstraint.", quiet)
 # END: NCC1_TotalAnnualMaxNewCapacityConstraint.
 
 # BEGIN: NCC2_TotalAnnualMinNewCapacityConstraint.
@@ -1734,7 +1736,7 @@ where val > 0"))
     constraintnum += 1
 end
 
-logmsg("Created constraint NCC2_TotalAnnualMinNewCapacityConstraint.")
+logmsg("Created constraint NCC2_TotalAnnualMinNewCapacityConstraint.", quiet)
 # END: NCC2_TotalAnnualMinNewCapacityConstraint.
 
 # BEGIN: AAC1_TotalAnnualTechnologyActivity.
@@ -1754,7 +1756,7 @@ group by r.val, t.val, y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint AAC1_TotalAnnualTechnologyActivity.")
+logmsg("Created constraint AAC1_TotalAnnualTechnologyActivity.", quiet)
 # END: AAC1_TotalAnnualTechnologyActivity.
 
 # BEGIN: AAC2_TotalAnnualTechnologyActivityUpperLimit.
@@ -1771,7 +1773,7 @@ from TotalTechnologyAnnualActivityUpperLimit_def"))
     constraintnum += 1
 end
 
-logmsg("Created constraint AAC2_TotalAnnualTechnologyActivityUpperLimit.")
+logmsg("Created constraint AAC2_TotalAnnualTechnologyActivityUpperLimit.", quiet)
 # END: AAC2_TotalAnnualTechnologyActivityUpperLimit.
 
 # BEGIN: AAC3_TotalAnnualTechnologyActivityLowerLimit.
@@ -1789,7 +1791,7 @@ where val > 0"))
     constraintnum += 1
 end
 
-logmsg("Created constraint AAC3_TotalAnnualTechnologyActivityLowerLimit.")
+logmsg("Created constraint AAC3_TotalAnnualTechnologyActivityLowerLimit.", quiet)
 # END: AAC3_TotalAnnualTechnologyActivityLowerLimit.
 
 # BEGIN: TAC1_TotalModelHorizonTechnologyActivity.
@@ -1801,7 +1803,7 @@ for (r, t) in Base.product(sregion, stechnology)
     constraintnum += 1
 end
 
-logmsg("Created constraint TAC1_TotalModelHorizonTechnologyActivity.")
+logmsg("Created constraint TAC1_TotalModelHorizonTechnologyActivity.", quiet)
 # END: TAC1_TotalModelHorizonTechnologyActivity.
 
 # BEGIN: TAC2_TotalModelHorizonTechnologyActivityUpperLimit.
@@ -1818,7 +1820,7 @@ where val > 0"))
     constraintnum += 1
 end
 
-logmsg("Created constraint TAC2_TotalModelHorizonTechnologyActivityUpperLimit.")
+logmsg("Created constraint TAC2_TotalModelHorizonTechnologyActivityUpperLimit.", quiet)
 # END: TAC2_TotalModelHorizonTechnologyActivityUpperLimit.
 
 # BEGIN: TAC3_TotalModelHorizenTechnologyActivityLowerLimit.
@@ -1835,7 +1837,7 @@ where val > 0"))
     constraintnum += 1
 end
 
-logmsg("Created constraint TAC3_TotalModelHorizenTechnologyActivityLowerLimit.")
+logmsg("Created constraint TAC3_TotalModelHorizenTechnologyActivityLowerLimit.", quiet)
 # END: TAC3_TotalModelHorizenTechnologyActivityLowerLimit.
 
 # BEGIN: RM1_ReserveMargin_TechnologiesIncluded_In_Activity_Units.
@@ -1854,7 +1856,7 @@ group by r.val, y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint RM1_ReserveMargin_TechnologiesIncluded_In_Activity_Units.")
+logmsg("Created constraint RM1_ReserveMargin_TechnologiesIncluded_In_Activity_Units.", quiet)
 # END: RM1_ReserveMargin_TechnologiesIncluded_In_Activity_Units.
 
 # BEGIN: RM2_ReserveMargin_FuelsIncluded.
@@ -1873,7 +1875,7 @@ group by r.val, l.val, y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint RM2_ReserveMargin_FuelsIncluded.")
+logmsg("Created constraint RM2_ReserveMargin_FuelsIncluded.", quiet)
 # END: RM2_ReserveMargin_FuelsIncluded.
 
 # BEGIN: RM3_ReserveMargin_Constraint.
@@ -1891,7 +1893,7 @@ where rm.r = r.val and rm.y = y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint RM3_ReserveMargin_Constraint.")
+logmsg("Created constraint RM3_ReserveMargin_Constraint.", quiet)
 # END: RM3_ReserveMargin_Constraint.
 
 # BEGIN: RE1_FuelProductionByTechnologyAnnual.
@@ -1908,7 +1910,7 @@ for row in eachrow(queryproductionbytechnologyannual)
     constraintnum += 1
 end
 
-logmsg("Created constraint RE1_FuelProductionByTechnologyAnnual.")
+logmsg("Created constraint RE1_FuelProductionByTechnologyAnnual.", quiet)
 # END: RE1_FuelProductionByTechnologyAnnual.
 
 # BEGIN: RE2_TechIncluded.
@@ -1928,7 +1930,7 @@ group by r.val, y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint RE2_TechIncluded.")
+logmsg("Created constraint RE2_TechIncluded.", quiet)
 # END: RE2_TechIncluded.
 
 # BEGIN: RE3_FuelIncluded.
@@ -1948,7 +1950,7 @@ group by r.val, y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint RE3_FuelIncluded.")
+logmsg("Created constraint RE3_FuelIncluded.", quiet)
 # END: RE3_FuelIncluded.
 
 # BEGIN: RE4_EnergyConstraint.
@@ -1977,7 +1979,7 @@ where rmp.r = ry.r and rmp.y = ry.y"))
     constraintnum += 1
 end
 
-logmsg("Created constraint RE4_EnergyConstraint.")
+logmsg("Created constraint RE4_EnergyConstraint.", quiet)
 # END: RE4_EnergyConstraint.
 
 # Omitting RE5_FuelUseByTechnologyAnnual because it's just an identity that's not used elsewhere in model
@@ -1999,7 +2001,7 @@ from EmissionActivityRatio_def ear"))
     constraintnum += 1
 end
 
-logmsg("Created constraint E1_AnnualEmissionProductionByMode.")
+logmsg("Created constraint E1_AnnualEmissionProductionByMode.", quiet)
 # END: E1_AnnualEmissionProductionByMode.
 
 # BEGIN: E2_AnnualEmissionProduction.
@@ -2019,7 +2021,7 @@ group by r, t, e, y"))
     constraintnum += 1
 end
 
-logmsg("Created constraint E2_AnnualEmissionProduction.")
+logmsg("Created constraint E2_AnnualEmissionProduction.", quiet)
 # END: E2_AnnualEmissionProduction.
 
 # BEGIN: E3_EmissionsPenaltyByTechAndEmission.
@@ -2040,7 +2042,7 @@ group by ear.r, ear.t, ear.e, ear.y, ep.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint E3_EmissionsPenaltyByTechAndEmission.")
+logmsg("Created constraint E3_EmissionsPenaltyByTechAndEmission.", quiet)
 # END: E3_EmissionsPenaltyByTechAndEmission.
 
 # BEGIN: E4_EmissionsPenaltyByTechnology.
@@ -2060,7 +2062,7 @@ group by ear.r, ear.t, ear.y"))
     constraintnum += 1
 end
 
-logmsg("Created constraint E4_EmissionsPenaltyByTechnology.")
+logmsg("Created constraint E4_EmissionsPenaltyByTechnology.", quiet)
 # END: E4_EmissionsPenaltyByTechnology.
 
 # BEGIN: E5_DiscountedEmissionsPenaltyByTechnology.
@@ -2077,7 +2079,7 @@ for row in eachrow(queryrtydr)
     constraintnum += 1
 end
 
-logmsg("Created constraint E5_DiscountedEmissionsPenaltyByTechnology.")
+logmsg("Created constraint E5_DiscountedEmissionsPenaltyByTechnology.", quiet)
 # END: E5_DiscountedEmissionsPenaltyByTechnology.
 
 # BEGIN: E6_EmissionsAccounting1.
@@ -2096,7 +2098,7 @@ group by r, e, y"))
     constraintnum += 1
 end
 
-logmsg("Created constraint E6_EmissionsAccounting1.")
+logmsg("Created constraint E6_EmissionsAccounting1.", quiet)
 # END: E6_EmissionsAccounting1.
 
 # BEGIN: E7_EmissionsAccounting2.
@@ -2115,7 +2117,7 @@ left join ModelPeriodExogenousEmission_def mpe on mpe.r = r.val and mpe.e = e.va
     constraintnum += 1
 end
 
-logmsg("Created constraint E7_EmissionsAccounting2.")
+logmsg("Created constraint E7_EmissionsAccounting2.", quiet)
 # END: E7_EmissionsAccounting2.
 
 # BEGIN: E8_AnnualEmissionsLimit.
@@ -2136,7 +2138,7 @@ where ael.r = r.val and ael.e = e.val and ael.y = y.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint E8_AnnualEmissionsLimit.")
+logmsg("Created constraint E8_AnnualEmissionsLimit.", quiet)
 # END: E8_AnnualEmissionsLimit.
 
 # BEGIN: E9_ModelPeriodEmissionsLimit.
@@ -2154,25 +2156,25 @@ where mpl.r = r.val and mpl.e = e.val"))
     constraintnum += 1
 end
 
-logmsg("Created constraint E9_ModelPeriodEmissionsLimit.")
+logmsg("Created constraint E9_ModelPeriodEmissionsLimit.", quiet)
 # END: E9_ModelPeriodEmissionsLimit.
 
 # END: Define OSeMOSYS constraints.
 
 # BEGIN: Define model objective.
 @objective(model, Min, sum([vtotaldiscountedcost[r,y] for r = sregion, y = syear]))
-logmsg("Defined model objective.")
+logmsg("Defined model objective.", quiet)
 # END: Define model objective.
 
 # Solve model
 status::Symbol = solve(model)
 solvedtm::DateTime = now()  # Date/time of last solve operation
 solvedtmstr::String = Dates.format(solvedtm, "yyyy-mm-dd HH:MM:SS.sss")  # solvedtm as a formatted string
-logmsg("Solved model.", solvedtm)
+logmsg("Solved model.", quiet, solvedtm)
 
 # BEGIN: Save results to database.
-savevarresults(String.(split(replace(varstosave, " " => ""), ","; keepempty = false)), modelvarindices, db, solvedtmstr)
-logmsg("Finished saving results to database.")
+savevarresults(String.(split(replace(varstosave, " " => ""), ","; keepempty = false)), modelvarindices, db, solvedtmstr, quiet)
+logmsg("Finished saving results to database.", quiet)
 # END: Save results to database.
 
 logmsg("Finished scenario calculation.")
@@ -2184,13 +2186,15 @@ end  # calculatescenario()
     • solver - Name of solver to be used (currently, GLPK or CPLEX).
     • gmpmodelpath - Path to GNU MathProg model file corresponding to data file.
     • varstosave - Comma-delimited list of model variables whose results should be saved in SQLite database.
-    • targetprocs - Processes that should be used for parallelized operations within this function."""
+    • targetprocs - Processes that should be used for parallelized operations within this function.
+    • quiet - Suppresses low-priority status messages (which are otherwise printed to STDOUT)."""
 function calculategmpscenario(
     gmpdatapath::String,
-    solver::String,
-    gmpmodelpath::String = normpath(joinpath(@__DIR__, "..", "utils", "gmpl2sql", "osemosys_2017_11_08_long.txt")),
+    gmpmodelpath::String = normpath(joinpath(@__DIR__, "..", "utils", "gmpl2sql", "osemosys_2017_11_08_long.txt"));
+    solver::String = "GLPK",
     varstosave::String = "vdemand, vnewstoragecapacity, vaccumulatednewstoragecapacity, vstorageupperlimit, vstoragelowerlimit, vcapitalinvestmentstorage, vdiscountedcapitalinvestmentstorage, vsalvagevaluestorage, vdiscountedsalvagevaluestorage, vnewcapacity, vaccumulatednewcapacity, vtotalcapacityannual, vtotaltechnologyannualactivity, vtotalannualtechnologyactivitybymode, vproductionbytechnologyannual, vproduction, vusebytechnologyannual, vuse, vtrade, vtradeannual, vproductionannual, vuseannual, vcapitalinvestment, vdiscountedcapitalinvestment, vsalvagevalue, vdiscountedsalvagevalue, voperatingcost, vdiscountedoperatingcost, vtotaldiscountedcost",
-    targetprocs::Array{Int, 1} = Array{Int, 1}([1]))
+    targetprocs::Array{Int, 1} = Array{Int, 1}([1]),
+    quiet::Bool = false)
 
     logmsg("Started conversion of MathProg data file.")
 
@@ -2203,7 +2207,7 @@ function calculategmpscenario(
         error("gmpmodelpath must refer to a valid file system path.")
     end
 
-    logmsg("Validated run-time arguments.")
+    logmsg("Validated run-time arguments.", quiet)
     # END: Validate arguments.
 
     # BEGIN: Convert data file into NEMO SQLite database.

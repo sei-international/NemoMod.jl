@@ -9,8 +9,9 @@
     File description: Main function library for NEMO.
 =#
 
-"""Prints a log message (msg) to STDOUT."""
-function logmsg(msg::String, dtm=now()::DateTime)
+"""Prints a log message (msg) to STDOUT. The message is suppressed if suppress = true."""
+function logmsg(msg::String, suppress=false, dtm=now()::DateTime)
+    suppress && return
     println(stdout, Dates.format(dtm, @dateformat_str "YYYY-dd-u HH:MM:SS.sss ") * msg)
 end  # logmsg(msg::String)
 
@@ -416,12 +417,14 @@ function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
     end
 end  # createviewwithdefaults(tables::Array{String,1})
 
-"""Saves model results to a SQLite database using SQL inserts with transaction batching. Requires three arguments:
+"""Saves model results to a SQLite database using SQL inserts with transaction batching. Has five arguments:
     1) vars - Names of model variables for which results will be retrieved and saved to database.
     2) modelvarindices - Dictionary mapping model variable names to tuples of (variable, [index column names]).
     3) db - SQLite database.
-    4) solvedtmstr - String to write into solvedtm field in result tables."""
-function savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String)
+    4) solvedtmstr - String to write into solvedtm field in result tables.
+    5) quiet - Suppresses low-priority status messages (which are otherwise printed to STDOUT)."""
+function savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String,
+    quiet::Bool = false)
     for vname in intersect(vars, keys(modelvarindices))
         local v = modelvarindices[vname][1]  # Model variable corresponding to vname
         local gvv = JuMP.getvalue(v)  # Value of v in model solution
@@ -454,7 +457,7 @@ function savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tup
 
             # Complete SQLite transaction
             SQLite.execute!(db, "COMMIT")
-            logmsg("Saved results for " * vname * " to database.")
+            logmsg("Saved results for " * vname * " to database.", quiet)
         catch
             # Rollback db transaction
             SQLite.execute!(db, "ROLLBACK")
