@@ -12,7 +12,7 @@
         compilenemo()
 =#
 
-using PackageCompiler, Libdl
+using PackageCompiler, Libdl, NemoMod
 
 """Clone of PackageCompiler.snoop_userimg(). Implemented here in order to allow a custom blacklist to be passed to PackageCompiler.snoop().
     This should be a temporary measure eventually obviated by upgrades to PackageCompiler (i.e., for compatability with Julia 1.0)."""
@@ -62,7 +62,7 @@ end  # snoop_userimg_nemo(userimg, packages::Tuple{String, String}...)
 """Generates a new Julia system image that includes the NemoMod package. The package is optimized and compiled into the system image
     based on the use cases in usecases (a path to a Julia script of use cases). usecases defaults to the standard NemoMod test cases
     (see NemoMod test directory for other options). The existing system image is replaced unless replacesysimage = false."""
-function compilenemo(usecases::String = normpath(joinpath(@__DIR__, "..", "test", "runtests.jl")), replacesysimage::Bool = true)
+function compilenemo(replacesysimage::Bool = true, usecases::String = normpath(joinpath(pathof(NemoMod), "..", "..", "test", "runtests.jl")))
     # Restore stock system image to avoid conflicts
     PackageCompiler.revert()
 
