@@ -10,7 +10,7 @@
 =#
 
 using NemoMod
-using Test, SQLite, DataFrames, Pkg
+using Test, SQLite, DataFrames
 
 const TOL = 1e-4  # Default tolerance for isapprox() comparisons
 
