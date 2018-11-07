@@ -60,14 +60,14 @@ function snoop_userimg_nemo(userimg, packages::Tuple{String, String}...)
 end  # snoop_userimg_nemo(userimg, packages::Tuple{String, String}...)
 
 """Generates a new Julia system image that includes the NemoMod package. The package is optimized and compiled into the system image
-    based on the use cases in NemoMod/test/runtests.jl (i.e., the standard NemoMod test cases). The existing system image is replaced unless
-    replacesysimage = false."""
-function compilenemo(replacesysimage::Bool = true)
+    based on the use cases in usecases (a path to a Julia script of use cases). usecases defaults to the standard NemoMod test cases
+    (see NemoMod test directory for other options). The existing system image is replaced unless replacesysimage = false."""
+function compilenemo(usecases::String = normpath(joinpath(@__DIR__, "..", "test", "runtests.jl")), replacesysimage::Bool = true)
     # Restore stock system image to avoid conflicts
     PackageCompiler.revert()
 
     # Create snooping file
-    snoop_userimg_nemo(PackageCompiler.sysimg_folder("precompile.jl"), ("NemoMod", normpath(joinpath(@__DIR__, "..", "test", "runtests.jl"))))
+    snoop_userimg_nemo(PackageCompiler.sysimg_folder("precompile.jl"), ("NemoMod", usecases))
 
     # To avoid a copying error at the end of compile_package(), manually remove any pre-existing back-up of system image in Julia system image folder
     rm(joinpath(PackageCompiler.default_sysimg_path(false), "sys.$(Libdl.dlext)") * ".packagecompiler_backup"; force = true)
