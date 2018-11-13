@@ -37,12 +37,7 @@ logmsg("Validated run-time arguments.", quiet)
 # END: Validate arguments.
 
 # BEGIN: Connect to SQLite database.
-try
-    db = SQLite.DB(dbpath)
-catch
-    error("Unable to connect to scenario database. Make sure dbpath argument refers to a valid SQLite database.")
-end
-
+db = SQLite.DB(dbpath)
 logmsg("Connected to scenario database. Path = " * dbpath * ".", quiet)
 # END: Connect to SQLite database.
 
