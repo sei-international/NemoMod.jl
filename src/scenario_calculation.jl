@@ -6,7 +6,7 @@
 
     Release 0.1: Julia version of OSeMOSYS version 2017_11_08.  http://www.osemosys.org/
 
-    File description: Functions JuMP model object to be used.
+    File description: Functions for calculating a NEMO scenario.
 =#
 
 """Runs NEMO for a scenario specified in a SQLite database. Arguments:
@@ -30,15 +30,20 @@ logmsg("Started scenario calculation.")
 
 # BEGIN: Validate arguments.
 if !isfile(dbpath)
-    error("dbpath must refer to a file.")
+    error("dbpath argument must refer to a file.")
 end
 
 logmsg("Validated run-time arguments.", quiet)
 # END: Validate arguments.
 
 # BEGIN: Connect to SQLite database.
-db = SQLite.DB(dbpath)
-logmsg("Connected to model database. Path = " * dbpath * ".", quiet)
+try
+    db = SQLite.DB(dbpath)
+catch
+    error("Unable to connect to scenario database. Make sure dbpath argument refers to a valid SQLite database.")
+end
+
+logmsg("Connected to scenario database. Path = " * dbpath * ".", quiet)
 # END: Connect to SQLite database.
 
 # BEGIN: Create parameter views showing default values.
