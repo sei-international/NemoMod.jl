@@ -2175,7 +2175,7 @@ end  # calculatescenario()
 function calculategmpscenario(
     gmpdatapath::String,
     gmpmodelpath::String = normpath(joinpath(@__DIR__, "..", "utils", "gmpl2sql", "osemosys_2017_11_08_long.txt"));
-    jumpmodel::JuMP.Model = GLPKSolverMIP(presolve=true),
+    jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
     varstosave::String = "vdemand, vnewstoragecapacity, vaccumulatednewstoragecapacity, vstorageupperlimit, vstoragelowerlimit, vcapitalinvestmentstorage, vdiscountedcapitalinvestmentstorage, vsalvagevaluestorage, vdiscountedsalvagevaluestorage, vnewcapacity, vaccumulatednewcapacity, vtotalcapacityannual, vtotaltechnologyannualactivity, vtotalannualtechnologyactivitybymode, vproductionbytechnologyannual, vproduction, vusebytechnologyannual, vuse, vtrade, vtradeannual, vproductionannual, vuseannual, vcapitalinvestment, vdiscountedcapitalinvestment, vsalvagevalue, vdiscountedsalvagevalue, voperatingcost, vdiscountedoperatingcost, vtotaldiscountedcost",
     targetprocs::Array{Int, 1} = Array{Int, 1}([1]),
     quiet::Bool = false)
