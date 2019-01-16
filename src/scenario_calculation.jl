@@ -42,7 +42,9 @@ logmsg("Connected to scenario database. Path = " * dbpath * ".", quiet)
 # END: Connect to SQLite database.
 
 # BEGIN: Create parameter views showing default values.
-createviewwithdefaults(db, ["OutputActivityRatio", "InputActivityRatio", "ResidualCapacity", "OperationalLife", "FixedCost", "YearSplit", "SpecifiedAnnualDemand", "SpecifiedDemandProfile", "VariableCost", "DiscountRate", "CapitalCost", "CapitalCostStorage", "CapacityFactor", "CapacityToActivityUnit", "CapacityOfOneTechnologyUnit", "AvailabilityFactor", "TradeRoute", "TechnologyToStorage", "Conversionls",
+createviewwithdefaults(db, ["OutputActivityRatio", "InputActivityRatio", "ResidualCapacity", "OperationalLife", "FixedCost", "YearSplit", "SpecifiedAnnualDemand",
+"SpecifiedDemandProfile", "VariableCost", "DiscountRate", "CapitalCost", "CapitalCostStorage", "CapacityFactor", "CapacityToActivityUnit", "CapacityOfOneTechnologyUnit",
+"AvailabilityFactor", "TradeRoute", "TechnologyToStorage", "Conversionls",
 "Conversionld", "Conversionlh", "TechnologyFromStorage", "DaySplit", "StorageLevelStart", "DaysInDayType", "StorageMaxChargeRate", "StorageMaxDischargeRate",
 "ResidualStorageCapacity", "MinStorageCharge", "OperationalLifeStorage", "DepreciationMethod", "TotalAnnualMaxCapacity", "TotalAnnualMinCapacity",
 "TotalAnnualMaxCapacityInvestment", "TotalAnnualMinCapacityInvestment", "TotalTechnologyAnnualActivityUpperLimit", "TotalTechnologyAnnualActivityLowerLimit",
