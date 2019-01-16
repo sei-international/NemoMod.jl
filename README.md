@@ -12,6 +12,8 @@ NEMO is a high performance, open source energy system optimization tool develope
 
 NEMO can be used in command-line mode by installing this Julia package, and it also being integrated with the [Long-range Energy Alternatives Planning system (LEAP)](https://www.energycommunity.org/). This will allow LEAP to serve as a graphical user interface to NEMO.
 
+Development of NEMO is led by the Energy Modeling Program at the [Stockholm Environment Institute (SEI)](https://www.sei.org/).
+
 # Getting started with NEMO
 
 There are two ways to set up NEMO for command-line usage:
@@ -39,5 +41,8 @@ You can perform a full compilation with the `compilenemo` function in [utils/com
 
 ## Automated installation
 
-This method is intended for users who want a quick, easy way to install NEMO and Julia together. @jwveysey
+This method is intended for users who want a quick, easy way to install NEMO and Julia together. SEI provides installers that deploy the two from a single file. Each installer includes an option to install a fully compiled copy of NEMO (i.e., a Julia system image into which NEMO has been compiled; if this option is not selected, NEMO can still be executed with just-in-time compilation). Currently, installers are available for the following platforms:
 
+- Windows 64-bit
+
+To obtain an installer, contact [Jason Veysey](https://www.sei.org/people/jason-veysey/).
