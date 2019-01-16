@@ -46,3 +46,19 @@ This method is intended for users who want a quick, easy way to install NEMO and
 - Windows 64-bit
 
 To obtain an installer, contact [Jason Veysey](https://www.sei.org/people/jason-veysey/). Once NEMO is installed, you can invoke it as described under [Manual installation](https://github.com/sei-international/NemoMod.jl/blob/master/README.md#manual-installation) above.
+
+# Contributing to NEMO
+
+We're in the process of preparing guidelines for community contributions to NEMO. For now, if you'd like to contribute, please contact [Jason Veysey](https://www.sei.org/people/jason-veysey/).
+
+# Licensing and attribution
+
+NEMO's Julia code is made available under the Apache License, Version 2.0. See `LICENSE.md`(LICENSE.md) for details, including attribution requirements and limitations on use.
+
+The initial versions of NEMO were informed by version 2017_11_08 of the [Open Source Energy Modelling System (OSeMOSYS)](OSeMOSYS), which was also released under the Apache License, Version 2.0.
+
+# For more information
+
+The NEMO team includes several SEI staff: [Jason Veysey](https://www.sei.org/people/jason-veysey/), [Eric Kemp-Benedict](https://www.sei.org/people/eric-kemp-benedict/), [Taylor Binnington](https://www.sei.org/people/taylor-binnington/), and [Charlie Heaps](https://www.sei.org/people/charles-heaps/). Please feel free to contact any of us if you have questions.
+
+We're also working on NEMO documentation, which is coming soon.
