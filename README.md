@@ -23,5 +23,9 @@ There are two ways to set up NEMO for command-line usage:
 
 This method is appropriate for experienced Julia users (or people who just want to know more about how NEMO is put together!). To install NEMO manually, follow these steps:
 
-1. 
+1. [Install Julia](https://julialang.org/downloads/). We recommend version 1.0.x of Julia since NEMO is known to be compatible with this version. 64-bit Julia is preferable but should not be essential.
+
+2. Open a [Julia Read-Eval-Print Loop (REPL)](https://docs.julialang.org/en/v1/stdlib/REPL/#The-Julia-REPL-1) session. We suggest suppressing deprecation warnings (specify `--depwarn=no` when invoking Julia) since some of the packages that NEMO uses may show insignificant warnings otherwise.
+
+3. In the REPL window, type `]` to enter Pkg or package management mode, then enter `https://github.com/sei-international/NemoMod.jl` to install the NEMO package. To install a particular branch of the NEMO repository, put `#` and the name of the branch after `NemoMod.jl` (e.g., `#nemo-osemosys`).
 
