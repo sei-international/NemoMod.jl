@@ -31,4 +31,12 @@ This method is appropriate for experienced Julia users (or people who just want 
 
 4. Exit Pkg mode by pressing backspace, then type `using NemoMod`. Julia will load (and may precompile) the new package, after which you'll be ready to start using NEMO.
 
-5. There are a variety of ways NEMO can be invoked, but the most common is via the `calculatescenario` function (which calculates a scenario specified in a NEMO-compatible SQLite database). For more on information on this function and NEMO-compatible databases, see the NEMO package files, including the [source code](src)
+5. There are a variety of ways NEMO can be invoked, but the most common is via the `calculatescenario` function (which calculates a scenario specified in a NEMO-compatible SQLite database). For more on information on this function and NEMO-compatible databases, see the NEMO package files, including the [src directory](src) (which contains commented source code) and the [test directory](test) (which contains a sample NEMO-compatible database). You can also consult NEMO's documentation *(coming soon)*.
+
+6. (Optional) To optimize NEMO's performance, we suggest executing a full, ahead-of-time compilation of the NEMO package. This will add a compiled copy of NEMO to Julia's system image and substantially decrease run times. It's a good choice if you're just going to use NEMO for modeling and don't intend to customize the NEMO code. If you do a full compilation and then customize the code, you'll have to recompile in order for your changes to take effect.
+
+You can perform a full compilation with the `compilenemo` function in [utils\compilation.jl](utils\compilation.jl). Read the comments on this function for further information.
+
+## Automated installation
+
+This method is intended for users who want a quick, easy way to install NEMO and Julia together. @jwveysey
