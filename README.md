@@ -1,6 +1,6 @@
 # NEMO: Next Energy Modeling system for Optimization
 
-NEMO is a high performance, open source energy system optimization tool developed in [Julia](https://julialang.org/).  It is intended for modelers who seek substantial optimization capabilities without the limitations of proprietary, fee-based software and the performance bottlenecks of common open source alternatives. Key features of NEMO include:
+NEMO is a high performance, open source energy system optimization tool developed in [Julia](https://julialang.org/).  It is intended for modelers who seek substantial optimization capabilities without the limitations of proprietary, fee-based software or the performance bottlenecks of common open source alternatives. Key features of NEMO include:
 
 - Least-cost optimization of energy supply and demand
 - Support for multiple regions and regional trade
