@@ -27,5 +27,8 @@ This method is appropriate for experienced Julia users (or people who just want 
 
 2. Open a [Julia Read-Eval-Print Loop (REPL)](https://docs.julialang.org/en/v1/stdlib/REPL/#The-Julia-REPL-1) session. We suggest suppressing deprecation warnings (specify `--depwarn=no` when invoking Julia) since some of the packages that NEMO uses may show insignificant warnings otherwise.
 
-3. In the REPL window, type `]` to enter Pkg or package management mode, then enter `https://github.com/sei-international/NemoMod.jl` to install the NEMO package. To install a particular branch of the NEMO repository, put `#` and the name of the branch after `NemoMod.jl` (e.g., `#nemo-osemosys`).
+3. In the REPL window, type `]` to enter Pkg or package management mode, then enter `add https://github.com/sei-international/NemoMod.jl` to install the NEMO package. To install a particular branch of the NEMO repository, put `#` and the name of the branch after `NemoMod.jl` (e.g., `add https://github.com/sei-international/NemoMod.jl#nemo-osemosys`).
 
+4. Exit Pkg mode by pressing backspace, then type `using NemoMod`. Julia will load (and may precompile) the new package, after which you'll be ready to start using NEMO.
+
+5. There are a variety of ways NEMO can be invoked, but the most common is via the `calculatescenario` function (which calculates a scenario specified in a NEMO-compatible SQLite database). For more on information on this function and NEMO-compatible databases, see the NEMO package files, including the [source code](src)
