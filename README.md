@@ -1,4 +1,4 @@
-# NEMO: *N*ext *E*nergy *M*odeling system for *O*ptimization
+# NEMO: Next Energy Modeling system for Optimization
 
 NEMO is a high performance, open source energy system optimization tool developed in [Julia](https://julialang.org/).  It is intended for modelers who seek substantial optimization capabilities without the limitations of proprietary, fee-based software and the performance bottlenecks of common open source alternatives. Key features of NEMO include:
 
@@ -53,7 +53,7 @@ We're in the process of preparing guidelines for community contributions to NEMO
 
 # Licensing and attribution
 
-NEMO's Julia code is made available under the Apache License, Version 2.0. See [`LICENSE.md`](LICENSE.md) for details, including attribution requirements and limitations on use.
+NEMO's Julia code is made available under the Apache License, Version 2.0. See [LICENSE.md](LICENSE.md) for details, including attribution requirements and limitations on use.
 
 The initial versions of NEMO were informed by version 2017_11_08 of the [Open Source Energy Modelling System (OSeMOSYS)](OSeMOSYS), which was also released under the Apache License, Version 2.0.
 
