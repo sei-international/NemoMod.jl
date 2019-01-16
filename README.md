@@ -45,4 +45,4 @@ This method is intended for users who want a quick, easy way to install NEMO and
 
 - Windows 64-bit
 
-To obtain an installer, contact [Jason Veysey](https://www.sei.org/people/jason-veysey/).
+To obtain an installer, contact [Jason Veysey](https://www.sei.org/people/jason-veysey/). Once NEMO is installed, you can invoke it as described under [Manual installation](https://github.com/sei-international/NemoMod.jl/blob/master/README.md#manual-installation) above.
