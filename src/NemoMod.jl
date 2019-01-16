@@ -4,7 +4,7 @@
 
     Copyright © 2018: Stockholm Environment Institute U.S.
 
-    Release 0.1: Julia version of OSeMOSYS version 2017_11_08.  http://www.osemosys.org/
+    Release 0.1.2: NEMO-OSeMOSYS.
 
     File description: NemoMod module.
 =#
