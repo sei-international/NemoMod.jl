@@ -10,7 +10,7 @@
 - Parallel processing
 - [SQLite](https://www.sqlite.org/) data store
 
-}nemo can be used in command-line mode by installing this Julia package, and it also being integrated with the [Long-range Energy Alternatives Planning system (LEAP)](https://www.energycommunity.org/). This will allow LEAP to serve as a graphical user interface to nemo~.
+}nemo can be used in command-line mode by installing this Julia package, and it also being integrated with the [Long-range Energy Alternatives Planning system (LEAP)](https://www.energycommunity.org/). This will allow LEAP to serve as a graphical user interface to }nemo.
 
 Development of }nemo is led by the Energy Modeling Program at the [Stockholm Environment Institute (SEI)](https://www.sei.org/).
 
@@ -31,9 +31,9 @@ This method is appropriate for experienced Julia users (or people who just want 
 
 3. In the REPL window, type `]` to enter Pkg or package management mode, then enter `add https://github.com/sei-international/NemoMod.jl` to install the }nemo package. To install a particular branch of the }nemo repository, put `#` and the name of the branch after `NemoMod.jl` (e.g., `add https://github.com/sei-international/NemoMod.jl#nemo-osemosys`).
 
-4. Exit Pkg mode by pressing backspace, then type `using NemoMod`. Julia will load (and may precompile) the new package, after which you'll be ready to start using nemo~.
+4. Exit Pkg mode by pressing backspace, then type `using NemoMod`. Julia will load (and may precompile) the new package, after which you'll be ready to start using }nemo.
 
-5. There are a variety of ways }nemo can be invoked, but the most common is via the `calculatescenario` function (which calculates a scenario specified in a nemo~-compatible SQLite database). For more on information on this function and nemo~-compatible databases, see the }nemo package files, including the [src directory](src) (which contains commented source code) and the [test directory](test) (which contains a sample nemo~-compatible database). You can also consult nemo~'s documentation *(coming soon)*.
+5. There are a variety of ways }nemo can be invoked, but the most common is via the `calculatescenario` function (which calculates a scenario specified in a }nemo-compatible SQLite database). For more on information on this function and }nemo-compatible databases, see the }nemo package files, including the [src directory](src) (which contains commented source code) and the [test directory](test) (which contains a sample }nemo-compatible database). You can also consult }nemo's documentation *(coming soon)*.
 
 6. (Optional) To optimize }nemo's performance, we suggest executing a full, ahead-of-time compilation of the }nemo package. This will add a compiled copy of }nemo to Julia's system image and substantially decrease run times. It's a good choice if you're just going to use }nemo for modeling and don't intend to customize the }nemo code. If you do a full compilation and then customize the code, you'll have to recompile in order for your changes to take effect.
 
@@ -49,11 +49,11 @@ To obtain an installer, contact [Jason Veysey](https://www.sei.org/people/jason-
 
 # Contributing to }nemo
 
-We're in the process of preparing guidelines for community contributions to nemo~. For now, if you'd like to contribute, please contact [Jason Veysey](https://www.sei.org/people/jason-veysey/).
+We're in the process of preparing guidelines for community contributions to }nemo. For now, if you'd like to contribute, please contact [Jason Veysey](https://www.sei.org/people/jason-veysey/).
 
 # Licensing and attribution
 
-nemo~'s Julia code is made available under the Apache License, Version 2.0. See [LICENSE.md](LICENSE.md) for details, including attribution requirements and limitations on use.
+}nemo's Julia code is made available under the Apache License, Version 2.0. See [LICENSE.md](LICENSE.md) for details, including attribution requirements and limitations on use.
 
 The initial versions of }nemo were informed by version 2017_11_08 of the [Open Source Energy Modelling System (OSeMOSYS)](OSeMOSYS), which was also released under the Apache License, Version 2.0.
 
