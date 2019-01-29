@@ -35,7 +35,7 @@ This method is appropriate for experienced Julia users (or people who just want 
 
 5. There are a variety of ways }nemo can be invoked, but the most common is via the `calculatescenario` function (which calculates a scenario specified in a nemo~-compatible SQLite database). For more on information on this function and nemo~-compatible databases, see the }nemo package files, including the [src directory](src) (which contains commented source code) and the [test directory](test) (which contains a sample nemo~-compatible database). You can also consult nemo~'s documentation *(coming soon)*.
 
-6. (Optional) To optimize nemo~'s performance, we suggest executing a full, ahead-of-time compilation of the }nemo package. This will add a compiled copy of }nemo to Julia's system image and substantially decrease run times. It's a good choice if you're just going to use }nemo for modeling and don't intend to customize the }nemo code. If you do a full compilation and then customize the code, you'll have to recompile in order for your changes to take effect.
+6. (Optional) To optimize }nemo's performance, we suggest executing a full, ahead-of-time compilation of the }nemo package. This will add a compiled copy of }nemo to Julia's system image and substantially decrease run times. It's a good choice if you're just going to use }nemo for modeling and don't intend to customize the }nemo code. If you do a full compilation and then customize the code, you'll have to recompile in order for your changes to take effect.
 
 	You can perform a full compilation with the `compilenemo` function in [utils/compilation.jl](utils/compilation.jl). Read the comments on this function for further information.
 
