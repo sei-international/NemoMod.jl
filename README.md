@@ -1,4 +1,4 @@
-![|nemo logo](https://www.dropbox.com/s/htmu6bu97ue0j1b/nemo_logo_lowres.png?dl=0)
+![|nemo logo](https://www.dropbox.com/s/htmu6bu97ue0j1b/nemo_logo_lowres.png)
 
 # |nemo: Next Energy Modeling system for Optimization
 
