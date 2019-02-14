@@ -1,21 +1,34 @@
 #=
-    NEMO: Next-generation Energy Modeling system for Optimization.
+    |nemo: Next-generation Energy Modeling system for Optimization.
     https://github.com/sei-international/NemoMod.jl
 
     Copyright © 2018: Stockholm Environment Institute U.S.
 
     Release 0.1.2: NEMO-OSeMOSYS.
 
-    File description: Functions for calculating a NEMO scenario.
+    File description: Functions for calculating a |nemo scenario.
 =#
 
-"""Runs NEMO for a scenario specified in a SQLite database. Arguments:
-    • dbpath - Path to SQLite database.
-    • jumpmodel - JuMP model object specifying MIP solver to be used. Examples: Model(solver = GLPKSolverMIP(presolve=true)),
-        Model(solver = CplexSolver()). Note that solver package must be installed (GLPK is installed with NEMO by default).
-    • varstosave - Comma-delimited list of model variables whose results should be saved in SQLite database.
-    • targetprocs - Processes that should be used for parallelized operations within this function.
-    • quiet - Suppresses low-priority status messages (which are otherwise printed to STDOUT)."""
+"""
+    calculatescenario(dbpath; jumpmodel = Model(solver = GLPKSolverMIP(presolve=true)),
+    varstosave = "vdemand, vnewstoragecapacity, vaccumulatednewstoragecapacity, vstorageupperlimit, vstoragelowerlimit,
+    vcapitalinvestmentstorage, vdiscountedcapitalinvestmentstorage, vsalvagevaluestorage, vdiscountedsalvagevaluestorage,
+    vnewcapacity, vaccumulatednewcapacity, vtotalcapacityannual, vtotaltechnologyannualactivity,
+    vtotalannualtechnologyactivitybymode, vproductionbytechnologyannual, vproduction, vusebytechnologyannual, vuse, vtrade,
+    vtradeannual, vproductionannual, vuseannual, vcapitalinvestment, vdiscountedcapitalinvestment, vsalvagevalue,
+    vdiscountedsalvagevalue, voperatingcost, vdiscountedoperatingcost, vtotaldiscountedcost",
+    target = Array{Int, 1}([1]), quiet = false)
+
+Run |nemo for a scenario specified in a SQLite database.
+
+# Arguments
+- `dbpath::String`: Path to SQLite database.
+- `jumpmodel::JuMP.Model`: JuMP model object specifying MIP solver to be used. Examples: Model(solver = GLPKSolverMIP(presolve=true)),
+        Model(solver = CplexSolver()). Note that solver package must be installed (GLPK is installed with |nemo by default).
+- `varstosave::String`: Comma-delimited list of model variables whose results should be saved in SQLite database.
+- `targetprocs::Array{Int, 1}`: Processes that should be used for parallelized operations within the scenario calculation.
+- `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to STDOUT).
+"""
 function calculatescenario(
     dbpath::String;
     jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
@@ -2160,12 +2173,12 @@ logmsg("Finished saving results to database.", quiet)
 logmsg("Finished scenario calculation.")
 end  # calculatescenario()
 
-"""Runs NEMO for a scenario specified in a GNU MathProg data file. Saves results in a NEMO-compatible SQLite database in same
+"""Runs |nemo for a scenario specified in a GNU MathProg data file. Saves results in a |nemo-compatible SQLite database in same
     directory as GNU MathProg data file. Arguments:
     • gmpdatapath - Path to GNU MathProg data file.
     • gmpmodelpath - Path to GNU MathProg model file corresponding to data file.
     • jumpmodel - JuMP model object specifying MIP solver to be used. Examples: Model(solver = GLPKSolverMIP(presolve=true)),
-        Model(solver = CplexSolver()). Note that solver package must be installed (GLPK is installed with NEMO by default).
+        Model(solver = CplexSolver()). Note that solver package must be installed (GLPK is installed with |nemo by default).
     • varstosave - Comma-delimited list of model variables whose results should be saved in SQLite database.
     • targetprocs - Processes that should be used for parallelized operations within this function.
     • quiet - Suppresses low-priority status messages (which are otherwise printed to STDOUT)."""
@@ -2191,10 +2204,10 @@ function calculategmpscenario(
     logmsg("Validated run-time arguments.", quiet)
     # END: Validate arguments.
 
-    # BEGIN: Convert data file into NEMO SQLite database.
+    # BEGIN: Convert data file into |nemo SQLite database.
     local gmp2sqlprog::String = normpath(joinpath(@__DIR__, "..", "utils", "gmpl2sql", "gmpl2sql.exe"))  # Full path to gmp2sql.exe
     run(`$gmp2sqlprog -d $gmpdatapath -m $gmpmodelpath`)
-    # END: Convert data file into NEMO SQLite database.
+    # END: Convert data file into |nemo SQLite database.
 
     logmsg("Finished conversion of MathProg data file.")
 
