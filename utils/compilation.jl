@@ -4,8 +4,6 @@
 
     Copyright © 2018: Stockholm Environment Institute U.S.
 
-    Release 0.1.2: NEMO-OSeMOSYS.
-
     File description: Utilities for ahead-of-time compilation of NEMO. Typical usage in a REPL session:
         using NemoMod
         include(normpath(joinpath(pathof(NemoMod), "..", "..", "utils", "compilation.jl")))

@@ -4,8 +4,6 @@
 
     Copyright © 2018: Stockholm Environment Institute U.S.
 
-    Release 0.1.2: NEMO-OSeMOSYS.
-
 	File description: Tests for NemoMod package.
 =#
 

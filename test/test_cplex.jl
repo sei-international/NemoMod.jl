@@ -4,8 +4,6 @@
 
     Copyright © 2018: Stockholm Environment Institute U.S.
 
-    Release 0.1.2: NEMO-OSeMOSYS.
-
 	File description: A test of NemoMod package using CPLEX solver. This file is provided for users wishing
         to native compile NEMO with support for CPLEX.
 =#

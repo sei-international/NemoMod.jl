@@ -2,9 +2,11 @@ using Documenter
 using NemoMod
 
 makedocs(
-    sitename = "NemoMod",
+    sitename = "|nemo",
     format = :html,
-    modules = [NemoMod]
+    pages = [
+        "Introduction" => "index.md"
+    ],
 )
 
 # Documenter can also automatically deploy documentation to gh-pages.
@@ -13,3 +15,11 @@ makedocs(
 #=deploydocs(
     repo = "<repository url>"
 )=#
+
+#= Markdown syntax for referring to one docstring
+
+```@docs
+#NemoMod.logmsg(msg::String, suppress=false, dtm=now()::DateTime)
+```
+
+=#

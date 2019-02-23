@@ -4,18 +4,38 @@
 
     Copyright © 2018: Stockholm Environment Institute U.S.
 
-    Release 0.1.2: NEMO-OSeMOSYS.
-
     File description: Main function library for NEMO.
 =#
 
-"""Prints a log message (msg) to STDOUT. The message is suppressed if suppress = true."""
+"""
+    logmsg(msg::String, suppress=false, dtm=now()::DateTime)
+
+Print a log message (msg) to STDOUT. The message is suppressed if suppress = true.
+
+# Examples
+```jldoctest
+julia> using Dates
+
+julia> logmsg("Test message", false, DateTime(2020))
+2020-01-Jan 00:00:00.000 Test message
+```
+"""
 function logmsg(msg::String, suppress=false, dtm=now()::DateTime)
     suppress && return
     println(stdout, Dates.format(dtm, @dateformat_str "YYYY-dd-u HH:MM:SS.sss ") * msg)
 end  # logmsg(msg::String)
 
-"""Translates an OSeMOSYS set abbreviation (a) into the set's name."""
+"""
+    translatesetabb(a::String)
+
+Translate an OSeMOSYS set abbreviation (a) into the set's name.
+
+# Examples
+```jldoctest
+julia> translatesetabb(y)
+""YEAR""
+```
+"""
 function translatesetabb(a::String)
     if a == "y"
         return "YEAR"
@@ -43,6 +63,8 @@ function translatesetabb(a::String)
         return a
     end
 end  # translatesetabb(a::String)
+
+# Start here.
 
 """Generates Dicts that can be used to restrict JuMP constraints or variables to selected indices
 (rather than all values in their dimensions) at creation. Requires two arguments:
