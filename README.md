@@ -1,3 +1,5 @@
+![|nemo logo](docs/src/assets/nemo_logo_small.png)
+
 # |nemo: Next Energy Modeling system for Optimization
 
 |nemo is a high performance, open source energy system optimization tool developed in [Julia](https://julialang.org/).  It is intended for modelers who seek substantial optimization capabilities without the limitations of proprietary, fee-based software or the performance bottlenecks of common open source alternatives. Key features of |nemo include:
