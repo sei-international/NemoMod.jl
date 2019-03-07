@@ -60,20 +60,27 @@ db = SQLite.DB(dbpath)
 logmsg("Connected to scenario database. Path = " * dbpath * ".", quiet)
 # END: Connect to SQLite database.
 
+# BEGIN: Drop any pre-existing result tables.
+dropresulttables(db, true)
+logmsg("Dropped pre-existing result tables from database.", quiet)
+# END: Drop any pre-existing result tables.
+
 # BEGIN: Create parameter views showing default values.
 createviewwithdefaults(db, ["OutputActivityRatio", "InputActivityRatio", "ResidualCapacity", "OperationalLife", "FixedCost", "YearSplit", "SpecifiedAnnualDemand",
-"SpecifiedDemandProfile", "VariableCost", "DiscountRate", "CapitalCost", "CapitalCostStorage", "CapacityFactor", "CapacityToActivityUnit", "CapacityOfOneTechnologyUnit",
-"AvailabilityFactor", "TradeRoute", "TechnologyToStorage", "Conversionls",
-"Conversionld", "Conversionlh", "TechnologyFromStorage", "DaySplit", "StorageLevelStart", "DaysInDayType", "StorageMaxChargeRate", "StorageMaxDischargeRate",
-"ResidualStorageCapacity", "MinStorageCharge", "OperationalLifeStorage", "DepreciationMethod", "TotalAnnualMaxCapacity", "TotalAnnualMinCapacity",
-"TotalAnnualMaxCapacityInvestment", "TotalAnnualMinCapacityInvestment", "TotalTechnologyAnnualActivityUpperLimit", "TotalTechnologyAnnualActivityLowerLimit",
-"TotalTechnologyModelPeriodActivityUpperLimit", "TotalTechnologyModelPeriodActivityLowerLimit", "ReserveMarginTagTechnology", "ReserveMarginTagFuel",
-"ReserveMargin", "RETagTechnology", "RETagFuel", "REMinProductionTarget", "EmissionActivityRatio", "EmissionsPenalty", "ModelPeriodExogenousEmission",
-"AnnualExogenousEmission", "AnnualEmissionLimit", "ModelPeriodEmissionLimit", "AccumulatedAnnualDemand"])
+"SpecifiedDemandProfile", "VariableCost", "DiscountRate", "CapitalCost", "CapitalCostStorage", "CapacityFactor", "CapacityToActivityUnit",
+"CapacityOfOneTechnologyUnit", "AvailabilityFactor", "TradeRoute", "TechnologyToStorage", "TechnologyFromStorage",
+"StorageLevelStart", "StorageMaxChargeRate", "StorageMaxDischargeRate", "ResidualStorageCapacity", "MinStorageCharge", "OperationalLifeStorage",
+"DepreciationMethod", "TotalAnnualMaxCapacity", "TotalAnnualMinCapacity", "TotalAnnualMaxCapacityInvestment", "TotalAnnualMinCapacityInvestment",
+"TotalTechnologyAnnualActivityUpperLimit", "TotalTechnologyAnnualActivityLowerLimit", "TotalTechnologyModelPeriodActivityUpperLimit",
+"TotalTechnologyModelPeriodActivityLowerLimit", "ReserveMarginTagTechnology", "ReserveMarginTagFuel", "ReserveMargin", "RETagTechnology", "RETagFuel",
+"REMinProductionTarget", "EmissionActivityRatio", "EmissionsPenalty", "ModelPeriodExogenousEmission",
+"AnnualExogenousEmission", "AnnualEmissionLimit", "ModelPeriodEmissionLimit", "AccumulatedAnnualDemand", "TotalAnnualMaxCapacityStorage",
+"TotalAnnualMinCapacityStorage", "TotalAnnualMaxCapacityInvestmentStorage", "TotalAnnualMinCapacityInvestmentStorage"])
+
 logmsg("Created parameter views.", quiet)
 # END: Create parameter views showing default values.
 
-# BEGIN: Define OSeMOSYS sets.
+# BEGIN: Define sets.
 syear::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from YEAR order by val")[:val]))  # YEAR set
 stechnology::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from TECHNOLOGY")[:val]))  # TECHNOLOGY set
 stimeslice::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from TIMESLICE")[:val]))  # TIMESLICE set
@@ -81,17 +88,27 @@ sfuel::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from F
 semission::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from EMISSION")[:val]))  # EMISSION set
 smode_of_operation::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from MODE_OF_OPERATION")[:val]))  # MODE_OF_OPERATION set
 sregion::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from REGION")[:val]))  # REGION set
-sseason::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from SEASON order by val")[:val]))  # SEASON set
-sdaytype::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from DAYTYPE order by val")[:val]))  # DAYTYPE set
-sdailytimebracket::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from DAILYTIMEBRACKET")[:val]))  # DAILYTIMEBRACKET set
-# FLEXIBLEDEMANDTYPE not used in Utopia example; substitute empty value
-sflexibledemandtype::Array{String,1} = Array{String,1}()  # FLEXIBLEDEMANDTYPE set
 sstorage::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from STORAGE")[:val]))  # STORAGE set
+stsgroup1::Array{String,1} = collect(skipmissing(SQLite.query(db, "select name from TSGROUP1")[:name]))  # Time slice group 1 set
+stsgroup2::Array{String,1} = collect(skipmissing(SQLite.query(db, "select name from TSGROUP2")[:name]))  # Time slice group 2 set
 
-logmsg("Defined OSeMOSYS sets.", quiet)
-# END: Define OSeMOSYS sets.
+tsgroup1dict::Dict{Int, Tuple{String, Float64}} = Dict{Int, Tuple{String, Float64}}(row[:order] => (row[:name], row[:multiplier]) for row in
+    DataFrames.eachrow(SQLite.query(db, "select [order], name, cast (multiplier as real) as multiplier from tsgroup1 order by [order]")))
+    # For TSGROUP1, a dictionary mapping orders to tuples of (name, multiplier)
+tsgroup2dict::Dict{Int, Tuple{String, Float64}} = Dict{Int, Tuple{String, Float64}}(row[:order] => (row[:name], row[:multiplier]) for row in
+    DataFrames.eachrow(SQLite.query(db, "select [order], name, cast (multiplier as real) as multiplier from tsgroup2 order by [order]")))
+    # For TSGROUP2, a dictionary mapping orders to tuples of (name, multiplier)
+ltsgroupdict::Dict{Tuple{Int, Int, Int}, String} = Dict{Tuple{Int, Int, Int}, String}((row[:tg1o], row[:tg2o], row[:lo]) => row[:l] for row in
+    DataFrames.eachrow(SQLite.query(db, "select ltg.l as l, ltg.lorder as lo, ltg.tg2, tg2.[order] as tg2o, ltg.tg1, tg1.[order] as tg1o
+    from LTsGroup ltg, TSGROUP2 tg2, TSGROUP1 tg1
+    where
+    ltg.tg2 = tg2.name
+    and ltg.tg1 = tg1.name")))  # Dictionary of LTsGroup table mapping tuples of (tsgroup1 order, tsgroup2 order, time slice order) to time slice names
 
-# BEGIN: Define OSeMOSYS variables.
+logmsg("Defined sets.", quiet)
+# END: Define sets.
+
+# BEGIN: Define model variables.
 modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}} = Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}}()  # Dictionary mapping model variable names to tuples of (variable, [index column names]); must have an entry here in order to save variable's results back to database
 
 # Demands
@@ -103,15 +120,14 @@ modelvarindices["vdemand"] = (vdemand, ["r","l","f","y"])
 logmsg("Defined demand variables.", quiet)
 
 # Storage
-@variable(jumpmodel, vrateofstoragecharge[sregion, sstorage, sseason, sdaytype, sdailytimebracket, syear])
-@variable(jumpmodel, vrateofstoragedischarge[sregion, sstorage, sseason, sdaytype, sdailytimebracket, syear])
-@variable(jumpmodel, vnetchargewithinyear[sregion, sstorage, sseason, sdaytype, sdailytimebracket, syear])
-@variable(jumpmodel, vnetchargewithinday[sregion, sstorage, sseason, sdaytype, sdailytimebracket, syear])
-@variable(jumpmodel, vstoragelevelyearstart[sregion, sstorage, syear] >= 0)
-@variable(jumpmodel, vstoragelevelyearfinish[sregion, sstorage, syear] >= 0)
-@variable(jumpmodel, vstoragelevelseasonstart[sregion, sstorage, sseason, syear] >= 0)
-@variable(jumpmodel, vstorageleveldaytypestart[sregion, sstorage, sseason, sdaytype, syear] >= 0)
-@variable(jumpmodel, vstorageleveldaytypefinish[sregion, sstorage, sseason, sdaytype, syear] >= 0)
+@variable(jumpmodel, vstorageleveltsgroup1start[sregion, sstorage, stsgroup1, syear] >= 0)
+@variable(jumpmodel, vstorageleveltsgroup1end[sregion, sstorage, stsgroup1, syear] >= 0)
+@variable(jumpmodel, vstorageleveltsgroup2start[sregion, sstorage, stsgroup1, stsgroup2, syear] >= 0)
+@variable(jumpmodel, vstorageleveltsgroup2end[sregion, sstorage, stsgroup1, stsgroup2, syear] >= 0)
+@variable(jumpmodel, vstorageleveltsend[sregion, sstorage, stimeslice, syear] >= 0)  # Storage level at end of first hour in time slice
+@variable(jumpmodel, vstoragelevelyearend[sregion, sstorage, syear] >= 0)
+@variable(jumpmodel, vrateofstoragecharge[sregion, sstorage, stimeslice, syear] >= 0)
+@variable(jumpmodel, vrateofstoragedischarge[sregion, sstorage, stimeslice, syear] >= 0)
 @variable(jumpmodel, vstoragelowerlimit[sregion, sstorage, syear] >= 0)
 @variable(jumpmodel, vstorageupperlimit[sregion, sstorage, syear] >= 0)
 @variable(jumpmodel, vaccumulatednewstoragecapacity[sregion, sstorage, syear] >= 0)
@@ -122,15 +138,14 @@ logmsg("Defined demand variables.", quiet)
 @variable(jumpmodel, vdiscountedsalvagevaluestorage[sregion, sstorage, syear] >= 0)
 @variable(jumpmodel, vtotaldiscountedstoragecost[sregion, sstorage, syear] >= 0)
 
-modelvarindices["vrateofstoragecharge"] = (vrateofstoragecharge, ["r", "s", "ls", "ld", "lh", "y"])
-modelvarindices["vrateofstoragedischarge"] = (vrateofstoragedischarge, ["r", "s", "ls", "ld", "lh", "y"])
-modelvarindices["vnetchargewithinyear"] = (vnetchargewithinyear, ["r", "s", "ls", "ld", "lh", "y"])
-modelvarindices["vnetchargewithinday"] = (vnetchargewithinday, ["r", "s", "ls", "ld", "lh", "y"])
-modelvarindices["vstoragelevelyearstart"] = (vstoragelevelyearstart, ["r", "s", "y"])
-modelvarindices["vstoragelevelyearfinish"] = (vstoragelevelyearfinish, ["r", "s", "y"])
-modelvarindices["vstoragelevelseasonstart"] = (vstoragelevelseasonstart, ["r", "s", "ls", "y"])
-modelvarindices["vstorageleveldaytypestart"] = (vstorageleveldaytypestart, ["r", "s", "ls", "ld", "y"])
-modelvarindices["vstorageleveldaytypefinish"] = (vstorageleveldaytypefinish, ["r", "s", "ls", "ld", "y"])
+modelvarindices["vstorageleveltsgroup1start"] = (vstorageleveltsgroup1start, ["r", "s", "tg1", "y"])
+modelvarindices["vstorageleveltsgroup1end"] = (vstorageleveltsgroup1end, ["r", "s", "tg1", "y"])
+modelvarindices["vstorageleveltsgroup2start"] = (vstorageleveltsgroup2start, ["r", "s", "tg1", "tg2", "y"])
+modelvarindices["vstorageleveltsgroup2end"] = (vstorageleveltsgroup2end, ["r", "s", "tg1", "tg2", "y"])
+modelvarindices["vstorageleveltsend"] = (vstorageleveltsend, ["r", "s", "l", "y"])
+modelvarindices["vstoragelevelyearend"] = (vstoragelevelyearend, ["r", "s", "y"])
+modelvarindices["vrateofstoragecharge"] = (vrateofstoragecharge, ["r", "s", "l", "y"])
+modelvarindices["vrateofstoragedischarge"] = (vrateofstoragedischarge, ["r", "s", "l", "y"])
 modelvarindices["vstoragelowerlimit"] = (vstoragelowerlimit, ["r", "s", "y"])
 modelvarindices["vstorageupperlimit"] = (vstorageupperlimit, ["r", "s", "y"])
 modelvarindices["vaccumulatednewstoragecapacity"] = (vaccumulatednewstoragecapacity, ["r", "s", "y"])
@@ -330,9 +345,9 @@ modelvarindices["vmodelperiodemissions"] = (vmodelperiodemissions, ["r", "e"])
 logmsg("Defined emissions variables.", quiet)
 
 logmsg("Finished defining model variables.", quiet)
-# END: Define OSeMOSYS variables.
+# END: Define model variables.
 
-# BEGIN: Define OSeMOSYS constraints.
+# BEGIN: Define model constraints.
 
 # BEGIN: EQ_SpecifiedDemand.
 constraintnum::Int = 1  # Number of next constraint to be added to constraint array
@@ -345,7 +360,7 @@ from SpecifiedDemandProfile_def sdp, SpecifiedAnnualDemand_def sad, YearSplit_de
 where sad.r = sdp.r and sad.f = sdp.f and sad.y = sdp.y
 and ys.l = sdp.l and ys.y = sdp.y")
 
-for row in eachrow(queryvrateofdemand)
+for row in DataFrames.eachrow(queryvrateofdemand)
     ceq_specifieddemand[constraintnum] = @constraint(jumpmodel, row[:specifiedannualdemand] * row[:specifieddemandprofile] / row[:ys]
         == vrateofdemand[row[:r], row[:l], row[:f], row[:y]])
     constraintnum += 1
@@ -358,7 +373,7 @@ logmsg("Created constraint EQ_SpecifiedDemand.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref caa1_totalnewcapacity[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in eachrow(SQLite.query(db,"select r.val as r, t.val as t, y.val as y, group_concat(yy.val) as yya
+for row in DataFrames.eachrow(SQLite.query(db,"select r.val as r, t.val as t, y.val as y, group_concat(yy.val) as yya
 from REGION r, TECHNOLOGY t, YEAR y, OperationalLife_def ol, YEAR yy
 where ol.r = r.val and ol.t = t.val
 and y.val - yy.val < ol.val and y.val - yy.val >=0
@@ -379,7 +394,7 @@ logmsg("Created constraint CAa1_TotalNewCapacity.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref caa2_totalannualcapacity[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in eachrow(SQLite.query(db,"select r.val as r, t.val as t, y.val as y, cast(rc.val as real) as rc
+for row in DataFrames.eachrow(SQLite.query(db,"select r.val as r, t.val as t, y.val as y, cast(rc.val as real) as rc
 from REGION r, TECHNOLOGY t, YEAR y
 left join ResidualCapacity_def rc on rc.r = r.val and rc.t = t.val and rc.y = y.val"))
     local r = row[:r]
@@ -411,7 +426,7 @@ logmsg("Created constraint CAa3_TotalActivityOfEachTechnology.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref caa4_constraint_capacity[1:length(sregion) * length(stimeslice) * length(stechnology) * length(syear)]
 
-for row in eachrow(SQLite.query(db,"select r.val as r, l.val as l, t.val as t, y.val as y,
+for row in DataFrames.eachrow(SQLite.query(db,"select r.val as r, l.val as l, t.val as t, y.val as y,
     cast(cf.val as real) as cf, cast(cta.val as real) as cta
 from REGION r, TIMESLICE l, TECHNOLOGY t, YEAR y, CapacityFactor_def cf, CapacityToActivityUnit_def cta
 where cf.r = r.val and cf.t = t.val and cf.l = l.val and cf.y = y.val
@@ -433,7 +448,7 @@ logmsg("Created constraint CAa4_Constraint_Capacity.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref caa5_totalnewcapacity[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in eachrow(SQLite.query(db,"select cot.r as r, cot.t as t, cot.y as y, cast(cot.val as real) as cot
+for row in DataFrames.eachrow(SQLite.query(db,"select cot.r as r, cot.t as t, cot.y as y, cast(cot.val as real) as cot
 from CapacityOfOneTechnologyUnit_def cot where cot.val <> 0"))
     local r = row[:r]
     local t = row[:t]
@@ -451,7 +466,7 @@ logmsg("Created constraint CAa5_TotalNewCapacity.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref cab1_plannedmaintenance[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, group_concat(distinct ys.l || ';' || ys.val) as ysa,
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, group_concat(distinct ys.l || ';' || ys.val) as ysa,
 group_concat(distinct cf.cf || ';' || cf.ys || ';' || cf.l) as cfa,
 cast(af.val as real) as af, cast(cta.val as real) cta
 from REGION r, TECHNOLOGY t, YEAR y, YearSplit_def ys,
@@ -481,7 +496,7 @@ logmsg("Created constraint CAb1_PlannedMaintenance.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba1_rateoffuelproduction1[1:size(queryvrateofproductionbytechnologybymode)[1]]
 
-for row in eachrow(queryvrateofproductionbytechnologybymode)
+for row in DataFrames.eachrow(queryvrateofproductionbytechnologybymode)
     local r = row[:r]
     local l = row[:l]
     local t = row[:t]
@@ -500,7 +515,7 @@ logmsg("Created constraint EBa1_RateOfFuelProduction1.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba2_rateoffuelproduction2[1:size(queryvrateofproductionbytechnology)[1]]
 
-for row in eachrow(queryvrateofproductionbytechnology)
+for row in DataFrames.eachrow(queryvrateofproductionbytechnology)
     local r = row[:r]
     local l = row[:l]
     local t = row[:t]
@@ -528,7 +543,7 @@ group by r.val, l.val, t.val, f.val, y.val) rpt
 left join YearSplit_def ys on ys.l = rpt.l and ys.y = rpt.y
 group by rpt.r, rpt.l, rpt.f, rpt.y, ys")
 
-for row in eachrow(queryvrateofproduction)
+for row in DataFrames.eachrow(queryvrateofproduction)
     local r = row[:r]
     local l = row[:l]
     local f = row[:f]
@@ -545,7 +560,7 @@ logmsg("Created constraint EBa3_RateOfFuelProduction3.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba4_rateoffueluse1[1:size(queryvrateofusebytechnologybymode)[1]]
 
-for row in eachrow(queryvrateofusebytechnologybymode)
+for row in DataFrames.eachrow(queryvrateofusebytechnologybymode)
     local r = row[:r]
     local l = row[:l]
     local f = row[:f]
@@ -564,7 +579,7 @@ logmsg("Created constraint EBa4_RateOfFuelUse1.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba5_rateoffueluse2[1:size(queryvrateofusebytechnology)[1]]
 
-for row in eachrow(queryvrateofusebytechnology)
+for row in DataFrames.eachrow(queryvrateofusebytechnology)
     local r = row[:r]
     local l = row[:l]
     local f = row[:f]
@@ -593,7 +608,7 @@ group by rut.r, rut.l, rut.f, rut.y, ys")
 
 @constraintref eba6_rateoffueluse3[1:size(queryvrateofuse)[1]]
 
-for row in eachrow(queryvrateofuse)
+for row in DataFrames.eachrow(queryvrateofuse)
     local r = row[:r]
     local l = row[:l]
     local f = row[:f]
@@ -610,7 +625,7 @@ logmsg("Created constraint EBa6_RateOfFuelUse3.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba7_energybalanceeachts1[1:size(queryvrateofproduction)[1]]
 
-for row in eachrow(queryvrateofproduction)
+for row in DataFrames.eachrow(queryvrateofproduction)
     local r = row[:r]
     local l = row[:l]
     local f = row[:f]
@@ -629,7 +644,7 @@ logmsg("Created constraint EBa7_EnergyBalanceEachTS1.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba8_energybalanceeachts2[1:size(queryvrateofuse)[1]]
 
-for row in eachrow(queryvrateofuse)
+for row in DataFrames.eachrow(queryvrateofuse)
     local r = row[:r]
     local l = row[:l]
     local f = row[:f]
@@ -648,7 +663,7 @@ logmsg("Created constraint EBa8_EnergyBalanceEachTS2.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba9_energybalanceeachts3[1:size(queryvrateofdemand)[1]]
 
-for row in eachrow(queryvrateofdemand)
+for row in DataFrames.eachrow(queryvrateofdemand)
     local r = row[:r]
     local l = row[:l]
     local f = row[:f]
@@ -677,7 +692,7 @@ logmsg("Created constraint EBa10_EnergyBalanceEachTS4.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba11_energybalanceeachts5[1:length(sregion) * length(stimeslice) * length(sfuel) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, l.val as l, f.val as f, y.val as y, group_concat(tr.rr || ';' || tr.val) as tra
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, l.val as l, f.val as f, y.val as y, group_concat(tr.rr || ';' || tr.val) as tra
 from region r, timeslice l, fuel f, year y
 left join traderoute_def tr on tr.r = r.val and tr.f = f.val and tr.y = y.val
 group by r.val, l.val, f.val, y.val"))
@@ -734,7 +749,7 @@ logmsg("Created constraint EBb3_EnergyBalanceEachYear3.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref ebb4_energybalanceeachyear4[1:length(sregion) * length(sfuel) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, f.val as f, y.val as y, cast(aad.val as real) as aad,
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, f.val as f, y.val as y, cast(aad.val as real) as aad,
 group_concat(tr.rr || ';' || tr.val) as tra
 from region r, fuel f, year y
 left join traderoute_def tr on tr.r = r.val and tr.f = f.val and tr.y = y.val
@@ -757,7 +772,7 @@ logmsg("Created constraint EBb4_EnergyBalanceEachYear4.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref acc1_fuelproductionbytechnology[1:size(queryvrateofproductionbytechnology)[1]]
 
-for row in eachrow(queryvrateofproductionbytechnology)
+for row in DataFrames.eachrow(queryvrateofproductionbytechnology)
     local r = row[:r]
     local l = row[:l]
     local t = row[:t]
@@ -777,7 +792,7 @@ logmsg("Created constraint Acc1_FuelProductionByTechnology.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref acc2_fuelusebytechnology[1:size(queryvrateofusebytechnology)[1]]
 
-for row in eachrow(queryvrateofusebytechnology)
+for row in DataFrames.eachrow(queryvrateofusebytechnology)
     local r = row[:r]
     local l = row[:l]
     local t = row[:t]
@@ -797,7 +812,7 @@ logmsg("Created constraint Acc2_FuelUseByTechnology.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref acc3_averageannualrateofactivity[1:length(sregion) * length(stechnology) * length(smode_of_operation) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, t.val as t, m.val as m, y.val as y, group_concat(l.val || ';' || ys.val) as la
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, m.val as m, y.val as y, group_concat(l.val || ';' || ys.val) as la
 from region r, technology t, mode_of_operation m, year y, timeslice l, YearSplit_def ys
 where ys.l = l.val and ys.y = y.val
 group by r.val, t.val, m.val, y.val"))
@@ -825,428 +840,200 @@ end
 logmsg("Created constraint Acc4_ModelPeriodCostByRegion.", quiet)
 # END: Acc4_ModelPeriodCostByRegion.
 
-# BEGIN: S1_RateOfStorageCharge.
+# BEGIN: NS1_RateOfStorageCharge.
+# vrateofstoragecharge is in terms of energy output/year (e.g., PJ/yr, depending on CapacityToActivityUnit)
 constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref s1_rateofstoragecharge[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
+@constraintref ns1_rateofstoragecharge[1:length(sregion) * length(sstorage) * length(stimeslice) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y,
-group_concat(t.val || ';' || m.val || ';' || l.val || ';' || (tts.val * cls.val * cld.val * clh.val)) as ia
-from region r, storage s, season ls, daytype ld, dailytimebracket lh, year y, technology t,
-mode_of_operation m, timeslice l, TechnologyToStorage_def tts, Conversionls_def cls, Conversionld_def cld,
-Conversionlh_def clh
-where tts.r = r.val and tts.t = t.val and tts.s = s.val and tts.m = m.val and tts.val > 0
-and cls.l = l.val and cls.ls = ls.val
-and cld.l = l.val and cld.ld = ld.val
-and clh.l = l.val and clh.lh = lh.val
-group by r.val, s.val, ls.val, ld.val, lh.val, y.val"))
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, l.val as l, y.val as y,
+group_concat(tts.m || ';' || tts.t) as tta
+from region r, storage s, TIMESLICE l, year y, TechnologyToStorage_def tts
+where
+tts.r = r.val and tts.s = s.val and tts.val = 1
+group by r.val, s.val, l.val, y.val"))
     local r = row[:r]
-    local s = row[:s]
-    local ls = row[:ls]
-    local ld = row[:ld]
-    local lh = row[:lh]
+    local l = row[:l]
     local y = row[:y]
 
-    s1_rateofstoragecharge[constraintnum] = @constraint(jumpmodel, sum([vrateofactivity[r,split(i,";")[3],split(i,";")[1],split(i,";")[2],y] * Meta.parse(split(i,";")[4]) for i = split(row[:ia], ",")]) == vrateofstoragecharge[r,s,ls,ld,lh,y])
+    ns1_rateofstoragecharge[constraintnum] = @constraint(jumpmodel, sum([vrateofactivity[r,l,split(tt,";")[2],split(tt,";")[1],y] for tt = split(row[:tta], ",")])
+        == vrateofstoragecharge[r, row[:s], l, y])
     constraintnum += 1
 end
+logmsg("Created constraint NS1_RateOfStorageCharge.", quiet)
+# END: NS1_RateOfStorageCharge.
 
-logmsg("Created constraint S1_RateOfStorageCharge.", quiet)
-# END: S1_RateOfStorageCharge.
-
-# BEGIN: S2_RateOfStorageDischarge.
+# BEGIN: NS2_RateOfStorageDischarge.
+# vrateofstoragedischarge is in terms of energy output/year (e.g., PJ/yr, depending on CapacityToActivityUnit)
 constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref s2_rateofstoragedischarge[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
+@constraintref ns2_rateofstoragedischarge[1:length(sregion) * length(sstorage) * length(stimeslice) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y,
-group_concat(t.val || ';' || m.val || ';' || l.val || ';' || (tfs.val * cls.val * cld.val * clh.val)) as ia
-from region r, storage s, season ls, daytype ld, dailytimebracket lh, year y, technology t,
-mode_of_operation m, timeslice l, TechnologyFromStorage_def tfs, Conversionls_def cls, Conversionld_def cld,
-Conversionlh_def clh
-where tfs.r = r.val and tfs.t = t.val and tfs.s = s.val and tfs.m = m.val and tfs.val > 0
-and cls.l = l.val and cls.ls = ls.val
-and cld.l = l.val and cld.ld = ld.val
-and clh.l = l.val and clh.lh = lh.val
-group by r.val, s.val, ls.val, ld.val, lh.val, y.val"))
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, l.val as l, y.val as y,
+group_concat(tfs.m || ';' || tfs.t) as tfa
+from region r, storage s, TIMESLICE l, year y, TechnologyFromStorage_def tfs
+where
+tfs.r = r.val and tfs.s = s.val and tfs.val = 1
+group by r.val, s.val, l.val, y.val"))
     local r = row[:r]
-    local s = row[:s]
-    local ls = row[:ls]
-    local ld = row[:ld]
-    local lh = row[:lh]
+    local l = row[:l]
     local y = row[:y]
 
-    s2_rateofstoragedischarge[constraintnum] = @constraint(jumpmodel, sum([vrateofactivity[r,split(i,";")[3],split(i,";")[1],split(i,";")[2],y] * Meta.parse(split(i,";")[4]) for i = split(row[:ia], ",")]) == vrateofstoragedischarge[r,s,ls,ld,lh,y])
+    ns2_rateofstoragedischarge[constraintnum] = @constraint(jumpmodel, sum([vrateofactivity[r,l,split(tf,";")[2],split(tf,";")[1],y] for tf = split(row[:tfa], ",")])
+        == vrateofstoragedischarge[r, row[:s], l, y])
     constraintnum += 1
 end
+logmsg("Created constraint NS2_RateOfStorageDischarge.", quiet)
+# END: NS2_RateOfStorageDischarge.
 
-logmsg("Created constraint S2_RateOfStorageDischarge.", quiet)
-# END: S2_RateOfStorageDischarge.
-
-# BEGIN: S3_NetChargeWithinYear.
+# BEGIN: NS3_StorageLevelTsGroup1Start, NS4_StorageLevelTsGroup2Start, NS5_StorageLevelTimesliceEnd.
+# Note that vstorageleveltsend represents storage level (in energy terms) at end of first hour in time slice
 constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref s3_netchargewithinyear[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
+constraint2num::Int, constraint3num::Int = 1, 1  # Supplemental constraint counters needed because three constraints are defined in subsequent loop
+@constraintref ns3_storageleveltsgroup1start[1:length(sregion) * length(sstorage) * length(stsgroup1) * length(syear)]
+@constraintref ns4_storageleveltsgroup2start[1:length(sregion) * length(sstorage) * length(stsgroup1) * length(stsgroup2) * length(syear)]
+@constraintref ns5_storageleveltimesliceend[1:length(sregion) * length(sstorage) * length(stimeslice) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y,
-group_concat(ys.val * cls.val * cld.val * clh.val) as ia
-from region r, storage s, season ls, daytype ld, dailytimebracket lh, year y, timeslice l,
-YearSplit_def ys, Conversionls_def cls, Conversionld_def cld, Conversionlh_def clh
-where ys.l = l.val and ys.y = y.val
-and cls.l = l.val and cls.ls = ls.val and cls.val > 0
-and cld.l = l.val and cld.ld = ld.val and cld.val > 0
-and clh.l = l.val and clh.lh = lh.val and clh.val > 0
-group by r.val, s.val, ls.val, ld.val, lh.val, y.val"))
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, ltg.l as l, y.val as y, ltg.lorder as lo,
+    ltg.tg2 as tg2, tg2.[order] as tg2o, ltg.tg1 as tg1, tg1.[order] as tg1o, cast(sls.val as real) as sls
+from REGION r, STORAGE s, YEAR y, LTsGroup ltg, TSGROUP2 tg2, TSGROUP1 tg1
+left join StorageLevelStart_def sls on sls.r = r.val and sls.s = s.val
+where
+ltg.tg2 = tg2.name
+and ltg.tg1 = tg1.name"))
     local r = row[:r]
     local s = row[:s]
-    local ls = row[:ls]
-    local ld = row[:ld]
-    local lh = row[:lh]
+    local l = row[:l]
     local y = row[:y]
+    local tg1 = row[:tg1]
+    local tg2 = row[:tg2]
+    local lo = row[:lo]
+    local tg2o = row[:tg2o]
+    local tg1o = row[:tg1o]
+    local startlevel  # Storage level at beginning of first hour in time slice
+    local addns3::Bool = false  # Indicates whether to add to constraint ns3
+    local addns4::Bool = false  #  Indicates whether to add to constraint ns4
 
-    s3_netchargewithinyear[constraintnum] = @constraint(jumpmodel, (vrateofstoragecharge[r,s,ls,ld,lh,y] - vrateofstoragedischarge[r,s,ls,ld,lh,y]) * sum([Meta.parse(i) for i = split(row[:ia], ",")]) == vnetchargewithinyear[r,s,ls,ld,lh,y])
-    constraintnum += 1
+    if y == first(syear) && tg1o == 1 && tg2o == 1 && lo == 1
+        startlevel = ismissing(row[:sls]) ? 0 : row[:sls]
+        addns3 = true
+        addns4 = true
+    elseif tg1o == 1 && tg2o == 1 && lo == 1
+        startlevel = vstoragelevelyearend[r, s, string(Meta.parse(y)-1)]
+        addns3 = true
+        addns4 = true
+    elseif tg2o == 1 && lo == 1
+        startlevel = vstorageleveltsgroup1end[r, s, tsgroup1dict[tg1o-1][1], y]
+        addns3 = true
+        addns4 = true
+    elseif lo == 1
+        startlevel = vstorageleveltsgroup2end[r, s, tg1, tsgroup2dict[tg2o-1][1], y]
+        addns4 = true
+    else
+        startlevel = vstorageleveltsend[r, s, ltsgroupdict[(tg1o, tg2o, lo-1)], y]
+    end
+
+    if addns3
+        ns3_storageleveltsgroup1start[constraintnum] = @constraint(jumpmodel, startlevel == vstorageleveltsgroup1start[r, s, tg1, y])
+        constraintnum += 1
+    end
+
+    if addns4
+        ns4_storageleveltsgroup2start[constraint2num] = @constraint(jumpmodel, startlevel == vstorageleveltsgroup2start[r, s, tg1, tg2, y])
+        constraint2num += 1
+    end
+
+    ns5_storageleveltimesliceend[constraint3num] = @constraint(jumpmodel,
+        startlevel + (vrateofstoragecharge[r, s, l, y] - vrateofstoragedischarge[r, s, l, y]) / 8760 == vstorageleveltsend[r, s, l, y])
+    constraint3num += 1
 end
+logmsg("Created constraints NS3_StorageLevelTsGroup1Start, NS4_StorageLevelTsGroup2Start, and NS5_StorageLevelTimesliceEnd.", quiet)
+# BEGIN: NS3_StorageLevelTsGroup1Start, NS4_StorageLevelTsGroup2Start, NS5_StorageLevelTimesliceEnd.
 
-logmsg("Created constraint S3_NetChargeWithinYear.", quiet)
-# END: S3_NetChargeWithinYear.
-
-# BEGIN: S4_NetChargeWithinDay.
+# BEGIN: NS6_StorageLevelTsGroup2End.
 constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref s4_netchargewithinday[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
+@constraintref ns6_storageleveltsgroup2end[1:length(sregion) * length(sstorage) * length(stsgroup1) * length(stsgroup2) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y, cast(ds.val as real) as ds
-from region r, storage s, season ls, daytype ld, dailytimebracket lh, year y, daysplit_def ds
-where ds.lh = lh.val and ds.y = y.val"))
+for row in DataFrames.eachrow(SQLite.query(db, "select main.r, main.s, main.tg1, main.tg1o, main.tg2, main.tg2o, cast(main.tg2m as real) as tg2m,
+    main.y, ltg2.l as maxl, main.maxlo
+from
+(select r.val as r, s.val as s, tg1.name as tg1, tg1.[order] as tg1o, tg2.name as tg2, tg2.[order] as tg2o, tg2.multiplier as tg2m,
+y.val as y, max(ltg.lorder) as maxlo
+from REGION r, STORAGE s, TSGROUP1 tg1, TSGROUP2 tg2, YEAR as y, LTsGroup ltg
+where
+tg1.name = ltg.tg1
+and tg2.name = ltg.tg2
+group by r.val, s.val, tg1.name, tg1.[order], tg2.name, tg2.[order], tg2.multiplier, y.val) main, LTsGroup ltg2
+where
+ltg2.tg1 = main.tg1
+and ltg2.tg2 = main.tg2
+and ltg2.lorder = main.maxlo"))
     local r = row[:r]
     local s = row[:s]
-    local ls = row[:ls]
-    local ld = row[:ld]
-    local lh = row[:lh]
+    local tg1 = row[:tg1]
+    local tg2 = row[:tg2]
     local y = row[:y]
 
-    s4_netchargewithinday[constraintnum] = @constraint(jumpmodel, (vrateofstoragecharge[r,s,ls,ld,lh,y] - vrateofstoragedischarge[r,s,ls,ld,lh,y]) * row[:ds] == vnetchargewithinday[r,s,ls,ld,lh,y])
+    ns6_storageleveltsgroup2end[constraintnum] = @constraint(jumpmodel, vstorageleveltsgroup2start[r, s, tg1, tg2, y] +
+        (vstorageleveltsend[r, s, row[:maxl], y] - vstorageleveltsgroup2start[r, s, tg1, tg2, y]) * row[:tg2m]
+        == vstorageleveltsgroup2end[r, s, tg1, tg2, y])
     constraintnum += 1
 end
+logmsg("Created constraint NS6_StorageLevelTsGroup2End.", quiet)
+# END: NS6_StorageLevelTsGroup2End.
 
-logmsg("Created constraint S4_NetChargeWithinDay.", quiet)
-# END: S4_NetChargeWithinDay.
-
-# BEGIN: S5_and_S6_StorageLevelYearStart.
+# BEGIN: NS7_StorageLevelTsGroup1End.
 constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref s5_and_s6_storagelevelyearstart[1:length(sregion) * length(sstorage) * length(syear)]
+@constraintref ns7_storageleveltsgroup1end[1:length(sregion) * length(sstorage) * length(stsgroup1) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(sls.val as real) as sls
-from region r, storage s, year y, StorageLevelStart_def sls
-where sls.r = r.val and sls.s = s.val"))
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, tg1.name as tg1, tg1.[order] as tg1o, cast(tg1.multiplier as real) as tg1m,
+    y.val as y, max(tg2.[order]) as maxtg2o
+from REGION r, STORAGE s, TSGROUP1 tg1, YEAR as y, LTsGroup ltg, TSGROUP2 tg2
+where
+tg1.name = ltg.tg1
+and ltg.tg2 = tg2.name
+group by r.val, s.val, tg1.name, tg1.[order], tg1.multiplier, y.val"))
+    local r = row[:r]
+    local s = row[:s]
+    local tg1 = row[:tg1]
+    local y = row[:y]
+
+    ns7_storageleveltsgroup1end[constraintnum] = @constraint(jumpmodel, vstorageleveltsgroup1start[r, s, tg1, y] +
+        (vstorageleveltsgroup2end[r, s, tg1, tsgroup2dict[row[:maxtg2o]][1], y] - vstorageleveltsgroup1start[r, s, tg1, y]) * row[:tg1m]
+        == vstorageleveltsgroup1end[r, s, tg1, y])
+    constraintnum += 1
+end
+logmsg("Created constraint NS7_StorageLevelTsGroup1End.", quiet)
+# END: NS7_StorageLevelTsGroup1End.
+
+# BEGIN: NS8_StorageLevelYearEnd.
+constraintnum = 1  # Number of next constraint to be added to constraint array
+@constraintref ns8_storagelevelyearend[1:length(sregion) * length(sstorage) * length(syear)]
+
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, group_concat(l.val || ';' || ys.val) as lya, cast(sls.val as real) as sls
+from REGION r, STORAGE s, YEAR as y, TIMESLICE l, YearSplit_def ys
+left join StorageLevelStart_def sls on sls.r = r.val and sls.s = s.val
+where l.val = ys.l
+and y.val = ys.y
+group by r.val, s.val, y.val"))
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
+    local sls = ismissing(row[:sls]) ? 0 : row[:sls]
+    local start = (y == first(syear) ? sls : vstoragelevelyearend[r, s, string(Meta.parse(y)-1)])
 
-    s5_and_s6_storagelevelyearstart[constraintnum] = @constraint(jumpmodel, (y == first(syear) ? row[:sls] : vstoragelevelyearstart[r,s,string(Meta.parse(y)-1)] + sum([vnetchargewithinyear[r,s,ls,ld,lh,string(Meta.parse(y)-1)] for ls = sseason, ld = sdaytype, lh = sdailytimebracket])) == vstoragelevelyearstart[r,s,y])
+    ns8_storagelevelyearend[constraintnum] = @constraint(jumpmodel, start +
+        sum([(vrateofstoragecharge[r,s,split(ly,";")[1],y] - vrateofstoragedischarge[r,s,split(ly,";")[1],y]) * Meta.parse(split(ly,";")[2]) for ly = split(row[:lya], ",")])
+        == vstoragelevelyearend[r, s, y])
     constraintnum += 1
 end
-
-logmsg("Created constraint S5_and_S6_StorageLevelYearStart.", quiet)
-# END: S5_and_S6_StorageLevelYearStart.
-
-# BEGIN: S7_and_S8_StorageLevelYearFinish.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref s7_and_s8_storagelevelyearfinish[1:length(sregion) * length(sstorage) * length(syear)]
-
-for (r, s, y) in Base.product(sregion, sstorage, syear)
-    s7_and_s8_storagelevelyearfinish[constraintnum] = @constraint(jumpmodel, (y < last(syear) ? vstoragelevelyearstart[r,s,string(Meta.parse(y)+1)] : vstoragelevelyearstart[r,s,y] + sum([vnetchargewithinyear[r,s,ls,ld,lh,y] for ls = sseason, ld = sdaytype, lh = sdailytimebracket])) == vstoragelevelyearfinish[r,s,y])
-    constraintnum += 1
-end
-
-logmsg("Created constraint S7_and_S8_StorageLevelYearFinish.", quiet)
-# END: S7_and_S8_StorageLevelYearFinish.
-
-# BEGIN: S9_and_S10_StorageLevelSeasonStart.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref s9_and_s10_storagelevelseasonstart[1:length(sregion) * length(sstorage) * length(sseason) * length(syear)]
-
-for (r, s, ls, y) in Base.product(sregion, sstorage, sseason, syear)
-    s9_and_s10_storagelevelseasonstart[constraintnum] = @constraint(jumpmodel, (ls == first(sseason) ? vstoragelevelyearstart[r,s,y] : vstoragelevelseasonstart[r,s,string(Meta.parse(ls)-1),y] + sum([vnetchargewithinyear[r,s,string(Meta.parse(ls)-1),ld,lh,y] for ld = sdaytype, lh = sdailytimebracket])) == vstoragelevelseasonstart[r,s,ls,y])
-    constraintnum += 1
-end
-
-logmsg("Created constraint S9_and_S10_StorageLevelSeasonStart.", quiet)
-# END: S9_and_S10_StorageLevelSeasonStart.
-
-# BEGIN: S11_and_S12_StorageLevelDayTypeStart.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref s11_and_s12_storageleveldaytypestart[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(syear)]
-
-for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, y.val as y, cast(did.val as real) as did
-from region r, storage s, season ls, daytype ld, year y
-left join DaysInDayType_def did on did.ls = ls.val and did.ld = ld.val - 1 and did.y = y.val"))
-    local r = row[:r]
-    local s = row[:s]
-    local ls = row[:ls]
-    local ld = row[:ld]
-    local y = row[:y]
-
-    s11_and_s12_storageleveldaytypestart[constraintnum] = @constraint(jumpmodel, (ld == first(sdaytype) ? vstoragelevelseasonstart[r,s,ls,y] : vstorageleveldaytypestart[r,s,ls,string(Meta.parse(ld)-1),y] + sum([vnetchargewithinday[r,s,ls,string(Meta.parse(ld)-1),lh,y] * row[:did] for lh = sdailytimebracket])) == vstorageleveldaytypestart[r,s,ls,ld,y])
-    constraintnum += 1
-end
-
-logmsg("Created constraint S11_and_S12_StorageLevelDayTypeStart.", quiet)
-# END: S11_and_S12_StorageLevelDayTypeStart.
-
-# BEGIN: S13_and_S14_and_S15_StorageLevelDayTypeFinish.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref s13_and_s14_and_s15_storageleveldaytypefinish[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(syear)]
-
-for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, y.val as y, cast(did.val as real) as did
-from region r, storage s, season ls, daytype ld, year y
-left join DaysInDayType_def did on did.ls = ls.val and did.ld = ld.val + 1 and did.y = y.val"))
-    local r = row[:r]
-    local s = row[:s]
-    local ls = row[:ls]
-    local ld = row[:ld]
-    local y = row[:y]
-
-    s13_and_s14_and_s15_storageleveldaytypefinish[constraintnum] = @constraint(jumpmodel, (ls == last(sseason) && ld == last(sdaytype) ? vstoragelevelyearfinish[r,s,y] : (ld == last(sdaytype) ? vstoragelevelseasonstart[r,s,string(Meta.parse(ls)+1),y] : vstorageleveldaytypefinish[r,s,ls,string(Meta.parse(ld)+1),y] - sum([vnetchargewithinday[r,s,ls,string(Meta.parse(ld)+1),lh,y] * row[:did] for lh = sdailytimebracket]))) == vstorageleveldaytypefinish[r,s,ls,ld,y])
-    constraintnum += 1
-end
-
-logmsg("Created constraint S13_and_S14_and_S15_StorageLevelDayTypeFinish.", quiet)
-# END: S13_and_S14_and_S15_StorageLevelDayTypeFinish.
-
-# BEGIN: SC1_LowerLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInFirstWeekConstraint.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref sc1_lowerlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinfirstweekconstraint[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
-
-querysc1::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y,
-group_concat(lhlh.val) as lhlha
-from region r, storage s, season ls, daytype ld, dailytimebracket lh, year y
-left join dailytimebracket lhlh on lh.val > lhlh.val
-group by r.val, s.val, ls.val, ld.val, lh.val, y.val")
-
-for row in eachrow(querysc1)
-    local r = row[:r]
-    local s = row[:s]
-    local ls = row[:ls]
-    local ld = row[:ld]
-    local lh = row[:lh]
-    local y = row[:y]
-
-    sc1_lowerlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(jumpmodel, 0 <= vstorageleveldaytypestart[r,s,ls,ld,y] + (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstoragelowerlimit[r,s,y])
-    constraintnum += 1
-end
-
-logmsg("Created constraint SC1_LowerLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInFirstWeekConstraint.", quiet)
-# END: SC1_LowerLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInFirstWeekConstraint.
-
-# BEGIN: SC1_UpperLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInFirstWeekConstraint.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref sc1_upperlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinfirstweekconstraint[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
-
-for row in eachrow(querysc1)
-    local r = row[:r]
-    local s = row[:s]
-    local ls = row[:ls]
-    local ld = row[:ld]
-    local lh = row[:lh]
-    local y = row[:y]
-
-    sc1_upperlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(jumpmodel, vstorageleveldaytypestart[r,s,ls,ld,y] + (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstorageupperlimit[r,s,y] <= 0)
-    constraintnum += 1
-end
-
-logmsg("Created constraint SC1_UpperLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInFirstWeekConstraint.", quiet)
-# END: SC1_UpperLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInFirstWeekConstraint.
-
-# BEGIN: SC2_LowerLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInFirstWeekConstraint.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref sc2_lowerlimit_endofdailytimebracketoflastinstanceofdaytypeinfirstweekconstraint[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
-
-querysc2::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y,
-group_concat(lhlh.val) as lhlha
-from region r, storage s, season ls, daytype ld, dailytimebracket lh, year y
-left join dailytimebracket lhlh on lh.val < lhlh.val
-where ld.val > (select min(val) from daytype)
-group by r.val, s.val, ls.val, ld.val, lh.val, y.val")
-
-for row in eachrow(querysc2)
-    local r = row[:r]
-    local s = row[:s]
-    local ls = row[:ls]
-    local ld = row[:ld]
-    local lh = row[:lh]
-    local y = row[:y]
-
-    sc2_lowerlimit_endofdailytimebracketoflastinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(jumpmodel, 0 <= vstorageleveldaytypestart[r,s,ls,ld,y] - (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,string(Meta.parse(ld)-1),lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstoragelowerlimit[r,s,y])
-    constraintnum += 1
-end
-
-logmsg("Created constraint SC2_LowerLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInFirstWeekConstraint.", quiet)
-# END: SC2_LowerLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInFirstWeekConstraint.
-
-# BEGIN: SC2_UpperLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInFirstWeekConstraint.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref sc2_upperlimit_endofdailytimebracketoflastinstanceofdaytypeinfirstweekconstraint[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
-
-for row in eachrow(querysc2)
-    local r = row[:r]
-    local s = row[:s]
-    local ls = row[:ls]
-    local ld = row[:ld]
-    local lh = row[:lh]
-    local y = row[:y]
-
-    sc2_upperlimit_endofdailytimebracketoflastinstanceofdaytypeinfirstweekconstraint[constraintnum] = @constraint(jumpmodel, vstorageleveldaytypestart[r,s,ls,ld,y] - (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,string(Meta.parse(ld)-1),lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstorageupperlimit[r,s,y] <= 0)
-    constraintnum += 1
-end
-
-logmsg("Created constraint SC2_UpperLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInFirstWeekConstraint.", quiet)
-# END: SC2_UpperLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInFirstWeekConstraint.
-
-# BEGIN: SC3_LowerLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInLastWeekConstraint.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref sc3_lowerlimit_endofdailytimebracketoflastinstanceofdaytypeinlastweekconstraint[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
-
-querysc3::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y,
-group_concat(lhlh.val) as lhlha
-from region r, storage s, season ls, daytype ld, dailytimebracket lh, year y
-left join dailytimebracket lhlh on lh.val < lhlh.val
-group by r.val, s.val, ls.val, ld.val, lh.val, y.val")
-
-for row in eachrow(querysc3)
-    local r = row[:r]
-    local s = row[:s]
-    local ls = row[:ls]
-    local ld = row[:ld]
-    local lh = row[:lh]
-    local y = row[:y]
-
-    sc3_lowerlimit_endofdailytimebracketoflastinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(jumpmodel, 0 <= vstorageleveldaytypefinish[r,s,ls,ld,y] - (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstoragelowerlimit[r,s,y])
-    constraintnum += 1
-end
-
-logmsg("Created constraint SC3_LowerLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInLastWeekConstraint.", quiet)
-# END: SC3_LowerLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInLastWeekConstraint.
-
-# BEGIN: SC3_UpperLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInLastWeekConstraint.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref sc3_upperlimit_endofdailytimebracketoflastinstanceofdaytypeinlastweekconstraint[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
-
-for row in eachrow(querysc3)
-    local r = row[:r]
-    local s = row[:s]
-    local ls = row[:ls]
-    local ld = row[:ld]
-    local lh = row[:lh]
-    local y = row[:y]
-
-    sc3_upperlimit_endofdailytimebracketoflastinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(jumpmodel, vstorageleveldaytypefinish[r,s,ls,ld,y] - (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstorageupperlimit[r,s,y] <= 0)
-    constraintnum += 1
-end
-
-logmsg("Created constraint SC3_UpperLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInLastWeekConstraint.", quiet)
-# END: SC3_UpperLimit_EndOfDailyTimeBracketOfLastInstanceOfDayTypeInLastWeekConstraint.
-
-# BEGIN: SC4_LowerLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInLastWeekConstraint.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref sc4_lowerlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinlastweekconstraint[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
-
-querysc4::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y,
-group_concat(lhlh.val) as lhlha
-from region r, storage s, season ls, daytype ld, dailytimebracket lh, year y
-left join dailytimebracket lhlh on lh.val > lhlh.val
-where ld.val > (select min(val) from daytype)
-group by r.val, s.val, ls.val, ld.val, lh.val, y.val")
-
-for row in eachrow(querysc4)
-    local r = row[:r]
-    local s = row[:s]
-    local ls = row[:ls]
-    local ld = row[:ld]
-    local lh = row[:lh]
-    local y = row[:y]
-
-    sc4_lowerlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(jumpmodel, 0 <= vstorageleveldaytypefinish[r,s,ls,string(Meta.parse(ld)-1),y] + (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstoragelowerlimit[r,s,y])
-    constraintnum += 1
-end
-
-logmsg("Created constraint SC4_LowerLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInLastWeekConstraint.", quiet)
-# END: SC4_LowerLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInLastWeekConstraint.
-
-# BEGIN: SC4_UpperLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInLastWeekConstraint.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref sc4_upperlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinlastweekconstraint[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
-
-for row in eachrow(querysc4)
-    local r = row[:r]
-    local s = row[:s]
-    local ls = row[:ls]
-    local ld = row[:ld]
-    local lh = row[:lh]
-    local y = row[:y]
-
-    sc4_upperlimit_beginningofdailytimebracketoffirstinstanceofdaytypeinlastweekconstraint[constraintnum] = @constraint(jumpmodel, vstorageleveldaytypefinish[r,s,ls,string(Meta.parse(ld)-1),y] + (ismissing(row[:lhlha]) ? 0 : sum([vnetchargewithinday[r,s,ls,ld,lhlh,y] for lhlh = split(row[:lhlha], ",")])) - vstorageupperlimit[r,s,y] <= 0)
-    constraintnum += 1
-end
-
-logmsg("Created constraint SC4_UpperLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInLastWeekConstraint.", quiet)
-# END: SC4_UpperLimit_BeginningOfDailyTimeBracketOfFirstInstanceOfDayTypeInLastWeekConstraint.
-
-# BEGIN: SC5_MaxChargeConstraint.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref sc5_maxchargeconstraint[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
-
-for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y, cast(smx.val as real) as smx
-from region r, storage s, season ls, daytype ld, dailytimebracket lh, year y, StorageMaxChargeRate_def smx
-where smx.r = r.val and smx.s = s.val"))
-    local r = row[:r]
-    local s = row[:s]
-    local ls = row[:ls]
-    local ld = row[:ld]
-    local lh = row[:lh]
-    local y = row[:y]
-
-    sc5_maxchargeconstraint[constraintnum] = @constraint(jumpmodel, vrateofstoragecharge[r,s,ls,ld,lh,y] <= row[:smx])
-    constraintnum += 1
-end
-
-logmsg("Created constraint SC5_MaxChargeConstraint.", quiet)
-# END: SC5_MaxChargeConstraint.
-
-# BEGIN: SC6_MaxDischargeConstraint.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref sc6_maxdischargeconstraint[1:length(sregion) * length(sstorage) * length(sseason) * length(sdaytype) * length(sdailytimebracket) * length(syear)]
-
-for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, ls.val as ls, ld.val as ld, lh.val as lh, y.val as y, cast(smx.val as real) as smx
-from region r, storage s, season ls, daytype ld, dailytimebracket lh, year y, StorageMaxDischargeRate_def smx
-where smx.r = r.val and smx.s = s.val"))
-    local r = row[:r]
-    local s = row[:s]
-    local ls = row[:ls]
-    local ld = row[:ld]
-    local lh = row[:lh]
-    local y = row[:y]
-
-    sc6_maxdischargeconstraint[constraintnum] = @constraint(jumpmodel, vrateofstoragedischarge[r,s,ls,ld,lh,y] <= row[:smx])
-    constraintnum += 1
-end
-
-logmsg("Created constraint SC6_MaxDischargeConstraint.", quiet)
-# END: SC6_MaxDischargeConstraint.
+logmsg("Created constraint NS8_StorageLevelYearEnd.", quiet)
+# END: NS8_StorageLevelYearEnd.
 
 # BEGIN: SI1_StorageUpperLimit.
 constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref si1_storageupperlimit[1:length(sregion) * length(sstorage) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(rsc.val as real) as rsc
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(rsc.val as real) as rsc
 from region r, storage s, year y
 left join ResidualStorageCapacity_def rsc on rsc.r = r.val and rsc.s = s.val and rsc.y = y.val"))
     local r = row[:r]
@@ -1265,7 +1052,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref si2_storagelowerlimit[1:length(sregion) * length(sstorage) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(msc.val as real) as msc
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(msc.val as real) as msc
 from region r, storage s, year y, MinStorageCharge_def msc
 where msc.r = r.val and msc.s = s.val and msc.y = y.val"))
     local r = row[:r]
@@ -1284,7 +1071,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref si3_totalnewstorage[1:length(sregion) * length(sstorage) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols, group_concat(yy.val) as yya
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols, group_concat(yy.val) as yya
 from region r, storage s, year y, OperationalLifeStorage_def ols, year yy
 where ols.r = r.val and ols.s = s.val
 and y.val - yy.val < ols.val and y.val - yy.val >= 0
@@ -1300,12 +1087,147 @@ end
 logmsg("Created constraint SI3_TotalNewStorage.", quiet)
 # END: SI3_TotalNewStorage.
 
+# BEGIN: NS9a_StorageLevelTsLowerLimit and NS9b_StorageLevelTsUpperLimit.
+constraintnum = 1  # Number of next constraint to be added to constraint array
+
+@constraintref ns9a_storageleveltslowerlimit[1:length(sregion) * length(sstorage) * length(stimeslice) * length(syear)]
+@constraintref ns9b_storageleveltsupperlimit[1:length(sregion) * length(sstorage) * length(stimeslice) * length(syear)]
+
+for (r, s, l, y) in Base.product(sregion, sstorage, stimeslice, syear)
+    ns9a_storageleveltslowerlimit[constraintnum] = @constraint(jumpmodel, vstoragelowerlimit[r,s,y] <= vstorageleveltsend[r,s,l,y])
+    ns9b_storageleveltsupperlimit[constraintnum] = @constraint(jumpmodel, vstorageleveltsend[r,s,l,y] <= vstorageupperlimit[r,s,y])
+    constraintnum += 1
+end
+
+logmsg("Created constraints NS9a_StorageLevelTsLowerLimit and NS9b_StorageLevelTsUpperLimit.", quiet)
+# END: NS9a_StorageLevelTsLowerLimit and NS9b_StorageLevelTsUpperLimit.
+
+# BEGIN: NS10_StorageChargeLimit.
+constraintnum = 1  # Number of next constraint to be added to constraint array
+
+@constraintref ns10_storagechargelimit[1:length(sregion) * length(sstorage) * length(stimeslice) * length(syear)]
+
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, l.val as l, y.val as y, cast(smc.val as real) as smc
+from region r, storage s, TIMESLICE l, year y, StorageMaxChargeRate_def smc
+where
+r.val = smc.r
+and s.val = smc.s"))
+    ns10_storagechargelimit[constraintnum] = @constraint(jumpmodel, vrateofstoragecharge[row[:r], row[:s], row[:l], row[:y]] <= row[:smc])
+    constraintnum += 1
+end
+
+logmsg("Created constraint NS10_StorageChargeLimit.", quiet)
+# END: NS10_StorageChargeLimit.
+
+# BEGIN: NS11_StorageDischargeLimit.
+constraintnum = 1  # Number of next constraint to be added to constraint array
+
+@constraintref ns11_storagedischargelimit[1:length(sregion) * length(sstorage) * length(stimeslice) * length(syear)]
+
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, l.val as l, y.val as y, cast(smd.val as real) as smd
+from region r, storage s, TIMESLICE l, year y, StorageMaxDischargeRate_def smd
+where
+r.val = smd.r
+and s.val = smd.s"))
+    ns11_storagedischargelimit[constraintnum] = @constraint(jumpmodel, vrateofstoragedischarge[row[:r], row[:s], row[:l], row[:y]] <= row[:smd])
+    constraintnum += 1
+end
+
+logmsg("Created constraint NS11_StorageDischargeLimit.", quiet)
+# END: NS11_StorageDischargeLimit.
+
+# BEGIN: NS12a_StorageLevelTsGroup2LowerLimit and NS12b_StorageLevelTsGroup2UpperLimit.
+constraintnum = 1  # Number of next constraint to be added to constraint array
+
+@constraintref ns12a_storageleveltsgroup2lowerlimit[1:length(sregion) * length(sstorage) * length(stsgroup1) * length(stsgroup2) * length(syear)]
+@constraintref ns12b_storageleveltsgroup2upperlimit[1:length(sregion) * length(sstorage) * length(stsgroup1) * length(stsgroup2) * length(syear)]
+
+for (r, s, tg1, tg2, y) in Base.product(sregion, sstorage, stsgroup1, stsgroup2, syear)
+    ns12a_storageleveltsgroup2lowerlimit[constraintnum] = @constraint(jumpmodel, vstoragelowerlimit[r,s,y] <= vstorageleveltsgroup2end[r,s,tg1,tg2,y])
+    ns12b_storageleveltsgroup2upperlimit[constraintnum] = @constraint(jumpmodel, vstorageleveltsgroup2end[r,s,tg1,tg2,y] <= vstorageupperlimit[r,s,y])
+    constraintnum += 1
+end
+
+logmsg("Created constraints NS12a_StorageLevelTsGroup2LowerLimit and NS12b_StorageLevelTsGroup2UpperLimit.", quiet)
+# END: NS12a_StorageLevelTsGroup2LowerLimit and NS12b_StorageLevelTsGroup2UpperLimit.
+
+# BEGIN: NS13a_StorageLevelTsGroup1LowerLimit and NS13b_StorageLevelTsGroup1UpperLimit.
+constraintnum = 1  # Number of next constraint to be added to constraint array
+
+@constraintref ns13a_storageleveltsgroup1lowerlimit[1:length(sregion) * length(sstorage) * length(stsgroup1) * length(syear)]
+@constraintref ns13b_storageleveltsgroup1upperlimit[1:length(sregion) * length(sstorage) * length(stsgroup1) * length(syear)]
+
+for (r, s, tg1, y) in Base.product(sregion, sstorage, stsgroup1, syear)
+    ns13a_storageleveltsgroup1lowerlimit[constraintnum] = @constraint(jumpmodel, vstoragelowerlimit[r,s,y] <= vstorageleveltsgroup1end[r,s,tg1,y])
+    ns13b_storageleveltsgroup1upperlimit[constraintnum] = @constraint(jumpmodel, vstorageleveltsgroup1end[r,s,tg1,y] <= vstorageupperlimit[r,s,y])
+    constraintnum += 1
+end
+
+logmsg("Created constraints NS13a_StorageLevelTsGroup1LowerLimit and NS13b_StorageLevelTsGroup1UpperLimit.", quiet)
+# END: NS13a_StorageLevelTsGroup2LowerLimit and NS13b_StorageLevelTsGroup2UpperLimit.
+
+# BEGIN: NS14_MaxStorageCapacity.
+constraintnum = 1  # Number of next constraint to be added to constraint array
+
+@constraintref ns14_maxstoragecapacity[1:length(sregion) * length(sstorage) * length(syear)]
+
+for row in DataFrames.eachrow(SQLite.query(db, "select smc.r, smc.s, smc.y, cast(smc.val as real) as smc
+from TotalAnnualMaxCapacityStorage_def smc"))
+    ns14_maxstoragecapacity[constraintnum] = @constraint(jumpmodel, vstorageupperlimit[row[:r],row[:s],row[:y]] <= row[:smc])
+    constraintnum += 1
+end
+
+logmsg("Created constraint NS14_MaxStorageCapacity.", quiet)
+# END: NS14_MaxStorageCapacity.
+
+# BEGIN: NS15_MinStorageCapacity.
+constraintnum = 1  # Number of next constraint to be added to constraint array
+
+@constraintref ns15_minstoragecapacity[1:length(sregion) * length(sstorage) * length(syear)]
+
+for row in DataFrames.eachrow(SQLite.query(db, "select smc.r, smc.s, smc.y, cast(smc.val as real) as smc
+from TotalAnnualMinCapacityStorage_def smc"))
+    ns15_minstoragecapacity[constraintnum] = @constraint(jumpmodel, row[:smc] <= vstorageupperlimit[row[:r],row[:s],row[:y]])
+    constraintnum += 1
+end
+
+logmsg("Created constraint NS15_MinStorageCapacity.", quiet)
+# END: NS15_MinStorageCapacity.
+
+# BEGIN: NS16_MaxStorageCapacityInvestment.
+constraintnum = 1  # Number of next constraint to be added to constraint array
+
+@constraintref ns16_maxstoragecapacityinvestment[1:length(sregion) * length(sstorage) * length(syear)]
+
+for row in DataFrames.eachrow(SQLite.query(db, "select smc.r, smc.s, smc.y, cast(smc.val as real) as smc
+from TotalAnnualMaxCapacityInvestmentStorage_def smc"))
+    ns16_maxstoragecapacityinvestment[constraintnum] = @constraint(jumpmodel, vnewstoragecapacity[row[:r],row[:s],row[:y]] <= row[:smc])
+    constraintnum += 1
+end
+
+logmsg("Created constraint NS16_MaxStorageCapacityInvestment.", quiet)
+# END: NS16_MaxStorageCapacityInvestment.
+
+# BEGIN: NS17_MinStorageCapacityInvestment.
+constraintnum = 1  # Number of next constraint to be added to constraint array
+
+@constraintref ns17_minstoragecapacityinvestment[1:length(sregion) * length(sstorage) * length(syear)]
+
+for row in DataFrames.eachrow(SQLite.query(db, "select smc.r, smc.s, smc.y, cast(smc.val as real) as smc
+from TotalAnnualMinCapacityInvestmentStorage_def smc"))
+    ns17_minstoragecapacityinvestment[constraintnum] = @constraint(jumpmodel, row[:smc] <= vnewstoragecapacity[row[:r],row[:s],row[:y]])
+    constraintnum += 1
+end
+
+logmsg("Created constraint NS17_MinStorageCapacityInvestment.", quiet)
+# END: NS17_MinStorageCapacityInvestment.
+
 # BEGIN: SI4_UndiscountedCapitalInvestmentStorage.
 constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref si4_undiscountedcapitalinvestmentstorage[1:length(sregion) * length(sstorage) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(ccs.val as real) as ccs
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(ccs.val as real) as ccs
 from region r, storage s, year y, CapitalCostStorage_def ccs
 where ccs.r = r.val and ccs.s = s.val and ccs.y = y.val"))
     local r = row[:r]
@@ -1324,7 +1246,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref si5_discountingcapitalinvestmentstorage[1:length(sregion) * length(sstorage) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr
 from region r, storage s, year y, DiscountRate_def dr
 where dr.r = r.val"))
     local r = row[:r]
@@ -1343,7 +1265,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref si6_salvagevaluestorageatendofperiod1[1:length(sregion) * length(sstorage) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y
 from region r, storage s, year y, OperationalLifeStorage_def ols
 where ols.r = r.val and ols.s = s.val
 and y.val + ols.val - 1 <= " * last(syear)))
@@ -1363,7 +1285,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref si7_salvagevaluestorageatendofperiod2[1:length(sregion) * length(sstorage) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols
 from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStorage_def ols, DiscountRate_def dr
 where dm.r = r.val and dm.val = 1
 and ols.r = r.val and ols.s = s.val
@@ -1391,7 +1313,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref si8_salvagevaluestorageatendofperiod3[1:length(sregion) * length(sstorage) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr, cast(ols.val as real) as ols
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr, cast(ols.val as real) as ols
 from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStorage_def ols, DiscountRate_def dr
 where dm.r = r.val and dm.val = 1
 and ols.r = r.val and ols.s = s.val
@@ -1414,7 +1336,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref si9_salvagevaluestoragediscountedtostartyear[1:length(sregion) * length(sstorage) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr
 from region r, storage s, year y, DiscountRate_def dr
 where dr.r = r.val"))
     local r = row[:r]
@@ -1445,7 +1367,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref cc1_undiscountedcapitalinvestment[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc
 from region r, technology t, year y, CapitalCost_def cc
 where cc.r = r.val and cc.t = t.val and cc.y = y.val"))
     local r = row[:r]
@@ -1468,7 +1390,7 @@ where dr.r = r.val")
 
 @constraintref cc2_discountingcapitalinvestment[1:size(queryrtydr)[1]]
 
-for row in eachrow(queryrtydr)
+for row in DataFrames.eachrow(queryrtydr)
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -1485,7 +1407,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref sv1_salvagevalueatendofperiod1[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc, cast(dr.val as real) as dr,
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc, cast(dr.val as real) as dr,
 cast(ol.val as real) as ol
 from region r, technology t, year y, DepreciationMethod_def dm, OperationalLife_def ol, DiscountRate_def dr,
 CapitalCost_def cc
@@ -1511,7 +1433,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref sv2_salvagevalueatendofperiod2[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc, cast(ol.val as real) as ol
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc, cast(ol.val as real) as ol
 from region r, technology t, year y, DepreciationMethod_def dm, OperationalLife_def ol, DiscountRate_def dr,
 CapitalCost_def cc
 where dm.r = r.val and dm.val = 1
@@ -1543,7 +1465,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref sv3_salvagevalueatendofperiod3[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y
 from region r, technology t, year y, OperationalLife_def ol
 where ol.r = r.val and ol.t = t.val
 and y.val + ol.val - 1 <= " * last(syear)))
@@ -1563,7 +1485,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref sv4_salvagevaluediscountedtostartyear[1:size(queryrtydr)[1]]
 
-for row in eachrow(queryrtydr)
+for row in DataFrames.eachrow(queryrtydr)
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -1580,7 +1502,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref oc1_operatingcostsvariable[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, group_concat(m.val || ';' || vc.val) as mva
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, group_concat(m.val || ';' || vc.val) as mva
 from region r, technology t, year y, mode_of_operation m, VariableCost_def vc
 where vc.r = r.val and vc.t = t.val and vc.m = m.val and vc.y = y.val
 group by r.val, t.val, y.val"))
@@ -1600,7 +1522,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref oc2_operatingcostsfixedannual[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(fc.val as real) as fc
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(fc.val as real) as fc
 from region r, technology t, year y, FixedCost_def fc
 where fc.r = r.val and fc.t = t.val and fc.y = y.val"))
     local r = row[:r]
@@ -1631,7 +1553,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref oc4_discountedoperatingcoststotalannual[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in eachrow(queryrtydr)
+for row in DataFrames.eachrow(queryrtydr)
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -1672,7 +1594,7 @@ logmsg("Created constraint TDC2_TotalDiscountedCost.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref tcc1_totalannualmaxcapacityconstraint[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmx
+for row in DataFrames.eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmx
 from TotalAnnualMaxCapacity_def"))
     local r = row[:r]
     local t = row[:t]
@@ -1689,7 +1611,7 @@ logmsg("Created constraint TCC1_TotalAnnualMaxCapacityConstraint.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref tcc2_totalannualmincapacityconstraint[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmn
+for row in DataFrames.eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmn
 from TotalAnnualMinCapacity_def
 where val > 0"))
     local r = row[:r]
@@ -1707,7 +1629,7 @@ logmsg("Created constraint TCC2_TotalAnnualMinCapacityConstraint.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref ncc1_totalannualmaxnewcapacityconstraint[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmx
+for row in DataFrames.eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmx
 from TotalAnnualMaxCapacityInvestment_def"))
     local r = row[:r]
     local t = row[:t]
@@ -1724,7 +1646,7 @@ logmsg("Created constraint NCC1_TotalAnnualMaxNewCapacityConstraint.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref ncc2_totalannualminnewcapacityconstraint[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmn
+for row in DataFrames.eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmn
 from TotalAnnualMinCapacityInvestment_def
 where val > 0"))
     local r = row[:r]
@@ -1743,7 +1665,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref aac1_totalannualtechnologyactivity[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, group_concat(l.val || ';' || ys.val) as lya
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, group_concat(l.val || ';' || ys.val) as lya
 from region r, technology t, year y, timeslice l, YearSplit_def ys
 where ys.l = l.val and ys.y = y.val
 group by r.val, t.val, y.val"))
@@ -1762,7 +1684,7 @@ logmsg("Created constraint AAC1_TotalAnnualTechnologyActivity.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref aac2_totalannualtechnologyactivityupperlimit[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as amx
+for row in DataFrames.eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as amx
 from TotalTechnologyAnnualActivityUpperLimit_def"))
     local r = row[:r]
     local t = row[:t]
@@ -1779,7 +1701,7 @@ logmsg("Created constraint AAC2_TotalAnnualTechnologyActivityUpperLimit.", quiet
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref aac3_totalannualtechnologyactivitylowerlimit[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as amn
+for row in DataFrames.eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as amn
 from TotalTechnologyAnnualActivityLowerLimit_def
 where val > 0"))
     local r = row[:r]
@@ -1809,7 +1731,7 @@ logmsg("Created constraint TAC1_TotalModelHorizonTechnologyActivity.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref tac2_totalmodelhorizontechnologyactivityupperlimit[1:length(sregion) * length(stechnology)]
 
-for row in eachrow(SQLite.query(db, "select r, t, cast(val as real) as mmx
+for row in DataFrames.eachrow(SQLite.query(db, "select r, t, cast(val as real) as mmx
 from TotalTechnologyModelPeriodActivityUpperLimit_def
 where val > 0"))
     local r = row[:r]
@@ -1826,7 +1748,7 @@ logmsg("Created constraint TAC2_TotalModelHorizonTechnologyActivityUpperLimit.",
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref tac3_totalmodelhorizentechnologyactivitylowerlimit[1:length(sregion) * length(stechnology)]
 
-for row in eachrow(SQLite.query(db, "select r, t, cast(val as real) as mmn
+for row in DataFrames.eachrow(SQLite.query(db, "select r, t, cast(val as real) as mmn
 from TotalTechnologyModelPeriodActivityLowerLimit_def
 where val > 0"))
     local r = row[:r]
@@ -1843,7 +1765,7 @@ logmsg("Created constraint TAC3_TotalModelHorizenTechnologyActivityLowerLimit.",
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref rm1_reservemargin_technologiesincluded_in_activity_units[1:length(sregion) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, y.val as y, group_concat(t.val || ';' || rmt.val || ';' || cau.val) as trca
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, y.val as y, group_concat(t.val || ';' || rmt.val || ';' || cau.val) as trca
 from region r, year y, technology t, ReserveMarginTagTechnology_def rmt, CapacityToActivityUnit_def cau
 where rmt.r = r.val and rmt.t = t.val and rmt.y = y.val
 and cau.r = r.val and cau.t = t.val
@@ -1862,7 +1784,7 @@ logmsg("Created constraint RM1_ReserveMargin_TechnologiesIncluded_In_Activity_Un
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref rm2_reservemargin_fuelsincluded[1:length(sregion) * length(stimeslice) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, l.val as l, y.val as y, group_concat(f.val || ';' || rmf.val) as fra
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, l.val as l, y.val as y, group_concat(f.val || ';' || rmf.val) as fra
 from region r, timeslice l, year y, fuel f, ReserveMarginTagFuel_def rmf
 where rmf.r = r.val and rmf.f = f.val and rmf.y = y.val
 group by r.val, l.val, y.val"))
@@ -1881,7 +1803,7 @@ logmsg("Created constraint RM2_ReserveMargin_FuelsIncluded.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref rm3_reservemargin_constraint[1:length(sregion) * length(stimeslice) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, l.val as l, y.val as y, cast(rm.val as real) as rm
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, l.val as l, y.val as y, cast(rm.val as real) as rm
 from region r, timeslice l, year y, ReserveMargin_def rm
 where rm.r = r.val and rm.y = y.val"))
     local r = row[:r]
@@ -1899,7 +1821,7 @@ logmsg("Created constraint RM3_ReserveMargin_Constraint.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref re1_fuelproductionbytechnologyannual[1:size(queryproductionbytechnologyannual)[1]]
 
-for row in eachrow(queryproductionbytechnologyannual)
+for row in DataFrames.eachrow(queryproductionbytechnologyannual)
     local r = row[:r]
     local t = row[:t]
     local f = row[:f]
@@ -1917,7 +1839,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref re2_techincluded[1:length(sregion) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, y.val as y, group_concat(distinct t.val || ';' || f.val || ';' || ret.val) as tfa
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, y.val as y, group_concat(distinct t.val || ';' || f.val || ';' || ret.val) as tfa
 from REGION r, TECHNOLOGY t, FUEL f, YEAR y, OutputActivityRatio_def oar, RETagTechnology_def ret
 where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val and oar.val <> 0
 and ret.r = r.val and ret.t = t.val and ret.y = y.val and ret.val <> 0
@@ -1937,7 +1859,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref re3_fuelincluded[1:length(sregion) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, y.val as y, group_concat(l.val || ';' || f.val || ';' || ys.val || ';' || rtf.val) as lfa
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, y.val as y, group_concat(l.val || ';' || f.val || ';' || ys.val || ';' || rtf.val) as lfa
 from REGION r, YEAR y, TIMESLICE l, FUEL f, YearSplit_def ys, RETagFuel_def rtf
 where ys.l = l.val and ys.y = y.val
 and rtf.r = r.val and rtf.f = f.val and rtf.y = y.val and rtf.val <> 0
@@ -1957,7 +1879,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref re4_energyconstraint[1:length(sregion) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select ry.r as r, ry.y as y, cast(rmp.val as real) as rmp
+for row in DataFrames.eachrow(SQLite.query(db, "select ry.r as r, ry.y as y, cast(rmp.val as real) as rmp
 from
 (select r.val as r, y.val as y
 from REGION r, TECHNOLOGY t, FUEL f, YEAR y, OutputActivityRatio_def oar, RETagTechnology_def ret
@@ -1988,7 +1910,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref e1_annualemissionproductionbymode[1:length(sregion) * length(stechnology) * length(semission) * length(smode_of_operation) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r, t, e, m, y, cast(val as real) as ear
+for row in DataFrames.eachrow(SQLite.query(db, "select r, t, e, m, y, cast(val as real) as ear
 from EmissionActivityRatio_def ear"))
     local r = row[:r]
     local t = row[:t]
@@ -2008,7 +1930,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref e2_annualemissionproduction[1:length(sregion) * length(stechnology) * length(semission) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r, t, e, y, group_concat(m) as ma
+for row in DataFrames.eachrow(SQLite.query(db, "select r, t, e, y, group_concat(m) as ma
 from EmissionActivityRatio_def ear
 group by r, t, e, y"))
     local r = row[:r]
@@ -2028,7 +1950,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref e3_emissionspenaltybytechandemission[1:length(sregion) * length(stechnology) * length(semission) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select ear.r as r, ear.t as t, ear.e as e, ear.y as y, cast(ep.val as real) as ep
+for row in DataFrames.eachrow(SQLite.query(db, "select ear.r as r, ear.t as t, ear.e as e, ear.y as y, cast(ep.val as real) as ep
 from EmissionActivityRatio_def ear, EmissionsPenalty_def ep
 where ep.r = ear.r and ep.e = ear.e and ep.y = ear.y
 group by ear.r, ear.t, ear.e, ear.y, ep.val"))
@@ -2049,7 +1971,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref e4_emissionspenaltybytechnology[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select ear.r as r, ear.t as t, ear.y as y, group_concat(distinct ear.e) as ea
+for row in DataFrames.eachrow(SQLite.query(db, "select ear.r as r, ear.t as t, ear.y as y, group_concat(distinct ear.e) as ea
 from EmissionActivityRatio_def ear, EmissionsPenalty_def ep
 where ep.r = ear.r and ep.e = ear.e and ep.y = ear.y
 group by ear.r, ear.t, ear.y"))
@@ -2068,7 +1990,7 @@ logmsg("Created constraint E4_EmissionsPenaltyByTechnology.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref e5_discountedemissionspenaltybytechnology[1:size(queryrtydr)[1]]
 
-for row in eachrow(queryrtydr)
+for row in DataFrames.eachrow(queryrtydr)
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -2086,7 +2008,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref e6_emissionsaccounting1[1:length(sregion) * length(semission) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r, e, y, group_concat(distinct t) as ta
+for row in DataFrames.eachrow(SQLite.query(db, "select r, e, y, group_concat(distinct t) as ta
 from EmissionActivityRatio_def ear
 group by r, e, y"))
     local r = row[:r]
@@ -2105,7 +2027,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref e7_emissionsaccounting2[1:length(sregion) * length(semission)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, e.val as e, cast(mpe.val as real) as mpe
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, e.val as e, cast(mpe.val as real) as mpe
 from region r, emission e
 left join ModelPeriodExogenousEmission_def mpe on mpe.r = r.val and mpe.e = e.val"))
     local r = row[:r]
@@ -2124,7 +2046,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref e8_annualemissionslimit[1:length(sregion) * length(semission) * length(syear)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, e.val as e, y.val as y, cast(aee.val as real) as aee, cast(ael.val as real) as ael
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, e.val as e, y.val as y, cast(aee.val as real) as aee, cast(ael.val as real) as ael
 from region r, emission e, year y, AnnualEmissionLimit_def ael
 left join AnnualExogenousEmission_def aee on aee.r = r.val and aee.e = e.val and aee.y = y.val
 where ael.r = r.val and ael.e = e.val and ael.y = y.val"))
@@ -2145,7 +2067,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 @constraintref e9_modelperiodemissionslimit[1:length(sregion) * length(semission)]
 
-for row in eachrow(SQLite.query(db, "select r.val as r, e.val as e, cast(mpl.val as real) as mpl
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, e.val as e, cast(mpl.val as real) as mpl
 from region r, emission e, ModelPeriodEmissionLimit_def mpl
 where mpl.r = r.val and mpl.e = e.val"))
     local r = row[:r]
@@ -2158,7 +2080,7 @@ end
 logmsg("Created constraint E9_ModelPeriodEmissionsLimit.", quiet)
 # END: E9_ModelPeriodEmissionsLimit.
 
-# END: Define OSeMOSYS constraints.
+# END: Define model constraints.
 
 # BEGIN: Define model objective.
 @objective(jumpmodel, Min, sum([vtotaldiscountedcost[r,y] for r = sregion, y = syear]))

@@ -1,10 +1,10 @@
 #=
-    NEMO: Next-generation Energy Modeling system for Optimization.
+    |nemo: Next-generation Energy Modeling system for Optimization.
     https://github.com/sei-international/NemoMod.jl
 
     Copyright © 2018: Stockholm Environment Institute U.S.
 
-    File description: Main function library for NEMO.
+    File description: Main function library for |nemo.
 =#
 
 """
@@ -28,7 +28,7 @@ end  # logmsg(msg::String)
 """
     translatesetabb(a::String)
 
-Translate an OSeMOSYS set abbreviation (a) into the set's name.
+Translate a set abbreviation (a) into the set's name.
 
 # Examples
 ```jldoctest
@@ -49,22 +49,26 @@ function translatesetabb(a::String)
         return "MODE_OF_OPERATION"
     elseif a == "r" || a == "rr"
         return "REGION"
+    elseif a == "s"
+        return "STORAGE"
+    elseif a == "l"
+        return "TIMESLICE"
+    elseif a == "tg1"
+        return "TSGROUP1"
+    elseif a == "tg2"
+        return "TSGROUP2"
     elseif a == "ls"
         return "SEASON"
     elseif a == "ld"
         return "DAYTYPE"
     elseif a == "lh"
         return "DAILYTIMEBRACKET"
-    elseif a == "s"
-        return "STORAGE"
-    elseif a == "l"
-        return "TIMESLICE"
     else
         return a
     end
 end  # translatesetabb(a::String)
 
-# Start here.
+# Start documentation updates here.
 
 """Generates Dicts that can be used to restrict JuMP constraints or variables to selected indices
 (rather than all values in their dimensions) at creation. Requires two arguments:
@@ -83,7 +87,7 @@ function keydicts(df::DataFrames.DataFrame, numdicts::Int)
     end
 
     # Populate dictionaries using df
-    for row in eachrow(df)
+    for row in DataFrames.eachrow(df)
         for j in 1:numdicts
             if !haskey(returnval[j], [row[k] for k = 1:j])
                 returnval[j][[row[k] for k = 1:j]] = Set{String}()
@@ -144,13 +148,13 @@ stechnology = dropnull(SQLite.query(db, "select val from technology limit 10")[:
 @constraintref(abc[1:10])
 m = Model()
 @variable(m, vtest[stechnology])
-createconstraint(m, "TestConstraint", abc, eachrow(SQLite.query(db, "select t.val as t from technology t limit 10")), ["t"], "vtest[t]", ">=", "0")
+createconstraint(m, "TestConstraint", abc, DataFrames.eachrow(SQLite.query(db, "select t.val as t from technology t limit 10")), ["t"], "vtest[t]", ">=", "0")
 =#
 
-"""Creates an empty NEMO SQLite database. Arguments:
+"""Creates an empty |nemo SQLite database. Arguments:
     • path - Full path to database, including database name.
     • defaultvals - Dictionary of table names and default values for val column.
-If specified database already exists, drops and recreates NEMO tables in database."""
+If specified database already exists, drops and recreates |nemo tables in database."""
 function createnemodb(path::String, defaultvals::Dict{String, Float64} = Dict{String, Float64}())
     # Open SQLite database
     local db::SQLite.DB = SQLite.DB(path)
@@ -159,7 +163,7 @@ function createnemodb(path::String, defaultvals::Dict{String, Float64} = Dict{St
     # BEGIN: DDL operations in an SQLite transaction.
     SQLite.execute!(db, "BEGIN")
 
-    # BEGIN: Drop any existing NEMO tables.
+    # BEGIN: Drop any existing |nemo tables.
     SQLite.execute!(db,"drop table if exists AccumulatedAnnualDemand")
     SQLite.execute!(db,"drop table if exists AnnualEmissionLimit")
     SQLite.execute!(db,"drop table if exists AnnualExogenousEmission")
@@ -181,6 +185,7 @@ function createnemodb(path::String, defaultvals::Dict{String, Float64} = Dict{St
     SQLite.execute!(db,"drop table if exists EmissionsPenalty")
     SQLite.execute!(db,"drop table if exists FixedCost")
     SQLite.execute!(db,"drop table if exists InputActivityRatio")
+    SQLite.execute!(db,"drop table if exists LTsGroup")
     SQLite.execute!(db,"drop table if exists MinStorageCharge")
     SQLite.execute!(db,"drop table if exists ModelPeriodEmissionLimit")
     SQLite.execute!(db,"drop table if exists ModelPeriodExogenousEmission")
@@ -204,9 +209,13 @@ function createnemodb(path::String, defaultvals::Dict{String, Float64} = Dict{St
     SQLite.execute!(db,"drop table if exists TechnologyFromStorage")
     SQLite.execute!(db,"drop table if exists TechnologyToStorage")
     SQLite.execute!(db,"drop table if exists TotalAnnualMaxCapacity")
+    SQLite.execute!(db,"drop table if exists TotalAnnualMaxCapacityStorage")
     SQLite.execute!(db,"drop table if exists TotalAnnualMaxCapacityInvestment")
+    SQLite.execute!(db,"drop table if exists TotalAnnualMaxCapacityInvestmentStorage")
     SQLite.execute!(db,"drop table if exists TotalAnnualMinCapacity")
+    SQLite.execute!(db,"drop table if exists TotalAnnualMinCapacityStorage")
     SQLite.execute!(db,"drop table if exists TotalAnnualMinCapacityInvestment")
+    SQLite.execute!(db,"drop table if exists TotalAnnualMinCapacityInvestmentStorage")
     SQLite.execute!(db,"drop table if exists TotalTechnologyAnnualActivityLowerLimit")
     SQLite.execute!(db,"drop table if exists TotalTechnologyAnnualActivityUpperLimit")
     SQLite.execute!(db,"drop table if exists TotalTechnologyModelPeriodActivityLowerLimit")
@@ -226,20 +235,21 @@ function createnemodb(path::String, defaultvals::Dict{String, Float64} = Dict{St
     SQLite.execute!(db,"drop table if exists MODE_OF_OPERATION")
     SQLite.execute!(db,"drop table if exists EMISSION")
     SQLite.execute!(db,"drop table if exists FUEL")
-    # END: Drop any existing NEMO tables.
+    SQLite.execute!(db,"drop table if exists TSGROUP1")
+    SQLite.execute!(db,"drop table if exists TSGROUP2")
+    # END: Drop any existing |nemo tables.
 
-    # BEGIN: Add new NEMO tables.
+    # BEGIN: Add new |nemo tables.
     # No default values for sets/dimensions
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `DAYTYPE` ( `val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `DAILYTIMEBRACKET` ( `val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `EMISSION` ( `val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `FUEL` ( `val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `MODE_OF_OPERATION` (`val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`))")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `REGION` (`val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`))")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `SEASON` ( `val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `STORAGE` ( `val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TECHNOLOGY` (`val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`))")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TIMESLICE` (`val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`))")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TSGROUP1` (`val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`))")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TSGROUP2` (`val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`))")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `YEAR` (`val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`))")
 
     # Parameter tables include any requested default values
@@ -251,12 +261,15 @@ function createnemodb(path::String, defaultvals::Dict{String, Float64} = Dict{St
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalTechnologyAnnualActivityUpperLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalTechnologyAnnualActivityUpperLimit") ? " DEFAULT " * string(defaultvals["TotalTechnologyAnnualActivityUpperLimit"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalTechnologyAnnualActivityLowerLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalTechnologyAnnualActivityLowerLimit") ? " DEFAULT " * string(defaultvals["TotalTechnologyAnnualActivityLowerLimit"]) : "") * ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMinCapacityInvestment` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalAnnualMinCapacityInvestment") ? " DEFAULT " * string(defaultvals["TotalAnnualMinCapacityInvestment"]) : "") * ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`) )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMinCapacityInvestmentStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalAnnualMinCapacityInvestmentStorage") ? " DEFAULT " * string(defaultvals["TotalAnnualMinCapacityInvestmentStorage"]) : "") * ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMinCapacity` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalAnnualMinCapacity") ? " DEFAULT " * string(defaultvals["TotalAnnualMinCapacity"]) : "") * ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), PRIMARY KEY(`id`) )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMinCapacityStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalAnnualMinCapacityStorage") ? " DEFAULT " * string(defaultvals["TotalAnnualMinCapacityStorage"]) : "") * ", FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), PRIMARY KEY(`id`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMaxCapacityInvestment` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalAnnualMaxCapacityInvestment") ? " DEFAULT " * string(defaultvals["TotalAnnualMaxCapacityInvestment"]) : "") * ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`) )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMaxCapacityInvestmentStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalAnnualMaxCapacityInvestmentStorage") ? " DEFAULT " * string(defaultvals["TotalAnnualMaxCapacityInvestmentStorage"]) : "") * ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMaxCapacity` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalAnnualMaxCapacity") ? " DEFAULT " * string(defaultvals["TotalAnnualMaxCapacity"]) : "") * ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`) )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMaxCapacityStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalAnnualMaxCapacityStorage") ? " DEFAULT " * string(defaultvals["TotalAnnualMaxCapacityStorage"]) : "") * ", FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), PRIMARY KEY(`id`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TechnologyToStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `s` TEXT, `m` TEXT, `val` REAL" * (haskey(defaultvals, "TechnologyToStorage") ? " DEFAULT " * string(defaultvals["TechnologyToStorage"]) : "") * ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TechnologyFromStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `s` TEXT, `m` TEXT, `val` REAL" * (haskey(defaultvals, "TechnologyFromStorage") ? " DEFAULT " * string(defaultvals["TechnologyFromStorage"]) : "") * ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TechWithCapacityNeededToMeetPeakTS` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `val` REAL" * (haskey(defaultvals, "TechWithCapacityNeededToMeetPeakTS") ? " DEFAULT " * string(defaultvals["TechWithCapacityNeededToMeetPeakTS"]) : "") * ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), PRIMARY KEY(`id`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `StorageMaxDischargeRate` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL" * (haskey(defaultvals, "StorageMaxDischargeRate") ? " DEFAULT " * string(defaultvals["StorageMaxDischargeRate"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `StorageMaxChargeRate` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL" * (haskey(defaultvals, "StorageMaxChargeRate") ? " DEFAULT " * string(defaultvals["StorageMaxChargeRate"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `StorageLevelStart` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL" * (haskey(defaultvals, "StorageLevelStart") ? " DEFAULT " * string(defaultvals["StorageLevelStart"]) : "") * ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`) )")
@@ -276,18 +289,13 @@ function createnemodb(path::String, defaultvals::Dict{String, Float64} = Dict{St
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ModelPeriodExogenousEmission` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `e` TEXT, `val` REAL" * (haskey(defaultvals, "ModelPeriodExogenousEmission") ? " DEFAULT " * string(defaultvals["ModelPeriodExogenousEmission"]) : "") * ", FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ModelPeriodEmissionLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `e` TEXT, `val` REAL" * (haskey(defaultvals, "ModelPeriodEmissionLimit") ? " DEFAULT " * string(defaultvals["ModelPeriodEmissionLimit"]) : "") * ", FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `MinStorageCharge` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "MinStorageCharge") ? " DEFAULT " * string(defaultvals["MinStorageCharge"]) : "") * ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`) )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `LTsGroup` ( `id` INTEGER NOT NULL UNIQUE, `l` TEXT, `lorder` INTEGER, `tg2` TEXT, `tg1` TEXT, FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`tg2`) REFERENCES `TSGROUP2`(`val`), FOREIGN KEY(`tg1`) REFERENCES `TSGROUP1`(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `InputActivityRatio` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `f` TEXT, `m` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "InputActivityRatio") ? " DEFAULT " * string(defaultvals["InputActivityRatio"]) : "") * ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `FixedCost` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "FixedCost") ? " DEFAULT " * string(defaultvals["FixedCost"]) : "") * ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `EmissionsPenalty` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `e` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "EmissionsPenalty") ? " DEFAULT " * string(defaultvals["EmissionsPenalty"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `EmissionActivityRatio` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `e` TEXT, `m` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "EmissionActivityRatio") ? " DEFAULT " * string(defaultvals["EmissionActivityRatio"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `DiscountRateStorage` ( `id` INTEGER NOT NULL UNIQUE, `val` REAL" * (haskey(defaultvals, "DiscountRateStorage") ? " DEFAULT " * string(defaultvals["DiscountRateStorage"]) : "") * ", PRIMARY KEY(`id`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `DiscountRate` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `val` REAL" * (haskey(defaultvals, "DiscountRate") ? " DEFAULT " * string(defaultvals["DiscountRate"]) : "") * ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `DepreciationMethod` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `val` REAL" * (haskey(defaultvals, "DepreciationMethod") ? " DEFAULT " * string(defaultvals["DepreciationMethod"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `DaysInDayType` ( `id` INTEGER NOT NULL UNIQUE, `ls` TEXT, `ld` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "DaysInDayType") ? " DEFAULT " * string(defaultvals["DaysInDayType"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`ld`) REFERENCES `DAYTYPE`(`val`), FOREIGN KEY(`ls`) REFERENCES `SEASON`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `DaySplit` ( `id` INTEGER NOT NULL UNIQUE, `lh` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "DaySplit") ? " DEFAULT " * string(defaultvals["DaySplit"]) : "") * ", FOREIGN KEY(`lh`) REFERENCES `DAILYTIMEBRACKET`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `Conversionls` ( `id` INTEGER NOT NULL UNIQUE, `l` TEXT, `ls` TEXT, `val` REAL" * (haskey(defaultvals, "Conversionls") ? " DEFAULT " * string(defaultvals["Conversionls"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`ls`) REFERENCES `SEASON`(`val`), FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `Conversionlh` ( `id` INTEGER NOT NULL UNIQUE, `l` TEXT, `lh` TEXT, `val` REAL" * (haskey(defaultvals, "Conversionlh") ? " DEFAULT " * string(defaultvals["Conversionlh"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`lh`) REFERENCES `DAILYTIMEBRACKET`(`val`), FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `Conversionld` ( `id` INTEGER NOT NULL UNIQUE, `l` TEXT, `ld` TEXT, `val` REAL" * (haskey(defaultvals, "Conversionld") ? " DEFAULT " * string(defaultvals["Conversionld"]) : "") * ", FOREIGN KEY(`ld`) REFERENCES `DAYTYPE`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `CapitalCostStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "CapitalCostStorage") ? " DEFAULT " * string(defaultvals["CapitalCostStorage"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `CapitalCost` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "CapitalCost") ? " DEFAULT " * string(defaultvals["CapitalCost"]) : "") * ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `CapacityToActivityUnit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `val` REAL" * (haskey(defaultvals, "CapacityToActivityUnit") ? " DEFAULT " * string(defaultvals["CapacityToActivityUnit"]) : "") * ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`) )")
@@ -297,21 +305,21 @@ function createnemodb(path::String, defaultvals::Dict{String, Float64} = Dict{St
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `AnnualExogenousEmission` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `e` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "AnnualExogenousEmission") ? " DEFAULT " * string(defaultvals["AnnualExogenousEmission"]) : "") * ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `AnnualEmissionLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `e` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "AnnualEmissionLimit") ? " DEFAULT " * string(defaultvals["AnnualEmissionLimit"]) : "") * ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `AccumulatedAnnualDemand` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "AccumulatedAnnualDemand") ? " DEFAULT " * string(defaultvals["AccumulatedAnnualDemand"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`) )")
-    # END: Add new NEMO tables.
+    # END: Add new |nemo tables.
 
     SQLite.execute!(db, "COMMIT")
     SQLite.execute!(db, "VACUUM")
 
-    logmsg("Added NEMO structure to SQLite database at " * path * ".")
+    logmsg("Added |nemo structure to SQLite database at " * path * ".")
     # END: DDL operations in an SQLite transaction.
 
     # Return configured database
     return db
 end  # createnemodb(path::String, defaultvals::Dict{String, Float64} = Dict{String, Float64}())
 
-"""Creates an empty NEMO SQLite database with parameter defaults set to values used in LEAP. Arguments:
+"""Creates an empty |nemo SQLite database with parameter defaults set to values used in LEAP. Arguments:
     • path - Full path to database, including database name.
-If specified database already exists, drops and recreates NEMO tables in database."""
+If specified database already exists, drops and recreates |nemo tables in database."""
 function createnemodb_leap(path::String)
     # BEGIN: Specify default parameter values.
     defaultvals::Dict{String, Float64} = Dict{String, Float64}()  # Default values to be passed to createnemodb
@@ -328,7 +336,6 @@ function createnemodb_leap(path::String)
     defaultvals["TotalAnnualMaxCapacity"] = 10000000000.0
     defaultvals["TechnologyToStorage"] = 0.0
     defaultvals["TechnologyFromStorage"] = 0.0
-    defaultvals["TechWithCapacityNeededToMeetPeakTS"] = 0.0
     defaultvals["StorageMaxDischargeRate"] = 99.0
     defaultvals["StorageMaxChargeRate"] = 99.0
     defaultvals["StorageLevelStart"] = 999.0
@@ -352,14 +359,8 @@ function createnemodb_leap(path::String)
     defaultvals["FixedCost"] = 0.0
     defaultvals["EmissionsPenalty"] = 0.0
     defaultvals["EmissionActivityRatio"] = 0.0
-    defaultvals["DiscountRateStorage"] = 0.0
     defaultvals["DiscountRate"] = 0.05
     defaultvals["DepreciationMethod"] = 1.0
-    defaultvals["DaysInDayType"] = 7.0
-    defaultvals["DaySplit"] = 0.00137
-    defaultvals["Conversionls"] = 0.0
-    defaultvals["Conversionlh"] = 0.0
-    defaultvals["Conversionld"] = 0.0
     defaultvals["CapitalCostStorage"] = 0.0
     defaultvals["CapitalCost"] = 0.0
     defaultvals["CapacityToActivityUnit"] = 31.536
@@ -437,7 +438,7 @@ function createconstraint(model::JuMP.Model, logname::String, constraintref::Arr
     logmsg("Created constraint " * logname * ".")
 end  # createconstraint
 
-"""For each OSeMOSYS parameter table identified in tables, creates a view that explicitly shows the default value for the val
+"""For each parameter table identified in tables, creates a view that explicitly shows the default value for the val
 column, if one is available. View name = [table name]  * "_def"."""
 function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
     for t in tables
@@ -450,7 +451,7 @@ function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
         SQLite.query(db,"drop view if exists " * t * "_def")
 
         # BEGIN: Extract foreign key fields and default value from t.
-        for row in eachrow(SQLite.query(db, "PRAGMA table_info('" * t *"')"))
+        for row in DataFrames.eachrow(SQLite.query(db, "PRAGMA table_info('" * t *"')"))
             local rowname::String = row[:name]  # Value in name field for row
 
             if rowname == "id"
@@ -561,15 +562,31 @@ function savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tup
 end  # savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String)
 
 """Drops all tables in db whose name begins with "v" or "sqlite_stat" (both case-sensitive)."""
-function dropresulttables(db::SQLite.DB)
-    for row in eachrow(SQLite.tables(db))
-        local name = row[:name]
+function dropresulttables(db::SQLite.DB, quiet::Bool = true)
+    # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
+    try
+        # Begin SQLite transaction
+        SQLite.execute!(db, "BEGIN")
 
-        if name[1:1] == "v" || (length(name) >= 11 && name[1:11] == "sqlite_stat")
-            SQLite.execute!(db, "drop table " * name)
-            logmsg("Dropped table " * name * ".")
+        for row in DataFrames.eachrow(SQLite.tables(db))
+            local name = row[:name]
+
+            if name[1:1] == "v" || (length(name) >= 11 && name[1:11] == "sqlite_stat")
+                SQLite.execute!(db, "drop table " * name)
+                logmsg("Dropped table " * name * ".", quiet)
+            end
         end
+
+        # Complete SQLite transaction
+        SQLite.execute!(db, "COMMIT")
+    catch
+        # Rollback db transaction
+        SQLite.execute!(db, "ROLLBACK")
+
+        # Proceed with normal Julia error sequence
+        rethrow()
     end
+    # END: Wrap database operations in try-catch block to allow rollback on error.
 end  # dropresulttables(db::SQLite.DB)
 
 """Returns an array of model variables corresponding to the names in varnames. Excludes any variables not convertible to
@@ -622,9 +639,9 @@ function startnemo(dbpath::String, solver::String = "Cbc", numprocs::Int = Sys.C
     end
     # END: Add worker processes.
 
-    # BEGIN: Call main function for NEMO.
+    # BEGIN: Call main function for |nemo.
     @everywhere include(joinpath(Pkg.dir(), "NemoMod\\src\\NemoMod.jl"))  # Note that @everywhere loads file in Main module on all processes
 
     @time NemoMod.nemomain(dbpath, solver)
-    # END: Call main function for NEMO.
+    # END: Call main function for |nemo.
 end  # startnemo(dbpath::String, solver::String = "Cbc", numprocs::Int = Sys.CPU_CORES)
