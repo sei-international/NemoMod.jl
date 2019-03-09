@@ -441,71 +441,83 @@ end  # createconstraint
 """For each parameter table identified in tables, creates a view that explicitly shows the default value for the val
 column, if one is available. View name = [table name]  * "_def"."""
 function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
-    for t in tables
-        local hasdefault::Bool = false  # Indicates whether val column in t has a default value
-        local defaultval  # Default value for val column in t, if column has a default value
-        local pks::Array{String,1} = Array{String,1}()  # Names of foreign key fields in t
-        local createviewstmt::String  # Create view SQL statement that will be executed for t
+    try
+        # BEGIN: SQLite transaction.
+        SQLite.execute!(db, "BEGIN")
 
-        # Delete view if existing already
-        SQLite.query(db,"drop view if exists " * t * "_def")
+        for t in tables
+            local hasdefault::Bool = false  # Indicates whether val column in t has a default value
+            local defaultval  # Default value for val column in t, if column has a default value
+            local pks::Array{String,1} = Array{String,1}()  # Names of foreign key fields in t
+            local createviewstmt::String  # Create view SQL statement that will be executed for t
 
-        # BEGIN: Extract foreign key fields and default value from t.
-        for row in DataFrames.eachrow(SQLite.query(db, "PRAGMA table_info('" * t *"')"))
-            local rowname::String = row[:name]  # Value in name field for row
+            # Delete view if existing already
+            SQLite.query(db,"drop view if exists " * t * "_def")
 
-            if rowname == "id"
-                continue
-            elseif rowname == "val"
-                if !ismissing(row[:dflt_value])
-                    defaultval = row[:dflt_value]
+            # BEGIN: Extract foreign key fields and default value from t.
+            for row in DataFrames.eachrow(SQLite.query(db, "PRAGMA table_info('" * t *"')"))
+                local rowname::String = row[:name]  # Value in name field for row
 
-                    # Some special handling here to avoid creating large views where they're not necessary, given OSeMOSYS's logic
-                    if (t == "OutputActivityRatio" || t == "InputActivityRatio") && defaultval == "0"
-                        # OutputActivityRatio and InputActivityRatio are only used when != 0, so can ignore a default value of 0
-                        hasdefault = false
-                    else
-                        hasdefault = true
+                if rowname == "id"
+                    continue
+                elseif rowname == "val"
+                    if !ismissing(row[:dflt_value])
+                        defaultval = row[:dflt_value]
+
+                        # Some special handling here to avoid creating large views where they're not necessary, given OSeMOSYS's logic
+                        if (t == "OutputActivityRatio" || t == "InputActivityRatio") && defaultval == "0"
+                            # OutputActivityRatio and InputActivityRatio are only used when != 0, so can ignore a default value of 0
+                            hasdefault = false
+                        else
+                            hasdefault = true
+                        end
                     end
+                else
+                    push!(pks,rowname)
                 end
+            end
+            # END: Extract foreign key fields and default value from t.
+
+            # BEGIN: Create unique index on t for foreign key fields.
+            # This step significantly improves performance for many queries on new view for t
+            SQLite.query(db,"drop index if exists " * t * "_fks_unique")
+            SQLite.query(db,"create unique index " * t * "_fks_unique on " * t * " (" * join(pks, ",") * ")")
+            # END: Create unique index on t for foreign key fields.
+
+            if hasdefault
+                # Join to primary key tables with default specified
+                local outerfieldsclause::String = ""  # Dynamic fields clause for create view outer select
+                local innerfieldsclause::String = ""  # Dynamic fields clause for create view inner select
+                local fromclause::String = ""  # Dynamic from clause for create view inner select
+                local leftjoinclause::String = ""  # Dynamic left join criteria for create view inner select
+
+                for f in pks
+                    outerfieldsclause = outerfieldsclause * f * ", "
+                    innerfieldsclause = innerfieldsclause * f * "_tab.val as " * f * ", "
+                    fromclause = fromclause * translatesetabb(f) * " as " * f * "_tab, "
+                    leftjoinclause = leftjoinclause * "t." * f * " = " * f * "_tab.val and "
+                end
+
+                innerfieldsclause = innerfieldsclause * "t.val as val "
+                fromclause = fromclause[1:end-2] * " "
+                leftjoinclause = leftjoinclause[1:end-4]
+
+                createviewstmt = "create view " * t * "_def as select " * outerfieldsclause * "ifnull(val," * string(defaultval) * ") as val from (select " * innerfieldsclause * "from " * fromclause * "left join " * t * " t on " * leftjoinclause * ")"
             else
-                push!(pks,rowname)
-            end
-        end
-        # END: Extract foreign key fields and default value from t.
-
-        # BEGIN: Create unique index on t for foreign key fields.
-        # This step significantly improves performance for many queries on new view for t
-        SQLite.query(db,"drop index if exists " * t * "_fks_unique")
-        SQLite.query(db,"create unique index " * t * "_fks_unique on " * t * " (" * join(pks, ",") * ")")
-        # END: Create unique index on t for foreign key fields.
-
-        if hasdefault
-            # Join to primary key tables with default specified
-            local outerfieldsclause::String = ""  # Dynamic fields clause for create view outer select
-            local innerfieldsclause::String = ""  # Dynamic fields clause for create view inner select
-            local fromclause::String = ""  # Dynamic from clause for create view inner select
-            local leftjoinclause::String = ""  # Dynamic left join criteria for create view inner select
-
-            for f in pks
-                outerfieldsclause = outerfieldsclause * f * ", "
-                innerfieldsclause = innerfieldsclause * f * "_tab.val as " * f * ", "
-                fromclause = fromclause * translatesetabb(f) * " as " * f * "_tab, "
-                leftjoinclause = leftjoinclause * "t." * f * " = " * f * "_tab.val and "
+                # No default value, so view with defaults is a simple copy of t
+                createviewstmt = "create view " * t * "_def as select * from " * t
             end
 
-            innerfieldsclause = innerfieldsclause * "t.val as val "
-            fromclause = fromclause[1:end-2] * " "
-            leftjoinclause = leftjoinclause[1:end-4]
-
-            createviewstmt = "create view " * t * "_def as select " * outerfieldsclause * "ifnull(val," * string(defaultval) * ") as val from (select " * innerfieldsclause * "from " * fromclause * "left join " * t * " t on " * leftjoinclause * ")"
-        else
-            # No default value, so view with defaults is a simple copy of t
-            createviewstmt = "create view " * t * "_def as select * from " * t
+            # println("createviewstmt = " * createviewstmt)
+            SQLite.query(db, createviewstmt)
         end
 
-        # println("createviewstmt = " * createviewstmt)
-        SQLite.query(db, createviewstmt)
+        SQLite.execute!(db, "COMMIT")
+        # END: SQLite transaction.
+    catch
+        # Rollback transaction and rethrow error
+        SQLite.execute!(db, "ROLLBACK")
+        rethrow()
     end
 end  # createviewwithdefaults(tables::Array{String,1})
 
