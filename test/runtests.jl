@@ -1,8 +1,8 @@
 #=
-    NEMO: Next-generation Energy Modeling system for Optimization.
+    |nemo: Next-generation Energy Modeling system for Optimization.
     https://github.com/sei-international/NemoMod.jl
 
-    Copyright © 2018: Stockholm Environment Institute U.S.
+    Copyright © 2019: Stockholm Environment Institute U.S.
 
 	File description: Tests for NemoMod package.
 =#
@@ -30,66 +30,44 @@ function delete_dbfile(path::String, max_del_attempts::Int)
 end  # delete_dbfile(path::String)
 
 @testset "Solving a scenario" begin
-    @testset "Solving UTOPIA with GLPK" begin
-        dbfile = joinpath(@__DIR__, "utopia.sqlite")
+    @testset "Solving storage_test with GLPK" begin
+        dbfile = joinpath(@__DIR__, "storage_test.sqlite")
 
         NemoMod.calculatescenario(dbfile)  # GLPK is default solver
 
         db = SQLite.DB(dbfile)
         testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
 
-        @test testqry[1,:y] == "1990"
-        @test testqry[2,:y] == "1991"
-        @test testqry[3,:y] == "1992"
-        @test testqry[4,:y] == "1993"
-        @test testqry[5,:y] == "1994"
-        @test testqry[6,:y] == "1995"
-        @test testqry[7,:y] == "1996"
-        @test testqry[8,:y] == "1997"
-        @test testqry[9,:y] == "1998"
-        @test testqry[10,:y] == "1999"
-        @test testqry[11,:y] == "2000"
-        @test testqry[12,:y] == "2001"
-        @test testqry[13,:y] == "2002"
-        @test testqry[14,:y] == "2003"
-        @test testqry[15,:y] == "2004"
-        @test testqry[16,:y] == "2005"
-        @test testqry[17,:y] == "2006"
-        @test testqry[18,:y] == "2007"
-        @test testqry[19,:y] == "2008"
-        @test testqry[20,:y] == "2009"
-        @test testqry[21,:y] == "2010"
+        @test testqry[1,:y] == "2020"
+        @test testqry[2,:y] == "2021"
+        @test testqry[3,:y] == "2022"
+        @test testqry[4,:y] == "2023"
+        @test testqry[5,:y] == "2024"
+        @test testqry[6,:y] == "2025"
+        @test testqry[7,:y] == "2026"
+        @test testqry[8,:y] == "2027"
+        @test testqry[9,:y] == "2028"
+        @test testqry[10,:y] == "2029"
 
-        @test isapprox(testqry[1,:val], 7078.726833; atol=TOL)
-        @test isapprox(testqry[2,:val], 1376.094496; atol=TOL)
-        @test isapprox(testqry[3,:val], 1424.622928; atol=TOL)
-        @test isapprox(testqry[4,:val], 1299.845856; atol=TOL)
-        @test isapprox(testqry[5,:val], 1341.383291; atol=TOL)
-        @test isapprox(testqry[6,:val], 1214.807617; atol=TOL)
-        @test isapprox(testqry[7,:val], 1196.944055; atol=TOL)
-        @test isapprox(testqry[8,:val], 1207.676216; atol=TOL)
-        @test isapprox(testqry[9,:val], 1098.252384; atol=TOL)
-        @test isapprox(testqry[10,:val], 1117.595158; atol=TOL)
-        @test isapprox(testqry[11,:val], 1047.769294; atol=TOL)
-        @test isapprox(testqry[12,:val], 1125.578368; atol=TOL)
-        @test isapprox(testqry[13,:val], 1047.590383; atol=TOL)
-        @test isapprox(testqry[14,:val], 1023.135753; atol=TOL)
-        @test isapprox(testqry[15,:val], 937.081597; atol=TOL)
-        @test isapprox(testqry[16,:val], 2029.877355; atol=TOL)
-        @test isapprox(testqry[17,:val], 885.294875; atol=TOL)
-        @test isapprox(testqry[18,:val], 838.923596; atol=TOL)
-        @test isapprox(testqry[19,:val], 777.346299; atol=TOL)
-        @test isapprox(testqry[20,:val], 718.732469; atol=TOL)
-        @test isapprox(testqry[21,:val], 659.805869; atol=TOL)
+        @test isapprox(testqry[1,:val], 3845.15711985937; atol=TOL)
+        @test isapprox(testqry[2,:val], 146.552326874185; atol=TOL)
+        @test isapprox(testqry[3,:val], 139.573639845721; atol=TOL)
+        @test isapprox(testqry[4,:val], 132.927276043543; atol=TOL)
+        @test isapprox(testqry[5,:val], 126.597405755756; atol=TOL)
+        @test isapprox(testqry[6,:val], 120.568957862625; atol=TOL)
+        @test isapprox(testqry[7,:val], 114.827578916785; atol=TOL)
+        @test isapprox(testqry[8,:val], 109.359598968367; atol=TOL)
+        @test isapprox(testqry[9,:val], 104.151999017492; atol=TOL)
+        @test isapprox(testqry[10,:val], 99.1923800166593; atol=TOL)
 
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.query(db, "VACUUM")
-    end  # "Solving UTOPIA with GLPK"
+    end  # "Solving storage_test with GLPK"
 end  # @testset "Solving a scenario"
 
 @testset "Other database operations" begin
-    @testset "Create a new NEMO database" begin
+    @testset "Create a new |nemo database" begin
         db = NemoMod.createnemodb(joinpath(@__DIR__, "new_nemo.sqlite"))
 
         @test isfile(joinpath(@__DIR__, "new_nemo.sqlite"))
@@ -105,9 +83,9 @@ end  # @testset "Solving a scenario"
 
         @test !isfile(joinpath(@__DIR__, "new_nemo.sqlite"))
         # END: Delete new database file.
-    end  # @testset "Create a new NEMO database"
+    end  # @testset "Create a new |nemo database"
 
-    @testset "Create a new NEMO database with LEAP parameter defaults" begin
+    @testset "Create a new |nemo database with LEAP parameter defaults" begin
         db = NemoMod.createnemodb_leap(joinpath(@__DIR__, "new_nemo_leap.sqlite"))
 
         @test isfile(joinpath(@__DIR__, "new_nemo_leap.sqlite"))
@@ -125,7 +103,7 @@ end  # @testset "Solving a scenario"
 
         @test !isfile(joinpath(@__DIR__, "new_nemo_leap.sqlite"))
         # END: Delete new database file.
-    end  # @testset "Create a new NEMO database with LEAP parameter defaults"
+    end  # @testset "Create a new |nemo database with LEAP parameter defaults"
 
     @testset "Set parameter default" begin
         db = NemoMod.createnemodb(joinpath(@__DIR__, "param_default.sqlite"))
