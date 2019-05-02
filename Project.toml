@@ -1,7 +1,7 @@
 name = "NemoMod"
 uuid = "a3c327a0-d2f0-11e8-37fd-d12fd35c3c72"
 authors = ["Jason Veysey <jason.veysey@sei.org>"]
-version = "0.1.2"
+version = "1.0.0-alpha"
 
 [deps]
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
