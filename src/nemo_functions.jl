@@ -573,7 +573,8 @@ function savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tup
     end
 end  # savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String)
 
-"""Drops all tables in db whose name begins with "v" or "sqlite_stat" (both case-sensitive)."""
+"""Drops all tables in db whose name begins with "v" or "sqlite_stat" (both case-sensitive).
+    quiet parameter determines whether most status messages are suppressed."""
 function dropresulttables(db::SQLite.DB, quiet::Bool = true)
     # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
     try
