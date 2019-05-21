@@ -10,7 +10,7 @@
 """
     logmsg(msg::String, suppress=false, dtm=now()::DateTime)
 
-Print a log message (msg) to STDOUT. The message is suppressed if suppress = true.
+Prints a log message (msg) to STDOUT. The message is suppressed if `suppress == true`.
 
 # Examples
 ```jldoctest
@@ -28,7 +28,7 @@ end  # logmsg(msg::String)
 """
     translatesetabb(a::String)
 
-Translate a set abbreviation (a) into the set's name.
+Translates a set abbreviation into the set's name.
 
 # Examples
 ```jldoctest
@@ -68,16 +68,19 @@ function translatesetabb(a::String)
     end
 end  # translatesetabb(a::String)
 
-# Start documentation updates here.
+"""
+    keydicts(df::DataFrames.DataFrame, numdicts::Int)
 
-"""Generates Dicts that can be used to restrict JuMP constraints or variables to selected indices
-(rather than all values in their dimensions) at creation. Requires two arguments:
-    1) df - The results of a query that selects the index values.
-    2) numdicts - The number of Dicts that should be created.  The first Dict is for the first field in
-        the query, the second is for the first two fields in the query, and so on.  Dict keys are arrays
-        of the values of the key fields to which the Dict corresponds, and Dict values are Sets of corresponding
-        values in the next field of the query (field #2 for the first Dict, field #3 for the second Dict, and so on).
-Returns an array of the generated Dicts."""
+Generates `Dicts` that can be used to restrict JuMP constraints or variables to selected indices
+(rather than all values in their dimensions) at creation. Returns an array of the generated `Dicts`.
+
+# Arguments
+- `df::DataFrames.DataFrame`: The results of a query that selects the index values.
+- `numdicts::Int`: The number of `Dicts` that should be created.  The first `Dict` is for the first field in
+        the query, the second is for the first two fields in the query, and so on.  `Dict` keys are arrays
+        of the values of the key fields to which the `Dict` corresponds, and `Dict` values are `Sets` of corresponding
+        values in the next field of the query (field #2 for the first `Dict`, field #3 for the second `Dict`, and so on).
+"""
 function keydicts(df::DataFrames.DataFrame, numdicts::Int)
     local returnval = Array{Dict{Array{String,1},Set{String}},1}()  # Function return value
 
@@ -100,8 +103,14 @@ function keydicts(df::DataFrames.DataFrame, numdicts::Int)
     return returnval
 end  # keydicts(df::DataFrames.DataFrame, numdicts::Int)
 
-"""Runs keydicts using parallel processes identified in targetprocs. If there are not at least 10,000 rows in df for each
-target process, resorts to running keydicts on process that called keydicts_parallel."""
+"""
+    keydicts_parallel(df::DataFrames.DataFrame, numdicts::Int,
+    targetprocs::Array{Int,1})
+
+Runs `keydicts` using parallel processes identified in `targetprocs`. If there are not at
+least 10,000 rows in `df` for each target process, resorts to running `keydicts` on process
+that called `keydicts_parallel`.
+"""
 function keydicts_parallel(df::DataFrames.DataFrame, numdicts::Int, targetprocs::Array{Int,1})
     local returnval = Array{Dict{Array{String,1},Set{String}},1}()  # Function return value
     local availprocs::Array{Int, 1} = intersect(procs(), targetprocs)  # Targeted processes that actually exist
@@ -151,10 +160,16 @@ m = Model()
 createconstraint(m, "TestConstraint", abc, DataFrames.eachrow(SQLite.query(db, "select t.val as t from technology t limit 10")), ["t"], "vtest[t]", ">=", "0")
 =#
 
-"""Creates an empty |nemo SQLite database. Arguments:
-    • path - Full path to database, including database name.
-    • defaultvals - Dictionary of table names and default values for val column.
-If specified database already exists, drops and recreates |nemo tables in database."""
+"""
+    createnemodb(path::String,
+    defaultvals::Dict{String, Float64} = Dict{String, Float64}())
+
+Creates an empty |nemo SQLite database. If specified database already exists, drops and recreates |nemo tables in database.
+
+# Arguments
+- `path::String`: Full path to database, including database name.
+- `defaultvals::Dict{String, Float64} = Dict{String, Float64}()`: Dictionary of table names and default values for `val` column.
+"""
 function createnemodb(path::String, defaultvals::Dict{String, Float64} = Dict{String, Float64}())
     # Open SQLite database
     local db::SQLite.DB = SQLite.DB(path)
@@ -317,9 +332,15 @@ function createnemodb(path::String, defaultvals::Dict{String, Float64} = Dict{St
     return db
 end  # createnemodb(path::String, defaultvals::Dict{String, Float64} = Dict{String, Float64}())
 
-"""Creates an empty |nemo SQLite database with parameter defaults set to values used in LEAP. Arguments:
-    • path - Full path to database, including database name.
-If specified database already exists, drops and recreates |nemo tables in database."""
+"""
+    createnemodb_leap(path::String)
+
+Creates an empty |nemo SQLite database with parameter defaults set to values used in LEAP.
+If specified database already exists, drops and recreates |nemo tables in database.
+
+# Arguments
+- `path::String`: Full path to database, including database name.
+"""
 function createnemodb_leap(path::String)
     # BEGIN: Specify default parameter values.
     defaultvals::Dict{String, Float64} = Dict{String, Float64}()  # Default values to be passed to createnemodb
@@ -376,11 +397,17 @@ function createnemodb_leap(path::String)
     createnemodb(path, defaultvals)
 end  # createnemodb_leap(path::String)
 
-"""Sets the default value for a parameter table. Requires three arguments:
-    1) db - SQLite database containing parameter table.
-    2) table - Table name (case-sensitive).
-    3) val - Parameter value (must be a floating-point number).
-Implements logic described at https://www.sqlite.org/lang_altertable.html."""
+"""
+    setparamdefault(db::SQLite.DB, table::String, val::Float64)
+
+Sets the default value for a parameter table.
+Implements logic described at [https://www.sqlite.org/lang_altertable.html](https://www.sqlite.org/lang_altertable.html).
+
+# Arguments
+- `db::SQLite.DB`: SQLite database containing parameter table.
+- `table::String`: Table name (case-sensitive).
+- `val::Float64`: Parameter value (must be a floating-point number).
+"""
 function setparamdefault(db::SQLite.DB, table::String, val::Float64)
     try
         # BEGIN: SQLite transaction.
@@ -411,6 +438,7 @@ function setparamdefault(db::SQLite.DB, table::String, val::Float64)
 end  # setparamdefault(db::SQLite.DB, table::String, val::Float64)
 
 # Demonstration function - performance is too poor for production use
+#=
 function createconstraint(model::JuMP.Model, logname::String, constraintref::Array{JuMP.ConstraintRef,1}, rows::DataFrames.DFRowIterator,
     keyfields::Array{String,1}, lh::String, operator::String, rh::String)
 
@@ -437,9 +465,13 @@ function createconstraint(model::JuMP.Model, logname::String, constraintref::Arr
 
     logmsg("Created constraint " * logname * ".")
 end  # createconstraint
+=#
 
-"""For each parameter table identified in tables, creates a view that explicitly shows the default value for the val
-column, if one is available. View name = [table name]  * "_def"."""
+"""
+    createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
+
+For each parameter table identified in `tables`, creates a view that explicitly shows the default value
+for the `val` column, if one is available. View name = [table name]  * "_def"."""
 function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
     try
         # BEGIN: SQLite transaction.
@@ -521,12 +553,21 @@ function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
     end
 end  # createviewwithdefaults(tables::Array{String,1})
 
-"""Saves model results to a SQLite database using SQL inserts with transaction batching. Has five arguments:
-    1) vars - Names of model variables for which results will be retrieved and saved to database.
-    2) modelvarindices - Dictionary mapping model variable names to tuples of (variable, [index column names]).
-    3) db - SQLite database.
-    4) solvedtmstr - String to write into solvedtm field in result tables.
-    5) quiet - Suppresses low-priority status messages (which are otherwise printed to STDOUT)."""
+"""
+    savevarresults(vars::Array{String,1},
+    modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}},
+    db::SQLite.DB, solvedtmstr::String, quiet::Bool = false)
+
+Saves model results to a SQLite database using SQL inserts with transaction batching.
+
+# Arguments
+- `vars::Array{String,1}`: Names of model variables for which results will be retrieved and saved to database.
+- `modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}}`: Dictionary mapping model variable names
+    to tuples of (variable, [index column names]).
+- `db::SQLite.DB`: SQLite database.
+- `solvedtmstr::String`: String to write into solvedtm field in result tables.
+- `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to STDOUT).
+"""
 function savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String,
     quiet::Bool = false)
     for vname in intersect(vars, keys(modelvarindices))
@@ -573,8 +614,12 @@ function savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tup
     end
 end  # savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String)
 
-"""Drops all tables in db whose name begins with "v" or "sqlite_stat" (both case-sensitive).
-    quiet parameter determines whether most status messages are suppressed."""
+"""
+    dropresulttables(db::SQLite.DB, quiet::Bool = true)
+
+Drops all tables in db whose name begins with "v" or "sqlite_stat" (both case-sensitive).
+    `quiet` parameter determines whether most status messages are suppressed.
+"""
 function dropresulttables(db::SQLite.DB, quiet::Bool = true)
     # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
     try
@@ -602,8 +647,12 @@ function dropresulttables(db::SQLite.DB, quiet::Bool = true)
     # END: Wrap database operations in try-catch block to allow rollback on error.
 end  # dropresulttables(db::SQLite.DB)
 
-"""Returns an array of model variables corresponding to the names in varnames. Excludes any variables not convertible to
-    JuMP.JuMPContainer."""
+"""
+    getvars(varnames::Array{String, 1})
+
+Returns an array of model variables corresponding to the names in `varnames`. Excludes any variables not convertible to
+    `JuMP.JuMPContainer`.
+"""
 function getvars(varnames::Array{String, 1})
     local returnval::Array{JuMP.JuMPContainer, 1} = Array{JuMP.JuMPContainer, 1}()  # Function's return value
 
@@ -618,7 +667,8 @@ function getvars(varnames::Array{String, 1})
     return returnval
 end  # getvars(varnames::Array{String, 1})
 
-"""This function is deprecated."""
+# This function is deprecated.
+#=
 function startnemo(dbpath::String, solver::String = "Cbc", numprocs::Int = Sys.CPU_THREADS)
     # Note: Sys.CPU_THREADS was Sys.CPU_CORES in Julia 0.6
 
@@ -658,3 +708,4 @@ function startnemo(dbpath::String, solver::String = "Cbc", numprocs::Int = Sys.C
     @time NemoMod.nemomain(dbpath, solver)
     # END: Call main function for |nemo.
 end  # startnemo(dbpath::String, solver::String = "Cbc", numprocs::Int = Sys.CPU_CORES)
+=#

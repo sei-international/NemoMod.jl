@@ -6,6 +6,7 @@ makedocs(
     format = :html,
     pages = [
         "Introduction" => "index.md"
+        "Installation" => "installation.md"
     ],
 )
 

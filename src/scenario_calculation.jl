@@ -14,14 +14,14 @@
         vdiscountedcapitalinvestmentstorage, vsalvagevaluestorage,
         vdiscountedsalvagevaluestorage, vnewcapacity, vaccumulatednewcapacity,
         vtotalcapacityannual, vtotaltechnologyannualactivity,
-        vtotalannualtechnologyactivitybymode, vproductionbytechnologyannual, vproduction,
-        vusebytechnologyannual, vuse, vtrade, vtradeannual, vproductionannual, vuseannual,
-        vcapitalinvestment, vdiscountedcapitalinvestment, vsalvagevalue,
-        vdiscountedsalvagevalue, voperatingcost, vdiscountedoperatingcost,
-        vtotaldiscountedcost",
+        vtotalannualtechnologyactivitybymode, vproductionbytechnologyannual,
+        vproduction, vusebytechnologyannual, vuse, vtrade, vtradeannual,
+        vproductionannual, vuseannual, vcapitalinvestment,
+        vdiscountedcapitalinvestment, vsalvagevalue, vdiscountedsalvagevalue,
+        voperatingcost, vdiscountedoperatingcost, vtotaldiscountedcost",
     target = Array{Int, 1}([1]), quiet = false)
 
-Run |nemo for a scenario specified in a SQLite database.
+Runs |nemo for a scenario specified in a SQLite database.
 
 # Arguments
 - `dbpath::String`: Path to SQLite database.
@@ -2107,20 +2107,21 @@ end  # calculatescenario()
     gmpmodelpath::String = normpath(joinpath(@__DIR__, "..", "utils", "gmpl2sql",
         "osemosys_2017_11_08_long.txt"));
     jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
-    varstosave::String = "vdemand, vnewstoragecapacity, vaccumulatednewstoragecapacity,
-        vstorageupperlimit, vstoragelowerlimit, vcapitalinvestmentstorage,
-        vdiscountedcapitalinvestmentstorage, vsalvagevaluestorage,
-        vdiscountedsalvagevaluestorage, vnewcapacity, vaccumulatednewcapacity,
-        vtotalcapacityannual, vtotaltechnologyannualactivity,
-        vtotalannualtechnologyactivitybymode, vproductionbytechnologyannual, vproduction,
-        vusebytechnologyannual, vuse, vtrade, vtradeannual, vproductionannual, vuseannual,
+    varstosave::String = "vdemand, vnewstoragecapacity,
+        vaccumulatednewstoragecapacity, vstorageupperlimit, vstoragelowerlimit,
+        vcapitalinvestmentstorage, vdiscountedcapitalinvestmentstorage,
+        vsalvagevaluestorage, vdiscountedsalvagevaluestorage, vnewcapacity,
+        vaccumulatednewcapacity, vtotalcapacityannual,
+        vtotaltechnologyannualactivity, vtotalannualtechnologyactivitybymode,
+        vproductionbytechnologyannual, vproduction, vusebytechnologyannual,
+        vuse, vtrade, vtradeannual, vproductionannual, vuseannual,
         vcapitalinvestment, vdiscountedcapitalinvestment, vsalvagevalue,
         vdiscountedsalvagevalue, voperatingcost, vdiscountedoperatingcost,
         vtotaldiscountedcost",
     targetprocs::Array{Int, 1} = Array{Int, 1}([1]),
     quiet::Bool = false)
 
-Run |nemo for a scenario specified in a GNU MathProg data file. Save results in a
+Runs |nemo for a scenario specified in a GNU MathProg data file. Saves results in a
 |nemo-compatible SQLite database in same directory as GNU MathProg data file.
 
 # Arguments
