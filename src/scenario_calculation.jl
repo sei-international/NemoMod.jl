@@ -26,14 +26,21 @@ Runs |nemo for a scenario specified in a SQLite database.
 # Arguments
 - `dbpath::String`: Path to SQLite database.
 - `jumpmodel::JuMP.Model`: JuMP model object specifying MIP solver to be used.
-    Examples: Model(solver = GLPKSolverMIP(presolve=true)), Model(solver = CplexSolver()).
-    Note that solver package must be installed (GLPK is installed with |nemo by default).
+    Examples: Model(solver = GLPKSolverMIP(presolve=true)), Model(solver = CplexSolver()),
+    Model(solver = CbcSolver(logLevel=1, presolve="on")).
+    Note that solver package must be installed (GLPK and Cbc are installed with |nemo by
+    default).
 - `varstosave::String`: Comma-delimited list of model variables whose results should be
     saved in SQLite database.
 - `targetprocs::Array{Int, 1}`: Processes that should be used for parallelized operations
     within the scenario calculation.
 - `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to
     STDOUT).
+
+!!! tip
+For small models, performance may be improved by turning off the solver's presolve function. For
+example, `jumpmodel = Model(solver = GLPKSolverMIP(presolve=false))` or
+`jumpmodel = Model(solver = CbcSolver(logLevel=1, presolve="off"))`.
 """
 function calculatescenario(
     dbpath::String;
@@ -2129,14 +2136,21 @@ Runs |nemo for a scenario specified in a GNU MathProg data file. Saves results i
 - `gmpdatapath::String`: Path to GNU MathProg data file.
 - `gmpmodelpath::String`: Path to GNU MathProg model file corresponding to data file.
 - `jumpmodel::JuMP.Model`: JuMP model object specifying MIP solver to be used.
-    Examples: Model(solver = GLPKSolverMIP(presolve=true)), Model(solver = CplexSolver()).
-    Note that solver package must be installed (GLPK is installed with |nemo by default).
+    Examples: Model(solver = GLPKSolverMIP(presolve=true)), Model(solver = CplexSolver()),
+    Model(solver = CbcSolver(logLevel=1, presolve="on")).
+    Note that solver package must be installed (GLPK and Cbc are installed with |nemo by
+    default).
 - `varstosave::String`: Comma-delimited list of model variables whose results should be
     saved in SQLite database.
 - `targetprocs::Array{Int, 1}`: Processes that should be used for parallelized operations
     within this function.
 - `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to
     STDOUT).
+
+!!! tip
+For small models, performance may be improved by turning off the solver's presolve function. For
+example, `jumpmodel = Model(solver = GLPKSolverMIP(presolve=false))` or
+`jumpmodel = Model(solver = CbcSolver(logLevel=1, presolve="off"))`.
 """
 function calculategmpscenario(
     gmpdatapath::String,

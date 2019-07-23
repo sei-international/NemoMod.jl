@@ -4,6 +4,7 @@ authors = ["Jason Veysey <jason.veysey@sei.org>"]
 version = "1.0.0-alpha"
 
 [deps]
+Cbc = "9961bab8-2fa3-5c5a-9d89-47fab24efd76"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
@@ -20,4 +21,5 @@ GLPKMathProgInterface = "0.4.4"
 JuMP = "0.18.5"
 PackageCompiler = "0.5.1"
 SQLite = "0.7.0"
+Cbc = "0.6.1"
 julia = "1.0"

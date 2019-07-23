@@ -8,7 +8,7 @@
 =#
 
 #using NemoMod
-using Test, SQLite, DataFrames
+using Test, SQLite, DataFrames, JuMP, Cbc
 
 const TOL = 1e-4  # Default tolerance for isapprox() comparisons
 
@@ -64,6 +64,41 @@ end  # delete_dbfile(path::String)
         NemoMod.dropresulttables(db)
         testqry = SQLite.query(db, "VACUUM")
     end  # "Solving storage_test with GLPK"
+
+    @testset "Solving storage_test with Cbc" begin
+        dbfile = joinpath(@__DIR__, "storage_test.sqlite")
+
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = CbcSolver(logLevel=1, presolve="on")))
+
+        db = SQLite.DB(dbfile)
+        testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
+
+        @test testqry[1,:y] == "2020"
+        @test testqry[2,:y] == "2021"
+        @test testqry[3,:y] == "2022"
+        @test testqry[4,:y] == "2023"
+        @test testqry[5,:y] == "2024"
+        @test testqry[6,:y] == "2025"
+        @test testqry[7,:y] == "2026"
+        @test testqry[8,:y] == "2027"
+        @test testqry[9,:y] == "2028"
+        @test testqry[10,:y] == "2029"
+
+        @test isapprox(testqry[1,:val], 3845.15711985937; atol=TOL)
+        @test isapprox(testqry[2,:val], 146.552326874185; atol=TOL)
+        @test isapprox(testqry[3,:val], 139.573639845721; atol=TOL)
+        @test isapprox(testqry[4,:val], 132.927276043543; atol=TOL)
+        @test isapprox(testqry[5,:val], 126.597405755756; atol=TOL)
+        @test isapprox(testqry[6,:val], 120.568957862625; atol=TOL)
+        @test isapprox(testqry[7,:val], 114.827578916785; atol=TOL)
+        @test isapprox(testqry[8,:val], 109.359598968367; atol=TOL)
+        @test isapprox(testqry[9,:val], 104.151999017492; atol=TOL)
+        @test isapprox(testqry[10,:val], 99.1923800166593; atol=TOL)
+
+        # Delete test results and re-compact test database
+        NemoMod.dropresulttables(db)
+        testqry = SQLite.query(db, "VACUUM")
+    end  # "Solving storage_test with Cbc"
 end  # @testset "Solving a scenario"
 
 @testset "Other database operations" begin

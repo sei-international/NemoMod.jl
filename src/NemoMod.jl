@@ -11,7 +11,7 @@ module NemoMod
 
 # BEGIN: Access other modules and code files.
 using JuMP, SQLite, DataFrames, Distributed, Dates
-using GLPKMathProgInterface  # Default solver
+using GLPKMathProgInterface, Cbc  # Default solvers
 
 include("nemo_functions.jl")  # Core |nemo functions
 include("scenario_calculation.jl")  # Functions for calculating a scenario with |nemo
