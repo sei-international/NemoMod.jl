@@ -7,7 +7,7 @@
 	File description: Tests for NemoMod package.
 =#
 
-#using NemoMod
+using NemoMod
 using Test, SQLite, DataFrames, JuMP, Cbc
 
 const TOL = 1e-4  # Default tolerance for isapprox() comparisons
