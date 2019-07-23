@@ -161,16 +161,19 @@ createconstraint(m, "TestConstraint", abc, DataFrames.eachrow(SQLite.query(db, "
 =#
 
 """
-    createnemodb(path::String,
-    defaultvals::Dict{String, Float64} = Dict{String, Float64}())
+    createnemodb(path::String;
+    defaultvals::Dict{String, Float64} = Dict{String, Float64}(),
+    foreignkeys::Bool = false)
 
 Creates an empty |nemo SQLite database. If specified database already exists, drops and recreates |nemo tables in database.
 
 # Arguments
 - `path::String`: Full path to database, including database name.
-- `defaultvals::Dict{String, Float64} = Dict{String, Float64}()`: Dictionary of table names and default values for `val` column.
+- `defaultvals::Dict{String, Float64} = Dict{String, Float64}()`: Dictionary of parameter table names and default values for `val` column.
+- `foreignkeys::Bool = false`: Indicates whether to create foreign keys within database.
 """
-function createnemodb(path::String, defaultvals::Dict{String, Float64} = Dict{String, Float64}())
+function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{String, Float64}(),
+    foreignkeys::Bool = false)
     # Open SQLite database
     local db::SQLite.DB = SQLite.DB(path)
     logmsg("Opened SQLite database at " * path * ".")
@@ -239,6 +242,8 @@ function createnemodb(path::String, defaultvals::Dict{String, Float64} = Dict{St
     SQLite.execute!(db,"drop table if exists VariableCost")
     SQLite.execute!(db,"drop table if exists YearSplit")
 
+    SQLite.execute!(db,"drop table if exists DefaultParams")
+
     SQLite.execute!(db,"drop table if exists DAILYTIMEBRACKET")
     SQLite.execute!(db,"drop table if exists DAYTYPE")
     SQLite.execute!(db,"drop table if exists REGION")
@@ -256,71 +261,80 @@ function createnemodb(path::String, defaultvals::Dict{String, Float64} = Dict{St
 
     # BEGIN: Add new |nemo tables.
     # No default values for sets/dimensions
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `EMISSION` ( `val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `FUEL` ( `val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `MODE_OF_OPERATION` (`val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`))")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `REGION` (`val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`))")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `STORAGE` ( `val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TECHNOLOGY` (`val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`))")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TIMESLICE` (`val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`))")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TSGROUP1` (`val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`))")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TSGROUP2` (`val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`))")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `YEAR` (`val` TEXT NOT NULL UNIQUE, PRIMARY KEY(`val`))")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `EMISSION` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`) )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `FUEL` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`) )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `MODE_OF_OPERATION` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `REGION` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `STORAGE` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`) )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TECHNOLOGY` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TIMESLICE` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TSGROUP1` (`name` TEXT, `desc` TEXT, `order` INTEGER NOT NULL UNIQUE, `multiplier` REAL NOT NULL DEFAULT 1, PRIMARY KEY(`name`))")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TSGROUP2` (`name` TEXT, `desc` TEXT, `order` INTEGER NOT NULL UNIQUE, `multiplier` REAL NOT NULL DEFAULT 1, PRIMARY KEY(`name`))")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `YEAR` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
 
-    # Parameter tables include any requested default values
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `YearSplit` ( `id` INTEGER NOT NULL UNIQUE, `l` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "YearSplit") ? " DEFAULT " * string(defaultvals["YearSplit"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `VariableCost` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `m` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "VariableCost") ? " DEFAULT " * string(defaultvals["VariableCost"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TradeRoute` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `rr` TEXT, `f` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TradeRoute") ? " DEFAULT " * string(defaultvals["TradeRoute"]) : "") * ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`rr`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalTechnologyModelPeriodActivityUpperLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `val` REAL" * (haskey(defaultvals, "TotalTechnologyModelPeriodActivityUpperLimit") ? " DEFAULT " * string(defaultvals["TotalTechnologyModelPeriodActivityUpperLimit"]) : "") * ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalTechnologyModelPeriodActivityLowerLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `val` REAL" * (haskey(defaultvals, "TotalTechnologyModelPeriodActivityLowerLimit") ? " DEFAULT " * string(defaultvals["TotalTechnologyModelPeriodActivityLowerLimit"]) : "") * ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalTechnologyAnnualActivityUpperLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalTechnologyAnnualActivityUpperLimit") ? " DEFAULT " * string(defaultvals["TotalTechnologyAnnualActivityUpperLimit"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalTechnologyAnnualActivityLowerLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalTechnologyAnnualActivityLowerLimit") ? " DEFAULT " * string(defaultvals["TotalTechnologyAnnualActivityLowerLimit"]) : "") * ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMinCapacityInvestment` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalAnnualMinCapacityInvestment") ? " DEFAULT " * string(defaultvals["TotalAnnualMinCapacityInvestment"]) : "") * ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMinCapacityInvestmentStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalAnnualMinCapacityInvestmentStorage") ? " DEFAULT " * string(defaultvals["TotalAnnualMinCapacityInvestmentStorage"]) : "") * ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMinCapacity` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalAnnualMinCapacity") ? " DEFAULT " * string(defaultvals["TotalAnnualMinCapacity"]) : "") * ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), PRIMARY KEY(`id`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMinCapacityStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalAnnualMinCapacityStorage") ? " DEFAULT " * string(defaultvals["TotalAnnualMinCapacityStorage"]) : "") * ", FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), PRIMARY KEY(`id`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMaxCapacityInvestment` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalAnnualMaxCapacityInvestment") ? " DEFAULT " * string(defaultvals["TotalAnnualMaxCapacityInvestment"]) : "") * ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMaxCapacityInvestmentStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalAnnualMaxCapacityInvestmentStorage") ? " DEFAULT " * string(defaultvals["TotalAnnualMaxCapacityInvestmentStorage"]) : "") * ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMaxCapacity` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalAnnualMaxCapacity") ? " DEFAULT " * string(defaultvals["TotalAnnualMaxCapacity"]) : "") * ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMaxCapacityStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "TotalAnnualMaxCapacityStorage") ? " DEFAULT " * string(defaultvals["TotalAnnualMaxCapacityStorage"]) : "") * ", FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), PRIMARY KEY(`id`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TechnologyToStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `s` TEXT, `m` TEXT, `val` REAL" * (haskey(defaultvals, "TechnologyToStorage") ? " DEFAULT " * string(defaultvals["TechnologyToStorage"]) : "") * ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TechnologyFromStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `s` TEXT, `m` TEXT, `val` REAL" * (haskey(defaultvals, "TechnologyFromStorage") ? " DEFAULT " * string(defaultvals["TechnologyFromStorage"]) : "") * ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `StorageMaxDischargeRate` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL" * (haskey(defaultvals, "StorageMaxDischargeRate") ? " DEFAULT " * string(defaultvals["StorageMaxDischargeRate"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `StorageMaxChargeRate` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL" * (haskey(defaultvals, "StorageMaxChargeRate") ? " DEFAULT " * string(defaultvals["StorageMaxChargeRate"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `StorageLevelStart` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL" * (haskey(defaultvals, "StorageLevelStart") ? " DEFAULT " * string(defaultvals["StorageLevelStart"]) : "") * ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `SpecifiedDemandProfile` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `l` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "SpecifiedDemandProfile") ? " DEFAULT " * string(defaultvals["SpecifiedDemandProfile"]) : "") * ", FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `SpecifiedAnnualDemand` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "SpecifiedAnnualDemand") ? " DEFAULT " * string(defaultvals["SpecifiedAnnualDemand"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ResidualStorageCapacity` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "ResidualStorageCapacity") ? " DEFAULT " * string(defaultvals["ResidualStorageCapacity"]) : "") * ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ResidualCapacity` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "ResidualCapacity") ? " DEFAULT " * string(defaultvals["ResidualCapacity"]) : "") * ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ReserveMarginTagTechnology` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "ReserveMarginTagTechnology") ? " DEFAULT " * string(defaultvals["ReserveMarginTagTechnology"]) : "") * ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ReserveMarginTagFuel` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "ReserveMarginTagFuel") ? " DEFAULT " * string(defaultvals["ReserveMarginTagFuel"]) : "") * ", FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ReserveMargin` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "ReserveMargin") ? " DEFAULT " * string(defaultvals["ReserveMargin"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `RETagTechnology` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "RETagTechnology") ? " DEFAULT " * string(defaultvals["RETagTechnology"]) : "") * ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `RETagFuel` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "RETagFuel") ? " DEFAULT " * string(defaultvals["RETagFuel"]) : "") * ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `REMinProductionTarget` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "REMinProductionTarget") ? " DEFAULT " * string(defaultvals["REMinProductionTarget"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `OutputActivityRatio` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `f` TEXT, `m` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "OutputActivityRatio") ? " DEFAULT " * string(defaultvals["OutputActivityRatio"]) : "") * ", FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `OperationalLifeStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL" * (haskey(defaultvals, "OperationalLifeStorage") ? " DEFAULT " * string(defaultvals["OperationalLifeStorage"]) : "") * ", FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `OperationalLife` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `val` REAL" * (haskey(defaultvals, "OperationalLife") ? " DEFAULT " * string(defaultvals["OperationalLife"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ModelPeriodExogenousEmission` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `e` TEXT, `val` REAL" * (haskey(defaultvals, "ModelPeriodExogenousEmission") ? " DEFAULT " * string(defaultvals["ModelPeriodExogenousEmission"]) : "") * ", FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ModelPeriodEmissionLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `e` TEXT, `val` REAL" * (haskey(defaultvals, "ModelPeriodEmissionLimit") ? " DEFAULT " * string(defaultvals["ModelPeriodEmissionLimit"]) : "") * ", FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `MinStorageCharge` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "MinStorageCharge") ? " DEFAULT " * string(defaultvals["MinStorageCharge"]) : "") * ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `LTsGroup` ( `id` INTEGER NOT NULL UNIQUE, `l` TEXT, `lorder` INTEGER, `tg2` TEXT, `tg1` TEXT, FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`tg2`) REFERENCES `TSGROUP2`(`val`), FOREIGN KEY(`tg1`) REFERENCES `TSGROUP1`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `InputActivityRatio` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `f` TEXT, `m` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "InputActivityRatio") ? " DEFAULT " * string(defaultvals["InputActivityRatio"]) : "") * ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `FixedCost` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "FixedCost") ? " DEFAULT " * string(defaultvals["FixedCost"]) : "") * ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `EmissionsPenalty` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `e` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "EmissionsPenalty") ? " DEFAULT " * string(defaultvals["EmissionsPenalty"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `EmissionActivityRatio` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `e` TEXT, `m` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "EmissionActivityRatio") ? " DEFAULT " * string(defaultvals["EmissionActivityRatio"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `DiscountRate` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `val` REAL" * (haskey(defaultvals, "DiscountRate") ? " DEFAULT " * string(defaultvals["DiscountRate"]) : "") * ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `DepreciationMethod` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `val` REAL" * (haskey(defaultvals, "DepreciationMethod") ? " DEFAULT " * string(defaultvals["DepreciationMethod"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `CapitalCostStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "CapitalCostStorage") ? " DEFAULT " * string(defaultvals["CapitalCostStorage"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `CapitalCost` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "CapitalCost") ? " DEFAULT " * string(defaultvals["CapitalCost"]) : "") * ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `CapacityToActivityUnit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `val` REAL" * (haskey(defaultvals, "CapacityToActivityUnit") ? " DEFAULT " * string(defaultvals["CapacityToActivityUnit"]) : "") * ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `CapacityOfOneTechnologyUnit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "CapacityOfOneTechnologyUnit") ? " DEFAULT " * string(defaultvals["CapacityOfOneTechnologyUnit"]) : "") * ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), PRIMARY KEY(`id`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `CapacityFactor` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `l` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "CapacityFactor") ? " DEFAULT " * string(defaultvals["CapacityFactor"]) : "") * ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`), PRIMARY KEY(`id`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `AvailabilityFactor` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "AvailabilityFactor") ? " DEFAULT " * string(defaultvals["AvailabilityFactor"]) : "") * ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `AnnualExogenousEmission` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `e` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "AnnualExogenousEmission") ? " DEFAULT " * string(defaultvals["AnnualExogenousEmission"]) : "") * ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), PRIMARY KEY(`id`), FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `AnnualEmissionLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `e` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "AnnualEmissionLimit") ? " DEFAULT " * string(defaultvals["AnnualEmissionLimit"]) : "") * ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), PRIMARY KEY(`id`) )")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `AccumulatedAnnualDemand` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `y` TEXT, `val` REAL" * (haskey(defaultvals, "AccumulatedAnnualDemand") ? " DEFAULT " * string(defaultvals["AccumulatedAnnualDemand"]) : "") * ", PRIMARY KEY(`id`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`) )")
+    # Parameter default table
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `DefaultParams` ( `tablename` TEXT NOT NULL, `val` REAL NOT NULL, PRIMARY KEY(`tablename`) );")
+
+    # Parameter tables
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `YearSplit` ( `id` INTEGER NOT NULL UNIQUE, `l` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `VariableCost` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `m` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TradeRoute` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `rr` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`rr`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalTechnologyModelPeriodActivityUpperLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalTechnologyModelPeriodActivityLowerLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalTechnologyAnnualActivityUpperLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalTechnologyAnnualActivityLowerLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMinCapacityInvestment` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMinCapacityInvestmentStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMinCapacity` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMinCapacityStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMaxCapacityInvestment` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMaxCapacityInvestmentStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMaxCapacity` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMaxCapacityStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TechnologyToStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `s` TEXT, `m` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TechnologyFromStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `s` TEXT, `m` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `StorageMaxDischargeRate` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `StorageMaxChargeRate` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `StorageLevelStart` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `SpecifiedDemandProfile` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `l` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `SpecifiedAnnualDemand` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ResidualStorageCapacity` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ResidualCapacity` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ReserveMarginTagTechnology` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ReserveMarginTagFuel` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ReserveMargin` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `RETagTechnology` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `RETagFuel` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `REMinProductionTarget` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `OutputActivityRatio` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `f` TEXT, `m` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `OperationalLifeStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `OperationalLife` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ModelPeriodExogenousEmission` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `e` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ModelPeriodEmissionLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `e` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `MinStorageCharge` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `LTsGroup` ( `id` INTEGER PRIMARY KEY AUTOINCREMENT, `l` TEXT UNIQUE,	`lorder` INTEGER, `tg2` TEXT, `tg1` TEXT" * (foreignkeys ? ", FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`), FOREIGN KEY(`tg2`) REFERENCES `TSGROUP2`(`name`), FOREIGN KEY(`tg1`) REFERENCES `TSGROUP1`(`name`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `InputActivityRatio` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `f` TEXT, `m` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `FixedCost` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `EmissionsPenalty` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `e` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `EmissionActivityRatio` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `e` TEXT, `m` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `DiscountRate` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `DepreciationMethod` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `CapitalCostStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `CapitalCost` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `CapacityToActivityUnit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `CapacityOfOneTechnologyUnit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `CapacityFactor` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `l` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `AvailabilityFactor` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `AnnualExogenousEmission` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `e` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `AnnualEmissionLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `e` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `AccumulatedAnnualDemand` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
     # END: Add new |nemo tables.
+
+    # BEGIN: Write default values to DefaultParams.
+    for (k, v) in defaultvals
+        SQLite.execute!(db, "INSERT INTO DefaultParams values('" * k * "', " * string(v) * ")")
+    end
+    # END: Write default values to DefaultParams.
 
     SQLite.execute!(db, "COMMIT")
     SQLite.execute!(db, "VACUUM")
@@ -335,8 +349,9 @@ end  # createnemodb(path::String, defaultvals::Dict{String, Float64} = Dict{Stri
 """
     createnemodb_leap(path::String)
 
-Creates an empty |nemo SQLite database with parameter defaults set to values used in LEAP.
-If specified database already exists, drops and recreates |nemo tables in database.
+Creates an empty |nemo SQLite database with parameter defaults set to values used in LEAP
+(and no foreign keys). If specified database already exists, drops and recreates |nemo tables
+in database.
 
 # Arguments
 - `path::String`: Full path to database, including database name.
@@ -394,14 +409,13 @@ function createnemodb_leap(path::String)
     # END: Specify default parameter values.
 
     # Call createnemodb()
-    createnemodb(path, defaultvals)
+    createnemodb(path; defaultvals = defaultvals)
 end  # createnemodb_leap(path::String)
 
 """
     setparamdefault(db::SQLite.DB, table::String, val::Float64)
 
-Sets the default value for a parameter table.
-Implements logic described at [https://www.sqlite.org/lang_altertable.html](https://www.sqlite.org/lang_altertable.html).
+Sets the default value for a |nemo parameter table.
 
 # Arguments
 - `db::SQLite.DB`: SQLite database containing parameter table.
@@ -409,32 +423,12 @@ Implements logic described at [https://www.sqlite.org/lang_altertable.html](http
 - `val::Float64`: Parameter value (must be a floating-point number).
 """
 function setparamdefault(db::SQLite.DB, table::String, val::Float64)
-    try
-        # BEGIN: SQLite transaction.
-        SQLite.execute!(db, "BEGIN")
-        schemaversion::Int = SQLite.query(db, "PRAGMA schema_version")[1,1]  # Starting schema version in db
-        SQLite.execute!(db, "PRAGMA writable_schema = ON")
+    # Add value to DefaultParams table - INSERT OR REPLACE syntax replaces any existing value
+    SQLite.execute!(db, "INSERT OR REPLACE INTO DefaultParams (tablename, val) values('" * table * "', " * string(val) * ")")
 
-        sql::String = SQLite.query(db, "select sql from sqlite_master where type = 'table' and name = '" * table * "'")[1,1]  # Original SQL for table
-        sql_parts::Tuple{String, String} = (sql[1:last(findfirst(r"`*val`*\s+real"i, sql))],
-            sql[first(findnext(r"[,)]", sql, last(findfirst(r"`*val`*\s+real"i, sql)))):length(sql)])  # First element - original SQL up through data type for val column; second element - original SQL from comma following data type for val column
-
-        SQLite.execute!(db, "update sqlite_master set sql = '" * sql_parts[1] * " DEFAULT " * string(val) * sql_parts[2] * "' where type = 'table' and name = '" * table * "'")
-
-        SQLite.execute!(db, "PRAGMA schema_version = " * string(schemaversion + 1))
-        SQLite.execute!(db, "PRAGMA writable_schema = OFF")
-        SQLite.execute!(db, "COMMIT")
-        # END: SQLite transaction.
-
-        # Update view showing default values for table
-        SQLite.execute!(db, "VACUUM")  # Appears to be necessary to make default visible in current Julia session
-        createviewwithdefaults(db, [table])
-        logmsg("Updated default value for parameter " * table * ". New default = " * string(val) * ".")
-    catch
-        # Rollback transaction and rethrow error
-        SQLite.execute!(db, "ROLLBACK")
-        rethrow()
-    end
+    # Update view showing default values for table
+    createviewwithdefaults(db, [table])
+    logmsg("Updated default value for parameter " * table * ". New default = " * string(val) * ".")
 end  # setparamdefault(db::SQLite.DB, table::String, val::Float64)
 
 # Demonstration function - performance is too poor for production use
@@ -471,7 +465,8 @@ end  # createconstraint
     createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
 
 For each parameter table identified in `tables`, creates a view that explicitly shows the default value
-for the `val` column, if one is available. View name = [table name]  * "_def"."""
+for the `val` column, if one is available. View name = [table name]  * "_def". Table names are case-
+sensitive."""
 function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
     try
         # BEGIN: SQLite transaction.
@@ -481,34 +476,39 @@ function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
             local hasdefault::Bool = false  # Indicates whether val column in t has a default value
             local defaultval  # Default value for val column in t, if column has a default value
             local pks::Array{String,1} = Array{String,1}()  # Names of foreign key fields in t
+            local defaultqry::DataFrame  # Query of DefaultParams table for t's default value
             local createviewstmt::String  # Create view SQL statement that will be executed for t
 
             # Delete view if existing already
             SQLite.query(db,"drop view if exists " * t * "_def")
 
-            # BEGIN: Extract foreign key fields and default value from t.
+            # BEGIN: Determine foreign key fields in t.
             for row in DataFrames.eachrow(SQLite.query(db, "PRAGMA table_info('" * t *"')"))
                 local rowname::String = row[:name]  # Value in name field for row
 
-                if rowname == "id"
+                if rowname == "id" || rowname == "val"
                     continue
-                elseif rowname == "val"
-                    if !ismissing(row[:dflt_value])
-                        defaultval = row[:dflt_value]
-
-                        # Some special handling here to avoid creating large views where they're not necessary, given OSeMOSYS's logic
-                        if (t == "OutputActivityRatio" || t == "InputActivityRatio") && defaultval == "0"
-                            # OutputActivityRatio and InputActivityRatio are only used when != 0, so can ignore a default value of 0
-                            hasdefault = false
-                        else
-                            hasdefault = true
-                        end
-                    end
                 else
                     push!(pks,rowname)
                 end
             end
-            # END: Extract foreign key fields and default value from t.
+            # END: Determine foreign key fields in t.
+
+            # BEGIN: Determine default value for t.
+            defaultqry = SQLite.query(db, "select * from DefaultParams where tablename = '" * t * "'")
+
+            if size(defaultqry)[1] >= 1
+                defaultval = defaultqry[:val][1]
+
+                # Some special handling here to avoid creating large views where they're not necessary, given !nemo's logic
+                if (t == "OutputActivityRatio" || t == "InputActivityRatio") && defaultval == 0.0
+                    # OutputActivityRatio and InputActivityRatio are only used when != 0, so can ignore a default value of 0
+                    hasdefault = false
+                else
+                    hasdefault = true
+                end
+            end
+            # END: Determine default value for t.
 
             # BEGIN: Create unique index on t for foreign key fields.
             # This step significantly improves performance for many queries on new view for t
@@ -517,7 +517,7 @@ function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
             # END: Create unique index on t for foreign key fields.
 
             if hasdefault
-                # Join to primary key tables with default specified
+                # Join to foreign key tables with default specified
                 local outerfieldsclause::String = ""  # Dynamic fields clause for create view outer select
                 local innerfieldsclause::String = ""  # Dynamic fields clause for create view inner select
                 local fromclause::String = ""  # Dynamic from clause for create view inner select

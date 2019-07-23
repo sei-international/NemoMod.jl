@@ -7,7 +7,7 @@
 	File description: Tests for NemoMod package.
 =#
 
-using NemoMod
+#using NemoMod
 using Test, SQLite, DataFrames
 
 const TOL = 1e-4  # Default tolerance for isapprox() comparisons
@@ -91,8 +91,8 @@ end  # @testset "Solving a scenario"
         @test isfile(joinpath(@__DIR__, "new_nemo_leap.sqlite"))
         # Test that AccumulatedAnnualDemand table exists
         @test size(SQLite.query(db, "PRAGMA table_info('AccumulatedAnnualDemand')"))[1] > 0
-        # Look for default value in AccumulatedAnnualDemand table
-        @test SQLite.query(db, "PRAGMA table_info('AccumulatedAnnualDemand')")[5,:dflt_value] == "0.0"
+        # Look for default value for AccumulatedAnnualDemand parameter
+        @test SQLite.query(db, "SELECT val FROM DefaultParams WHERE tablename = 'AccumulatedAnnualDemand'")[1,:val] == 0.0
 
         # BEGIN: Delete new database file.
         # Get Julia to release file
@@ -107,10 +107,11 @@ end  # @testset "Solving a scenario"
 
     @testset "Set parameter default" begin
         db = NemoMod.createnemodb(joinpath(@__DIR__, "param_default.sqlite"))
-        @test ismissing(SQLite.query(db, "PRAGMA table_info('VariableCost')")[6,:dflt_value])
+        @test size(SQLite.query(db, "SELECT val FROM DefaultParams WHERE tablename = 'VariableCost'"))[1] == 0  # No rows in query result
 
         NemoMod.setparamdefault(db, "VariableCost", 1.0)
-        @test SQLite.query(db, "PRAGMA table_info('VariableCost')")[6,:dflt_value] == "1.0"
+
+        @test SQLite.query(db, "SELECT val FROM DefaultParams WHERE tablename = 'VariableCost'")[1,:val] == 1.0
 
         # BEGIN: Delete new database file.
         # Get Julia to release file
