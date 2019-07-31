@@ -333,7 +333,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
 
     # BEGIN: Write default values to DefaultParams.
     for (k, v) in defaultvals
-        SQLite.execute!(db, "INSERT INTO DefaultParams values('" * k * "', " * string(v) * ")")
+        SQLite.execute!(db, "INSERT INTO DefaultParams (tablename, val) values('" * k * "', " * string(v) * ")")
     end
     # END: Write default values to DefaultParams.
 
