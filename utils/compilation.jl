@@ -4,7 +4,7 @@
 
     Copyright © 2018: Stockholm Environment Institute U.S.
 
-    File description: Utilities for ahead-of-time compilation of NEMO. Typical usage in a REPL session:
+    File description: Utilities for ahead-of-time compilation of |nemo. Typical usage in a REPL session:
         using NemoMod
         include(normpath(joinpath(pathof(NemoMod), "..", "..", "utils", "compilation.jl")))
         compilenemo()
