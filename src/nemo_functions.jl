@@ -273,7 +273,8 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `YEAR` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
 
     # Parameter default table
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `DefaultParams` ( `tablename` TEXT NOT NULL, `val` REAL NOT NULL, PRIMARY KEY(`tablename`) );")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `DefaultParams` ( `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, `tablename` TEXT NOT NULL, `val` REAL NOT NULL );")
+    SQLite.execute!(db, "CREATE UNIQUE INDEX `DefaultParams_tablename_unique` ON `DefaultParams` (`tablename`);")  # Needed for LEAP compatibility
 
     # Parameter tables
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `YearSplit` ( `id` INTEGER NOT NULL UNIQUE, `l` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`)" : "") * " )")

@@ -21,7 +21,8 @@
         voperatingcost, vdiscountedoperatingcost, vtotaldiscountedcost",
     target = Array{Int, 1}([1]), quiet = false)
 
-Runs |nemo for a scenario specified in a SQLite database.
+Runs |nemo for a scenario specified in a SQLite database. Returns a Symbol indicating
+the solve status reported by the solver.
 
 # Arguments
 - `dbpath::String`: Path to SQLite database.
@@ -2098,7 +2099,7 @@ logmsg("Defined model objective.", quiet)
 status::Symbol = solve(jumpmodel)
 solvedtm::DateTime = now()  # Date/time of last solve operation
 solvedtmstr::String = Dates.format(solvedtm, "yyyy-mm-dd HH:MM:SS.sss")  # solvedtm as a formatted string
-logmsg("Solved model.", quiet, solvedtm)
+logmsg("Solved model. Solver status = " * string(status) * ".", quiet, solvedtm)
 
 # BEGIN: Save results to database.
 savevarresults(String.(split(replace(varstosave, " " => ""), ","; keepempty = false)), modelvarindices, db, solvedtmstr, quiet)
@@ -2106,6 +2107,7 @@ logmsg("Finished saving results to database.", quiet)
 # END: Save results to database.
 
 logmsg("Finished scenario calculation.")
+return status
 end  # calculatescenario()
 
 """
@@ -2129,7 +2131,8 @@ end  # calculatescenario()
     quiet::Bool = false)
 
 Runs |nemo for a scenario specified in a GNU MathProg data file. Saves results in a
-|nemo-compatible SQLite database in same directory as GNU MathProg data file.
+|nemo-compatible SQLite database in same directory as GNU MathProg data file. Returns
+a Symbol indicating the solve status reported by the solver.
 
 # Arguments
 
@@ -2182,5 +2185,6 @@ function calculategmpscenario(
     logmsg("Finished conversion of MathProg data file.")
 
     # Call calculatescenario()
-    calculatescenario(splitext(gmpdatapath)[1] * ".sl3"; jumpmodel=jumpmodel, varstosave=varstosave, targetprocs=targetprocs, quiet=quiet)
+    status::Symbol = calculatescenario(splitext(gmpdatapath)[1] * ".sl3"; jumpmodel=jumpmodel, varstosave=varstosave, targetprocs=targetprocs, quiet=quiet)
+    return status
 end  # calculategmpscenario()
