@@ -4,20 +4,20 @@
 
     Copyright © 2019: Stockholm Environment Institute U.S.
 
-	File description: A test of NemoMod package using CPLEX solver. This file is provided for users wishing
-        to native compile |nemo with support for CPLEX.
+	File description: A test of NemoMod package using Gurobi solver. This file is provided for users wishing
+        to native compile |nemo with support for Gurobi.
 =#
 
 using NemoMod
-using Test, SQLite, DataFrames, JuMP, CPLEX
+using Test, SQLite, DataFrames, JuMP, Gurobi
 
 const TOL = 1e-4  # Default tolerance for isapprox() comparisons
 
 @testset "Solving a scenario" begin
-    @testset "Solving storage_test with CPLEX" begin
+    @testset "Solving storage_test with Gurobi" begin
         dbfile = joinpath(@__DIR__, "storage_test.sqlite")
 
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = CplexSolver()))
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = solver=GurobiSolver()))
 
         db = SQLite.DB(dbfile)
         testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
@@ -47,5 +47,5 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.query(db, "VACUUM")
-    end  # "Solving storage_test with CPLEX"
+    end  # "Solving storage_test with Gurobi"
 end  # @testset "Solving a scenario"
