@@ -123,10 +123,10 @@ function keydicts_parallel(df::DataFrames.DataFrame, numdicts::Int, targetprocs:
     else
         # Divide operation among available processes
         local blockdivrem = divrem(dfrows, np)  # Quotient and remainder from dividing dfrows by np; element 1 = quotient, element 2 = remainder
-        local results = Array{typeof(returnval), 1}(np)  # Collection of results from async processing
+        local results = Array{typeof(returnval), 1}(undef, np)  # Collection of results from async processing
 
-        # Dispatch async tasks in main process, each of which performs a remotecall_fetch on an available process. Wrap in sync block to wait until all async processes
-        #   finish before proceeding.
+        # Dispatch async tasks in main process, each of which performs a remotecall_fetch on an available process. Wrap in sync block
+        #   to wait until all async processes finish before proceeding.
         @sync begin
             for p=1:np
                 @async begin

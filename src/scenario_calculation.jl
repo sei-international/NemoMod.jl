@@ -19,7 +19,7 @@
         vproductionannual, vuseannual, vcapitalinvestment,
         vdiscountedcapitalinvestment, vsalvagevalue, vdiscountedsalvagevalue,
         voperatingcost, vdiscountedoperatingcost, vtotaldiscountedcost",
-    target = Array{Int, 1}([1]), quiet = false)
+    targetprocs = Array{Int, 1}([1]), quiet = false)
 
 Runs |nemo for a scenario specified in a SQLite database. Returns a Symbol indicating
 the solve status reported by the solver.
@@ -474,19 +474,28 @@ logmsg("Created constraint CAa5_TotalNewCapacity.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref cab1_plannedmaintenance[1:length(sregion) * length(stechnology) * length(syear)]
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, group_concat(distinct ys.l || ';' || ys.val) as ysa,
+# Breaking query into two parts (a and b) aids performance
+for row in DataFrames.eachrow(SQLite.query(db, "select a.r, a.t, a.y, a.ysa, b.cfa, b.af, b.cta
+from
+(select r.val as r, t.val as t, y.val as y, group_concat(distinct ys.l || ';' || ys.val) as ysa
+from REGION r, TECHNOLOGY t, YEAR y, YearSplit_def ys
+where ys.y = y.val
+group by r.val, t.val, y.val) a,
+(select r.val as r, t.val as t, y.val as y,
 group_concat(distinct cf.cf || ';' || cf.ys || ';' || cf.l) as cfa,
 cast(af.val as real) as af, cast(cta.val as real) cta
-from REGION r, TECHNOLOGY t, YEAR y, YearSplit_def ys,
+from REGION r, TECHNOLOGY t, YEAR y,
 (select CapacityFactor_def.r, CapacityFactor_def.t, CapacityFactor_def.l, CapacityFactor_def.y,
 CapacityFactor_def.val as cf, YearSplit_def.val as ys from CapacityFactor_def, YearSplit_def
-where CapacityFactor_def.l = YearSplit_def.l and CapacityFactor_def.y = YearSplit_def.y) cf, AvailabilityFactor_def af,
-CapacityToActivityUnit_def cta
-where ys.y = y.val
-and cf.r = r.val and cf.t = t.val and cf.y = y.val
+where CapacityFactor_def.l = YearSplit_def.l and CapacityFactor_def.y = YearSplit_def.y) cf,
+AvailabilityFactor_def af, CapacityToActivityUnit_def cta
+where
+cf.r = r.val and cf.t = t.val and cf.y = y.val
 and af.r = r.val and af.t = t.val and af.y = y.val
 and cta.r = r.val and cta.t = t.val
-group by r.val, t.val, y.val"))
+group by r.val, t.val, y.val) b
+where
+a.r = b.r and a.t = b.t and a.y = b.y"))
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]

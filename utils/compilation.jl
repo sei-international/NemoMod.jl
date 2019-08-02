@@ -114,25 +114,24 @@ end  # copysysimage(src::String)
         > Second item - Use cases that determine what functionality of the package is included in the new system image.
 Example invocations:
     • compilenemo() - New system image includes NemoMod with compiled functionality based on standard NemoMod test cases. Support for GLPK and Cbc solvers is included
-        in new system image since they're|nemo's default solvers. Existing system image is overwritten.
+        in new system image since they're |nemo's default solvers.
     • compilenemo(("NemoMod", normpath(joinpath(pathof(NemoMod), "..", "..", "test", "runtests.jl"))),
         ("CPLEX", normpath(joinpath(pathof(NemoMod), "..", "..", "test", "test_cplex.jl")))) - New system image includes NemoMod and CPLEX; compiled functionality
-        is based on standard NemoMod test cases plus a supplemental test case for CPLEX. Support for GLPK, Cbc, and CPLEX solvers is included in new system image.
-        Existing system image is overwritten."""
+        is based on standard NemoMod test cases plus a supplemental test case for CPLEX. Support for GLPK, Cbc, and CPLEX solvers is included in new system image."""
 function compilenemo(packagesandusecases::Tuple{String, String}...=
     ("NemoMod", normpath(joinpath(pathof(NemoMod), "..", "..", "test", "runtests.jl"))))
     # BEGIN: Restore stock system image.
     #= Background:
-    |nemo all-in-one installation backs up original system image as lib\julia\sys.dll.nemo_backup.
+    |nemo all-in-one installer backs up original system image as lib\julia\sys.dll.nemo_backup.
     Calling PackageCompiler.compile_package() with force = true pushes current system image to sys.dll.packagecompiler_backup in lib\julia
         (if this file doesn't exist already).
     PackageCompiler.revert() copies any sys.dll from CPU target-specific subdirectory under PackageCompiler sysimg folder to lib\julia.
-        Such sys.dll's are clean system images (no extra packages added) created by PackageCompiler.
+        Such sys.dll's are clean system images (no extra packages added) created by PackageCompiler (revert creates one).
 
     Logic:
         1) Restore lib\julia\sys.dll.nemo_backup if available.
         2) Otherwise, restore lib\julia\sys.dll.packagecompiler_backup if available.
-        3) Otherwise, just continue.
+        3) Otherwise, assume sys.dll is stock. Copy sys.dll to lib\julia\sys.dll.nemo_backup for future reference.
     =#
     local sysimagedir::String = PackageCompiler.default_sysimg_path(false)  # Directory containing Julia system image file
 
@@ -140,6 +139,8 @@ function compilenemo(packagesandusecases::Tuple{String, String}...=
         copysysimage(joinpath(sysimagedir, "sys.$(Libdl.dlext).nemo_backup"))
     elseif isfile(joinpath(sysimagedir, "sys.$(Libdl.dlext).packagecompiler_backup"))
         copysysimage(joinpath(sysimagedir, "sys.$(Libdl.dlext).packagecompiler_backup"))
+    else
+        cp(joinpath(sysimagedir, "sys.$(Libdl.dlext)"), joinpath(sysimagedir, "sys.$(Libdl.dlext).nemo_backup"))
     end
     # END: Restore stock system image.
 
@@ -156,7 +157,7 @@ end  # compilenemo(packagesandusecases::Tuple{String, String}...= ("NemoMod", no
 
 """A convenience function for compiling |nemo with support for Gurobi and/or CPLEX
     included (corresponding parameter = true) or excluded (corresponding parameter = false).
-    Support for GLPK and Cbc is included in all cases, even if both parameters = false."""
+    Support for GLPK and Cbc is included in all cases, even if both parameters are false."""
 function compilenemo(; gurobi = false, cplex = false)
     # BEGIN: Ensure Julia packages for Gurobi and CPLEX, as needed, are installed.
     local pkgs::Array{String,1} = Array{String,1}()
@@ -178,6 +179,6 @@ function compilenemo(; gurobi = false, cplex = false)
     gurobi && push!(puc, ("Gurobi", normpath(joinpath(pathof(NemoMod), "..", "..", "test", "test_gurobi.jl"))))
     cplex && push!(puc, ("CPLEX", normpath(joinpath(pathof(NemoMod), "..", "..", "test", "test_cplex.jl"))))
 
-    
+    compilenemo(puc...)
     # END: Call compilenemo() with appropriate packagesandusecases.
 end  # compilenemo(; gurobi = false, cplex = false)
