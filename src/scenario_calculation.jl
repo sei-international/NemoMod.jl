@@ -195,11 +195,13 @@ logmsg("Defined capacity variables.", quiet)
 @variable(jumpmodel, vtotalannualtechnologyactivitybymode[sregion, stechnology, smode_of_operation, syear] >= 0)
 @variable(jumpmodel, vtotaltechnologymodelperiodactivity[sregion, stechnology])
 
-queryvrateofproductionbytechnologybymode::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, l.val as l, t.val as t, m.val as m, f.val as f, y.val as y,
+queryvrateofproductionbytechnologybymode::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y,
 cast(oar.val as real) as oar
-from region r, timeslice l, technology t, MODE_OF_OPERATION m, fuel f, year y, OutputActivityRatio_def oar
+from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, OutputActivityRatio_def oar
 where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.m = m.val and oar.y = y.val
-and oar.val <> 0")
+and oar.val <> 0
+and ys.y = y.val
+order by r.val, ys.l, t.val, f.val, y.val")
 
 # ys included because it's needed for some later constraints based on this query
 queryvrateofproductionbytechnology::DataFrames.DataFrame = SQLite.query(db, "select
@@ -246,10 +248,12 @@ end
 @variable(jumpmodel, vrateofproduction[sregion, stimeslice, sfuel, syear] >= 0)
 @variable(jumpmodel, vproduction[sregion, stimeslice, sfuel, syear] >= 0)
 
-queryvrateofusebytechnologybymode::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, l.val as l, t.val as t, m.val as m, f.val as f, y.val as y, cast(iar.val as real) as iar
-from region r, timeslice l, technology t, MODE_OF_OPERATION m, fuel f, year y, InputActivityRatio_def iar
+queryvrateofusebytechnologybymode::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y, cast(iar.val as real) as iar
+from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, InputActivityRatio_def iar
 where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.m = m.val and iar.y = y.val
-and iar.val <> 0")
+and iar.val <> 0
+and ys.y = y.val
+order by r.val, ys.l, t.val, f.val, y.val")
 
 # ys included because it's needed for some later constraints based on this query
 queryvrateofusebytechnology::DataFrames.DataFrame = SQLite.query(db, "select
@@ -598,29 +602,39 @@ logmsg("Created constraint EBa1_RateOfFuelProduction1.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba2_rateoffuelproduction2[1:size(queryvrateofproductionbytechnology)[1]]
 
-if restrictvars
-    for row in DataFrames.eachrow(queryvrateofproductionbytechnology)
-        local r = row[:r]
-        local l = row[:l]
-        local t = row[:t]
-        local f = row[:f]
-        local y = row[:y]
+lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
+sumexps = Array{AffExpr, 1}([AffExpr()])
+# sumexps[1] = vrateofproductionbytechnologybymode sum
 
-        # vrateofproductionbytechnologybymode is JuMP.JuMPDict because it was defined with triangular indexing
-        eba2_rateoffuelproduction2[constraintnum] = @constraint(jumpmodel, sum([(haskey(vrateofproductionbytechnologybymode.tupledict, (r,l,t,m,f,y)) ? vrateofproductionbytechnologybymode[r,l,t,m,f,y] : 0) for m = smode_of_operation]) == vrateofproductionbytechnology[r,l,t,f,y])
-        constraintnum += 1
-    end
-else
-    for row in DataFrames.eachrow(queryvrateofproductionbytechnology)
-        local r = row[:r]
-        local l = row[:l]
-        local t = row[:t]
-        local f = row[:f]
-        local y = row[:y]
+for row in DataFrames.eachrow(queryvrateofproductionbytechnologybymode)
+    local r = row[:r]
+    local l = row[:l]
+    local t = row[:t]
+    local f = row[:f]
+    local y = row[:y]
 
-        eba2_rateoffuelproduction2[constraintnum] = @constraint(jumpmodel, sum([vrateofproductionbytechnologybymode[r,l,t,m,f,y] for m = smode_of_operation]) == vrateofproductionbytechnology[r,l,t,f,y])
+    if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || t != lastkeys[3] || f != lastkeys[4] || y != lastkeys[5])
+        # Create constraint
+        eba2_rateoffuelproduction2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
+            vrateofproductionbytechnology[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
         constraintnum += 1
+
+        sumexps[1] = AffExpr()
     end
+
+    append!(sumexps[1], vrateofproductionbytechnologybymode[r,l,t,row[:m],f,y])
+
+    lastkeys[1] = r
+    lastkeys[2] = l
+    lastkeys[3] = t
+    lastkeys[4] = f
+    lastkeys[5] = y
+end
+
+# Create last constraint
+if isassigned(lastkeys, 1)
+    eba2_rateoffuelproduction2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
+        vrateofproductionbytechnology[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
 end
 
 logmsg("Created constraint EBa2_RateOfFuelProduction2.", quiet)
@@ -686,29 +700,39 @@ logmsg("Created constraint EBa4_RateOfFuelUse1.", quiet)
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba5_rateoffueluse2[1:size(queryvrateofusebytechnology)[1]]
 
-if restrictvars
-    for row in DataFrames.eachrow(queryvrateofusebytechnology)
-        local r = row[:r]
-        local l = row[:l]
-        local f = row[:f]
-        local t = row[:t]
-        local y = row[:y]
+lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
+sumexps = Array{AffExpr, 1}([AffExpr()])
+# sumexps[1] = vrateofusebytechnologybymode sum
 
-        # vrateofusebytechnologybymode is JuMP.JuMPDict because it was defined with triangular indexing
-        eba5_rateoffueluse2[constraintnum] = @constraint(jumpmodel, sum([(haskey(vrateofusebytechnologybymode.tupledict, (r,l,t,m,f,y)) ? vrateofusebytechnologybymode[r,l,t,m,f,y] : 0) for m = smode_of_operation]) == vrateofusebytechnology[r,l,t,f,y])
-        constraintnum += 1
-    end
-else
-    for row in DataFrames.eachrow(queryvrateofusebytechnology)
-        local r = row[:r]
-        local l = row[:l]
-        local f = row[:f]
-        local t = row[:t]
-        local y = row[:y]
+for row in DataFrames.eachrow(queryvrateofusebytechnologybymode)
+    local r = row[:r]
+    local l = row[:l]
+    local f = row[:f]
+    local t = row[:t]
+    local y = row[:y]
 
-        eba5_rateoffueluse2[constraintnum] = @constraint(jumpmodel, sum([vrateofusebytechnologybymode[r,l,t,m,f,y] for m = smode_of_operation]) == vrateofusebytechnology[r,l,t,f,y])
+    if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || t != lastkeys[3] || f != lastkeys[4] || y != lastkeys[5])
+        # Create constraint
+        eba5_rateoffueluse2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
+            vrateofusebytechnology[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
         constraintnum += 1
+
+        sumexps[1] = AffExpr()
     end
+
+    append!(sumexps[1], vrateofusebytechnologybymode[r,l,t,row[:m],f,y])
+
+    lastkeys[1] = r
+    lastkeys[2] = l
+    lastkeys[3] = t
+    lastkeys[4] = f
+    lastkeys[5] = y
+end
+
+# Create last constraint
+if isassigned(lastkeys, 1)
+    eba5_rateoffueluse2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
+        vrateofusebytechnology[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
 end
 
 logmsg("Created constraint EBa5_RateOfFuelUse2.", quiet)
