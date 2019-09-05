@@ -982,7 +982,7 @@ lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = t, lastke
 sumexps = Array{AffExpr, 1}([AffExpr()])
 # sumexps[1] = vrateofactivity sum
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, m.val as m, y.val as y, ys.l as l as l, cast(ys.val as real) as ys
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, m.val as m, y.val as y, ys.l as l, cast(ys.val as real) as ys
 from region r, technology t, mode_of_operation m, year y, YearSplit_def ys
 where ys.y = y.val
 order by r.val, t.val, m.val, y.val"))
