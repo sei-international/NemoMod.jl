@@ -363,10 +363,6 @@ function createnemodb_leap(path::String)
 
     defaultvals["VariableCost"] = 0.0
     defaultvals["TradeRoute"] = 0.0
-    defaultvals["TotalTechnologyModelPeriodActivityUpperLimit"] = 10000000000.0
-    defaultvals["TotalTechnologyModelPeriodActivityLowerLimit"] = 0.0
-    defaultvals["TotalTechnologyAnnualActivityUpperLimit"] = 10000000000.0
-    defaultvals["TotalTechnologyAnnualActivityLowerLimit"] = 0.0
     defaultvals["TotalAnnualMinCapacityInvestment"] = 0.0
     defaultvals["TotalAnnualMinCapacity"] = 0.0
     defaultvals["TotalAnnualMaxCapacityInvestment"] = 10000000000.0
@@ -567,10 +563,11 @@ Saves model results to a SQLite database using SQL inserts with transaction batc
     to tuples of (variable, [index column names]).
 - `db::SQLite.DB`: SQLite database.
 - `solvedtmstr::String`: String to write into solvedtm field in result tables.
+- `reportzeros::Bool`: Indicates whether values equal to 0 should be saved.
 - `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to STDOUT).
 """
 function savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String,
-    quiet::Bool = false)
+    reportzeros::Bool = false, quiet::Bool = false)
     for vname in intersect(vars, keys(modelvarindices))
         local v = modelvarindices[vname][1]  # Model variable corresponding to vname
         local gvv = JuMP.getvalue(v)  # Value of v in model solution
@@ -598,7 +595,9 @@ function savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tup
 
             # Insert data from gvv
             for i = 1:length(vals)
-                SQLite.execute!(db, "insert into " * vname * " values('" * join(indices[i], "', '") * "', '" * string(vals[i]) * "', '" * solvedtmstr * "')")
+                if reportzeros || vals[i] != 0.0
+                    SQLite.execute!(db, "insert into " * vname * " values('" * join(indices[i], "', '") * "', '" * string(vals[i]) * "', '" * solvedtmstr * "')")
+                end
             end
 
             # Complete SQLite transaction
@@ -667,6 +666,49 @@ function getvars(varnames::Array{String, 1})
 
     return returnval
 end  # getvars(varnames::Array{String, 1})
+
+"""
+    checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
+
+For the scenario specified in `db`, checks whether there are:
+    1) Any TotalTechnologyAnnualActivityUpperLimit values that are <= tolerance times the maximum
+        annual demand
+    2) Any TotalTechnologyModelPeriodActivityUpperLimit values that are <= tolerance times the maximum
+        annual demand times the number of years in the scenario
+Returns a `Tuple` of Booleans whose first value is the result of the first check, and whose second
+    value is the result of the second.
+"""
+function checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
+    local annual::Bool = true  # Return value indicating whether there are any TotalTechnologyAnnualActivityUpperLimit
+        # values that are <= tolerance x maximum annual demand in scenario
+    local modelperiod::Bool = true  # Return value indicating whether there are any TotalTechnologyModelPeriodActivityUpperLimit
+        # values that are <= tolerance x maximum annual demand x # of years in scenario
+    local qry::DataFrame  # Working query
+    local maxdemand::Float64  # Maximum annual demand in scenario
+
+    qry = SQLite.query(db, "select max(mv) as mv from
+    (select max(val) as mv from AccumulatedAnnualDemand_def
+    union
+    select max(val) as mv from SpecifiedAnnualDemand_def)")
+
+    maxdemand = qry[1][1]
+
+    qry = SQLite.query(db, "select tau.val from TotalTechnologyAnnualActivityUpperLimit_def tau
+        where tau.val / :v1 <= :v2"; values = [maxdemand, tolerance])
+
+    if size(qry)[1] == 0
+        annual = false
+    end
+
+    qry = SQLite.query(db, "select tmu.val from TotalTechnologyModelPeriodActivityUpperLimit_def tmu
+      where tmu.val / (:v1 * (select count(val) from year)) <= :v2"; values = [maxdemand, tolerance])
+
+    if size(qry)[1] == 0
+      modelperiod = false
+    end
+
+    return (annual, modelperiod)
+end  # checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
 
 # This function is deprecated.
 #=
