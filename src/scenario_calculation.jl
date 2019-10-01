@@ -709,8 +709,8 @@ if transmissionmodeling
     @variable(jumpmodel, vtransmissionexists[stransmission, syear], Bin)  # Indicates whether tr exists (exogenously or endogenously) in year
     modelvarindices["vtransmissionexists"] = (vtransmissionexists, ["tr","y"])
 
-    # 1 = DC optimized power flow
-    if in(1, transmissionmodelingtypes)
+    # 1 = DC optimized power flow, 2 = DCOPF with disjunctive relaxation
+    if in(1, transmissionmodelingtypes) || in(2, transmissionmodelingtypes)
         @variable(jumpmodel, -pi <= vvoltageangle[snode, stimeslice, syear] <= pi)
         modelvarindices["vvoltageangle"] = (vvoltageangle, ["n","l","y"])
     end
@@ -1824,6 +1824,7 @@ end
 if transmissionmodeling
     constraintnum = 1  # Number of next constraint to be added to constraint array
     @constraintref tr3_flow[1:size(queryvtransmissionbyline)[1]]
+    tr3a_flow::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     @constraintref tr4_maxflow[1:size(queryvtransmissionbyline)[1]]
     @constraintref tr5_minflow[1:size(queryvtransmissionbyline)[1]]
 
@@ -1836,12 +1837,23 @@ if transmissionmodeling
         local y = row[:y]
         local type = row[:type]
 
+        # vtransmissionbyline is flow over line tr from n1 to n2 in model's power units
         if type == 1  # DCOPF
-            # vtransmissionbyline is flow over line tr from n1 to n2 in model's power units
             tr3_flow[constraintnum] = @constraint(jumpmodel, -1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]) * vtransmissionexists[tr,y]
                 == vtransmissionbyline[tr,l,f,y])
             tr4_maxflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] <= row[:maxflow])
             tr5_minflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] >= -row[:maxflow])
+        elseif type == 2  # DCOPF with disjunctive formulation
+            tr3_flow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] -
+                (-1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]))
+                <= (1 - vtransmissionexists[tr,y]) * 1000)
+            push!(tr3a_flow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] -
+                (-1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]))
+                >= (vtransmissionexists[tr,y] - 1) * 1000))
+            #tr4_maxflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y]^2 <= vtransmissionexists[tr,y] * row[:maxflow]^2)
+            #tr5_minflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y]^2 >= 0)
+            tr4_maxflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] <= vtransmissionexists[tr,y] * row[:maxflow])
+            tr5_minflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] >= -vtransmissionexists[tr,y] * row[:maxflow])
         end
 
         constraintnum += 1
