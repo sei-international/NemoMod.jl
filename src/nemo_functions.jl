@@ -63,6 +63,10 @@ function translatesetabb(a::String)
         return "DAYTYPE"
     elseif a == "lh"
         return "DAILYTIMEBRACKET"
+    elseif a == "n" || a == "n1" || a == "n2"
+        return "NODE"
+    elseif a == "tr"
+        return "TransmissionLine"
     else
         return a
     end
@@ -497,7 +501,7 @@ function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
             if size(defaultqry)[1] >= 1
                 defaultval = defaultqry[:val][1]
 
-                # Some special handling here to avoid creating large views where they're not necessary, given !nemo's logic
+                # Some special handling here to avoid creating large views where they're not necessary, given |nemo's logic
                 if (t == "OutputActivityRatio" || t == "InputActivityRatio") && defaultval == 0.0
                     # OutputActivityRatio and InputActivityRatio are only used when != 0, so can ignore a default value of 0
                     hasdefault = false
@@ -548,7 +552,32 @@ function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
         SQLite.execute!(db, "ROLLBACK")
         rethrow()
     end
-end  # createviewwithdefaults(tables::Array{String,1})
+end  # createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
+
+"""
+    dropdefaultviews(db::SQLite.DB)
+
+Drops all views in `db` whose name ends with ""_def""."""
+function dropdefaultviews(db::SQLite.DB)
+    try
+        # BEGIN: SQLite transaction.
+        SQLite.execute!(db, "BEGIN")
+
+        for row in DataFrames.eachrow(SQLite.query(db, "select name from sqlite_master where type = 'view'"))
+            if endswith(row[:name], "_def")
+                SQLite.execute!(db, "DROP VIEW " * row[:name])
+            end
+        end
+
+        SQLite.execute!(db, "COMMIT")
+        SQLite.execute!(db, "VACUUM")
+        # END: SQLite transaction.
+    catch
+        # Rollback transaction and rethrow error
+        SQLite.execute!(db, "ROLLBACK")
+        rethrow()
+    end
+end  # dropdefaultviews(db::SQLite.DB)
 
 """
     savevarresults(vars::Array{String,1},
@@ -709,6 +738,73 @@ function checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
 
     return (annual, modelperiod)
 end  # checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
+
+function addtransmissiontables(db::SQLite.DB; foreignkeys::Bool = false, quiet::Bool = false)
+    # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
+    try
+        # BEGIN: SQLite transaction.
+        SQLite.execute!(db, "BEGIN")
+
+        SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `NODE` ( `val` TEXT, `desc` TEXT, `r` TEXT, PRIMARY KEY(`val`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * ")")
+        SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TransmissionModelingEnabled` ( `id` INTEGER, `r` text, `f` TEXT, `y` TEXT, `type` INTEGER DEFAULT 1, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * ")")
+        SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TransmissionLine` ( `id` TEXT, `n1` TEXT, `n2` TEXT, `f` TEXT, `maxflow` REAL, `reactance` REAL, `yconstruction` INTEGER, `capitalcost` REAL, `fixedcost` REAL, `variablecost` REAL, `operationallife` INTEGER, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`n2`) REFERENCES `NODE`(`val`), FOREIGN KEY(`n1`) REFERENCES `NODE`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)," : "") * ")")
+        SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `NodalDistributionDemand` ( `id` INTEGER, `n` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`n`) REFERENCES `NODE`(`val`)" : "") * ")")
+        SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `NodalDistributionStorageCapacity` ( `id` INTEGER, `n` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`n`) REFERENCES `NODE`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`)" : "") * ")")
+        SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `NodalDistributionTechnologyCapacity` ( `id` INTEGER, `n` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`n`) REFERENCES `NODE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * ")")
+
+        SQLite.execute!(db, "COMMIT")
+        # END: SQLite transaction.
+
+        logmsg("Added transmission tables to database.", quiet)
+    catch
+        # Rollback transaction and rethrow error
+        SQLite.execute!(db, "ROLLBACK")
+        rethrow()
+    end
+    # END: Wrap database operations in try-catch block to allow rollback on error.
+end  # addtransmissiontables(db::SQLite.DB, foreignkeys::Bool = false)
+
+function addtransmissiondata(db::SQLite.DB; quiet::Bool = false)
+    if isfile("c:/nemomod/" * splitext(basename(db.file))[1] * "_transmission.sqlite")
+        # First, add transmission tables to scenario database
+        addtransmissiontables(db; foreignkeys = false, quiet = quiet)
+
+        # Next, copy in transmission data from transmission database
+        # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
+        try
+            # BEGIN: SQLite transaction.
+            SQLite.execute!(db, "BEGIN")
+            SQLite.execute!(db, "ATTACH DATABASE '" * "c:/nemomod/" * splitext(basename(db.file))[1] * "_transmission.sqlite' as trdb")
+
+            SQLite.execute!(db, "DELETE FROM NodalDistributionTechnologyCapacity")
+            SQLite.execute!(db, "DELETE FROM NodalDistributionStorageCapacity")
+            SQLite.execute!(db, "DELETE FROM NodalDistributionDemand")
+            SQLite.execute!(db, "DELETE FROM TransmissionLine")
+            SQLite.execute!(db, "DELETE FROM TransmissionModelingEnabled")
+            SQLite.execute!(db, "DELETE FROM NODE")
+
+            SQLite.execute!(db, "INSERT INTO NODE SELECT * FROM trdb.NODE")
+            SQLite.execute!(db, "INSERT INTO TransmissionModelingEnabled SELECT * FROM trdb.TransmissionModelingEnabled")
+            SQLite.execute!(db, "INSERT INTO TransmissionLine SELECT * FROM trdb.TransmissionLine")
+            SQLite.execute!(db, "INSERT INTO NodalDistributionDemand SELECT * FROM trdb.NodalDistributionDemand")
+            SQLite.execute!(db, "INSERT INTO NodalDistributionStorageCapacity SELECT * FROM trdb.NodalDistributionStorageCapacity")
+            SQLite.execute!(db, "INSERT INTO NodalDistributionTechnologyCapacity SELECT * FROM trdb.NodalDistributionTechnologyCapacity")
+
+            SQLite.execute!(db, "COMMIT")
+            SQLite.execute!(db, "DETACH DATABASE trdb")
+            # END: SQLite transaction.
+
+            logmsg("Added transmission data to database.", quiet)
+        catch
+            # Rollback transaction and rethrow error
+            SQLite.execute!(db, "ROLLBACK")
+            rethrow()
+        end
+        # END: Wrap database operations in try-catch block to allow rollback on error.
+    else
+        logmsg("Could not find transmission data. No transmission data added to database.", quiet)
+    end
+end  # addtransmissiondata(db::SQLite.DB; quiet::Bool = false)
 
 # This function is deprecated.
 #=

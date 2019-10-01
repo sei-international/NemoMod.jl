@@ -15,7 +15,7 @@
         vdiscountedsalvagevaluestorage, vnewcapacity, vaccumulatednewcapacity,
         vtotalcapacityannual, vtotaltechnologyannualactivity,
         vtotalannualtechnologyactivitybymode, vproductionbytechnologyannual,
-        vproduction, vusebytechnologyannual, vuse, vtrade, vtradeannual,
+        vproduction, vusebytechnologyannual, vusenn, vtrade, vtradeannual,
         vproductionannual, vuseannual, vcapitalinvestment,
         vdiscountedcapitalinvestment, vsalvagevalue, vdiscountedsalvagevalue,
         voperatingcost, vdiscountedoperatingcost, vtotaldiscountedcost",
@@ -58,7 +58,7 @@ function calculatescenario(
     jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
     varstosave::String = "vdemand, vnewstoragecapacity, vaccumulatednewstoragecapacity, vstorageupperlimit, vstoragelowerlimit, vcapitalinvestmentstorage, "
     * "vdiscountedcapitalinvestmentstorage, vsalvagevaluestorage, vdiscountedsalvagevaluestorage, vnewcapacity, vaccumulatednewcapacity, vtotalcapacityannual, "
-    * "vtotaltechnologyannualactivity, vtotalannualtechnologyactivitybymode, vproductionbytechnologyannual, vproduction, vusebytechnologyannual, vuse, vtrade, "
+    * "vtotaltechnologyannualactivity, vtotalannualtechnologyactivitybymode, vproductionbytechnologyannual, vproduction, vusebytechnologyannual, vusenn, vtrade, "
     * "vtradeannual, vproductionannual, vuseannual, vcapitalinvestment, vdiscountedcapitalinvestment, vsalvagevalue, vdiscountedsalvagevalue, voperatingcost, "
     * "vdiscountedoperatingcost, vtotaldiscountedcost",
     targetprocs::Array{Int, 1} = Array{Int, 1}([1]),
@@ -92,17 +92,40 @@ dropresulttables(db, true)
 logmsg("Dropped pre-existing result tables from database.", quiet)
 # END: Drop any pre-existing result tables.
 
+# BEGIN: Temporary - Add transmission data.
+addtransmissiondata(db, quiet)
+# END: Temporary - Add transmission data.
+
+# BEGIN: Check if transmission modeling is required.
+local transmissionmodeling::Bool = false  # Indicates whether scenario involves transmission modeling
+local transmissionmodelingtypes::Array{Int64, 1} =
+    collect(skipmissing(SQLite.query(db, "select distinct type from TransmissionModelingEnabled")[:type]))
+    # Array of transmission modeling types requested for scenario
+
+if length(transmissionmodelingtypes) > 0
+    transmissionmodeling = true
+end
+
+logmsg("Verified that transmission modeling " * (transmissionmodeling ? "is" : "is not") * " enabled.", quiet)
+# END: Check if transmission modeling is required.
+
 # BEGIN: Create parameter views showing default values.
-createviewwithdefaults(db, ["OutputActivityRatio", "InputActivityRatio", "ResidualCapacity", "OperationalLife", "FixedCost", "YearSplit", "SpecifiedAnnualDemand",
-"SpecifiedDemandProfile", "VariableCost", "DiscountRate", "CapitalCost", "CapitalCostStorage", "CapacityFactor", "CapacityToActivityUnit",
-"CapacityOfOneTechnologyUnit", "AvailabilityFactor", "TradeRoute", "TechnologyToStorage", "TechnologyFromStorage",
-"StorageLevelStart", "StorageMaxChargeRate", "StorageMaxDischargeRate", "ResidualStorageCapacity", "MinStorageCharge", "OperationalLifeStorage",
-"DepreciationMethod", "TotalAnnualMaxCapacity", "TotalAnnualMinCapacity", "TotalAnnualMaxCapacityInvestment", "TotalAnnualMinCapacityInvestment",
+# Array of parameter tables needing default views in scenario database
+local paramsneedingdefs::Array{String, 1} = ["OutputActivityRatio", "InputActivityRatio", "ResidualCapacity", "OperationalLife",
+"FixedCost", "YearSplit", "SpecifiedAnnualDemand", "SpecifiedDemandProfile", "VariableCost", "DiscountRate", "CapitalCost",
+"CapitalCostStorage", "CapacityFactor", "CapacityToActivityUnit", "CapacityOfOneTechnologyUnit", "AvailabilityFactor",
+"TradeRoute", "TechnologyToStorage", "TechnologyFromStorage", "StorageLevelStart", "StorageMaxChargeRate", "StorageMaxDischargeRate",
+"ResidualStorageCapacity", "MinStorageCharge", "OperationalLifeStorage", "DepreciationMethod", "TotalAnnualMaxCapacity",
+"TotalAnnualMinCapacity", "TotalAnnualMaxCapacityInvestment", "TotalAnnualMinCapacityInvestment",
 "TotalTechnologyAnnualActivityUpperLimit", "TotalTechnologyAnnualActivityLowerLimit", "TotalTechnologyModelPeriodActivityUpperLimit",
 "TotalTechnologyModelPeriodActivityLowerLimit", "ReserveMarginTagTechnology", "ReserveMarginTagFuel", "ReserveMargin", "RETagTechnology", "RETagFuel",
 "REMinProductionTarget", "EmissionActivityRatio", "EmissionsPenalty", "ModelPeriodExogenousEmission",
 "AnnualExogenousEmission", "AnnualEmissionLimit", "ModelPeriodEmissionLimit", "AccumulatedAnnualDemand", "TotalAnnualMaxCapacityStorage",
-"TotalAnnualMinCapacityStorage", "TotalAnnualMaxCapacityInvestmentStorage", "TotalAnnualMinCapacityInvestmentStorage"])
+"TotalAnnualMinCapacityStorage", "TotalAnnualMaxCapacityInvestmentStorage", "TotalAnnualMinCapacityInvestmentStorage"]
+
+append!(paramsneedingdefs, ["NodalDistributionDemand", "NodalDistributionTechnologyCapacity", "NodalDistributionStorageCapacity"])
+
+createviewwithdefaults(db, paramsneedingdefs)
 
 logmsg("Created parameter views.", quiet)
 # END: Create parameter views showing default values.
@@ -118,6 +141,11 @@ sregion::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from
 sstorage::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from STORAGE")[:val]))  # STORAGE set
 stsgroup1::Array{String,1} = collect(skipmissing(SQLite.query(db, "select name from TSGROUP1")[:name]))  # Time slice group 1 set
 stsgroup2::Array{String,1} = collect(skipmissing(SQLite.query(db, "select name from TSGROUP2")[:name]))  # Time slice group 2 set
+
+if transmissionmodeling
+    snode::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from NODE")[:val]))  # Node set
+    stransmission::Array{String,1} = collect(skipmissing(SQLite.query(db, "select id from TransmissionLine")[:id]))  # Transmission line set
+end
 
 tsgroup1dict::Dict{Int, Tuple{String, Float64}} = Dict{Int, Tuple{String, Float64}}(row[:order] => (row[:name], row[:multiplier]) for row in
     DataFrames.eachrow(SQLite.query(db, "select [order], name, cast (multiplier as real) as multiplier from tsgroup1 order by [order]")))
@@ -141,12 +169,12 @@ modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}} = Dict{
 #   variable's results back to database
 
 # Demands
-@variable(jumpmodel, vdemand[sregion, stimeslice, sfuel, syear] >= 0)
-modelvarindices["vdemand"] = (vdemand, ["r","l","f","y"])
+@variable(jumpmodel, vdemandnn[sregion, stimeslice, sfuel, syear] >= 0)
+modelvarindices["vdemandnn"] = (vdemandnn, ["r","l","f","y"])
 
-if in("vrateofdemand", varstosavearr)
-    @variable(jumpmodel, vrateofdemand[sregion, stimeslice, sfuel, syear] >= 0)
-    modelvarindices["vrateofdemand"] = (vrateofdemand, ["r","l","f","y"])
+if in("vrateofdemandnn", varstosavearr)
+    @variable(jumpmodel, vrateofdemandnn[sregion, stimeslice, sfuel, syear] >= 0)
+    modelvarindices["vrateofdemandnn"] = (vrateofdemandnn, ["r","l","f","y"])
 end
 
 logmsg("Defined demand variables.", quiet)
@@ -252,157 +280,194 @@ if modelperiodactivityupperlimits || modelperiodactivitylowerlimits || in("vtota
     modelvarindices["vtotaltechnologymodelperiodactivity"] = (vtotaltechnologymodelperiodactivity, ["r", "t"])
 end
 
-queryvrateofproductionbytechnologybymode::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y,
+queryvrateofproductionbytechnologybymodenn::DataFrames.DataFrame = SQLite.query(db,
+"select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y,
 cast(oar.val as real) as oar
 from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, OutputActivityRatio_def oar
+left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
 where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.m = m.val and oar.y = y.val
 and oar.val <> 0
 and ys.y = y.val
+and tme.id is null
 order by r.val, ys.l, t.val, f.val, y.val")
 
 # ys included because it's needed for some later constraints based on this query
-queryvrateofproductionbytechnology::DataFrames.DataFrame = SQLite.query(db, "select
-r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
+queryvrateofproductionbytechnologynn::DataFrames.DataFrame = SQLite.query(db,
+"select r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
 from region r, YearSplit_def ys, technology t, fuel f, year y,
 (select distinct r, t, f, y
 from OutputActivityRatio_def
 where val <> 0) oar
+left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
 where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val
 and ys.y = y.val
+and tme.id is null
 order by r.val, ys.l, f.val, y.val")
 
+if in("vproductionbytechnology", varstosavearr)
+    # Overall query showing indices of vproductionbytechnology; nodal contributions will be added later if needed
+    queryvproductionbytechnologyindices::DataFrames.DataFrame = queryvrateofproductionbytechnologynn
+end
+
 # ys included because it's needed for some later constraints based on this query
-queryvproductionbytechnologyannual::DataFrames.DataFrame = SQLite.query(db, "select
-r.val as r, t.val as t, f.val as f, y.val as y, ys.l as l, cast(ys.val as real) as ys
+queryvproductionbytechnologyannual::DataFrames.DataFrame = SQLite.query(db,
+"select * from (
+select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l,
+cast(ys.val as real) as ys
 from region r, technology t, fuel f, year y, YearSplit_def ys,
 (select distinct r, t, f, y
 from OutputActivityRatio_def
 where val <> 0) oar
+left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
 where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val
 and ys.y = y.val
-order by r.val, t.val, f.val, y.val")
+and tme.id is null
+union all
+select n.r as r, ntc.t as t, oar.f as f, ntc.y as y, ntc.n as n, ys.l as l,
+cast(ys.val as real) as ys
+from NodalDistributionTechnologyCapacity_def ntc, NODE n,
+TransmissionModelingEnabled tme, YearSplit_def ys,
+(select distinct r, t, f, y
+from OutputActivityRatio_def
+where val <> 0) oar
+where ntc.val > 0
+and ntc.n = n.val
+and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
+and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
+and ntc.y = ys.y
+)
+order by r, t, f, y")
 
 if restrictvars
-    if in("vrateofproductionbytechnologybymode", varstosavearr)
-        indexdicts = keydicts_parallel(queryvrateofproductionbytechnologybymode, 5, targetprocs)  # Array of Dicts used to restrict indices of following variable
-        @variable(jumpmodel, vrateofproductionbytechnologybymode[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
+    if in("vrateofproductionbytechnologybymodenn", varstosavearr)
+        indexdicts = keydicts_parallel(queryvrateofproductionbytechnologybymodenn, 5, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        @variable(jumpmodel, vrateofproductionbytechnologybymodenn[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
             m=indexdicts[3][[r,l,t]], f=indexdicts[4][[r,l,t,m]], y=indexdicts[5][[r,l,t,m,f]]] >= 0)
     end
 
-    indexdicts = keydicts_parallel(queryvrateofproductionbytechnology, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
-    @variable(jumpmodel, vrateofproductionbytechnology[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
+    indexdicts = keydicts_parallel(queryvrateofproductionbytechnologynn, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
+    @variable(jumpmodel, vrateofproductionbytechnologynn[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
         f=indexdicts[3][[r,l,t]], y=indexdicts[4][[r,l,t,f]]] >= 0)
-
-    in("vproductionbytechnology", varstosavearr) &&
-        @variable(jumpmodel, vproductionbytechnology[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
-            f=indexdicts[3][[r,l,t]], y=indexdicts[4][[r,l,t,f]]] >= 0)
 
     indexdicts = keydicts_parallel(queryvproductionbytechnologyannual, 3, targetprocs)  # Array of Dicts used to restrict indices of vproductionbytechnologyannual
     @variable(jumpmodel, vproductionbytechnologyannual[r=[k[1] for k = keys(indexdicts[1])], t=indexdicts[1][[r]], f=indexdicts[2][[r,t]],
         y=indexdicts[3][[r,t,f]]] >= 0)
 else
-    in("vrateofproductionbytechnologybymode", varstosavearr) &&
-        @variable(jumpmodel, vrateofproductionbytechnologybymode[sregion, stimeslice, stechnology, smode_of_operation, sfuel, syear] >= 0)
-    @variable(jumpmodel, vrateofproductionbytechnology[sregion, stimeslice, stechnology, sfuel, syear] >= 0)
-    in("vproductionbytechnology", varstosavearr) &&
-        @variable(jumpmodel, vproductionbytechnology[sregion, stimeslice, stechnology, sfuel, syear] >= 0)
+    in("vrateofproductionbytechnologybymodenn", varstosavearr) &&
+        @variable(jumpmodel, vrateofproductionbytechnologybymodenn[sregion, stimeslice, stechnology, smode_of_operation, sfuel, syear] >= 0)
+    @variable(jumpmodel, vrateofproductionbytechnologynn[sregion, stimeslice, stechnology, sfuel, syear] >= 0)
     @variable(jumpmodel, vproductionbytechnologyannual[sregion, stechnology, sfuel, syear] >= 0)
 end
 
-if in("vrateofproductionbytechnologybymode", varstosavearr)
-    modelvarindices["vrateofproductionbytechnologybymode"] = (vrateofproductionbytechnologybymode, ["r", "l", "t", "m", "f", "y"])
+if in("vrateofproductionbytechnologybymodenn", varstosavearr)
+    modelvarindices["vrateofproductionbytechnologybymodenn"] = (vrateofproductionbytechnologybymodenn, ["r", "l", "t", "m", "f", "y"])
 end
 
-modelvarindices["vrateofproductionbytechnology"] = (vrateofproductionbytechnology, ["r","l","t","f","y"])
-
-if in("vproductionbytechnology", varstosavearr)
-    modelvarindices["vproductionbytechnology"] = (vproductionbytechnology, ["r","l","t","f","y"])
-end
-
+modelvarindices["vrateofproductionbytechnologynn"] = (vrateofproductionbytechnologynn, ["r","l","t","f","y"])
 modelvarindices["vproductionbytechnologyannual"] = (vproductionbytechnologyannual, ["r","t","f","y"])
 
 @variable(jumpmodel, vrateofproduction[sregion, stimeslice, sfuel, syear] >= 0)
 modelvarindices["vrateofproduction"] = (vrateofproduction, ["r", "l", "f", "y"])
-@variable(jumpmodel, vproduction[sregion, stimeslice, sfuel, syear] >= 0)
-modelvarindices["vproduction"] = (vproduction, ["r","l","f","y"])
+@variable(jumpmodel, vrateofproductionnn[sregion, stimeslice, sfuel, syear] >= 0)
+modelvarindices["vrateofproductionnn"] = (vrateofproductionnn, ["r", "l", "f", "y"])
+@variable(jumpmodel, vproductionnn[sregion, stimeslice, sfuel, syear] >= 0)
+modelvarindices["vproductionnn"] = (vproductionnn, ["r","l","f","y"])
 
-queryvrateofusebytechnologybymode::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y, cast(iar.val as real) as iar
+queryvrateofusebytechnologybymodenn::DataFrames.DataFrame = SQLite.query(db,
+"select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y, cast(iar.val as real) as iar
 from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, InputActivityRatio_def iar
+left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
 where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.m = m.val and iar.y = y.val
 and iar.val <> 0
 and ys.y = y.val
+and tme.id is null
 order by r.val, ys.l, t.val, f.val, y.val")
 
 # ys included because it's needed for some later constraints based on this query
-queryvrateofusebytechnology::DataFrames.DataFrame = SQLite.query(db, "select
+queryvrateofusebytechnologynn::DataFrames.DataFrame = SQLite.query(db, "select
 r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
 from region r, YearSplit_def ys, technology t, fuel f, year y,
 (select distinct r, t, f, y from InputActivityRatio_def where val <> 0) iar
+left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
 where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
 and ys.y = y.val
+and tme.id is null
 order by r.val, ys.l, f.val, y.val")
 
+if in("vusebytechnology", varstosavearr)
+    # Overall query showing indices of vusebytechnology; nodal contributions will be added later if needed
+    queryvusebytechnologyindices::DataFrames.DataFrame = queryvrateofusebytechnologynn
+end
+
 # ys included because it's needed for some later constraints based on this query
-queryvusebytechnologyannual::DataFrames.DataFrame = SQLite.query(db, "select
-r.val as r, t.val as t, f.val as f, y.val as y, ys.l as l, cast(ys.val as real) as ys
+queryvusebytechnologyannual::DataFrames.DataFrame = SQLite.query(db,
+"select * from (
+select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l,
+cast(ys.val as real) as ys
 from region r, technology t, fuel f, year y, YearSplit_def ys,
 (select distinct r, t, f, y from InputActivityRatio_def where val <> 0) iar
+left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
 where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
 and ys.y = y.val
-order by r.val, t.val, f.val, y.val")
+and tme.id is null
+union all
+select n.r as r, ntc.t as t, iar.f as f, ntc.y as y, ntc.n as n, ys.l as l,
+cast(ys.val as real) as ys
+from NodalDistributionTechnologyCapacity_def ntc, NODE n,
+TransmissionModelingEnabled tme, YearSplit_def ys,
+(select distinct r, t, f, y from InputActivityRatio_def where val <> 0) iar
+where ntc.val > 0
+and ntc.n = n.val
+and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
+and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
+and ntc.y = ys.y
+)
+order by r, t, f, y")
 
 if restrictvars
-    if in("vrateofusebytechnologybymode", varstosavearr)
-        indexdicts = keydicts_parallel(queryvrateofusebytechnologybymode, 5, targetprocs)  # Array of Dicts used to restrict indices of following variable
-        @variable(jumpmodel, vrateofusebytechnologybymode[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
+    if in("vrateofusebytechnologybymodenn", varstosavearr)
+        indexdicts = keydicts_parallel(queryvrateofusebytechnologybymodenn, 5, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        @variable(jumpmodel, vrateofusebytechnologybymodenn[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
             m=indexdicts[3][[r,l,t]], f=indexdicts[4][[r,l,t,m]], y=indexdicts[5][[r,l,t,m,f]]] >= 0)
     end
 
-    indexdicts = keydicts_parallel(queryvrateofusebytechnology, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
-    @variable(jumpmodel, vrateofusebytechnology[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
+    indexdicts = keydicts_parallel(queryvrateofusebytechnologynn, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
+    @variable(jumpmodel, vrateofusebytechnologynn[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
         f=indexdicts[3][[r,l,t]], y=indexdicts[4][[r,l,t,f]]] >= 0)
-
-    in("vusebytechnology", varstosavearr) &&
-        @variable(jumpmodel, vusebytechnology[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
-            f=indexdicts[3][[r,l,t]], y=indexdicts[4][[r,l,t,f]]] >= 0)
 
     indexdicts = keydicts_parallel(queryvusebytechnologyannual, 3, targetprocs)  # Array of Dicts used to restrict indices of vusebytechnologyannual
     @variable(jumpmodel, vusebytechnologyannual[r=[k[1] for k = keys(indexdicts[1])], t=indexdicts[1][[r]], f=indexdicts[2][[r,t]],
         y=indexdicts[3][[r,t,f]]] >= 0)
 else
-    in("vrateofusebytechnologybymode", varstosavearr) &&
-        @variable(jumpmodel, vrateofusebytechnologybymode[sregion, stimeslice, stechnology, smode_of_operation, sfuel, syear] >= 0)
-    @variable(jumpmodel, vrateofusebytechnology[sregion, stimeslice, stechnology, sfuel, syear] >= 0)
-    in("vusebytechnology", varstosavearr) &&
-        @variable(jumpmodel, vusebytechnology[sregion, stimeslice, stechnology, sfuel, syear] >= 0)
+    in("vrateofusebytechnologybymodenn", varstosavearr) &&
+        @variable(jumpmodel, vrateofusebytechnologybymodenn[sregion, stimeslice, stechnology, smode_of_operation, sfuel, syear] >= 0)
+    @variable(jumpmodel, vrateofusebytechnologynn[sregion, stimeslice, stechnology, sfuel, syear] >= 0)
     @variable(jumpmodel, vusebytechnologyannual[sregion, stechnology, sfuel, syear] >= 0)
 end
 
-if in("vrateofusebytechnologybymode", varstosavearr)
-    modelvarindices["vrateofusebytechnologybymode"] = (vrateofusebytechnologybymode, ["r", "l", "t", "m", "f", "y"])
+if in("vrateofusebytechnologybymodenn", varstosavearr)
+    modelvarindices["vrateofusebytechnologybymodenn"] = (vrateofusebytechnologybymodenn, ["r", "l", "t", "m", "f", "y"])
 end
 
-modelvarindices["vrateofusebytechnology"] = (vrateofusebytechnology, ["r","l","t","f","y"])
-
-if in("vusebytechnology", varstosavearr)
-    modelvarindices["vusebytechnology"] = (vusebytechnology, ["r","l","t","f","y"])
-end
+modelvarindices["vrateofusebytechnologynn"] = (vrateofusebytechnologynn, ["r","l","t","f","y"])
 
 modelvarindices["vusebytechnologyannual"] = (vusebytechnologyannual, ["r","t","f","y"])
 
 @variable(jumpmodel, vrateofuse[sregion, stimeslice, sfuel, syear] >= 0)
 modelvarindices["vrateofuse"] = (vrateofuse, ["r", "l", "f", "y"])
-@variable(jumpmodel, vuse[sregion, stimeslice, sfuel, syear] >= 0)
-modelvarindices["vuse"] = (vuse, ["r", "l", "f", "y"])
+@variable(jumpmodel, vrateofusenn[sregion, stimeslice, sfuel, syear] >= 0)
+modelvarindices["vrateofusenn"] = (vrateofusenn, ["r", "l", "f", "y"])
+@variable(jumpmodel, vusenn[sregion, stimeslice, sfuel, syear] >= 0)
+modelvarindices["vusenn"] = (vusenn, ["r", "l", "f", "y"])
 
 @variable(jumpmodel, vtrade[sregion, sregion, stimeslice, sfuel, syear])
 modelvarindices["vtrade"] = (vtrade, ["r", "rr", "l", "f", "y"])
 @variable(jumpmodel, vtradeannual[sregion, sregion, sfuel, syear])
 modelvarindices["vtradeannual"] = (vtradeannual, ["r", "rr", "f", "y"])
-@variable(jumpmodel, vproductionannual[sregion, sfuel, syear] >= 0)
-modelvarindices["vproductionannual"] = (vproductionannual, ["r", "f", "y"])
-@variable(jumpmodel, vuseannual[sregion, sfuel, syear] >= 0)
-modelvarindices["vuseannual"] = (vuseannual, ["r", "f", "y"])
+@variable(jumpmodel, vproductionannualnn[sregion, sfuel, syear] >= 0)
+modelvarindices["vproductionannualnn"] = (vproductionannualnn, ["r", "f", "y"])
+@variable(jumpmodel, vuseannualnn[sregion, sfuel, syear] >= 0)
+modelvarindices["vuseannualnn"] = (vuseannualnn, ["r", "f", "y"])
 logmsg("Defined activity variables.", quiet)
 
 # Costing
@@ -436,10 +501,10 @@ logmsg("Defined costing variables.", quiet)
 
 # Reserve margin
 @variable(jumpmodel, vtotalcapacityinreservemargin[sregion, syear] >= 0)
-@variable(jumpmodel, vdemandneedingreservemargin[sregion, stimeslice, syear] >= 0)
-
 modelvarindices["vtotalcapacityinreservemargin"] = (vtotalcapacityinreservemargin, ["r", "y"])
+@variable(jumpmodel, vdemandneedingreservemargin[sregion, stimeslice, syear] >= 0)
 modelvarindices["vdemandneedingreservemargin"] = (vdemandneedingreservemargin, ["r", "l", "y"])
+
 logmsg("Defined reserve margin variables.", quiet)
 
 # RE target
@@ -475,6 +540,226 @@ modelvarindices["vmodelperiodemissions"] = (vmodelperiodemissions, ["r", "e"])
 
 logmsg("Defined emissions variables.", quiet)
 
+# Transmission
+if transmissionmodeling
+    queryvrateofactivitynodal::DataFrames.DataFrame = SQLite.query(db,
+    "select ntc.n as n, l.val as l, ntc.t as t, m.val as m, ntc.y as y
+    from NodalDistributionTechnologyCapacity_def ntc, TIMESLICE l, MODE_OF_OPERATION m
+    where
+    ntc.val > 0
+    order by ntc.n, ntc.t, l.val, ntc.y")
+
+    queryvrateofproductionbytechnologynodal::DataFrames.DataFrame = SQLite.query(db,
+    "select ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y,
+    	cast(ys.val as real) as ys
+    from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
+	TransmissionModelingEnabled tme,
+    (select distinct r, t, f, y
+    from OutputActivityRatio_def
+    where val <> 0) oar
+    where ntc.val > 0
+    and ntc.y = ys.y
+    and ntc.n = n.val
+    and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
+	and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
+    order by ntc.n, ys.l, oar.f, ntc.y")
+
+    if in("vproductionbytechnology", varstosavearr)
+        queryvproductionbytechnologynodal::DataFrames.DataFrame = SQLite.query(db,
+        "select n.r as r, ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y,
+        	cast(ys.val as real) as ys
+        from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
+    	TransmissionModelingEnabled tme,
+        (select distinct r, t, f, y
+        from OutputActivityRatio_def
+        where val <> 0) oar
+        where ntc.val > 0
+        and ntc.y = ys.y
+        and ntc.n = n.val
+        and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
+    	and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
+        order by n.r, ys.l, ntc.t, oar.f, ntc.y")
+
+        queryvproductionbytechnologyindices = vcat(queryvproductionbytechnologyindices,
+        SQLite.query(db,
+        "select distinct n.r as r, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y, null as ys
+        from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
+        TransmissionModelingEnabled tme,
+        (select distinct r, t, f, y
+        from OutputActivityRatio_def
+        where val <> 0) oar
+        where ntc.val > 0
+        and ntc.y = ys.y
+        and ntc.n = n.val
+        and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
+        and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y"))
+    end
+
+    queryvrateofusebytechnologynodal::DataFrames.DataFrame = SQLite.query(db,
+    "select ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y,
+    	cast(ys.val as real) as ys
+    from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
+	TransmissionModelingEnabled tme,
+    (select distinct r, t, f, y
+    from InputActivityRatio_def
+    where val <> 0) iar
+    where ntc.val > 0
+    and ntc.y = ys.y
+    and ntc.n = n.val
+    and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
+	and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
+    order by ntc.n, ys.l, iar.f, ntc.y")
+
+    if in("vusebytechnology", varstosavearr)
+        queryvusebytechnologynodal::DataFrames.DataFrame = SQLite.query(db,
+        "select n.r as r, ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y,
+        	cast(ys.val as real) as ys
+        from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
+    	TransmissionModelingEnabled tme,
+        (select distinct r, t, f, y
+        from InputActivityRatio_def
+        where val <> 0) iar
+        where ntc.val > 0
+        and ntc.y = ys.y
+        and ntc.n = n.val
+        and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
+    	and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
+        order by n.r, ys.l, ntc.t, iar.f, ntc.y")
+
+        queryvusebytechnologyindices = vcat(queryvusebytechnologyindices,
+        SQLite.query(db,
+        "select distinct n.r as r, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y, null as ys
+        from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
+        TransmissionModelingEnabled tme,
+        (select distinct r, t, f, y
+        from InputActivityRatio_def
+        where val <> 0) iar
+        where ntc.val > 0
+        and ntc.y = ys.y
+        and ntc.n = n.val
+        and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
+        and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y"))
+    end
+
+    queryvtransmissionbyline::DataFrames.DataFrame = SQLite.query(db,
+    "select tl.id as tr, ys.l as l, tl.f as f, tme1.y as y, tl.n1 as n1, tl.n2 as n2,
+	tl.reactance as reactance, tme1.type as type, tl.maxflow as maxflow,
+    cast(tl.VariableCost as real) as vc, cast(ys.val as real) as ys,
+    cast(tl.fixedcost as real) as fc
+    from TransmissionLine tl, NODE n1, NODE n2, TransmissionModelingEnabled tme1,
+    TransmissionModelingEnabled tme2, YearSplit_def ys
+    where
+    tl.n1 = n1.val and tl.n2 = n2.val
+    and tme1.r = n1.r and tme1.f = tl.f
+    and tme2.r = n2.r and tme2.f = tl.f
+    and tme1.y = tme2.y and tme1.type = tme2.type
+	and ys.y = tme1.y
+    order by tl.id, tme1.y")
+
+    if restrictvars
+        indexdicts = keydicts_parallel(queryvrateofactivitynodal, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        @variable(jumpmodel, vrateofactivitynodal[n=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[n]], t=indexdicts[2][[n,l]],
+            m=indexdicts[3][[n,l,t]], y=indexdicts[4][[n,l,t,m]]] >= 0)
+
+        indexdicts = keydicts_parallel(queryvrateofproductionbytechnologynodal, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        @variable(jumpmodel, vrateofproductionbytechnologynodal[n=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[n]], t=indexdicts[2][[n,l]],
+            f=indexdicts[3][[n,l,t]], y=indexdicts[4][[n,l,t,f]]] >= 0)
+
+        indexdicts = keydicts_parallel(queryvtransmissionbyline, 3, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        @variable(jumpmodel, vtransmissionbyline[tr=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[tr]], f=indexdicts[2][[tr,l]],
+            y=indexdicts[3][[tr,l,f]]])
+    else
+        @variable(jumpmodel, vrateofactivitynodal[snode, stimeslice, stechnology, smode_of_operation, syear] >= 0)
+        @variable(jumpmodel, vrateofproductionbytechnologynodal[snode, stimeslice, stechnology, sfuel, syear] >= 0)
+        @variable(jumpmodel, vtransmissionbyline[stransmission, stimeslice, sfuel, syear])
+    end
+
+    modelvarindices["vrateofactivitynodal"] = (vrateofactivitynodal, ["n", "l", "t", "m", "y"])
+    modelvarindices["vrateofproductionbytechnologynodal"] = (vrateofproductionbytechnologynodal, ["n", "l", "t", "f", "y"])
+    # Note: n1 is from node; n2 is to node
+    modelvarindices["vtransmissionbyline"] = (vtransmissionbyline, ["tr", "l", "f", "y"])
+
+    @variable(jumpmodel, vrateoftotalactivitynodal[snode, stechnology, stimeslice, syear] >= 0)
+    modelvarindices["vrateoftotalactivitynodal"] = (vrateoftotalactivitynodal, ["n", "t", "l", "y"])
+
+    @variable(jumpmodel, vrateofproductionnodal[snode, stimeslice, sfuel, syear] >= 0)
+    modelvarindices["vrateofproductionnodal"] = (vrateofproductionnodal, ["n", "l", "f", "y"])
+
+    @variable(jumpmodel, vrateofusenodal[snode, stimeslice, sfuel, syear] >= 0)
+    modelvarindices["vrateofusenodal"] = (vrateofusenodal, ["n", "l", "f", "y"])
+
+    @variable(jumpmodel, vproductionnodal[snode, stimeslice, sfuel, syear] >= 0)
+    modelvarindices["vproductionnodal"] = (vproductionnodal, ["n","l","f","y"])
+
+    @variable(jumpmodel, vproductionannualnodal[snode, sfuel, syear] >= 0)
+    modelvarindices["vproductionannualnodal"] = (vproductionannualnodal, ["n","f","y"])
+
+    @variable(jumpmodel, vusenodal[snode, stimeslice, sfuel, syear] >= 0)
+    modelvarindices["vusenodal"] = (vusenodal, ["n","l","f","y"])
+
+    @variable(jumpmodel, vuseannualnodal[snode, sfuel, syear] >= 0)
+    modelvarindices["vuseannualnodal"] = (vuseannualnodal, ["n","f","y"])
+
+    @variable(jumpmodel, vdemandnodal[snode, stimeslice, sfuel, syear] >= 0)
+    modelvarindices["vdemandnodal"] = (vdemandnodal, ["n","l","f","y"])
+
+    @variable(jumpmodel, vtransmissionbuilt[stransmission, syear], Bin)  # Indicates whether tr is built in year
+    modelvarindices["vtransmissionbuilt"] = (vtransmissionbuilt, ["tr","y"])
+
+    @variable(jumpmodel, vtransmissionexists[stransmission, syear], Bin)  # Indicates whether tr exists (exogenously or endogenously) in year
+    modelvarindices["vtransmissionexists"] = (vtransmissionexists, ["tr","y"])
+
+    # 1 = DC optimized power flow
+    if in(1, transmissionmodelingtypes)
+        @variable(jumpmodel, -pi <= vvoltageangle[snode, stimeslice, syear] <= pi)
+        modelvarindices["vvoltageangle"] = (vvoltageangle, ["n","l","y"])
+    end
+
+    @variable(jumpmodel, vcapitalinvestmenttransmission[stransmission, syear] >= 0)
+    modelvarindices["vcapitalinvestmenttransmission"] = (vcapitalinvestmenttransmission, ["tr","y"])
+    @variable(jumpmodel, vdiscountedcapitalinvestmenttransmission[stransmission, syear] >= 0)
+    modelvarindices["vdiscountedcapitalinvestmenttransmission"] = (vdiscountedcapitalinvestmenttransmission, ["tr","y"])
+    @variable(jumpmodel, vsalvagevaluetransmission[stransmission, syear] >= 0)
+    modelvarindices["vsalvagevaluetransmissionvsalvagevaluetransmission"] = (vsalvagevaluetransmission, ["tr","y"])
+    @variable(jumpmodel, vdiscountedsalvagevaluetransmission[stransmission, syear] >= 0)
+    modelvarindices["vdiscountedsalvagevaluetransmission"] = (vdiscountedsalvagevaluetransmission, ["tr","y"])
+    @variable(jumpmodel, voperatingcosttransmission[stransmission, syear] >= 0)
+    modelvarindices["voperatingcosttransmission"] = (voperatingcosttransmission, ["tr","y"])
+    @variable(jumpmodel, vdiscountedoperatingcosttransmission[stransmission, syear] >= 0)
+    modelvarindices["vdiscountedoperatingcosttransmission"] = (vdiscountedoperatingcosttransmission, ["tr","y"])
+    @variable(jumpmodel, vtotaldiscountedtransmissioncostbyregion[sregion, syear] >= 0)
+    modelvarindices["vtotaldiscountedtransmissioncostbyregion"] = (vtotaldiscountedtransmissioncostbyregion, ["r","y"])
+
+    logmsg("Defined transmission variables.", quiet)
+end  # transmissionmodeling
+
+# Combined nodal + non-nodal variables
+if in("vproductionbytechnology", varstosavearr)
+    if restrictvars
+        indexdicts = keydicts_parallel(queryvproductionbytechnologyindices, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        @variable(jumpmodel, vproductionbytechnology[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
+            f=indexdicts[3][[r,l,t]], y=indexdicts[4][[r,l,t,f]]] >= 0)
+    else
+        @variable(jumpmodel, vproductionbytechnology[sregion, stimeslice, stechnology, sfuel, syear] >= 0)
+    end
+
+    modelvarindices["vproductionbytechnology"] = (vproductionbytechnology, ["r","l","t","f","y"])
+end
+
+if in("vusebytechnology", varstosavearr)
+    if restrictvars
+        indexdicts = keydicts_parallel(queryvusebytechnologyindices, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        @variable(jumpmodel, vusebytechnology[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
+            f=indexdicts[3][[r,l,t]], y=indexdicts[4][[r,l,t,f]]] >= 0)
+    else
+        @variable(jumpmodel, vusebytechnology[sregion, stimeslice, stechnology, sfuel, syear] >= 0)
+    end
+
+    modelvarindices["vusebytechnology"] = (vusebytechnology, ["r","l","t","f","y"])
+end
+
+logmsg("Defined combined nodal and non-nodal variables.", quiet)
+
 logmsg("Finished defining model variables.", quiet)
 # END: Define model variables.
 
@@ -482,25 +767,29 @@ logmsg("Finished defining model variables.", quiet)
 
 # A few variables used in constraint construction
 local lastkeys::Array{String, 1} = Array{String, 1}()  # Array of last key values processed in constraint query loops
-local lastvals::Array{Float64, 1} = Array{Float64, 1}()  # Array of last numeric values saved in constraint query loops
+local lastvals::Array{Float64, 1} = Array{Float64, 1}()  # Array of last float values saved in constraint query loops
+local lastvalsint::Array{Int64, 1} = Array{Int64, 1}()  # Array of last integer values saved in constraint query loops
 local sumexps::Array{AffExpr, 1} = Array{AffExpr, 1}()  # Array of sums of variables assembled in constraint query loops
+local querytemp::DataFrames.DataFrame = DataFrames.DataFrame()  # Query object for temporary queries
 
 # BEGIN: EQ_SpecifiedDemand.
-queryvrateofdemand::DataFrames.DataFrame = SQLite.query(db,"select sdp.r as r, sdp.f as f, sdp.l as l, sdp.y as y,
+queryvrateofdemandnn::DataFrames.DataFrame = SQLite.query(db,"select sdp.r as r, sdp.f as f, sdp.l as l, sdp.y as y,
 cast(sdp.val as real) as specifieddemandprofile, cast(sad.val as real) as specifiedannualdemand,
 cast(ys.val as real) as ys
 from SpecifiedDemandProfile_def sdp, SpecifiedAnnualDemand_def sad, YearSplit_def ys
+left join TransmissionModelingEnabled tme on tme.r = sad.r and tme.f = sad.f and tme.y = sad.y
 where sad.r = sdp.r and sad.f = sdp.f and sad.y = sdp.y
 and ys.l = sdp.l and ys.y = sdp.y
-and sdp.val <> 0 and sad.val <> 0 and ys.val <> 0")
+and sdp.val <> 0 and sad.val <> 0 and ys.val <> 0
+and tme.id is null")
 
-if in("vrateofdemand", varstosavearr)
+if in("vrateofdemandnn", varstosavearr)
     constraintnum::Int = 1  # Number of next constraint to be added to constraint array
     @constraintref ceq_specifieddemand[1:length(sregion) * length(stimeslice) * length(sfuel) * length(syear)]
 
-    for row in DataFrames.eachrow(queryvrateofdemand)
+    for row in DataFrames.eachrow(queryvrateofdemandnn)
         ceq_specifieddemand[constraintnum] = @constraint(jumpmodel, row[:specifiedannualdemand] * row[:specifieddemandprofile] / row[:ys]
-            == vrateofdemand[row[:r], row[:l], row[:f], row[:y]])
+            == vrateofdemandnn[row[:r], row[:l], row[:f], row[:y]])
         constraintnum += 1
     end
 
@@ -567,18 +856,94 @@ end
 logmsg("Created constraint CAa2_TotalAnnualCapacity.", quiet)
 # END: CAa2_TotalAnnualCapacity.
 
+# BEGIN: VRateOfActivity1.
+# This constraint sets activity to sum of nodal activity for technologies involved in nodal modeling. The implication is that
+#   the non-nodal activity is controls total activity.
+vrateofactivity1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = m, lastkeys[5] = y
+sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivitynodal sum
+
+for row in DataFrames.eachrow(SQLite.query(db,
+"select r.val as r, l.val as l, t.val as t, m.val as m, y.val as y, ntc.n as n
+from REGION r, TIMESLICE l, TECHNOLOGY t, MODE_OF_OPERATION m, YEAR y,
+NodalDistributionTechnologyCapacity_def ntc, NODE n
+where ntc.n = n.val
+and n.r = r.val and ntc.t = t.val and ntc.y = y.val
+and ntc.val > 0
+order by r.val, l.val, t.val, m.val, y.val"))
+    local r = row[:r]
+    local l = row[:l]
+    local t = row[:t]
+    local m = row[:m]
+    local y = row[:y]
+
+    if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || t != lastkeys[3] || m != lastkeys[4] || y != lastkeys[5])
+        # Create constraint
+        push!(vrateofactivity1, @constraint(jumpmodel, sumexps[1] == vrateofactivity[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4],lastkeys[5]]))
+        sumexps[1] = AffExpr()
+    end
+
+    append!(sumexps[1], vrateofactivitynodal[row[:n],l,t,m,y])
+
+    lastkeys[1] = r
+    lastkeys[2] = l
+    lastkeys[3] = t
+    lastkeys[4] = m
+    lastkeys[5] = y
+end
+
+if isassigned(lastkeys, 1)
+    push!(vrateofactivity1, @constraint(jumpmodel, sumexps[1] == vrateofactivity[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4],lastkeys[5]]))
+end
+
+logmsg("Created constraint VRateOfActivity1.", quiet)
+# END: VRateOfActivity1.
+
 # BEGIN: CAa3_TotalActivityOfEachTechnology.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref caa3_totalactivityofeachtechnology[1:length(sregion) * length(stechnology) * length(stimeslice) * length(syear)]
+caa3_totalactivityofeachtechnology::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for (r, t, l, y) in Base.product(sregion, stechnology, stimeslice, syear)
-    caa3_totalactivityofeachtechnology[constraintnum] = @constraint(jumpmodel, sum([vrateofactivity[r,l,t,m,y] for m = smode_of_operation])
-        == vrateoftotalactivity[r,t,l,y])
-    constraintnum += 1
+    push!(caa3_totalactivityofeachtechnology, @constraint(jumpmodel, sum([vrateofactivity[r,l,t,m,y] for m = smode_of_operation])
+        == vrateoftotalactivity[r,t,l,y]))
 end
 
 logmsg("Created constraint CAa3_TotalActivityOfEachTechnology.", quiet)
 # END: CAa3_TotalActivityOfEachTechnology.
+
+# BEGIN: CAa3Tr_TotalActivityOfEachTechnology.
+if transmissionmodeling
+    caa3tr_totalactivityofeachtechnology::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = t, lastkeys[3] = l, lastkeys[4] = y
+    sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivitynodal sum
+
+    for row in DataFrames.eachrow(queryvrateofactivitynodal)
+        local n = row[:n]
+        local t = row[:t]
+        local l = row[:l]
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (n != lastkeys[1] || t != lastkeys[2] || l != lastkeys[3] || y != lastkeys[4])
+            # Create constraint
+            push!(caa3tr_totalactivityofeachtechnology, @constraint(jumpmodel, sumexps[1] == vrateoftotalactivitynodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
+            sumexps[1] = AffExpr()
+        end
+
+        append!(sumexps[1], vrateofactivitynodal[n,l,t,row[:m],y])
+
+        lastkeys[1] = n
+        lastkeys[2] = t
+        lastkeys[3] = l
+        lastkeys[4] = y
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        push!(caa3tr_totalactivityofeachtechnology, @constraint(jumpmodel, sumexps[1] == vrateoftotalactivitynodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
+    end
+
+    logmsg("Created constraint CAa3Tr_TotalActivityOfEachTechnology.", quiet)
+end
+# END: CAa3Tr_TotalActivityOfEachTechnology.
 
 # BEGIN: CAa4_Constraint_Capacity.
 constraintnum = 1  # Number of next constraint to be added to constraint array
@@ -602,6 +967,35 @@ end
 logmsg("Created constraint CAa4_Constraint_Capacity.", quiet)
 # END: CAa4_Constraint_Capacity.
 
+# BEGIN: CAa4Tr_Constraint_Capacity.
+if transmissionmodeling
+    constraintnum = 1  # Number of next constraint to be added to constraint array
+    @constraintref caa4tr_constraint_capacity[1:length(snode) * length(stimeslice) * length(stechnology) * length(syear)]
+
+    for row in DataFrames.eachrow(SQLite.query(db,"select ntc.n as n, ntc.t as t, l.val as l, ntc.y as y, n.r as r,
+    	cast(ntc.val as real) as ntc, cast(cf.val as real) as cf,
+    	cast(cta.val as real) as cta
+    from NodalDistributionTechnologyCapacity_def ntc, TIMESLICE l, NODE n,
+    CapacityFactor_def cf, CapacityToActivityUnit_def cta
+    where ntc.val > 0
+    and ntc.n = n.val
+    and cf.r = n.r and cf.t = ntc.t and cf.l = l.val and cf.y = ntc.y
+    and cta.r = n.r and cta.t = ntc.t"))
+        local n = row[:n]
+        local t = row[:t]
+        local l = row[:l]
+        local y = row[:y]
+        local r = row[:r]
+
+        caa4tr_constraint_capacity[constraintnum] = @constraint(jumpmodel, vrateoftotalactivitynodal[n,t,l,y]
+            <= vtotalcapacityannual[r,t,y] * row[:ntc] * row[:cf] * row[:cta])
+        constraintnum += 1
+    end
+
+    logmsg("Created constraint CAa4Tr_Constraint_Capacity.", quiet)
+end
+# END: CAa4Tr_Constraint_Capacity.
+
 # BEGIN: CAa5_TotalNewCapacity.
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref caa5_totalnewcapacity[1:length(sregion) * length(stechnology) * length(syear)]
@@ -620,7 +1014,11 @@ end
 logmsg("Created constraint CAa5_TotalNewCapacity.", quiet)
 # END: CAa5_TotalNewCapacity.
 
-# BEGIN: CAb1_PlannedMaintenance.
+#= BEGIN: CAb1_PlannedMaintenance.
+# Omitting this constraint since it only serves to apply AvailabilityFactor, for which user demand isn't clear.
+#   This parameter specifies an outage on an annual level and lets the model choose when (in which time slices) to take it.
+#   Note that the parameter isn't used by LEAP. Omitting the constraint improves performance. If the constraint were
+#   reinstated, a variant for transmission modeling (incorporating vrateoftotalactivitynodal) would be needed.
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref cab1_plannedmaintenance[1:length(sregion) * length(stechnology) * length(syear)]
 
@@ -671,14 +1069,14 @@ if isassigned(lastkeys, 1)
 end
 
 logmsg("Created constraint CAb1_PlannedMaintenance.", quiet)
-# END: CAb1_PlannedMaintenance.
+# END: CAb1_PlannedMaintenance. =#
 
 # BEGIN: EBa1_RateOfFuelProduction1.
-if in("vrateofproductionbytechnologybymode", varstosavearr)
+if in("vrateofproductionbytechnologybymodenn", varstosavearr)
     constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref eba1_rateoffuelproduction1[1:size(queryvrateofproductionbytechnologybymode)[1]]
+    @constraintref eba1_rateoffuelproduction1[1:size(queryvrateofproductionbytechnologybymodenn)[1]]
 
-    for row in DataFrames.eachrow(queryvrateofproductionbytechnologybymode)
+    for row in DataFrames.eachrow(queryvrateofproductionbytechnologybymodenn)
         local r = row[:r]
         local l = row[:l]
         local t = row[:t]
@@ -686,23 +1084,23 @@ if in("vrateofproductionbytechnologybymode", varstosavearr)
         local f = row[:f]
         local y = row[:y]
 
-        eba1_rateoffuelproduction1[constraintnum] = @constraint(jumpmodel, vrateofactivity[r,l,t,m,y] * row[:oar] == vrateofproductionbytechnologybymode[r,l,t,m,f,y])
+        eba1_rateoffuelproduction1[constraintnum] = @constraint(jumpmodel, vrateofactivity[r,l,t,m,y] * row[:oar] == vrateofproductionbytechnologybymodenn[r,l,t,m,f,y])
         constraintnum += 1
     end
 
     logmsg("Created constraint EBa1_RateOfFuelProduction1.", quiet)
-end  # in("vrateofproductionbytechnologybymode", varstosavearr)
+end  # in("vrateofproductionbytechnologybymodenn", varstosavearr)
 # END: EBa1_RateOfFuelProduction1.
 
 # BEGIN: EBa2_RateOfFuelProduction2.
 constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref eba2_rateoffuelproduction2[1:size(queryvrateofproductionbytechnology)[1]]
+@constraintref eba2_rateoffuelproduction2[1:size(queryvrateofproductionbytechnologynn)[1]]
 
 lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])
-# sumexps[1] = vrateofproductionbytechnologybymode-equivalent sum
+# sumexps[1] = vrateofproductionbytechnologybymodenn-equivalent sum
 
-for row in DataFrames.eachrow(queryvrateofproductionbytechnologybymode)
+for row in DataFrames.eachrow(queryvrateofproductionbytechnologybymodenn)
     local r = row[:r]
     local l = row[:l]
     local t = row[:t]
@@ -712,14 +1110,14 @@ for row in DataFrames.eachrow(queryvrateofproductionbytechnologybymode)
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || t != lastkeys[3] || f != lastkeys[4] || y != lastkeys[5])
         # Create constraint
         eba2_rateoffuelproduction2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-            vrateofproductionbytechnology[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
+            vrateofproductionbytechnologynn[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
         constraintnum += 1
 
         sumexps[1] = AffExpr()
     end
 
     append!(sumexps[1], vrateofactivity[r,l,t,row[:m],y] * row[:oar])
-    # Sum is of vrateofproductionbytechnologybymode[r,l,t,row[:m],f,y])
+    # Sum is of vrateofproductionbytechnologybymodenn[r,l,t,row[:m],f,y])
 
     lastkeys[1] = r
     lastkeys[2] = l
@@ -731,20 +1129,75 @@ end
 # Create last constraint
 if isassigned(lastkeys, 1)
     eba2_rateoffuelproduction2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-        vrateofproductionbytechnology[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
+        vrateofproductionbytechnologynn[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
 end
 
 logmsg("Created constraint EBa2_RateOfFuelProduction2.", quiet)
 # END: EBa2_RateOfFuelProduction2.
+
+# BEGIN: EBa2Tr_RateOfFuelProduction2.
+if transmissionmodeling
+    constraintnum = 1  # Number of next constraint to be added to constraint array
+    @constraintref eba2tr_rateoffuelproduction2[1:size(queryvrateofproductionbytechnologynodal)[1]]
+
+    lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
+    sumexps = Array{AffExpr, 1}([AffExpr()])
+    # sumexps[1] = vrateofactivitynodal sum
+
+    for row in DataFrames.eachrow(SQLite.query(db,
+    "select ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y, m.val as m,
+	   cast(oar.val as real) as oar
+    from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, MODE_OF_OPERATION m, NODE n, OutputActivityRatio_def oar,
+	TransmissionModelingEnabled tme
+    where ntc.val > 0
+    and ntc.y = ys.y
+    and ntc.n = n.val
+    and oar.r = n.r and oar.t = ntc.t and oar.m = m.val and oar.y = ntc.y
+    and oar.val > 0
+	and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
+    order by ntc.n, ys.l, ntc.t, oar.f, ntc.y"))
+        local n = row[:n]
+        local l = row[:l]
+        local t = row[:t]
+        local f = row[:f]
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (n != lastkeys[1] || l != lastkeys[2] || t != lastkeys[3] || f != lastkeys[4] || y != lastkeys[5])
+            # Create constraint
+            eba2tr_rateoffuelproduction2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
+                vrateofproductionbytechnologynodal[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
+            constraintnum += 1
+
+            sumexps[1] = AffExpr()
+        end
+
+        append!(sumexps[1], vrateofactivitynodal[n,l,t,row[:m],y] * row[:oar])
+
+        lastkeys[1] = n
+        lastkeys[2] = l
+        lastkeys[3] = t
+        lastkeys[4] = f
+        lastkeys[5] = y
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        eba2tr_rateoffuelproduction2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
+            vrateofproductionbytechnologynodal[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
+    end
+
+    logmsg("Created constraint EBa2Tr_RateOfFuelProduction2.", quiet)
+end
+# END: EBa2Tr_RateOfFuelProduction2.
 
 # BEGIN: EBa3_RateOfFuelProduction3.
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba3_rateoffuelproduction3[1:length(sregion) * length(stimeslice) * length(sfuel) * length(syear)]
 
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
-sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproductionbytechnology sum
+sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproductionbytechnologynn sum
 
-for row in DataFrames.eachrow(queryvrateofproductionbytechnology)
+for row in DataFrames.eachrow(queryvrateofproductionbytechnologynn)
     local r = row[:r]
     local l = row[:l]
     local f = row[:f]
@@ -752,13 +1205,13 @@ for row in DataFrames.eachrow(queryvrateofproductionbytechnology)
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
         # Create constraint
-        eba3_rateoffuelproduction3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofproduction[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+        eba3_rateoffuelproduction3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
         constraintnum += 1
 
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vrateofproductionbytechnology[r,l,row[:t],f,y])
+    append!(sumexps[1], vrateofproductionbytechnologynn[r,l,row[:t],f,y])
 
     lastkeys[1] = r
     lastkeys[2] = l
@@ -768,18 +1221,116 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    eba3_rateoffuelproduction3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofproduction[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+    eba3_rateoffuelproduction3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
 end
 
 logmsg("Created constraint EBa3_RateOfFuelProduction3.", quiet)
 # END: EBa3_RateOfFuelProduction3.
 
-# BEGIN: EBa4_RateOfFuelUse1.
-if in("vrateofusebytechnologybymode", varstosavearr)
+# BEGIN: EBa3Tr_RateOfFuelProduction3.
+if transmissionmodeling
     constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref eba4_rateoffueluse1[1:size(queryvrateofusebytechnologybymode)[1]]
+    @constraintref eba3tr_rateoffuelproduction3[1:length(snode) * length(stimeslice) * length(sfuel) * length(syear)]
 
-    for row in DataFrames.eachrow(queryvrateofusebytechnologybymode)
+    lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
+    sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproductionbytechnologynodal sum
+
+    for row in DataFrames.eachrow(queryvrateofproductionbytechnologynodal)
+        local n = row[:n]
+        local l = row[:l]
+        local f = row[:f]
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (n != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
+            # Create constraint
+            eba3tr_rateoffuelproduction3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+            constraintnum += 1
+
+            sumexps[1] = AffExpr()
+        end
+
+        append!(sumexps[1], vrateofproductionbytechnologynodal[n,l,row[:t],f,y])
+
+        lastkeys[1] = n
+        lastkeys[2] = l
+        lastkeys[3] = f
+        lastkeys[4] = y
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        eba3tr_rateoffuelproduction3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+    end
+
+    logmsg("Created constraint EBa3Tr_RateOfFuelProduction3.", quiet)
+end
+# END: EBa3Tr_RateOfFuelProduction3.
+
+# BEGIN: VRateOfProduction1.
+queryvrateofproduse::DataFrames.DataFrame = DataFrames.DataFrame()  # Populated below if transmissionmodeling
+
+if !transmissionmodeling
+    @constraint(jumpmodel, vrateofproduction1[r = sregion, l = stimeslice, f = sfuel, y = syear], vrateofproduction[r,l,f,y] == vrateofproductionnn[r,l,f,y])
+else
+    # Combine nodal and non-nodal
+    constraintnum = 1  # Number of next constraint to be added to constraint array
+    @constraintref vrateofproduction1[1:length(sregion) * length(stimeslice) * length(sfuel) * length(syear)]
+
+    lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
+    sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproductionnodal sum
+
+    queryvrateofproduse = SQLite.query(db,
+    "select r.val as r, l.val as l, f.val as f, y.val as y, tme.id as tme, n.val as n
+    from region r, timeslice l, fuel f, year y, YearSplit_def ys
+    left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
+    left join NODE n on n.r = r.val
+    where
+    ys.l = l.val and ys.y = y.val
+    order by r.val, l.val, f.val, y.val")
+
+    for row in DataFrames.eachrow(queryvrateofproduse)
+        local r = row[:r]
+        local l = row[:l]
+        local f = row[:f]
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
+            # Create constraint
+            vrateofproduction1[constraintnum] = @constraint(jumpmodel,
+                (sumexps[1] == AffExpr() ? vrateofproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] : sumexps[1])
+                == vrateofproduction[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+            constraintnum += 1
+
+            sumexps[1] = AffExpr()
+        end
+
+        if !ismissing(row[:tme]) && !ismissing(row[:n])
+            append!(sumexps[1], vrateofproductionnodal[row[:n],l,f,y])
+        end
+
+        lastkeys[1] = r
+        lastkeys[2] = l
+        lastkeys[3] = f
+        lastkeys[4] = y
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        vrateofproduction1[constraintnum] = @constraint(jumpmodel,
+            (sumexps[1] == AffExpr() ? vrateofproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] : sumexps[1])
+            == vrateofproduction[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+    end
+end
+
+logmsg("Created constraint VRateOfProduction1.", quiet)
+# END: VRateOfProduction1.
+
+# BEGIN: EBa4_RateOfFuelUse1.
+if in("vrateofusebytechnologybymodenn", varstosavearr)
+    constraintnum = 1  # Number of next constraint to be added to constraint array
+    @constraintref eba4_rateoffueluse1[1:size(queryvrateofusebytechnologybymodenn)[1]]
+
+    for row in DataFrames.eachrow(queryvrateofusebytechnologybymodenn)
         local r = row[:r]
         local l = row[:l]
         local f = row[:f]
@@ -787,7 +1338,7 @@ if in("vrateofusebytechnologybymode", varstosavearr)
         local m = row[:m]
         local y = row[:y]
 
-        eba4_rateoffueluse1[constraintnum] = @constraint(jumpmodel, vrateofactivity[r,l,t,m,y] * row[:iar] == vrateofusebytechnologybymode[r,l,t,m,f,y])
+        eba4_rateoffueluse1[constraintnum] = @constraint(jumpmodel, vrateofactivity[r,l,t,m,y] * row[:iar] == vrateofusebytechnologybymodenn[r,l,t,m,f,y])
         constraintnum += 1
     end
 
@@ -797,13 +1348,13 @@ end
 
 # BEGIN: EBa5_RateOfFuelUse2.
 constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref eba5_rateoffueluse2[1:size(queryvrateofusebytechnology)[1]]
+@constraintref eba5_rateoffueluse2[1:size(queryvrateofusebytechnologynn)[1]]
 
 lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])
-# sumexps[1] = vrateofusebytechnologybymode-equivalent sum
+# sumexps[1] = vrateofusebytechnologybymodenn-equivalent sum
 
-for row in DataFrames.eachrow(queryvrateofusebytechnologybymode)
+for row in DataFrames.eachrow(queryvrateofusebytechnologybymodenn)
     local r = row[:r]
     local l = row[:l]
     local f = row[:f]
@@ -813,14 +1364,14 @@ for row in DataFrames.eachrow(queryvrateofusebytechnologybymode)
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || t != lastkeys[3] || f != lastkeys[4] || y != lastkeys[5])
         # Create constraint
         eba5_rateoffueluse2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-            vrateofusebytechnology[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
+            vrateofusebytechnologynn[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
         constraintnum += 1
 
         sumexps[1] = AffExpr()
     end
 
     append!(sumexps[1], vrateofactivity[r,l,t,row[:m],y] * row[:iar])
-    # Sum is of vrateofusebytechnologybymode[r,l,t,row[:m],f,y])
+    # Sum is of vrateofusebytechnologybymodenn[r,l,t,row[:m],f,y])
 
     lastkeys[1] = r
     lastkeys[2] = l
@@ -832,20 +1383,75 @@ end
 # Create last constraint
 if isassigned(lastkeys, 1)
     eba5_rateoffueluse2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-        vrateofusebytechnology[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
+        vrateofusebytechnologynn[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
 end
 
 logmsg("Created constraint EBa5_RateOfFuelUse2.", quiet)
 # END: EBa5_RateOfFuelUse2.
+
+# BEGIN: EBa5Tr_RateOfFuelUse2.
+if transmissionmodeling
+    constraintnum = 1  # Number of next constraint to be added to constraint array
+    @constraintref eba5tr_rateoffueluse2[1:size(queryvrateofusebytechnologynodal)[1]]
+
+    lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
+    sumexps = Array{AffExpr, 1}([AffExpr()])
+    # sumexps[1] = vrateofactivitynodal sum
+
+    for row in DataFrames.eachrow(SQLite.query(db,
+    "select ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y, m.val as m,
+	   cast(iar.val as real) as iar
+    from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, MODE_OF_OPERATION m, NODE n, InputActivityRatio_def iar,
+	TransmissionModelingEnabled tme
+    where ntc.val > 0
+    and ntc.y = ys.y
+    and ntc.n = n.val
+    and iar.r = n.r and iar.t = ntc.t and iar.m = m.val and iar.y = ntc.y
+    and iar.val > 0
+	and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
+    order by ntc.n, ys.l, ntc.t, iar.f, ntc.y"))
+        local n = row[:n]
+        local l = row[:l]
+        local t = row[:t]
+        local f = row[:f]
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (n != lastkeys[1] || l != lastkeys[2] || t != lastkeys[3] || f != lastkeys[4] || y != lastkeys[5])
+            # Create constraint
+            eba5tr_rateoffueluse2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
+                vrateofusebytechnologynodal[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
+            constraintnum += 1
+
+            sumexps[1] = AffExpr()
+        end
+
+        append!(sumexps[1], vrateofactivitynodal[n,l,t,row[:m],y] * row[:iar])
+
+        lastkeys[1] = n
+        lastkeys[2] = l
+        lastkeys[3] = t
+        lastkeys[4] = f
+        lastkeys[5] = y
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        eba5tr_rateoffueluse2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
+            vrateofusebytechnologynodal[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
+    end
+
+    logmsg("Created constraint EBa5Tr_RateOfFuelUse2.", quiet)
+end
+# END: EBa5Tr_RateOfFuelUse2.
 
 # BEGIN: EBa6_RateOfFuelUse3.
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba6_rateoffueluse3[1:length(sregion) * length(stimeslice) * length(sfuel) * length(syear)]
 
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
-sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofusebytechnology sum
+sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofusebytechnologynn sum
 
-for row in DataFrames.eachrow(queryvrateofusebytechnology)
+for row in DataFrames.eachrow(queryvrateofusebytechnologynn)
     local r = row[:r]
     local l = row[:l]
     local f = row[:f]
@@ -853,13 +1459,13 @@ for row in DataFrames.eachrow(queryvrateofusebytechnology)
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
         # Create constraint
-        eba6_rateoffueluse3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofuse[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+        eba6_rateoffueluse3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
         constraintnum += 1
 
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vrateofusebytechnology[r,l,row[:t],f,y])
+    append!(sumexps[1], vrateofusebytechnologynn[r,l,row[:t],f,y])
 
     lastkeys[1] = r
     lastkeys[2] = l
@@ -869,17 +1475,106 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    eba6_rateoffueluse3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofuse[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+    eba6_rateoffueluse3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
 end
 
 logmsg("Created constraint EBa6_RateOfFuelUse3.", quiet)
 # END: EBa6_RateOfFuelUse3.
 
+# BEGIN: EBa6Tr_RateOfFuelUse3.
+if transmissionmodeling
+    constraintnum = 1  # Number of next constraint to be added to constraint array
+    @constraintref eba6tr_rateoffueluse3[1:length(snode) * length(stimeslice) * length(sfuel) * length(syear)]
+
+    lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
+    sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofusebytechnologynodal sum
+
+    for row in DataFrames.eachrow(queryvrateofusebytechnologynodal)
+        local n = row[:n]
+        local l = row[:l]
+        local f = row[:f]
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (n != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
+            # Create constraint
+            eba6tr_rateoffueluse3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+            constraintnum += 1
+
+            sumexps[1] = AffExpr()
+        end
+
+        append!(sumexps[1], vrateofusebytechnologynodal[n,l,row[:t],f,y])
+
+        lastkeys[1] = n
+        lastkeys[2] = l
+        lastkeys[3] = f
+        lastkeys[4] = y
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        eba6tr_rateoffueluse3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+    end
+
+    logmsg("Created constraint EBa6Tr_RateOfFuelUse3.", quiet)
+end
+# END: EBa6Tr_RateOfFuelUse3.
+
+# BEGIN: VRateOfUse1.
+if !transmissionmodeling
+    @constraint(jumpmodel, vrateofuse1[r = sregion, l = stimeslice, f = sfuel, y = syear], vrateofuse[r,l,f,y] == vrateofusenn[r,l,f,y])
+else
+    # Combine nodal and non-nodal
+    constraintnum = 1  # Number of next constraint to be added to constraint array
+    @constraintref vrateofuse1[1:length(sregion) * length(stimeslice) * length(sfuel) * length(syear)]
+
+    lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
+    sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofusenodal sum
+
+    for row in DataFrames.eachrow(queryvrateofproduse)
+        local r = row[:r]
+        local l = row[:l]
+        local f = row[:f]
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
+            # Create constraint
+            vrateofuse1[constraintnum] = @constraint(jumpmodel,
+                (sumexps[1] == AffExpr() ? vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] : sumexps[1])
+                == vrateofuse[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+            constraintnum += 1
+
+            sumexps[1] = AffExpr()
+        end
+
+        if !ismissing(row[:tme]) && !ismissing(row[:n])
+            append!(sumexps[1], vrateofusenodal[row[:n],l,f,y])
+        end
+
+        lastkeys[1] = r
+        lastkeys[2] = l
+        lastkeys[3] = f
+        lastkeys[4] = y
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        vrateofuse1[constraintnum] = @constraint(jumpmodel,
+            (sumexps[1] == AffExpr() ? vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] : sumexps[1])
+            == vrateofuse[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+    end
+end
+
+logmsg("Created constraint VRateOfUse1.", quiet)
+# END: VRateOfUse1.
+
 # BEGIN: EBa7_EnergyBalanceEachTS1 and EBa8_EnergyBalanceEachTS2.
 queryvproduse::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, l.val as l, f.val as f, y.val as y, cast(ys.val as real) as ys
 from region r, timeslice l, fuel f, year y, YearSplit_def ys
+left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
 where
-ys.l = l.val and ys.y = y.val")
+ys.l = l.val and ys.y = y.val
+and tme.id is null")
 
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref eba7_energybalanceeachts1[1:size(queryvproduse)[1]]
@@ -891,8 +1586,8 @@ for row in DataFrames.eachrow(queryvproduse)
     local f = row[:f]
     local y = row[:y]
 
-    eba7_energybalanceeachts1[constraintnum] = @constraint(jumpmodel, vrateofproduction[r,l,f,y] * row[:ys] == vproduction[r,l,f,y])
-    eba8_energybalanceeachts2[constraintnum] = @constraint(jumpmodel, vrateofuse[r,l,f,y] * row[:ys] == vuse[r,l,f,y])
+    eba7_energybalanceeachts1[constraintnum] = @constraint(jumpmodel, vrateofproductionnn[r,l,f,y] * row[:ys] == vproductionnn[r,l,f,y])
+    eba8_energybalanceeachts2[constraintnum] = @constraint(jumpmodel, vrateofusenn[r,l,f,y] * row[:ys] == vusenn[r,l,f,y])
 
     constraintnum += 1
 end
@@ -900,22 +1595,83 @@ end
 logmsg("Created constraints EBa7_EnergyBalanceEachTS1 and EBa8_EnergyBalanceEachTS2.", quiet)
 # END: EBa7_EnergyBalanceEachTS1 and EBa8_EnergyBalanceEachTS2.
 
+# BEGIN: EBa7Tr_EnergyBalanceEachTS1 and EBa8Tr_EnergyBalanceEachTS2.
+if transmissionmodeling
+    queryvproduse = SQLite.query(db, "select r.val as r, l.val as l, f.val as f, y.val as y, cast(ys.val as real) as ys
+    from region r, timeslice l, fuel f, year y, YearSplit_def ys,
+    TransmissionModelingEnabled tme
+    where
+    ys.l = l.val and ys.y = y.val
+    and tme.r = r.val and tme.f = f.val and tme.y = y.val")
+
+    constraintnum = 1  # Number of next constraint to be added to constraint array
+    @constraintref eba7tr_energybalanceeachts1[1:size(queryvproduse)[1]]
+    @constraintref eba8tr_energybalanceeachts2[1:size(queryvproduse)[1]]
+
+    for row in DataFrames.eachrow(queryvproduse)
+        local r = row[:r]
+        local l = row[:l]
+        local f = row[:f]
+        local y = row[:y]
+
+        eba7tr_energybalanceeachts1[constraintnum] = @constraint(jumpmodel, vrateofproductionnodal[r,l,f,y] * row[:ys] == vproductionnodal[r,l,f,y])
+        eba8tr_energybalanceeachts2[constraintnum] = @constraint(jumpmodel, vrateofusenodal[r,l,f,y] * row[:ys] == vusenodal[r,l,f,y])
+
+        constraintnum += 1
+    end
+
+    logmsg("Created constraints EBa7Tr_EnergyBalanceEachTS1 and EBa8Tr_EnergyBalanceEachTS2.", quiet)
+end
+# END: EBa7Tr_EnergyBalanceEachTS1 and EBa8Tr_EnergyBalanceEachTS2.
+
 # BEGIN: EBa9_EnergyBalanceEachTS3.
 constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref eba9_energybalanceeachts3[1:size(queryvrateofdemand)[1]]
+@constraintref eba9_energybalanceeachts3[1:size(queryvrateofdemandnn)[1]]
 
-for row in DataFrames.eachrow(queryvrateofdemand)
+for row in DataFrames.eachrow(queryvrateofdemandnn)
     local r = row[:r]
     local l = row[:l]
     local f = row[:f]
     local y = row[:y]
 
-    eba9_energybalanceeachts3[constraintnum] = @constraint(jumpmodel, row[:specifiedannualdemand] * row[:specifieddemandprofile] == vdemand[r,l,f,y])
+    eba9_energybalanceeachts3[constraintnum] = @constraint(jumpmodel, row[:specifiedannualdemand] * row[:specifieddemandprofile] == vdemandnn[r,l,f,y])
     constraintnum += 1
 end
 
 logmsg("Created constraint EBa9_EnergyBalanceEachTS3.", quiet)
 # END: EBa9_EnergyBalanceEachTS3.
+
+# BEGIN: EBa9Tr_EnergyBalanceEachTS3.
+if transmissionmodeling
+    querytemp = SQLite.query(db, "select sdp.r as r, sdp.f as f, sdp.l as l, sdp.y as y, ndd.n as n,
+    cast(sdp.val as real) as specifieddemandprofile, cast(sad.val as real) as specifiedannualdemand,
+    cast(ndd.val as real) as ndd
+    from SpecifiedDemandProfile_def sdp, SpecifiedAnnualDemand_def sad, TransmissionModelingEnabled tme,
+    NodalDistributionDemand_def ndd, NODE n
+    where sad.r = sdp.r and sad.f = sdp.f and sad.y = sdp.y
+    and sdp.val <> 0 and sad.val <> 0
+    and tme.r = sad.r and tme.f = sad.f and tme.y = sad.y
+    and ndd.n = n.val
+    and n.r = sad.r and ndd.f = sad.f and ndd.y = sad.y
+    and ndd.val > 0")
+
+    constraintnum = 1  # Number of next constraint to be added to constraint array
+    @constraintref eba9tr_energybalanceeachts3[1:size(querytemp)[1]]
+
+    for row in DataFrames.eachrow(querytemp)
+        local n = row[:n]
+        local l = row[:l]
+        local f = row[:f]
+        local y = row[:y]
+
+        eba9tr_energybalanceeachts3[constraintnum] = @constraint(jumpmodel, row[:specifiedannualdemand] * row[:specifieddemandprofile]
+            * row[:ndd] == vdemandnodal[n,l,f,y])
+        constraintnum += 1
+    end
+
+    logmsg("Created constraint EBa9Tr_EnergyBalanceEachTS3.", quiet)
+end
+# END: EBa9Tr_EnergyBalanceEachTS3.
 
 # BEGIN: EBa10_EnergyBalanceEachTS4.
 constraintnum = 1  # Number of next constraint to be added to constraint array
@@ -941,6 +1697,8 @@ for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, l.val as l, f
     cast(tr.val as real) as trv
 from region r, timeslice l, fuel f, year y
 left join traderoute_def tr on tr.r = r.val and tr.f = f.val and tr.y = y.val
+left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
+where tme.id is null
 order by r.val, l.val, f.val, y.val"))
     local r = row[:r]
     local l = row[:l]
@@ -949,13 +1707,14 @@ order by r.val, l.val, f.val, y.val"))
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
         # Create constraint
-        eba11_energybalanceeachts5[constraintnum] = @constraint(jumpmodel, vproduction[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
-            vdemand[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vuse[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1])
+        eba11_energybalanceeachts5[constraintnum] = @constraint(jumpmodel, vproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
+            vdemandnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1])
         constraintnum += 1
 
         sumexps[1] = AffExpr()
     end
 
+    # Appears that traderoutes must be defined reciprocally - two entries for each pair of regions. Bears testing.
     if !ismissing(row[:rr])
         append!(sumexps[1], vtrade[r,row[:rr],l,f,y] * row[:trv])
     end
@@ -968,36 +1727,249 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    eba11_energybalanceeachts5[constraintnum] = @constraint(jumpmodel, vproduction[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
-        vdemand[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vuse[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1])
+    eba11_energybalanceeachts5[constraintnum] = @constraint(jumpmodel, vproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
+        vdemandnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1])
 end
 
 logmsg("Created constraint EBa11_EnergyBalanceEachTS5.", quiet)
 # END: EBa11_EnergyBalanceEachTS5.
+
+# BEGIN: Tr1_SumBuilt.
+# Ensures vtransmissionbuilt can be 1 in at most one year
+if transmissionmodeling
+    constraintnum = 1  # Number of next constraint to be added to constraint array
+    @constraintref tr1_sumbuilt[1:length(stransmission)]
+
+    for tr in stransmission
+        tr1_sumbuilt[constraintnum] = @constraint(jumpmodel, sum([vtransmissionbuilt[tr,y] for y in syear]) <= 1)
+        constraintnum += 1
+    end
+
+    logmsg("Created constraint Tr1_SumBuilt.", quiet)
+end
+# END: Tr1_SumBuilt.
+
+# BEGIN: Tr2_TransmissionExists.
+if transmissionmodeling
+    constraintnum = 1  # Number of next constraint to be added to constraint array
+    @constraintref tr2_transmissionexists[1:length(stransmission) * length(syear)]
+
+    lastkeys = Array{String, 1}(undef,2)  # lastkeys[1] = tr, lastkeys[2] = y
+    lastvalsint = Array{Int64, 1}(undef,2)  # lastvalsint[1] = yconstruction, lastvalsint[2] = operationallife
+    sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtransmissionbuilt sum
+
+    for row in DataFrames.eachrow(SQLite.query(db, "select tl.id as tr, tl.yconstruction, tl.operationallife, y.val as y, null as yy
+    from TransmissionLine tl, YEAR y
+    where tl.yconstruction is not null
+    union all
+    select tl.id as tr, tl.yconstruction, tl.operationallife, y.val as y, yy.val as yy
+    from TransmissionLine tl, YEAR y, YEAR yy
+    where tl.yconstruction is null
+    and yy.val + tl.operationallife > y.val
+    and yy.val <= y.val
+    order by tr, y"))
+        local tr = row[:tr]
+        local y = row[:y]
+        local yy = row[:yy]
+        local yconstruction = ismissing(row[:yconstruction]) ? 0 : row[:yconstruction]
+
+        if isassigned(lastkeys, 1) && (tr != lastkeys[1] || y != lastkeys[2])
+            # Create constraint
+            if sumexps[1] == AffExpr()
+                # Exogenously built line
+                if (lastvalsint[1] <= Meta.parse(lastkeys[2])) && (lastvalsint[1] + lastvalsint[2] > Meta.parse(lastkeys[2]))
+                    tr2_transmissionexists[constraintnum] = @constraint(jumpmodel, vtransmissionexists[lastkeys[1],lastkeys[2]] == 1)
+                else
+                    tr2_transmissionexists[constraintnum] = @constraint(jumpmodel, vtransmissionexists[lastkeys[1],lastkeys[2]] == 0)
+                end
+            else
+                # Endogenous option
+                tr2_transmissionexists[constraintnum] = @constraint(jumpmodel, sumexps[1] == vtransmissionexists[lastkeys[1],lastkeys[2]])
+            end
+
+            constraintnum += 1
+            sumexps[1] = AffExpr()
+        end
+
+        if !ismissing(yy)
+            append!(sumexps[1], vtransmissionbuilt[tr,yy])
+        end
+
+        lastkeys[1] = tr
+        lastkeys[2] = y
+        lastvalsint[1] = yconstruction
+        lastvalsint[2] = row[:operationallife]
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        if sumexps[1] == AffExpr()
+            # Exogenously built line
+            if (lastvalsint[1] <= Meta.parse(lastkeys[2])) && (lastvalsint[1] + lastvalsint[2] > Meta.parse(lastkeys[2]))
+                tr2_transmissionexists[constraintnum] = @constraint(jumpmodel, vtransmissionexists[lastkeys[1],lastkeys[2]] == 1)
+            else
+                tr2_transmissionexists[constraintnum] = @constraint(jumpmodel, vtransmissionexists[lastkeys[1],lastkeys[2]] == 0)
+            end
+        else
+            # Endogenous option
+            tr2_transmissionexists[constraintnum] = @constraint(jumpmodel, sumexps[1] == vtransmissionexists[lastkeys[1],lastkeys[2]])
+        end
+    end
+
+    logmsg("Created constraint Tr2_TransmissionExists.", quiet)
+end
+# END: Tr2_TransmissionExists.
+
+# BEGIN: Tr3_Flow, Tr4_MaxFlow, and Tr5_MinFlow.
+if transmissionmodeling
+    constraintnum = 1  # Number of next constraint to be added to constraint array
+    @constraintref tr3_flow[1:size(queryvtransmissionbyline)[1]]
+    @constraintref tr4_maxflow[1:size(queryvtransmissionbyline)[1]]
+    @constraintref tr5_minflow[1:size(queryvtransmissionbyline)[1]]
+
+    for row in DataFrames.eachrow(queryvtransmissionbyline)
+        local tr = row[:tr]
+        local n1 = row[:n1]
+        local n2 = row[:n2]
+        local l = row[:l]
+        local f = row[:f]
+        local y = row[:y]
+        local type = row[:type]
+
+        if type == 1  # DCOPF
+            # vtransmissionbyline is flow over line tr from n1 to n2 in model's power units
+            tr3_flow[constraintnum] = @constraint(jumpmodel, -1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]) * vtransmissionexists[tr,y]
+                == vtransmissionbyline[tr,l,f,y])
+            tr4_maxflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] <= row[:maxflow])
+            tr5_minflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] >= -row[:maxflow])
+        end
+
+        constraintnum += 1
+    end
+
+    logmsg("Created constraints Tr3_Flow, Tr4_MaxFlow, and Tr5_MinFlow.", quiet)
+end
+# END: Tr3_Flow, Tr4_MaxFlow, and Tr5_MinFlow.
+
+# BEGIN: EBa11Tr_EnergyBalanceEachTS5.
+if transmissionmodeling
+    constraintnum = 1  # Number of next constraint to be added to constraint array
+    @constraintref eba11tr_energybalanceeachts5[1:length(snode) * length(stimeslice) * length(sfuel) * length(syear)]
+
+    lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
+    sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtransmissionbyline sum
+
+    for row in DataFrames.eachrow(SQLite.query(db, "select n.val as n, ys.l as l, f.val as f, y.val as y,
+    cast(ys.val as real) as ys, tl1.tr as tr, tl1.n2 as n2, tl2.tr as trneg, tl2.n1 as n1
+    from NODE n, YearSplit_def ys, FUEL f, YEAR y, TransmissionModelingEnabled tme
+    left join
+    (select tl.id as tr, tl.n1 as n1, tl.n2 as n2, tl.f as f, tme2.y as y,
+	tme2.type as type
+    from TransmissionLine tl, NODE n2, TransmissionModelingEnabled tme2
+    where tl.n2 = n2.val
+    and n2.r = tme2.r and tl.f = tme2.f) tl1 on tl1.n1 = n.val and tl1.f = f.val and tl1.y = y.val
+		and tl1.type = tme.type
+    left join
+    (select tl.id as tr, tl.n1 as n1, tl.n2 as n2, tl.f as f, tme2.y as y,
+	tme2.type as type
+    from TransmissionLine tl, NODE n2, TransmissionModelingEnabled tme2
+    where tl.n1 = n2.val
+    and n2.r = tme2.r and tl.f = tme2.f) tl2 on tl2.n2 = n.val and tl2.f = f.val and tl2.y = y.val
+		and tl2.type = tme.type
+	where ys.y = y.val
+    and tme.r = n.r and tme.f = f.val and tme.y = y.val
+    order by n.val, ys.l, f.val, y.val"))
+        local n = row[:n]
+        local l = row[:l]
+        local f = row[:f]
+        local y = row[:y]
+        local tr = row[:tr]  # Transmission line for which n is from node (n1)
+        local trneg = row[:trneg]  # # Transmission line for which n is to node (n2)
+
+        if isassigned(lastkeys, 1) && (n != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
+            # Create constraint
+            eba11tr_energybalanceeachts5[constraintnum] = @constraint(jumpmodel, vproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
+                vdemandnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1])
+            constraintnum += 1
+
+            sumexps[1] = AffExpr()
+        end
+
+        if !ismissing(tr)
+            append!(sumexps[1], vtransmissionbyline[tr,l,f,y] * row[:ys])
+        end
+
+        if !ismissing(trneg)
+            append!(sumexps[1], -vtransmissionbyline[trneg,l,f,y] * row[:ys])
+        end
+
+        lastkeys[1] = n
+        lastkeys[2] = l
+        lastkeys[3] = f
+        lastkeys[4] = y
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        eba11tr_energybalanceeachts5[constraintnum] = @constraint(jumpmodel, vproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
+            vdemandnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1])
+    end
+
+    logmsg("Created constraint EBa11Tr_EnergyBalanceEachTS5.", quiet)
+end
+# END: EBa11Tr_EnergyBalanceEachTS5.
 
 # BEGIN: EBb1_EnergyBalanceEachYear1.
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref ebb1_energybalanceeachyear1[1:length(sregion) * length(sfuel) * length(syear)]
 
 for (r, f, y) in Base.product(sregion, sfuel, syear)
-    ebb1_energybalanceeachyear1[constraintnum] = @constraint(jumpmodel, sum([vproduction[r,l,f,y] for l = stimeslice]) == vproductionannual[r,f,y])
+    ebb1_energybalanceeachyear1[constraintnum] = @constraint(jumpmodel, sum([vproductionnn[r,l,f,y] for l = stimeslice]) == vproductionannualnn[r,f,y])
     constraintnum += 1
 end
 
 logmsg("Created constraint EBb1_EnergyBalanceEachYear1.", quiet)
 # END: EBb1_EnergyBalanceEachYear1.
 
+# BEGIN: EBb1Tr_EnergyBalanceEachYear1.
+if transmissionmodeling
+    constraintnum = 1  # Number of next constraint to be added to constraint array
+    @constraintref ebb1tr_energybalanceeachyear1[1:length(snode) * length(sfuel) * length(syear)]
+
+    for (n, f, y) in Base.product(snode, sfuel, syear)
+        ebb1tr_energybalanceeachyear1[constraintnum] = @constraint(jumpmodel, sum([vproductionnodal[n,l,f,y] for l = stimeslice]) == vproductionannualnodal[n,f,y])
+        constraintnum += 1
+    end
+
+    logmsg("Created constraint EBb1Tr_EnergyBalanceEachYear1.", quiet)
+end
+# END: EBb1Tr_EnergyBalanceEachYear1.
+
 # BEGIN: EBb2_EnergyBalanceEachYear2.
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref ebb2_energybalanceeachyear2[1:length(sregion) * length(sfuel) * length(syear)]
 
 for (r, f, y) in Base.product(sregion, sfuel, syear)
-    ebb2_energybalanceeachyear2[constraintnum] = @constraint(jumpmodel, sum([vuse[r,l,f,y] for l = stimeslice]) == vuseannual[r,f,y])
+    ebb2_energybalanceeachyear2[constraintnum] = @constraint(jumpmodel, sum([vusenn[r,l,f,y] for l = stimeslice]) == vuseannualnn[r,f,y])
     constraintnum += 1
 end
 
 logmsg("Created constraint EBb2_EnergyBalanceEachYear2.", quiet)
 # END: EBb2_EnergyBalanceEachYear2.
+
+# BEGIN: EBb2Tr_EnergyBalanceEachYear2.
+if transmissionmodeling
+    constraintnum = 1  # Number of next constraint to be added to constraint array
+    @constraintref ebb2tr_energybalanceeachyear2[1:length(snode) * length(sfuel) * length(syear)]
+
+    for (n, f, y) in Base.product(snode, sfuel, syear)
+        ebb2tr_energybalanceeachyear2[constraintnum] = @constraint(jumpmodel, sum([vusenodal[n,l,f,y] for l = stimeslice]) == vuseannualnodal[n,f,y])
+        constraintnum += 1
+    end
+
+    logmsg("Created constraint EBb2Tr_EnergyBalanceEachYear2.", quiet)
+end
+# END: EBb2Tr_EnergyBalanceEachYear2.
 
 # BEGIN: EBb3_EnergyBalanceEachYear3.
 constraintnum = 1  # Number of next constraint to be added to constraint array
@@ -1017,14 +1989,15 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = f, lastkeys[3] = y
 lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = aad
-sumexps = Array{AffExpr, 1}([AffExpr()])
-# sumexps[1] = vtradeannual sum
+sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtradeannual sum
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, f.val as f, y.val as y, cast(aad.val as real) as aad,
     tr.rr as rr, cast(tr.val as real) as trv
 from region r, fuel f, year y
 left join traderoute_def tr on tr.r = r.val and tr.f = f.val and tr.y = y.val
 left join AccumulatedAnnualDemand_def aad on aad.r = r.val and aad.f = f.val and aad.y = y.val
+left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
+where tme.id is null
 order by r.val, f.val, y.val"))
     local r = row[:r]
     local f = row[:f]
@@ -1032,8 +2005,8 @@ order by r.val, f.val, y.val"))
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || f != lastkeys[2] || y != lastkeys[3])
         # Create constraint
-        ebb4_energybalanceeachyear4[constraintnum] = @constraint(jumpmodel, vproductionannual[lastkeys[1],lastkeys[2],lastkeys[3]] >=
-            vuseannual[lastkeys[1],lastkeys[2],lastkeys[3]] + sumexps[1] + lastvals[1])
+        ebb4_energybalanceeachyear4[constraintnum] = @constraint(jumpmodel, vproductionannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] >=
+            vuseannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] + sumexps[1] + lastvals[1])
         constraintnum += 1
 
         sumexps[1] = AffExpr()
@@ -1055,51 +2028,150 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    ebb4_energybalanceeachyear4[constraintnum] = @constraint(jumpmodel, vproductionannual[lastkeys[1],lastkeys[2],lastkeys[3]] >=
-        vuseannual[lastkeys[1],lastkeys[2],lastkeys[3]] + sumexps[1] + lastvals[1])
+    ebb4_energybalanceeachyear4[constraintnum] = @constraint(jumpmodel, vproductionannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] >=
+        vuseannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] + sumexps[1] + lastvals[1])
 end
 
 logmsg("Created constraint EBb4_EnergyBalanceEachYear4.", quiet)
 # END: EBb4_EnergyBalanceEachYear4.
 
+# BEGIN: EBb4Tr_EnergyBalanceEachYear4.
+# For nodal modeling, where there is not trade, this constraint accounts for AccumulatedAnnualDemand only.
+if transmissionmodeling
+    constraintnum = 1  # Number of next constraint to be added to constraint array
+    @constraintref ebb4tr_energybalanceeachyear4[1:length(snode) * length(sfuel) * length(syear)]
+
+    for row in DataFrames.eachrow(SQLite.query(db,
+        "select ndd.n as n, ndd.f as f, ndd.y as y, cast(ndd.val as real) as ndd, cast(aad.val as real) as aad
+        from NodalDistributionDemand_def ndd, NODE n, TransmissionModelingEnabled tme, AccumulatedAnnualDemand_def aad
+        where
+        ndd.n = n.val
+        and tme.r = n.r and tme.f = ndd.f and tme.y = ndd.y
+        and aad.r = n.r and aad.f = ndd.f and aad.y = ndd.y
+        and aad.val > 0"))
+        local n = row[:n]
+        local f = row[:f]
+        local y = row[:y]
+
+        ebb4tr_energybalanceeachyear4[constraintnum] = @constraint(jumpmodel, vproductionannualnodal[n,f,y] >=
+            vuseannualnodal[n,f,y] + row[:aad] * row[:ndd])
+        constraintnum += 1
+    end
+
+    logmsg("Created constraint EBb4Tr_EnergyBalanceEachYear4.", quiet)
+end
+# END: EBb4Tr_EnergyBalanceEachYear4.
+
 # BEGIN: Acc1_FuelProductionByTechnology.
 if in("vproductionbytechnology", varstosavearr)
     constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref acc1_fuelproductionbytechnology[1:size(queryvrateofproductionbytechnology)[1]]
+    @constraintref acc1_fuelproductionbytechnology[1:size(queryvproductionbytechnologyindices)[1]]
 
-    for row in DataFrames.eachrow(queryvrateofproductionbytechnology)
+    for row in DataFrames.eachrow(queryvrateofproductionbytechnologynn)
         local r = row[:r]
         local l = row[:l]
         local t = row[:t]
         local f = row[:f]
         local y = row[:y]
 
-        acc1_fuelproductionbytechnology[constraintnum] = @constraint(jumpmodel, vrateofproductionbytechnology[r,l,t,f,y] * row[:ys] == vproductionbytechnology[r,l,t,f,y])
+        acc1_fuelproductionbytechnology[constraintnum] = @constraint(jumpmodel, vrateofproductionbytechnologynn[r,l,t,f,y] * row[:ys] == vproductionbytechnology[r,l,t,f,y])
         constraintnum += 1
     end
 
+    if transmissionmodeling
+        lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
+        sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproductionbytechnologynodal sum
+
+        for row in DataFrames.eachrow(queryvproductionbytechnologynodal)
+            local r = row[:r]
+            local l = row[:l]
+            local t = row[:t]
+            local f = row[:f]
+            local y = row[:y]
+
+            if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || t != lastkeys[3] || f != lastkeys[4] || y != lastkeys[5])
+                # Create constraint
+                acc1_fuelproductionbytechnology[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
+                    vproductionbytechnology[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4],lastkeys[5]])
+                constraintnum += 1
+
+                sumexps[1] = AffExpr()
+            end
+
+            append!(sumexps[1], vrateofproductionbytechnologynodal[row[:n],l,t,f,y] * row[:ys])
+
+            lastkeys[1] = r
+            lastkeys[2] = l
+            lastkeys[3] = t
+            lastkeys[4] = f
+            lastkeys[5] = y
+        end
+
+        # Create last constraint
+        if isassigned(lastkeys, 1)
+            acc1_fuelproductionbytechnology[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
+                vproductionbytechnology[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4],lastkeys[5]])
+        end
+    end  # transmissionmodeling
+
     logmsg("Created constraint Acc1_FuelProductionByTechnology.", quiet)
-end
+end  # in("vproductionbytechnology", varstosavearr)
 # END: Acc1_FuelProductionByTechnology.
 
 # BEGIN: Acc2_FuelUseByTechnology.
 if in("vusebytechnology", varstosavearr)
     constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref acc2_fuelusebytechnology[1:size(queryvrateofusebytechnology)[1]]
+    @constraintref acc2_fuelusebytechnology[1:size(queryvusebytechnologyindices)[1]]
 
-    for row in DataFrames.eachrow(queryvrateofusebytechnology)
+    for row in DataFrames.eachrow(queryvrateofusebytechnologynn)
         local r = row[:r]
         local l = row[:l]
         local t = row[:t]
         local f = row[:f]
         local y = row[:y]
 
-        acc2_fuelusebytechnology[constraintnum] = @constraint(jumpmodel, vrateofusebytechnology[r,l,t,f,y] * row[:ys] == vusebytechnology[r,l,t,f,y])
+        acc2_fuelusebytechnology[constraintnum] = @constraint(jumpmodel, vrateofusebytechnologynn[r,l,t,f,y] * row[:ys] == vusebytechnology[r,l,t,f,y])
         constraintnum += 1
     end
 
+    if transmissionmodeling
+        lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
+        sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofusebytechnologynodal sum
+
+        for row in DataFrames.eachrow(queryvusebytechnologynodal)
+            local r = row[:r]
+            local l = row[:l]
+            local t = row[:t]
+            local f = row[:f]
+            local y = row[:y]
+
+            if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || t != lastkeys[3] || f != lastkeys[4] || y != lastkeys[5])
+                # Create constraint
+                acc2_fuelusebytechnology[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
+                    vusebytechnology[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4],lastkeys[5]])
+                constraintnum += 1
+
+                sumexps[1] = AffExpr()
+            end
+
+            append!(sumexps[1], vrateofusebytechnologynodal[row[:n],l,t,f,y] * row[:ys])
+
+            lastkeys[1] = r
+            lastkeys[2] = l
+            lastkeys[3] = t
+            lastkeys[4] = f
+            lastkeys[5] = y
+        end
+
+        # Create last constraint
+        if isassigned(lastkeys, 1)
+            acc2_fuelusebytechnology[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
+                vusebytechnology[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4],lastkeys[5]])
+        end
+    end  # transmissionmodeling
+
     logmsg("Created constraint Acc2_FuelUseByTechnology.", quiet)
-end
+end  # in("vusebytechnology", varstosavearr)
 # END: Acc2_FuelUseByTechnology.
 
 # BEGIN: Acc3_AverageAnnualRateOfActivity.
@@ -1107,8 +2179,7 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref acc3_averageannualrateofactivity[1:length(sregion) * length(stechnology) * length(smode_of_operation) * length(syear)]
 
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = m, lastkeys[4] = y
-sumexps = Array{AffExpr, 1}([AffExpr()])
-# sumexps[1] = vrateofactivity sum
+sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivity sum
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, m.val as m, y.val as y, ys.l as l, cast(ys.val as real) as ys
 from region r, technology t, mode_of_operation m, year y, YearSplit_def ys
@@ -1790,6 +2861,23 @@ end
 logmsg("Created constraint CC1_UndiscountedCapitalInvestment.", quiet)
 # END: CC1_UndiscountedCapitalInvestment.
 
+# BEGIN: CC1Tr_UndiscountedCapitalInvestment.
+if transmissionmodeling
+    cc1tr_undiscountedcapitalinvestment::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+    for row in DataFrames.eachrow(SQLite.query(db, "select tl.id as tr, y.val as y, cast(tl.CapitalCost as real) as cc from
+    TransmissionLine tl, YEAR y
+    where tl.CapitalCost is not null"))
+        local tr = row[:tr]
+        local y = row[:y]
+
+        push!(cc1tr_undiscountedcapitalinvestment, @constraint(jumpmodel, row[:cc] * vtransmissionbuilt[tr,y] == vcapitalinvestmenttransmission[tr,y]))
+    end
+
+    logmsg("Created constraint CC1Tr_UndiscountedCapitalInvestment.", quiet)
+end
+# END: CC1Tr_UndiscountedCapitalInvestment.
+
 # BEGIN: CC2_DiscountingCapitalInvestment.
 constraintnum = 1  # Number of next constraint to be added to constraint array
 
@@ -1811,7 +2899,31 @@ end
 logmsg("Created constraint CC2_DiscountingCapitalInvestment.", quiet)
 # END: CC2_DiscountingCapitalInvestment.
 
+# BEGIN: CC2Tr_DiscountingCapitalInvestment.
+if transmissionmodeling
+    # Note: if a transmission line crosses regional boundaries, costs are assigned to from region (associated with n1)
+    querytrydr::DataFrames.DataFrame = SQLite.query(db, "select tl.id as tr, y.val as y, cast(dr.val as real) as dr
+	from TransmissionLine tl, NODE n, YEAR y, DiscountRate_def dr
+    where tl.n1 = n.val
+	and n.r = dr.r")
+
+    cc2tr_discountingcapitalinvestment::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+    for row in DataFrames.eachrow(querytrydr)
+        local tr = row[:tr]
+        local y = row[:y]
+
+        push!(cc2tr_discountingcapitalinvestment, @constraint(jumpmodel,
+            vcapitalinvestmenttransmission[tr,y] / ((1 + row[:dr])^(Meta.parse(y) - Meta.parse(first(syear)))) == vdiscountedcapitalinvestmenttransmission[tr,y]))
+    end
+
+    logmsg("Created constraint CC2Tr_DiscountingCapitalInvestment.", quiet)
+end
+# END: CC2Tr_DiscountingCapitalInvestment.
+
 # BEGIN: SV1_SalvageValueAtEndOfPeriod1.
+# DepreciationMethod 1 (if discount rate > 0): base salvage value on % of discounted value remaining at end of modeling period.
+# DepreciationMethod 2 (or dm 1 if discount rate = 0): base salvage value on % of operational life remaining at end of modeling period.
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref sv1_salvagevalueatendofperiod1[1:length(sregion) * length(stechnology) * length(syear)]
 
@@ -1829,12 +2941,38 @@ and cc.r = r.val and cc.t = t.val and cc.y = y.val"))
     local y = row[:y]
     local dr = row[:dr]
 
-    sv1_salvagevalueatendofperiod1[constraintnum] = @constraint(jumpmodel, vsalvagevalue[r,t,y] == row[:cc] * vnewcapacity[r,t,y] * (1 - (((1 + dr)^(Meta.parse(last(syear)) - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ol]) - 1))))
+    sv1_salvagevalueatendofperiod1[constraintnum] = @constraint(jumpmodel, vsalvagevalue[r,t,y] ==
+        row[:cc] * vnewcapacity[r,t,y] * (1 - (((1 + dr)^(Meta.parse(last(syear)) - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ol]) - 1))))
     constraintnum += 1
 end
 
 logmsg("Created constraint SV1_SalvageValueAtEndOfPeriod1.", quiet)
 # END: SV1_SalvageValueAtEndOfPeriod1.
+
+# BEGIN: SV1Tr_SalvageValueAtEndOfPeriod1.
+if transmissionmodeling
+    sv1tr_salvagevalueatendofperiod1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+    for row in DataFrames.eachrow(SQLite.query(db, "select tl.id as tr, y.val as y, cast(tl.CapitalCost as real) as cc,
+	cast(tl.operationallife as real) as ol, cast(dr.val as real) as dr
+	from TransmissionLine tl, NODE n, YEAR y, DepreciationMethod_def dm, DiscountRate_def dr
+    where tl.CapitalCost is not null
+	and tl.n1 = n.val
+	and dm.r = n.r
+	and dr.r = n.r
+	and y.val + tl.operationallife - 1 > " * last(syear) *
+	" and (dm.val = 1 and dr.val > 0)"))
+        local tr = row[:tr]
+        local y = row[:y]
+        local dr = row[:dr]
+
+        push!(sv1tr_salvagevalueatendofperiod1, @constraint(jumpmodel, vsalvagevaluetransmission[tr,y] ==
+            row[:cc] * vtransmissionbuilt[tr,y] * (1 - (((1 + dr)^(Meta.parse(last(syear)) - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ol]) - 1)))))
+    end
+
+    logmsg("Created constraint SV1Tr_SalvageValueAtEndOfPeriod1.", quiet)
+end
+# END: SV1Tr_SalvageValueAtEndOfPeriod1.
 
 # BEGIN: SV2_SalvageValueAtEndOfPeriod2.
 constraintnum = 1  # Number of next constraint to be added to constraint array
@@ -1860,12 +2998,37 @@ and y.val + ol.val - 1 > " * last(syear) *
     local t = row[:t]
     local y = row[:y]
 
-    sv2_salvagevalueatendofperiod2[constraintnum] = @constraint(jumpmodel, vsalvagevalue[r,t,y] == row[:cc] * vnewcapacity[r,t,y] * (1 - (Meta.parse(last(syear)) - Meta.parse(y) + 1) / row[:ol]))
+    sv2_salvagevalueatendofperiod2[constraintnum] = @constraint(jumpmodel, vsalvagevalue[r,t,y] ==
+        row[:cc] * vnewcapacity[r,t,y] * (1 - (Meta.parse(last(syear)) - Meta.parse(y) + 1) / row[:ol]))
     constraintnum += 1
 end
 
 logmsg("Created constraint SV2_SalvageValueAtEndOfPeriod2.", quiet)
 # END: SV2_SalvageValueAtEndOfPeriod2.
+
+# BEGIN: SV2Tr_SalvageValueAtEndOfPeriod2.
+if transmissionmodeling
+    sv2tr_salvagevalueatendofperiod2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+    for row in DataFrames.eachrow(SQLite.query(db, "select tl.id as tr, y.val as y, cast(tl.CapitalCost as real) as cc,
+	cast(tl.operationallife as real) as ol
+	from TransmissionLine tl, NODE n, YEAR y, DepreciationMethod_def dm, DiscountRate_def dr
+    where tl.CapitalCost is not null
+	and tl.n1 = n.val
+	and dm.r = n.r
+	and dr.r = n.r
+	and y.val + tl.operationallife - 1 > " * last(syear) *
+	" and ((dm.val = 1 and dr.val = 0) or (dm.val = 2))"))
+        local tr = row[:tr]
+        local y = row[:y]
+
+        push!(sv2tr_salvagevalueatendofperiod2, @constraint(jumpmodel, vsalvagevaluetransmission[tr,y] ==
+            row[:cc] * vtransmissionbuilt[tr,y] * (1 - (Meta.parse(last(syear)) - Meta.parse(y) + 1) / row[:ol])))
+    end
+
+    logmsg("Created constraint SV2Tr_SalvageValueAtEndOfPeriod2.", quiet)
+end
+# END: SV2Tr_SalvageValueAtEndOfPeriod2.
 
 # BEGIN: SV3_SalvageValueAtEndOfPeriod3.
 constraintnum = 1  # Number of next constraint to be added to constraint array
@@ -1886,6 +3049,24 @@ end
 logmsg("Created constraint SV3_SalvageValueAtEndOfPeriod3.", quiet)
 # END: SV3_SalvageValueAtEndOfPeriod3.
 
+# BEGIN: SV3Tr_SalvageValueAtEndOfPeriod3.
+if transmissionmodeling
+    sv3tr_salvagevalueatendofperiod3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+    for row in DataFrames.eachrow(SQLite.query(db, "select tl.id as tr, y.val as y
+	from TransmissionLine tl, YEAR y
+    where tl.CapitalCost is not null
+	and y.val + tl.operationallife - 1 <= " * last(syear)))
+        local tr = row[:tr]
+        local y = row[:y]
+
+        push!(sv3tr_salvagevalueatendofperiod3, @constraint(jumpmodel, vsalvagevaluetransmission[tr,y] == 0))
+    end
+
+    logmsg("Created constraint SV3Tr_SalvageValueAtEndOfPeriod3.", quiet)
+end
+# END: SV3Tr_SalvageValueAtEndOfPeriod3.
+
 # BEGIN: SV4_SalvageValueDiscountedToStartYear.
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref sv4_salvagevaluediscountedtostartyear[1:size(queryrtydr)[1]]
@@ -1895,12 +3076,29 @@ for row in DataFrames.eachrow(queryrtydr)
     local t = row[:t]
     local y = row[:y]
 
-    sv4_salvagevaluediscountedtostartyear[constraintnum] = @constraint(jumpmodel, vdiscountedsalvagevalue[r,t,y] == vsalvagevalue[r,t,y] / ((1 + row[:dr])^(1 + Meta.parse(last(syear)) - Meta.parse(first(syear)))))
+    sv4_salvagevaluediscountedtostartyear[constraintnum] = @constraint(jumpmodel, vdiscountedsalvagevalue[r,t,y] ==
+        vsalvagevalue[r,t,y] / ((1 + row[:dr])^(1 + Meta.parse(last(syear)) - Meta.parse(first(syear)))))
     constraintnum += 1
 end
 
 logmsg("Created constraint SV4_SalvageValueDiscountedToStartYear.", quiet)
 # END: SV4_SalvageValueDiscountedToStartYear.
+
+# BEGIN: SV4Tr_SalvageValueDiscountedToStartYear.
+if transmissionmodeling
+    sv4tr_salvagevaluediscountedtostartyear::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+    for row in DataFrames.eachrow(querytrydr)
+        local tr = row[:tr]
+        local y = row[:y]
+
+        push!(sv4tr_salvagevaluediscountedtostartyear, @constraint(jumpmodel, vdiscountedsalvagevaluetransmission[tr,y] ==
+            vsalvagevaluetransmission[tr,y] / ((1 + row[:dr])^(1 + Meta.parse(last(syear)) - Meta.parse(first(syear))))))
+    end
+
+    logmsg("Created constraint SV4Tr_SalvageValueDiscountedToStartYear.", quiet)
+end
+# END: SV4Tr_SalvageValueDiscountedToStartYear.
 
 # BEGIN: OC1_OperatingCostsVariable.
 constraintnum = 1  # Number of next constraint to be added to constraint array
@@ -1975,6 +3173,43 @@ end
 logmsg("Created constraint OC3_OperatingCostsTotalAnnual.", quiet)
 # END: OC3_OperatingCostsTotalAnnual.
 
+# BEGIN: OCTr_OperatingCosts.
+if transmissionmodeling
+    octr_operatingcosts::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    lastkeys = Array{String, 1}(undef,2)  # lastkeys[1] = tr, lastkeys[2] = y
+    lastvals = Array{Float64, 1}(undef,1)  # lastvals[1] = fc
+    sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtransmissionbyline sum
+
+    for row in DataFrames.eachrow(queryvtransmissionbyline)
+        local tr = row[:tr]
+        local y = row[:y]
+        local vc = ismissing(row[:vc]) ? 0.0 : row[:vc]
+        local fc = ismissing(row[:fc]) ? 0.0 : row[:fc]
+
+        if isassigned(lastkeys, 1) && (tr != lastkeys[1] || y != lastkeys[2])
+            # Create constraint
+            push!(octr_operatingcosts, @constraint(jumpmodel, sumexps[1]
+                + vtransmissionexists[lastkeys[1],lastkeys[2]] * lastvals[1] == voperatingcosttransmission[lastkeys[1],lastkeys[2]]))
+            sumexps[1] = AffExpr()
+        end
+
+        append!(sumexps[1], vtransmissionbyline[tr,row[:l],row[:f],y] * row[:ys] * vc)
+
+        lastkeys[1] = tr
+        lastkeys[2] = y
+        lastvals[1] = fc
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        push!(octr_operatingcosts, @constraint(jumpmodel, sumexps[1]
+            + vtransmissionexists[lastkeys[1],lastkeys[2]] * lastvals[1] == voperatingcosttransmission[lastkeys[1],lastkeys[2]]))
+    end
+
+    logmsg("Created constraint OCTr_OperatingCosts.", quiet)
+end
+# END: OCTr_OperatingCosts.
+
 # BEGIN: OC4_DiscountedOperatingCostsTotalAnnual.
 constraintnum = 1  # Number of next constraint to be added to constraint array
 
@@ -1986,31 +3221,93 @@ for row in DataFrames.eachrow(queryrtydr)
     local y = row[:y]
     local dr = row[:dr]
 
-    oc4_discountedoperatingcoststotalannual[constraintnum] = @constraint(jumpmodel, voperatingcost[r,t,y] / ((1 + dr)^(Meta.parse(y) - Meta.parse(first(syear)) + 0.5)) == vdiscountedoperatingcost[r,t,y])
+    oc4_discountedoperatingcoststotalannual[constraintnum] = @constraint(jumpmodel,
+        voperatingcost[r,t,y] / ((1 + dr)^(Meta.parse(y) - Meta.parse(first(syear)) + 0.5)) == vdiscountedoperatingcost[r,t,y])
     constraintnum += 1
 end
 
 logmsg("Created constraint OC4_DiscountedOperatingCostsTotalAnnual.", quiet)
 # END: OC4_DiscountedOperatingCostsTotalAnnual.
 
+# BEGIN: OC4Tr_DiscountedOperatingCostsTotalAnnual.
+if transmissionmodeling
+    oc4tr_discountedoperatingcoststotalannual::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+    for row in DataFrames.eachrow(querytrydr)
+        local tr = row[:tr]
+        local y = row[:y]
+        local dr = row[:dr]
+
+        push!(oc4tr_discountedoperatingcoststotalannual, @constraint(jumpmodel,
+            voperatingcosttransmission[tr,y] / ((1 + dr)^(Meta.parse(y) - Meta.parse(first(syear)) + 0.5)) == vdiscountedoperatingcosttransmission[tr,y]))
+    end
+
+    logmsg("Created constraint OC4Tr_DiscountedOperatingCostsTotalAnnual.", quiet)
+end
+# END: OC4Tr_DiscountedOperatingCostsTotalAnnual.
+
 # BEGIN: TDC1_TotalDiscountedCostByTechnology.
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref tdc1_totaldiscountedcostbytechnology[1:length(sregion) * length(stechnology) * length(syear)]
 
 for (r, t, y) in Base.product(sregion, stechnology, syear)
-    tdc1_totaldiscountedcostbytechnology[constraintnum] = @constraint(jumpmodel, vdiscountedoperatingcost[r,t,y] + vdiscountedcapitalinvestment[r,t,y] + vdiscountedtechnologyemissionspenalty[r,t,y] - vdiscountedsalvagevalue[r,t,y] == vtotaldiscountedcostbytechnology[r,t,y])
+    tdc1_totaldiscountedcostbytechnology[constraintnum] = @constraint(jumpmodel,
+        vdiscountedoperatingcost[r,t,y] + vdiscountedcapitalinvestment[r,t,y]
+        + vdiscountedtechnologyemissionspenalty[r,t,y] - vdiscountedsalvagevalue[r,t,y]
+        == vtotaldiscountedcostbytechnology[r,t,y])
     constraintnum += 1
 end
 
 logmsg("Created constraint TDC1_TotalDiscountedCostByTechnology.", quiet)
 # END: TDC1_TotalDiscountedCostByTechnology.
 
+# BEGIN: TDCTr_TotalDiscountedTransmissionCostByRegion.
+if transmissionmodeling
+    tdctr_totaldiscountedtransmissioncostbyregion::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    lastkeys = Array{String, 1}(undef,2)  # lastkeys[1] = r, lastkeys[2] = y
+    sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = costs sum
+
+    for row in DataFrames.eachrow(SQLite.query(db, "select n.r as r, tl.id as tr, y.val as y
+	from TransmissionLine tl, NODE n, YEAR y
+    where tl.n1 = n.val
+	order by n.r, y.val"))
+        local r = row[:r]
+        local y = row[:y]
+        local tr = row[:tr]
+
+        if isassigned(lastkeys, 1) && (r != lastkeys[1] || y != lastkeys[2])
+            # Create constraint
+            push!(tdctr_totaldiscountedtransmissioncostbyregion, @constraint(jumpmodel,
+                sumexps[1] == vtotaldiscountedtransmissioncostbyregion[lastkeys[1],lastkeys[2]]))
+            sumexps[1] = AffExpr()
+        end
+
+        append!(sumexps[1], vdiscountedcapitalinvestmenttransmission[tr,y] + vdiscountedsalvagevaluetransmission[tr,y]
+            + vdiscountedoperatingcosttransmission[tr,y])
+
+        lastkeys[1] = r
+        lastkeys[2] = y
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        push!(tdctr_totaldiscountedtransmissioncostbyregion, @constraint(jumpmodel,
+            sumexps[1] == vtotaldiscountedtransmissioncostbyregion[lastkeys[1],lastkeys[2]]))
+    end
+
+    logmsg("Created constraint TDCTr_TotalDiscountedTransmissionCostByRegion.", quiet)
+end
+# END: TDCTr_TotalDiscountedTransmissionCostByRegion.
+
 # BEGIN: TDC2_TotalDiscountedCost.
 constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref tdc2_totaldiscountedcost[1:length(sregion) * length(syear)]
 
 for (r, y) in Base.product(sregion, syear)
-    tdc2_totaldiscountedcost[constraintnum] = @constraint(jumpmodel, (length(stechnology) == 0 ? 0 : sum([vtotaldiscountedcostbytechnology[r,t,y] for t = stechnology])) + (length(sstorage) == 0 ? 0 : sum([vtotaldiscountedstoragecost[r,s,y] for s = sstorage])) == vtotaldiscountedcost[r,y])
+    tdc2_totaldiscountedcost[constraintnum] = @constraint(jumpmodel, (length(stechnology) == 0 ? 0 : sum([vtotaldiscountedcostbytechnology[r,t,y] for t = stechnology]))
+        + (length(sstorage) == 0 ? 0 : sum([vtotaldiscountedstoragecost[r,s,y] for s = sstorage]))
+        + (transmissionmodeling ? vtotaldiscountedtransmissioncostbyregion[r,y] : 0)
+        == vtotaldiscountedcost[r,y])
     constraintnum += 1
 end
 
@@ -2319,13 +3616,14 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref re1_fuelproductionbytechnologyannual[1:length(sregion) * length(stechnology) * length(sfuel) * length(syear)]
 
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = f, lastkeys[4] = y
-sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vproductionbytechnology-equivalent sum
+sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vproductionbytechnologynn-equivalent sum
 
 for row in DataFrames.eachrow(queryvproductionbytechnologyannual)
     local r = row[:r]
     local t = row[:t]
     local f = row[:f]
     local y = row[:y]
+    local n = row[:n]
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
         # Create constraint
@@ -2335,7 +3633,11 @@ for row in DataFrames.eachrow(queryvproductionbytechnologyannual)
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vrateofproductionbytechnology[r,row[:l],t,f,y] * row[:ys])
+    if ismissing(n)
+        append!(sumexps[1], vrateofproductionbytechnologynn[r,row[:l],t,f,y] * row[:ys])
+    else
+        append!(sumexps[1], vrateofproductionbytechnologynodal[n,row[:l],t,f,y] * row[:ys])
+    end
 
     lastkeys[1] = r
     lastkeys[2] = t
@@ -2356,13 +3658,14 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 @constraintref fuelusebytechnologyannual[1:length(sregion) * length(stechnology) * length(sfuel) * length(syear)]
 
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = f, lastkeys[4] = y
-sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vusebytechnology-equivalent sum
+sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vusebytechnologynn-equivalent sum
 
 for row in DataFrames.eachrow(queryvusebytechnologyannual)
     local r = row[:r]
     local t = row[:t]
     local f = row[:f]
     local y = row[:y]
+    local n = row[:n]
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
         # Create constraint
@@ -2372,7 +3675,11 @@ for row in DataFrames.eachrow(queryvusebytechnologyannual)
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vrateofusebytechnology[r,row[:l],t,f,y] * row[:ys])
+    if ismissing(n)
+        append!(sumexps[1], vrateofusebytechnologynn[r,row[:l],t,f,y] * row[:ys])
+    else
+        append!(sumexps[1], vrateofusebytechnologynodal[n,row[:l],t,f,y] * row[:ys])
+    end
 
     lastkeys[1] = r
     lastkeys[2] = t
@@ -2396,8 +3703,11 @@ lastkeys = Array{String, 1}(undef,2)  # lastkeys[1] = r, lastkeys[2] = y
 sumexps = Array{AffExpr, 1}([AffExpr()]) # sumexps[1] = vproductionbytechnologyannual sum
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, y.val as y, oar.t as t, oar.f as f, cast(ret.val as real) as ret
-from REGION r, YEAR y, OutputActivityRatio_def oar, RETagTechnology_def ret
-where oar.r = r.val and oar.t = ret.t and oar.y = y.val and oar.val <> 0
+from REGION r, YEAR y, RETagTechnology_def ret,
+(select distinct r, t, f, y
+from OutputActivityRatio_def
+where val <> 0) oar
+where oar.r = r.val and oar.t = ret.t and oar.y = y.val
 and ret.r = r.val and ret.y = y.val and ret.val <> 0
 order by r.val, y.val"))
     local r = row[:r]
@@ -2474,17 +3784,15 @@ constraintnum = 1  # Number of next constraint to be added to constraint array
 
 for row in DataFrames.eachrow(SQLite.query(db, "select ry.r as r, ry.y as y, cast(rmp.val as real) as rmp
 from
-(select r.val as r, y.val as y
+(select distinct r.val as r, y.val as y
 from REGION r, TECHNOLOGY t, FUEL f, YEAR y, OutputActivityRatio_def oar, RETagTechnology_def ret
 where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val and oar.val <> 0
 and ret.r = r.val and ret.t = t.val and ret.y = y.val and ret.val <> 0
-group by r.val, y.val
 intersect
-select r.val as r, y.val as y
+select distinct r.val as r, y.val as y
 from REGION r, YEAR y, TIMESLICE l, FUEL f, YearSplit_def ys, RETagFuel_def rtf
 where ys.l = l.val and ys.y = y.val
-and rtf.r = r.val and rtf.f = f.val and rtf.y = y.val and rtf.val <> 0
-group by r.val, y.val) ry, REMinProductionTarget_def rmp
+and rtf.r = r.val and rtf.f = f.val and rtf.y = y.val and rtf.val <> 0) ry, REMinProductionTarget_def rmp
 where rmp.r = ry.r and rmp.y = ry.y"))
     local r = row[:r]
     local y = row[:y]
@@ -2610,7 +3918,7 @@ for row in DataFrames.eachrow(queryvannualtechnologyemissionpenaltybyemission)
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vannualtechnologyemission[r,t,e,y] * row[:ep])
+    append!(sumexps[1], vannualtechnologyemission[r,t,row[:e],y] * row[:ep])
 
     lastkeys[1] = r
     lastkeys[2] = t
@@ -2775,7 +4083,7 @@ end  # calculatescenario()
         vaccumulatednewcapacity, vtotalcapacityannual,
         vtotaltechnologyannualactivity, vtotalannualtechnologyactivitybymode,
         vproductionbytechnologyannual, vproduction, vusebytechnologyannual,
-        vuse, vtrade, vtradeannual, vproductionannual, vuseannual,
+        vusenn, vtrade, vtradeannual, vproductionannual, vuseannual,
         vcapitalinvestment, vdiscountedcapitalinvestment, vsalvagevalue,
         vdiscountedsalvagevalue, voperatingcost, vdiscountedoperatingcost,
         vtotaldiscountedcost",
@@ -2811,7 +4119,7 @@ function calculategmpscenario(
     gmpdatapath::String,
     gmpmodelpath::String = normpath(joinpath(@__DIR__, "..", "utils", "gmpl2sql", "osemosys_2017_11_08_long.txt"));
     jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
-    varstosave::String = "vdemand, vnewstoragecapacity, vaccumulatednewstoragecapacity, vstorageupperlimit, vstoragelowerlimit, vcapitalinvestmentstorage, vdiscountedcapitalinvestmentstorage, vsalvagevaluestorage, vdiscountedsalvagevaluestorage, vnewcapacity, vaccumulatednewcapacity, vtotalcapacityannual, vtotaltechnologyannualactivity, vtotalannualtechnologyactivitybymode, vproductionbytechnologyannual, vproduction, vusebytechnologyannual, vuse, vtrade, vtradeannual, vproductionannual, vuseannual, vcapitalinvestment, vdiscountedcapitalinvestment, vsalvagevalue, vdiscountedsalvagevalue, voperatingcost, vdiscountedoperatingcost, vtotaldiscountedcost",
+    varstosave::String = "vdemand, vnewstoragecapacity, vaccumulatednewstoragecapacity, vstorageupperlimit, vstoragelowerlimit, vcapitalinvestmentstorage, vdiscountedcapitalinvestmentstorage, vsalvagevaluestorage, vdiscountedsalvagevaluestorage, vnewcapacity, vaccumulatednewcapacity, vtotalcapacityannual, vtotaltechnologyannualactivity, vtotalannualtechnologyactivitybymode, vproductionbytechnologyannual, vproduction, vusebytechnologyannual, vusenn, vtrade, vtradeannual, vproductionannual, vuseannual, vcapitalinvestment, vdiscountedcapitalinvestment, vsalvagevalue, vdiscountedsalvagevalue, voperatingcost, vdiscountedoperatingcost, vtotaldiscountedcost",
     targetprocs::Array{Int, 1} = Array{Int, 1}([1]),
     quiet::Bool = false)
 
