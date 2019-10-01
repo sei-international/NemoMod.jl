@@ -93,7 +93,7 @@ logmsg("Dropped pre-existing result tables from database.", quiet)
 # END: Drop any pre-existing result tables.
 
 # BEGIN: Temporary - Add transmission data.
-addtransmissiondata(db, quiet)
+addtransmissiondata(db; quiet = quiet)
 # END: Temporary - Add transmission data.
 
 # BEGIN: Check if transmission modeling is required.
