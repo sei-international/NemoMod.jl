@@ -765,10 +765,10 @@ function addtransmissiontables(db::SQLite.DB; foreignkeys::Bool = false, quiet::
 end  # addtransmissiontables(db::SQLite.DB, foreignkeys::Bool = false)
 
 function addtransmissiondata(db::SQLite.DB; quiet::Bool = false)
-    if isfile("c:/nemomod/" * splitext(basename(db.file))[1] * "_transmission.sqlite")
-        # First, add transmission tables to scenario database
-        addtransmissiontables(db; foreignkeys = false, quiet = quiet)
+    # First, add transmission tables to scenario database
+    addtransmissiontables(db; foreignkeys = false, quiet = quiet)
 
+    if isfile("c:/nemomod/" * splitext(basename(db.file))[1] * "_transmission.sqlite")
         # Next, copy in transmission data from transmission database
         # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
         try
