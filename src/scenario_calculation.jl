@@ -106,6 +106,9 @@ if length(transmissionmodelingtypes) > 0
     transmissionmodeling = true
 end
 
+# Temporary - save transmission variables if transmission modeling is enabled
+transmissionmodeling && push!(varstosavearr, "vtransmissionbuilt", "vtransmissionexists", "vtransmissionbyline")
+
 logmsg("Verified that transmission modeling " * (transmissionmodeling ? "is" : "is not") * " enabled.", quiet)
 # END: Check if transmission modeling is required.
 
