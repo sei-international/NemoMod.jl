@@ -1612,13 +1612,13 @@ if transmissionmodeling
     @constraintref eba8tr_energybalanceeachts2[1:size(queryvproduse)[1]]
 
     for row in DataFrames.eachrow(queryvproduse)
-        local r = row[:r]
+        local n = row[:n]
         local l = row[:l]
         local f = row[:f]
         local y = row[:y]
 
-        eba7tr_energybalanceeachts1[constraintnum] = @constraint(jumpmodel, vrateofproductionnodal[r,l,f,y] * row[:ys] == vproductionnodal[r,l,f,y])
-        eba8tr_energybalanceeachts2[constraintnum] = @constraint(jumpmodel, vrateofusenodal[r,l,f,y] * row[:ys] == vusenodal[r,l,f,y])
+        eba7tr_energybalanceeachts1[constraintnum] = @constraint(jumpmodel, vrateofproductionnodal[n,l,f,y] * row[:ys] == vproductionnodal[n,l,f,y])
+        eba8tr_energybalanceeachts2[constraintnum] = @constraint(jumpmodel, vrateofusenodal[n,l,f,y] * row[:ys] == vusenodal[n,l,f,y])
 
         constraintnum += 1
     end
