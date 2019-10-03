@@ -1600,12 +1600,12 @@ logmsg("Created constraints EBa7_EnergyBalanceEachTS1 and EBa8_EnergyBalanceEach
 
 # BEGIN: EBa7Tr_EnergyBalanceEachTS1 and EBa8Tr_EnergyBalanceEachTS2.
 if transmissionmodeling
-    queryvproduse = SQLite.query(db, "select r.val as r, l.val as l, f.val as f, y.val as y, cast(ys.val as real) as ys
-    from region r, timeslice l, fuel f, year y, YearSplit_def ys,
+    queryvproduse = SQLite.query(db, "select n.val as n, l.val as l, f.val as f, y.val as y, cast(ys.val as real) as ys
+    from node n, timeslice l, fuel f, year y, YearSplit_def ys,
     TransmissionModelingEnabled tme
     where
     ys.l = l.val and ys.y = y.val
-    and tme.r = r.val and tme.f = f.val and tme.y = y.val")
+    and tme.r = n.r and tme.f = f.val and tme.y = y.val")
 
     constraintnum = 1  # Number of next constraint to be added to constraint array
     @constraintref eba7tr_energybalanceeachts1[1:size(queryvproduse)[1]]
