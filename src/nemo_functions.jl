@@ -768,13 +768,21 @@ function addtransmissiondata(db::SQLite.DB; quiet::Bool = false)
     # First, add transmission tables to scenario database
     addtransmissiontables(db; foreignkeys = false, quiet = quiet)
 
-    if isfile("c:/nemomod/" * splitext(basename(db.file))[1] * "_transmission.sqlite")
-        # Next, copy in transmission data from transmission database
+    # Next, copy in transmission data from transmission database
+    local transmissiondbpath::String  # Path to be searched for transmission db
+
+    if occursin("~", db.file)
+        transmissiondbpath = "c:/nemomod/" * splitext(basename(Base.Filesystem.longpath(db.file)))[1] * "_transmission.sqlite"
+    else
+        transmissiondbpath = "c:/nemomod/" * splitext(basename(db.file))[1] * "_transmission.sqlite"
+    end
+
+    if isfile(transmissiondbpath)
         # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
         try
             # BEGIN: SQLite transaction.
             SQLite.execute!(db, "BEGIN")
-            SQLite.execute!(db, "ATTACH DATABASE '" * "c:/nemomod/" * splitext(basename(db.file))[1] * "_transmission.sqlite' as trdb")
+            SQLite.execute!(db, "ATTACH DATABASE '" * transmissiondbpath * "' as trdb")
 
             SQLite.execute!(db, "DELETE FROM NodalDistributionTechnologyCapacity")
             SQLite.execute!(db, "DELETE FROM NodalDistributionStorageCapacity")
