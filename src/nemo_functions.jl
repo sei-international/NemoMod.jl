@@ -771,7 +771,7 @@ function addtransmissiondata(db::SQLite.DB; quiet::Bool = false)
     # Next, copy in transmission data from transmission database
     local transmissiondbpath::String  # Path to be searched for transmission db
 
-    if occursin("~", db.file)
+    if Sys.iswindows() && occursin("~", db.file)
         transmissiondbpath = "c:/nemomod/" * splitext(basename(Base.Filesystem.longpath(db.file)))[1] * "_transmission.sqlite"
     else
         transmissiondbpath = "c:/nemomod/" * splitext(basename(db.file))[1] * "_transmission.sqlite"
