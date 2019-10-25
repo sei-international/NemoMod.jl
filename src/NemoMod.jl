@@ -10,7 +10,7 @@
 module NemoMod
 
 # BEGIN: Access other modules and code files.
-using JuMP, SQLite, DataFrames, Distributed, Dates
+using JuMP, SQLite, DataFrames, Distributed, Dates, ConfParser
 using GLPKMathProgInterface, Cbc  # Default solvers
 
 include("nemo_functions.jl")  # Core |nemo functions

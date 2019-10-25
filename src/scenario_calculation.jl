@@ -71,6 +71,21 @@ function calculatescenario(
 
 logmsg("Started scenario calculation.")
 
+# BEGIN: Read config file.
+configfile = getconfig(quiet)  # ConfParse structure for config file if one is found; otherwise nothing
+# END: Read config file.
+
+# BEGIN: Perform beforescenariocalc include.
+if configfile != nothing && haskey(configfile, "includes", "beforescenariocalc")
+    try
+        include(normpath(joinpath(pwd(), retrieve(configfile, "includes", "beforescenariocalc"))))
+        logmsg("Performed beforescenariocalc include.", quiet)
+    catch e
+        logmsg("Could not perform beforescenariocalc include. Error message: " * sprint(showerror, e) * ". Continuing with |nemo.", quiet)
+    end
+end
+# END: Perform beforescenariocalc include.
+
 # BEGIN: Validate arguments.
 if !isfile(dbpath)
     error("dbpath argument must refer to a file.")
@@ -4062,6 +4077,17 @@ end
 
 logmsg("Created constraint E9_ModelPeriodEmissionsLimit.", quiet)
 # END: E9_ModelPeriodEmissionsLimit.
+
+# BEGIN: Perform customconstraints include.
+if configfile != nothing && haskey(configfile, "includes", "customconstraints")
+    try
+        include(normpath(joinpath(pwd(), retrieve(configfile, "includes", "customconstraints"))))
+        logmsg("Performed customconstraints include.", quiet)
+    catch e
+        logmsg("Could not perform customconstraints include. Error message: " * sprint(showerror, e) * ". Continuing with |nemo.", quiet)
+    end
+end
+# END: Perform customconstraints include.
 
 # END: Define model constraints.
 
