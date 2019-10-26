@@ -9,16 +9,9 @@
 
 """
     calculatescenario(dbpath; jumpmodel = Model(solver = GLPKSolverMIP(presolve=true)),
-    varstosave = "vdemand, vnewstoragecapacity, vaccumulatednewstoragecapacity,
-        vstorageupperlimit, vstoragelowerlimit, vcapitalinvestmentstorage,
-        vdiscountedcapitalinvestmentstorage, vsalvagevaluestorage,
-        vdiscountedsalvagevaluestorage, vnewcapacity, vaccumulatednewcapacity,
-        vtotalcapacityannual, vtotaltechnologyannualactivity,
-        vtotalannualtechnologyactivitybymode, vproductionbytechnologyannual,
-        vproduction, vusebytechnologyannual, vusenn, vtrade, vtradeannual,
-        vproductionannual, vuseannual, vcapitalinvestment,
-        vdiscountedcapitalinvestment, vsalvagevalue, vdiscountedsalvagevalue,
-        voperatingcost, vdiscountedoperatingcost, vtotaldiscountedcost",
+    varstosave = "vdemandnn, vnewcapacity, vtotalcapacityannual,
+        vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
+        vusenn, vtotaldiscountedcost",
     targetprocs = Array{Int, 1}([1]), restrictvars = false,
     reportzeros = false, quiet = false)
 
@@ -56,11 +49,7 @@ example, `jumpmodel = Model(solver = GLPKSolverMIP(presolve=false))` or
 function calculatescenario(
     dbpath::String;
     jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
-    varstosave::String = "vdemand, vnewstoragecapacity, vaccumulatednewstoragecapacity, vstorageupperlimit, vstoragelowerlimit, vcapitalinvestmentstorage, "
-    * "vdiscountedcapitalinvestmentstorage, vsalvagevaluestorage, vdiscountedsalvagevaluestorage, vnewcapacity, vaccumulatednewcapacity, vtotalcapacityannual, "
-    * "vtotaltechnologyannualactivity, vtotalannualtechnologyactivitybymode, vproductionbytechnologyannual, vproduction, vusebytechnologyannual, vusenn, vtrade, "
-    * "vtradeannual, vproductionannual, vuseannual, vcapitalinvestment, vdiscountedcapitalinvestment, vsalvagevalue, vdiscountedsalvagevalue, voperatingcost, "
-    * "vdiscountedoperatingcost, vtotaldiscountedcost",
+    varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
     targetprocs::Array{Int, 1} = Array{Int, 1}([1]),
     restrictvars::Bool = false,
     reportzeros::Bool = false,
@@ -139,7 +128,8 @@ local paramsneedingdefs::Array{String, 1} = ["OutputActivityRatio", "InputActivi
 "TotalTechnologyModelPeriodActivityLowerLimit", "ReserveMarginTagTechnology", "ReserveMarginTagFuel", "ReserveMargin", "RETagTechnology", "RETagFuel",
 "REMinProductionTarget", "EmissionActivityRatio", "EmissionsPenalty", "ModelPeriodExogenousEmission",
 "AnnualExogenousEmission", "AnnualEmissionLimit", "ModelPeriodEmissionLimit", "AccumulatedAnnualDemand", "TotalAnnualMaxCapacityStorage",
-"TotalAnnualMinCapacityStorage", "TotalAnnualMaxCapacityInvestmentStorage", "TotalAnnualMinCapacityInvestmentStorage"]
+"TotalAnnualMinCapacityStorage", "TotalAnnualMaxCapacityInvestmentStorage", "TotalAnnualMinCapacityInvestmentStorage",
+"TransmissionCapacityToActivityUnit"]
 
 append!(paramsneedingdefs, ["NodalDistributionDemand", "NodalDistributionTechnologyCapacity", "NodalDistributionStorageCapacity"])
 
@@ -663,15 +653,16 @@ if transmissionmodeling
     "select tl.id as tr, ys.l as l, tl.f as f, tme1.y as y, tl.n1 as n1, tl.n2 as n2,
 	tl.reactance as reactance, tme1.type as type, tl.maxflow as maxflow,
     cast(tl.VariableCost as real) as vc, cast(ys.val as real) as ys,
-    cast(tl.fixedcost as real) as fc
+    cast(tl.fixedcost as real) as fc, cast(tcta.val as real) as tcta
     from TransmissionLine tl, NODE n1, NODE n2, TransmissionModelingEnabled tme1,
-    TransmissionModelingEnabled tme2, YearSplit_def ys
+    TransmissionModelingEnabled tme2, YearSplit_def ys, TransmissionCapacityToActivityUnit_def tcta
     where
     tl.n1 = n1.val and tl.n2 = n2.val
     and tme1.r = n1.r and tme1.f = tl.f
     and tme2.r = n2.r and tme2.f = tl.f
     and tme1.y = tme2.y and tme1.type = tme2.type
 	and ys.y = tme1.y
+	and tl.f = tcta.f
     order by tl.id, tme1.y")
 
     if restrictvars
@@ -749,7 +740,7 @@ if transmissionmodeling
     modelvarindices["vtotaldiscountedtransmissioncostbyregion"] = (vtotaldiscountedtransmissioncostbyregion, ["r","y"])
 
     logmsg("Defined transmission variables.", quiet)
-end  # transmissionmodeling
+end  # if transmissionmodeling
 
 # Combined nodal + non-nodal variables
 if in("vproductionbytechnology", varstosavearr)
@@ -1855,7 +1846,7 @@ if transmissionmodeling
         local y = row[:y]
         local type = row[:type]
 
-        # vtransmissionbyline is flow over line tr from n1 to n2 in model's power units
+        # vtransmissionbyline is flow over line tr from n1 to n2; if type == 1 or 2, unit is MW
         if type == 1  # DCOPF
             tr3_flow[constraintnum] = @constraint(jumpmodel, -1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]) * vtransmissionexists[tr,y]
                 == vtransmissionbyline[tr,l,f,y])
@@ -1864,10 +1855,10 @@ if transmissionmodeling
         elseif type == 2  # DCOPF with disjunctive formulation
             tr3_flow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] -
                 (-1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]))
-                <= (1 - vtransmissionexists[tr,y]) * 1000)
+                <= (1 - vtransmissionexists[tr,y]) * 100000)
             push!(tr3a_flow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] -
                 (-1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]))
-                >= (vtransmissionexists[tr,y] - 1) * 1000))
+                >= (vtransmissionexists[tr,y] - 1) * 100000))
             #tr4_maxflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y]^2 <= vtransmissionexists[tr,y] * row[:maxflow]^2)
             #tr5_minflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y]^2 >= 0)
             tr4_maxflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] <= vtransmissionexists[tr,y] * row[:maxflow])
@@ -1883,54 +1874,83 @@ end
 
 # BEGIN: EBa11Tr_EnergyBalanceEachTS5.
 if transmissionmodeling
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref eba11tr_energybalanceeachts5[1:length(snode) * length(stimeslice) * length(sfuel) * length(syear)]
+    eba11tr_energybalanceeachts5::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtransmissionbyline sum
 
+    # First query selects transmission-enabled nodes without any transmission lines, second selects transmission-enabled
+    #   nodes that are n1 in a valid transmission line, third selects transmission-enabled nodes that are n2 in a
+    #   valid transmission line
     for row in DataFrames.eachrow(SQLite.query(db, "select n.val as n, ys.l as l, f.val as f, y.val as y,
-    cast(ys.val as real) as ys, tl1.tr as tr, tl1.n2 as n2, tl2.tr as trneg, tl2.n1 as n1
-    from NODE n, YearSplit_def ys, FUEL f, YEAR y, TransmissionModelingEnabled tme
-    left join
-    (select tl.id as tr, tl.n1 as n1, tl.n2 as n2, tl.f as f, tme2.y as y,
-	tme2.type as type
-    from TransmissionLine tl, NODE n2, TransmissionModelingEnabled tme2
-    where tl.n2 = n2.val
-    and n2.r = tme2.r and tl.f = tme2.f) tl1 on tl1.n1 = n.val and tl1.f = f.val and tl1.y = y.val
-		and tl1.type = tme.type
-    left join
-    (select tl.id as tr, tl.n1 as n1, tl.n2 as n2, tl.f as f, tme2.y as y,
-	tme2.type as type
-    from TransmissionLine tl, NODE n2, TransmissionModelingEnabled tme2
-    where tl.n1 = n2.val
-    and n2.r = tme2.r and tl.f = tme2.f) tl2 on tl2.n2 = n.val and tl2.f = f.val and tl2.y = y.val
-		and tl2.type = tme.type
+    cast(ys.val as real) as ys, null as tr, null as n2, null as trneg, null as n1,
+	tme.type as type, cast(tcta.val as real) as tcta
+    from NODE n, YearSplit_def ys, FUEL f, YEAR y, TransmissionModelingEnabled tme,
+	TransmissionCapacityToActivityUnit_def tcta
 	where ys.y = y.val
     and tme.r = n.r and tme.f = f.val and tme.y = y.val
-    order by n.val, ys.l, f.val, y.val"))
+	and tcta.f = f.val
+	and not exists (select 1 from TransmissionLine tl, NODE n2, TransmissionModelingEnabled tme2
+	where
+	n.val = tl.n1 and f.val = tl.f
+	and tl.n2 = n2.val
+	and n2.r = tme2.r and tl.f = tme2.f and y.val = tme2.y and tme.type = tme2.type)
+	and not exists (select 1 from TransmissionLine tl, NODE n2, TransmissionModelingEnabled tme2
+	where
+	n.val = tl.n2 and f.val = tl.f
+	and tl.n1 = n2.val
+	and n2.r = tme2.r and tl.f = tme2.f and y.val = tme2.y and tme.type = tme2.type)
+union all
+select n.val as n, ys.l as l, f.val as f, y.val as y,
+    cast(ys.val as real) as ys, tl.id as tr, tl.n2 as n2, null as trneg, null as n1, tme.type as type,
+	cast(tcta.val as real) as tcta
+    from NODE n, YearSplit_def ys, FUEL f, YEAR y, TransmissionModelingEnabled tme,
+	TransmissionLine tl, NODE n2, TransmissionModelingEnabled tme2, TransmissionCapacityToActivityUnit_def tcta
+	where ys.y = y.val
+    and tme.r = n.r and tme.f = f.val and tme.y = y.val
+	and tcta.f = f.val
+	and n.val = tl.n1 and f.val = tl.f
+	and tl.n2 = n2.val
+	and n2.r = tme2.r and tl.f = tme2.f and y.val = tme2.y and tme.type = tme2.type
+union all
+select n.val as n, ys.l as l, f.val as f, y.val as y,
+    cast(ys.val as real) as ys, null as tr, null as n2, tl.id as trneg, tl.n1 as n1, tme.type as type,
+	cast(tcta.val as real) as tcta
+    from NODE n, YearSplit_def ys, FUEL f, YEAR y, TransmissionModelingEnabled tme,
+	TransmissionLine tl, NODE n2, TransmissionModelingEnabled tme2, TransmissionCapacityToActivityUnit_def tcta
+	where ys.y = y.val
+    and tme.r = n.r and tme.f = f.val and tme.y = y.val
+	and tcta.f = f.val
+	and n.val = tl.n2 and f.val = tl.f
+	and tl.n1 = n2.val
+	and n2.r = tme2.r and tl.f = tme2.f and y.val = tme2.y and tme.type = tme2.type
+order by n, l, f, y"))
         local n = row[:n]
         local l = row[:l]
         local f = row[:f]
         local y = row[:y]
         local tr = row[:tr]  # Transmission line for which n is from node (n1)
-        local trneg = row[:trneg]  # # Transmission line for which n is to node (n2)
+        local trneg = row[:trneg]  # Transmission line for which n is to node (n2)
+        local trtype = row[:type]  # Type of transmission modeling for node
 
         if isassigned(lastkeys, 1) && (n != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
             # Create constraint
-            eba11tr_energybalanceeachts5[constraintnum] = @constraint(jumpmodel, vproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
-                vdemandnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1])
-            constraintnum += 1
-
+            # May want to change this to an equality constraint
+            push!(eba11tr_energybalanceeachts5, @constraint(jumpmodel, vproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
+                vdemandnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]))
             sumexps[1] = AffExpr()
         end
 
         if !ismissing(tr)
-            append!(sumexps[1], vtransmissionbyline[tr,l,f,y] * row[:ys])
+            if trtype == 1 || trtype == 2
+                append!(sumexps[1], vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta])
+            end
         end
 
         if !ismissing(trneg)
-            append!(sumexps[1], -vtransmissionbyline[trneg,l,f,y] * row[:ys])
+            if trtype == 1 || trtype == 2
+                append!(sumexps[1], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta])
+            end
         end
 
         lastkeys[1] = n
@@ -1941,8 +1961,8 @@ if transmissionmodeling
 
     # Create last constraint
     if isassigned(lastkeys, 1)
-        eba11tr_energybalanceeachts5[constraintnum] = @constraint(jumpmodel, vproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
-            vdemandnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1])
+        push!(eba11tr_energybalanceeachts5, @constraint(jumpmodel, vproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
+            vdemandnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]))
     end
 
     logmsg("Created constraint EBa11Tr_EnergyBalanceEachTS5.", quiet)
@@ -3223,7 +3243,7 @@ if transmissionmodeling
             sumexps[1] = AffExpr()
         end
 
-        append!(sumexps[1], vtransmissionbyline[tr,row[:l],row[:f],y] * row[:ys] * vc)
+        append!(sumexps[1], vtransmissionbyline[tr,row[:l],row[:f],y] * row[:ys] * row[:tcta] * vc)
 
         lastkeys[1] = tr
         lastkeys[2] = y
