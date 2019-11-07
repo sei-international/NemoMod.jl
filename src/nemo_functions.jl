@@ -28,28 +28,34 @@ end  # logmsg(msg::String)
 """
     getconfig(quiet::Bool = false)
 
-Reads in |nemo's configuration file, which should be in the Julia working directory and
-named `nemo_config.ini`. See the sample file in the |nemo package's `utils` directory
-for more information.
+Reads in |nemo's configuration file, which should be in the Julia working directory,
+in `ini` format, and named `nemo.ini` or `nemo.cfg`. See the sample file in the |nemo
+package's `utils` directory for more information.
 
 # Arguments
 - `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to STDOUT).
 """
 function getconfig(quiet::Bool = false)
-    configpath::String = joinpath(pwd(), "nemo_config.ini")
+    configpathini::String = joinpath(pwd(), "nemo.ini")
+    configpathcfg::String = joinpath(pwd(), "nemo.cfg")
+    configpath::String = ""
 
-    if isfile(configpath)
-        try
-            local conffile::ConfParse = ConfParse(configpath)
-            parse_conf!(conffile)
-            logmsg("Read |nemo configuration file at " * configpath * ".", quiet)
-            return conffile
-        catch
-            logmsg("Could not parse |nemo configuration file at " * configpath * ". Please verify format.", quiet)
-        end
+    if isfile(configpathini)
+        configpath = configpathini
+    elseif isfile(configpathcfg)
+        configpath = configpathcfg
+    else
+        return nothing
     end
 
-    return nothing
+    try
+        local conffile::ConfParse = ConfParse(configpath)
+        parse_conf!(conffile)
+        logmsg("Read |nemo configuration file at " * configpath * ".", quiet)
+        return conffile
+    catch
+        logmsg("Could not parse |nemo configuration file at " * configpath * ". Please verify format.", quiet)
+    end
 end  # getconfig(quiet::Bool = false)
 
 """
