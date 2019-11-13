@@ -60,6 +60,31 @@ function calculatescenario(
 
 logmsg("Started scenario calculation.")
 
+# BEGIN: Validate arguments.
+if !isfile(dbpath)
+    error("dbpath argument must refer to a file.")
+end
+
+# Convert varstosave into an array of strings with no empty values
+local varstosavearr = String.(split(replace(varstosave, " " => ""), ","; keepempty = false))
+
+logmsg("Validated run-time arguments.", quiet)
+# END: Validate arguments.
+
+# BEGIN: Set module global variables that depend on arguments.
+global csdbpath = dbpath
+global csquiet = quiet
+# END: Set module global variables that depend on arguments.
+
+# BEGIN: Connect to SQLite database.
+db = SQLite.DB(dbpath)
+logmsg("Connected to scenario database. Path = " * dbpath * ".", quiet)
+# END: Connect to SQLite database.
+
+# BEGIN: Temporary - add transmission tables to db.
+addtransmissiontables(db; quiet = quiet)
+# END: Temporary - add transmission tables to db.
+
 # BEGIN: Read config file.
 configfile = getconfig(quiet)  # ConfParse structure for config file if one is found; otherwise nothing
 # END: Read config file.
@@ -75,30 +100,10 @@ if configfile != nothing && haskey(configfile, "includes", "beforescenariocalc")
 end
 # END: Perform beforescenariocalc include.
 
-# BEGIN: Validate arguments.
-if !isfile(dbpath)
-    error("dbpath argument must refer to a file.")
-end
-
-# Convert varstosave into an array of strings with no empty values
-local varstosavearr = String.(split(replace(varstosave, " " => ""), ","; keepempty = false))
-
-logmsg("Validated run-time arguments.", quiet)
-# END: Validate arguments.
-
-# BEGIN: Connect to SQLite database.
-db = SQLite.DB(dbpath)
-logmsg("Connected to scenario database. Path = " * dbpath * ".", quiet)
-# END: Connect to SQLite database.
-
 # BEGIN: Drop any pre-existing result tables.
 dropresulttables(db, true)
 logmsg("Dropped pre-existing result tables from database.", quiet)
 # END: Drop any pre-existing result tables.
-
-# BEGIN: Temporary - Add transmission data.
-addtransmissiondata(db; quiet = quiet)
-# END: Temporary - Add transmission data.
 
 # BEGIN: Check if transmission modeling is required.
 local transmissionmodeling::Bool = false  # Indicates whether scenario involves transmission modeling

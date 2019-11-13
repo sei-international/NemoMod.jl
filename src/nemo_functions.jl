@@ -786,6 +786,17 @@ function checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
     return (annual, modelperiod)
 end  # checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
 
+"""
+    addtransmissiontables(db::SQLite.DB; foreignkeys::Bool = false, quiet::Bool = false)
+
+Adds tables for transmission sets and parameters to a |nemo scenario database. If the tables
+exist already, does not recreate them.
+
+# Arguments
+- `db::SQLite.DB`: Target database.
+- `foreignkeys::Bool = false`: Indicates whether new tables should include foreign keys.
+- `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to STDOUT).
+"""
 function addtransmissiontables(db::SQLite.DB; foreignkeys::Bool = false, quiet::Bool = false)
     # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
     try
@@ -812,6 +823,7 @@ function addtransmissiontables(db::SQLite.DB; foreignkeys::Bool = false, quiet::
     # END: Wrap database operations in try-catch block to allow rollback on error.
 end  # addtransmissiontables(db::SQLite.DB, foreignkeys::Bool = false)
 
+# Temporary function.
 function addtransmissiondata(db::SQLite.DB; quiet::Bool = false)
     # First, add transmission tables to scenario database
     addtransmissiontables(db; foreignkeys = false, quiet = quiet)

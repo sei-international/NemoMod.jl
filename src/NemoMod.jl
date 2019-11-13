@@ -9,6 +9,11 @@
 
 module NemoMod
 
+#= List of module global variables.
+    • csdbpath - dbpath argument in last invocation of calculatescenario()
+    • csquiet - quiet argument in last invocation of calculatescenario()
+=#
+
 # BEGIN: Access other modules and code files.
 using JuMP, SQLite, DataFrames, Distributed, Dates, ConfParser
 using GLPKMathProgInterface, Cbc  # Default solvers
