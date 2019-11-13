@@ -260,6 +260,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.execute!(db,"drop table if exists ResidualStorageCapacity")
     SQLite.execute!(db,"drop table if exists SpecifiedAnnualDemand")
     SQLite.execute!(db,"drop table if exists SpecifiedDemandProfile")
+    SQLite.execute!(db,"drop table if exists StorageFullLoadHours")
     SQLite.execute!(db,"drop table if exists StorageLevelStart")
     SQLite.execute!(db,"drop table if exists StorageMaxChargeRate")
     SQLite.execute!(db,"drop table if exists StorageMaxDischargeRate")
@@ -301,9 +302,15 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.execute!(db,"drop table if exists TSGROUP1")
     SQLite.execute!(db,"drop table if exists TSGROUP2")
     SQLite.execute!(db,"drop table if exists NODE")
+
+    SQLite.execute!(db,"drop table if exists Version")
     # END: Drop any existing |nemo tables.
 
     # BEGIN: Add new |nemo tables.
+    # Version table is for |nemo data dictionary version
+    SQLite.execute!(db, "CREATE TABLE `Version` (`version` INTEGER, PRIMARY KEY(`version`))")
+    SQLite.execute!(db, "INSERT INTO Version VALUES(1)")
+
     # No default values for sets/dimensions
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `EMISSION` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `FUEL` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`) )")
@@ -345,6 +352,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `StorageMaxDischargeRate` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`)" : "") * " )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `StorageMaxChargeRate` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`)" : "") * " )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `StorageLevelStart` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `StorageFullLoadHours` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `SpecifiedDemandProfile` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `l` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `SpecifiedAnnualDemand` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ResidualStorageCapacity` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")

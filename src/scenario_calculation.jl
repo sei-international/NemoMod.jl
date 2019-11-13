@@ -2761,6 +2761,11 @@ end
 logmsg("Created constraint NS17_MinStorageCapacityInvestment.", quiet)
 # END: NS17_MinStorageCapacityInvestment.
 
+# BEGIN: NS18_FullLoadHours.
+
+
+# END: NS18_FullLoadHours.
+
 # BEGIN: SI4_UndiscountedCapitalInvestmentStorage.
 constraintnum = 1  # Number of next constraint to be added to constraint array
 
