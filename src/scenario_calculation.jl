@@ -134,7 +134,7 @@ local paramsneedingdefs::Array{String, 1} = ["OutputActivityRatio", "InputActivi
 "REMinProductionTarget", "EmissionActivityRatio", "EmissionsPenalty", "ModelPeriodExogenousEmission",
 "AnnualExogenousEmission", "AnnualEmissionLimit", "ModelPeriodEmissionLimit", "AccumulatedAnnualDemand", "TotalAnnualMaxCapacityStorage",
 "TotalAnnualMinCapacityStorage", "TotalAnnualMaxCapacityInvestmentStorage", "TotalAnnualMinCapacityInvestmentStorage",
-"TransmissionCapacityToActivityUnit"]
+"TransmissionCapacityToActivityUnit", "StorageFullLoadHours"]
 
 append!(paramsneedingdefs, ["NodalDistributionDemand", "NodalDistributionTechnologyCapacity", "NodalDistributionStorageCapacity"])
 
@@ -2762,8 +2762,50 @@ logmsg("Created constraint NS17_MinStorageCapacityInvestment.", quiet)
 # END: NS17_MinStorageCapacityInvestment.
 
 # BEGIN: NS18_FullLoadHours.
+ns18_fullloadhours::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
+lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = s, lastkeys[3] = y
+lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = flh
+sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vnewcapacity sum
 
+# Note: vnewcapacity is in power units; vnewstoragecapacity is in energy units
+for row in DataFrames.eachrow(SQLite.query(db, "select distinct sf.r as r, sf.s as s, sf.y as y, tfs.t as t, cast(sf.val as real) as flh,
+cast(cta.val as real) as cta
+from StorageFullLoadHours_def sf, TechnologyFromStorage_def tfs, CapacityToActivityUnit_def cta
+where sf.r = tfs.r
+and sf.s = tfs.s
+and tfs.val = 1
+and tfs.r = cta.r
+and tfs.t = cta.t
+order by sf.r, sf.s, sf.y"))
+    local r = row[:r]
+    local s = row[:s]
+    local y = row[:y]
+
+    if isassigned(lastkeys, 1) && (r != lastkeys[1] || s != lastkeys[2] || y != lastkeys[3])
+        # Create constraint
+        push!(ns18_fullloadhours, @constraint(jumpmodel, sumexps[1] * lastvals[1] / 8760 == vnewstoragecapacity[lastkeys[1],lastkeys[2],lastkeys[3]]))
+        sumexps[1] = AffExpr()
+        lastvals[1] = 0.0
+    end
+
+    append!(sumexps[1], vnewcapacity[r,row[:t],y] * row[:cta])
+
+    if !ismissing(row[:flh])
+        lastvals[1] = row[:flh]
+    end
+
+    lastkeys[1] = r
+    lastkeys[2] = s
+    lastkeys[3] = y
+end
+
+# Create last constraint
+if isassigned(lastkeys, 1)
+    push!(ns18_fullloadhours, @constraint(jumpmodel, sumexps[1] * lastvals[1] / 8760 == vnewstoragecapacity[lastkeys[1],lastkeys[2],lastkeys[3]]))
+end
+
+logmsg("Created constraint NS18_FullLoadHours.", quiet)
 # END: NS18_FullLoadHours.
 
 # BEGIN: SI4_UndiscountedCapitalInvestmentStorage.
