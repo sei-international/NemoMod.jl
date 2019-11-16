@@ -72,9 +72,9 @@ logmsg("Validated run-time arguments.", quiet)
 # END: Validate arguments.
 
 # BEGIN: Set module global variables that depend on arguments.
-global csdbpath = new tables in dictionary v.1 csquiet = missing
-addstoragefullloadhours(db; quiet = quiet)
-# END: Set module global = new tables in dictionary v.1 csquiet =
+global csdbpath = dbpath
+global csquiet = quiet
+# END: Set module global variables that depend on arguments.
 
 # BEGIN: Connect to SQLite database.
 db = SQLite.DB(dbpath)
