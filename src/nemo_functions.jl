@@ -829,58 +829,28 @@ function addtransmissiontables(db::SQLite.DB; foreignkeys::Bool = false, quiet::
         rethrow()
     end
     # END: Wrap database operations in try-catch block to allow rollback on error.
-end  # addtransmissiontables(db::SQLite.DB, foreignkeys::Bool = false)
+end  # addtransmissiontables(db::SQLite.DB; foreignkeys::Bool = false, quiet::Bool = false)
 
-# Temporary function.
-function addtransmissiondata(db::SQLite.DB; quiet::Bool = false)
-    # First, add transmission tables to scenario database
-    addtransmissiontables(db; foreignkeys = false, quiet = quiet)
+# Temporary function
+function addstoragefullloadhours(db::SQLite.DB; foreignkeys::Bool = false, quiet::Bool = false)
+    # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
+    try
+        # BEGIN: SQLite transaction.
+        SQLite.execute!(db, "BEGIN")
 
-    # Next, copy in transmission data from transmission database
-    local transmissiondbpath::String  # Path to be searched for transmission db
+        SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `StorageFullLoadHours` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * ")")
 
-    if Sys.iswindows() && occursin("~", db.file)
-        transmissiondbpath = "c:/nemomod/" * splitext(basename(Base.Filesystem.longpath(db.file)))[1] * "_transmission.sqlite"
-    else
-        transmissiondbpath = "c:/nemomod/" * splitext(basename(db.file))[1] * "_transmission.sqlite"
+        SQLite.execute!(db, "COMMIT")
+        # END: SQLite transaction.
+
+        logmsg("Added StorageFullLoadHours table to database.", quiet)
+    catch
+        # Rollback transaction and rethrow error
+        SQLite.execute!(db, "ROLLBACK")
+        rethrow()
     end
-
-    if isfile(transmissiondbpath)
-        # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
-        try
-            # BEGIN: SQLite transaction.
-            SQLite.execute!(db, "BEGIN")
-            SQLite.execute!(db, "ATTACH DATABASE '" * transmissiondbpath * "' as trdb")
-
-            SQLite.execute!(db, "DELETE FROM NodalDistributionTechnologyCapacity")
-            SQLite.execute!(db, "DELETE FROM NodalDistributionStorageCapacity")
-            SQLite.execute!(db, "DELETE FROM NodalDistributionDemand")
-            SQLite.execute!(db, "DELETE FROM TransmissionLine")
-            SQLite.execute!(db, "DELETE FROM TransmissionModelingEnabled")
-            SQLite.execute!(db, "DELETE FROM NODE")
-
-            SQLite.execute!(db, "INSERT INTO NODE SELECT * FROM trdb.NODE")
-            SQLite.execute!(db, "INSERT INTO TransmissionModelingEnabled SELECT * FROM trdb.TransmissionModelingEnabled")
-            SQLite.execute!(db, "INSERT INTO TransmissionLine SELECT * FROM trdb.TransmissionLine")
-            SQLite.execute!(db, "INSERT INTO NodalDistributionDemand SELECT * FROM trdb.NodalDistributionDemand")
-            SQLite.execute!(db, "INSERT INTO NodalDistributionStorageCapacity SELECT * FROM trdb.NodalDistributionStorageCapacity")
-            SQLite.execute!(db, "INSERT INTO NodalDistributionTechnologyCapacity SELECT * FROM trdb.NodalDistributionTechnologyCapacity")
-
-            SQLite.execute!(db, "COMMIT")
-            SQLite.execute!(db, "DETACH DATABASE trdb")
-            # END: SQLite transaction.
-
-            logmsg("Added transmission data to database.", quiet)
-        catch
-            # Rollback transaction and rethrow error
-            SQLite.execute!(db, "ROLLBACK")
-            rethrow()
-        end
-        # END: Wrap database operations in try-catch block to allow rollback on error.
-    else
-        logmsg("Could not find transmission data. No transmission data added to database.", quiet)
-    end
-end  # addtransmissiondata(db::SQLite.DB; quiet::Bool = false)
+    # END: Wrap database operations in try-catch block to allow rollback on error.
+end  # addstoragefullloadhours(db::SQLite.DB; foreignkeys::Bool = false, quiet::Bool = false)
 
 # This function is deprecated.
 #=

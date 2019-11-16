@@ -72,18 +72,19 @@ logmsg("Validated run-time arguments.", quiet)
 # END: Validate arguments.
 
 # BEGIN: Set module global variables that depend on arguments.
-global csdbpath = dbpath
-global csquiet = quiet
-# END: Set module global variables that depend on arguments.
+global csdbpath = new tables in dictionary v.1 csquiet = missing
+addstoragefullloadhours(db; quiet = quiet)
+# END: Set module global = new tables in dictionary v.1 csquiet =
 
 # BEGIN: Connect to SQLite database.
 db = SQLite.DB(dbpath)
 logmsg("Connected to scenario database. Path = " * dbpath * ".", quiet)
 # END: Connect to SQLite database.
 
-# BEGIN: Temporary - add transmission tables to db.
+# BEGIN: Temporary - add new tables in dictionary v.1 to db.
 addtransmissiontables(db; quiet = quiet)
-# END: Temporary - add transmission tables to db.
+addstoragefullloadhours(db; quiet = quiet)
+# END: Temporary - add new tables in dictionary v.1 to db.
 
 # BEGIN: Read config file.
 configfile = getconfig(quiet)  # ConfParse structure for config file if one is found; otherwise nothing
