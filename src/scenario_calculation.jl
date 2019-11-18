@@ -71,9 +71,29 @@ local varstosavearr = String.(split(replace(varstosave, " " => ""), ","; keepemp
 logmsg("Validated run-time arguments.", quiet)
 # END: Validate arguments.
 
+# BEGIN: Read config file and process calculatescenarioargs.
+configfile = getconfig(quiet)  # ConfParse structure for config file if one is found; otherwise nothing
+
+if configfile != nothing
+    local boolargs::Array{Bool,1} = [restrictvars,reportzeros,quiet]  # Array of Boolean arguments for calculatescenario();
+        # necessary in order to have a mutable object for getconfigargs! call
+
+    getconfigargs!(configfile, varstosavearr, targetprocs, boolargs, quiet)
+
+    restrictvars = boolargs[1]
+    reportzeros = boolargs[2]
+    quiet = boolargs[3]
+end
+# END: Read config file and process calculatescenarioargs.
+
 # BEGIN: Set module global variables that depend on arguments.
 global csdbpath = dbpath
 global csquiet = quiet
+
+if configfile != nothing && haskey(configfile, "includes", "customconstraints")
+    # Define global variable for jumpmodel
+    global csjumpmodel = jumpmodel
+end
 # END: Set module global variables that depend on arguments.
 
 # BEGIN: Connect to SQLite database.
@@ -85,10 +105,6 @@ logmsg("Connected to scenario database. Path = " * dbpath * ".", quiet)
 addtransmissiontables(db; quiet = quiet)
 addstoragefullloadhours(db; quiet = quiet)
 # END: Temporary - add new tables in dictionary v.1 to db.
-
-# BEGIN: Read config file.
-configfile = getconfig(quiet)  # ConfParse structure for config file if one is found; otherwise nothing
-# END: Read config file.
 
 # BEGIN: Perform beforescenariocalc include.
 if configfile != nothing && haskey(configfile, "includes", "beforescenariocalc")

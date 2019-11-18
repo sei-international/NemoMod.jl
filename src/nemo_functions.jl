@@ -59,6 +59,91 @@ function getconfig(quiet::Bool = false)
 end  # getconfig(quiet::Bool = false)
 
 """
+    getconfigargs!(configfile::ConfParse,
+        varstosavearr::Array{String,1},
+        targetprocs::Array{Int,1},
+        bools::Array{Bool,1},
+        quiet::Bool)
+
+Loads run-time arguments for calculatescenario() from a configuration file.
+
+# Arguments
+- `configfile::ConfParse`: Configuration file. This argument is not changed by the function.
+- `varstosavearr::Array{String,1}`: Array representation of calculatescenario() varstosave argument.
+    New values in configuration file are added to this array.
+- `targetprocs::Array{Int,1}`: calculatescenario() targetprocs argument. New values in configuration
+    file are added to this array.
+- `bools::Array{Bool,1}`: Array of Boolean arguments for calculatescenario(): restrictvars, reportzeros,
+    and quiet, in that order. New values in configuration file overwrite values in this array.
+- `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to STDOUT).
+    This argument is not changed by the function.
+"""
+function getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, targetprocs::Array{Int,1},
+    bools::Array{Bool,1}, quiet::Bool)
+
+    if haskey(configfile, "calculatescenarioargs", "varstosave")
+        try
+            varstosaveconfig = retrieve(configfile, "calculatescenarioargs", "varstosave")
+
+            if typeof(varstosaveconfig) == String
+                union!(varstosavearr, [lowercase(varstosaveconfig)])
+            else
+                # varstosaveconfig should be an array of strings
+                union!(varstosavearr, [lowercase(v) for v in varstosaveconfig])
+            end
+
+            logmsg("Read varstosave argument from configuration file.", quiet)
+        catch e
+            logmsg("Could not read varstosave argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with |nemo.", quiet)
+        end
+    end
+
+    if haskey(configfile, "calculatescenarioargs", "targetprocs")
+        try
+            targetprocsconfig = retrieve(configfile, "calculatescenarioargs", "targetprocs")
+
+            if typeof(targetprocsconfig) == String
+                union!(targetprocs, [Meta.parse(targetprocsconfig)])
+            else
+                # targetprocsconfig should be an array of strings
+                union!(targetprocs, [Meta.parse(v) for v in targetprocsconfig])
+            end
+
+            logmsg("Read targetprocs argument from configuration file.", quiet)
+        catch e
+            logmsg("Could not read targetprocs argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with |nemo.", quiet)
+        end
+    end
+
+    if haskey(configfile, "calculatescenarioargs", "restrictvars")
+        try
+            bools[1] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "restrictvars")))
+            logmsg("Read restrictvars argument from configuration file.", quiet)
+        catch e
+            logmsg("Could not read restrictvars argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with |nemo.", quiet)
+        end
+    end
+
+    if haskey(configfile, "calculatescenarioargs", "reportzeros")
+        try
+            bools[2] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "reportzeros")))
+            logmsg("Read reportzeros argument from configuration file.", quiet)
+        catch e
+            logmsg("Could not read reportzeros argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with |nemo.", quiet)
+        end
+    end
+
+    if haskey(configfile, "calculatescenarioargs", "quiet")
+        try
+            bools[3] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "quiet")))
+            logmsg("Read quiet argument from configuration file. Value in configuration file will be used from this point forward.", quiet)
+        catch e
+            logmsg("Could not read quiet argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with |nemo.", quiet)
+        end
+    end
+end  # getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, targetprocs::Array{Int,1}, bools::Array{Bool,1}, quiet::Bool)
+
+"""
     translatesetabb(a::String)
 
 Translates a set abbreviation into the set's name.
