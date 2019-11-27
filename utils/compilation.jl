@@ -13,10 +13,10 @@
 # BEGIN: Ensure all packages needed for stock |nemo compilation are installed.
 using Pkg
 
-if length(setdiff(["PackageCompiler", "Libdl", "JuMP", "SQLite", "DataFrames", "Distributed", "Dates", "GLPKMathProgInterface", "Cbc"],
+if length(setdiff(["PackageCompiler", "Libdl", "JuMP", "SQLite", "DataFrames", "Distributed", "Dates", "ConfParser", "GLPKMathProgInterface", "Cbc"],
     collect(keys(Pkg.installed())))) > 0
 
-    Pkg.add(setdiff(["PackageCompiler", "Libdl", "JuMP", "SQLite", "DataFrames", "Distributed", "Dates", "GLPKMathProgInterface", "Cbc"],
+    Pkg.add(setdiff(["PackageCompiler", "Libdl", "JuMP", "SQLite", "DataFrames", "Distributed", "Dates", "ConfParser", "GLPKMathProgInterface", "Cbc"],
         collect(keys(Pkg.installed()))))
 end
 # END: Ensure all packages needed for stock |nemo compilation are installed.
