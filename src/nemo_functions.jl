@@ -26,6 +26,124 @@ function logmsg(msg::String, suppress=false, dtm=now()::DateTime)
 end  # logmsg(msg::String)
 
 """
+    getconfig(quiet::Bool = false)
+
+Reads in |nemo's configuration file, which should be in the Julia working directory,
+in `ini` format, and named `nemo.ini` or `nemo.cfg`. See the sample file in the |nemo
+package's `utils` directory for more information.
+
+# Arguments
+- `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to STDOUT).
+"""
+function getconfig(quiet::Bool = false)
+    configpathini::String = joinpath(pwd(), "nemo.ini")
+    configpathcfg::String = joinpath(pwd(), "nemo.cfg")
+    configpath::String = ""
+
+    if isfile(configpathini)
+        configpath = configpathini
+    elseif isfile(configpathcfg)
+        configpath = configpathcfg
+    else
+        return nothing
+    end
+
+    try
+        local conffile::ConfParse = ConfParse(configpath)
+        parse_conf!(conffile)
+        logmsg("Read |nemo configuration file at " * configpath * ".", quiet)
+        return conffile
+    catch
+        logmsg("Could not parse |nemo configuration file at " * configpath * ". Please verify format.", quiet)
+    end
+end  # getconfig(quiet::Bool = false)
+
+"""
+    getconfigargs!(configfile::ConfParse,
+        varstosavearr::Array{String,1},
+        targetprocs::Array{Int,1},
+        bools::Array{Bool,1},
+        quiet::Bool)
+
+Loads run-time arguments for calculatescenario() from a configuration file.
+
+# Arguments
+- `configfile::ConfParse`: Configuration file. This argument is not changed by the function.
+- `varstosavearr::Array{String,1}`: Array representation of calculatescenario() varstosave argument.
+    New values in configuration file are added to this array.
+- `targetprocs::Array{Int,1}`: calculatescenario() targetprocs argument. New values in configuration
+    file are added to this array.
+- `bools::Array{Bool,1}`: Array of Boolean arguments for calculatescenario(): restrictvars, reportzeros,
+    and quiet, in that order. New values in configuration file overwrite values in this array.
+- `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to STDOUT).
+    This argument is not changed by the function.
+"""
+function getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, targetprocs::Array{Int,1},
+    bools::Array{Bool,1}, quiet::Bool)
+
+    if haskey(configfile, "calculatescenarioargs", "varstosave")
+        try
+            varstosaveconfig = retrieve(configfile, "calculatescenarioargs", "varstosave")
+
+            if typeof(varstosaveconfig) == String
+                union!(varstosavearr, [lowercase(varstosaveconfig)])
+            else
+                # varstosaveconfig should be an array of strings
+                union!(varstosavearr, [lowercase(v) for v in varstosaveconfig])
+            end
+
+            logmsg("Read varstosave argument from configuration file.", quiet)
+        catch e
+            logmsg("Could not read varstosave argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with |nemo.", quiet)
+        end
+    end
+
+    if haskey(configfile, "calculatescenarioargs", "targetprocs")
+        try
+            targetprocsconfig = retrieve(configfile, "calculatescenarioargs", "targetprocs")
+
+            if typeof(targetprocsconfig) == String
+                union!(targetprocs, [Meta.parse(targetprocsconfig)])
+            else
+                # targetprocsconfig should be an array of strings
+                union!(targetprocs, [Meta.parse(v) for v in targetprocsconfig])
+            end
+
+            logmsg("Read targetprocs argument from configuration file.", quiet)
+        catch e
+            logmsg("Could not read targetprocs argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with |nemo.", quiet)
+        end
+    end
+
+    if haskey(configfile, "calculatescenarioargs", "restrictvars")
+        try
+            bools[1] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "restrictvars")))
+            logmsg("Read restrictvars argument from configuration file.", quiet)
+        catch e
+            logmsg("Could not read restrictvars argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with |nemo.", quiet)
+        end
+    end
+
+    if haskey(configfile, "calculatescenarioargs", "reportzeros")
+        try
+            bools[2] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "reportzeros")))
+            logmsg("Read reportzeros argument from configuration file.", quiet)
+        catch e
+            logmsg("Could not read reportzeros argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with |nemo.", quiet)
+        end
+    end
+
+    if haskey(configfile, "calculatescenarioargs", "quiet")
+        try
+            bools[3] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "quiet")))
+            logmsg("Read quiet argument from configuration file. Value in configuration file will be used from this point forward.", quiet)
+        catch e
+            logmsg("Could not read quiet argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with |nemo.", quiet)
+        end
+    end
+end  # getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, targetprocs::Array{Int,1}, bools::Array{Bool,1}, quiet::Bool)
+
+"""
     translatesetabb(a::String)
 
 Translates a set abbreviation into the set's name.
@@ -63,6 +181,10 @@ function translatesetabb(a::String)
         return "DAYTYPE"
     elseif a == "lh"
         return "DAILYTIMEBRACKET"
+    elseif a == "n" || a == "n1" || a == "n2"
+        return "NODE"
+    elseif a == "tr"
+        return "TransmissionLine"
     else
         return a
     end
@@ -207,6 +329,9 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.execute!(db,"drop table if exists MinStorageCharge")
     SQLite.execute!(db,"drop table if exists ModelPeriodEmissionLimit")
     SQLite.execute!(db,"drop table if exists ModelPeriodExogenousEmission")
+    SQLite.execute!(db,"drop table if exists NodalDistributionDemand")
+    SQLite.execute!(db,"drop table if exists NodalDistributionTechnologyCapacity")
+    SQLite.execute!(db,"drop table if exists NodalDistributionStorageCapacity")
     SQLite.execute!(db,"drop table if exists OperationalLife")
     SQLite.execute!(db,"drop table if exists OperationalLifeStorage")
     SQLite.execute!(db,"drop table if exists OutputActivityRatio")
@@ -220,6 +345,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.execute!(db,"drop table if exists ResidualStorageCapacity")
     SQLite.execute!(db,"drop table if exists SpecifiedAnnualDemand")
     SQLite.execute!(db,"drop table if exists SpecifiedDemandProfile")
+    SQLite.execute!(db,"drop table if exists StorageFullLoadHours")
     SQLite.execute!(db,"drop table if exists StorageLevelStart")
     SQLite.execute!(db,"drop table if exists StorageMaxChargeRate")
     SQLite.execute!(db,"drop table if exists StorageMaxDischargeRate")
@@ -238,6 +364,9 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.execute!(db,"drop table if exists TotalTechnologyAnnualActivityUpperLimit")
     SQLite.execute!(db,"drop table if exists TotalTechnologyModelPeriodActivityLowerLimit")
     SQLite.execute!(db,"drop table if exists TotalTechnologyModelPeriodActivityUpperLimit")
+    SQLite.execute!(db,"drop table if exists TransmissionCapacityToActivityUnit")
+    SQLite.execute!(db,"drop table if exists TransmissionLine")
+    SQLite.execute!(db,"drop table if exists TransmissionModelingEnabled")
     SQLite.execute!(db,"drop table if exists TradeRoute")
     SQLite.execute!(db,"drop table if exists VariableCost")
     SQLite.execute!(db,"drop table if exists YearSplit")
@@ -257,9 +386,16 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.execute!(db,"drop table if exists FUEL")
     SQLite.execute!(db,"drop table if exists TSGROUP1")
     SQLite.execute!(db,"drop table if exists TSGROUP2")
+    SQLite.execute!(db,"drop table if exists NODE")
+
+    SQLite.execute!(db,"drop table if exists Version")
     # END: Drop any existing |nemo tables.
 
     # BEGIN: Add new |nemo tables.
+    # Version table is for |nemo data dictionary version
+    SQLite.execute!(db, "CREATE TABLE `Version` (`version` INTEGER, PRIMARY KEY(`version`))")
+    SQLite.execute!(db, "INSERT INTO Version VALUES(1)")
+
     # No default values for sets/dimensions
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `EMISSION` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `FUEL` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`) )")
@@ -271,6 +407,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TSGROUP1` (`name` TEXT, `desc` TEXT, `order` INTEGER NOT NULL UNIQUE, `multiplier` REAL NOT NULL DEFAULT 1, PRIMARY KEY(`name`))")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TSGROUP2` (`name` TEXT, `desc` TEXT, `order` INTEGER NOT NULL UNIQUE, `multiplier` REAL NOT NULL DEFAULT 1, PRIMARY KEY(`name`))")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `YEAR` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `NODE` ( `val` TEXT, `desc` TEXT, `r` TEXT, PRIMARY KEY(`val`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
 
     # Parameter default table
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `DefaultParams` ( `id` INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, `tablename` TEXT NOT NULL, `val` REAL NOT NULL );")
@@ -279,6 +416,9 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     # Parameter tables
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `YearSplit` ( `id` INTEGER NOT NULL UNIQUE, `l` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`)" : "") * " )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `VariableCost` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `m` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TransmissionModelingEnabled` ( `id` INTEGER, `r` TEXT, `f` TEXT, `y` TEXT, `type` INTEGER DEFAULT 1, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TransmissionLine` ( `id` TEXT, `n1` TEXT, `n2` TEXT, `f` TEXT, `maxflow` REAL, `reactance` REAL, `yconstruction` INTEGER, `capitalcost` REAL, `fixedcost` REAL, `variablecost` REAL, `operationallife` INTEGER, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`n2`) REFERENCES `NODE`(`val`), FOREIGN KEY(`n1`) REFERENCES `NODE`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TransmissionCapacityToActivityUnit` ( `id` INTEGER NOT NULL UNIQUE, `f` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TradeRoute` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `rr` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`rr`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalTechnologyModelPeriodActivityUpperLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TotalTechnologyModelPeriodActivityLowerLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
@@ -297,6 +437,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `StorageMaxDischargeRate` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`)" : "") * " )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `StorageMaxChargeRate` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`)" : "") * " )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `StorageLevelStart` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `StorageFullLoadHours` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `SpecifiedDemandProfile` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `l` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `SpecifiedAnnualDemand` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ResidualStorageCapacity` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
@@ -310,6 +451,9 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `OutputActivityRatio` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `f` TEXT, `m` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `OperationalLifeStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `OperationalLife` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `NodalDistributionTechnologyCapacity` ( `id` INTEGER, `n` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`n`) REFERENCES `NODE`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `NodalDistributionStorageCapacity` ( `id` INTEGER, `n` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`n`) REFERENCES `NODE`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `NodalDistributionDemand` ( `id` INTEGER, `n` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`n`) REFERENCES `NODE`(`val`)" : "") * " )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ModelPeriodExogenousEmission` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `e` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `ModelPeriodEmissionLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `e` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `MinStorageCharge` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
@@ -497,7 +641,7 @@ function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
             if size(defaultqry)[1] >= 1
                 defaultval = defaultqry[:val][1]
 
-                # Some special handling here to avoid creating large views where they're not necessary, given !nemo's logic
+                # Some special handling here to avoid creating large views where they're not necessary, given |nemo's logic
                 if (t == "OutputActivityRatio" || t == "InputActivityRatio") && defaultval == 0.0
                     # OutputActivityRatio and InputActivityRatio are only used when != 0, so can ignore a default value of 0
                     hasdefault = false
@@ -548,7 +692,32 @@ function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
         SQLite.execute!(db, "ROLLBACK")
         rethrow()
     end
-end  # createviewwithdefaults(tables::Array{String,1})
+end  # createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
+
+"""
+    dropdefaultviews(db::SQLite.DB)
+
+Drops all views in `db` whose name ends with ""_def""."""
+function dropdefaultviews(db::SQLite.DB)
+    try
+        # BEGIN: SQLite transaction.
+        SQLite.execute!(db, "BEGIN")
+
+        for row in DataFrames.eachrow(SQLite.query(db, "select name from sqlite_master where type = 'view'"))
+            if endswith(row[:name], "_def")
+                SQLite.execute!(db, "DROP VIEW " * row[:name])
+            end
+        end
+
+        SQLite.execute!(db, "COMMIT")
+        SQLite.execute!(db, "VACUUM")
+        # END: SQLite transaction.
+    catch
+        # Rollback transaction and rethrow error
+        SQLite.execute!(db, "ROLLBACK")
+        rethrow()
+    end
+end  # dropdefaultviews(db::SQLite.DB)
 
 """
     savevarresults(vars::Array{String,1},
@@ -709,6 +878,64 @@ function checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
 
     return (annual, modelperiod)
 end  # checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
+
+"""
+    addtransmissiontables(db::SQLite.DB; foreignkeys::Bool = false, quiet::Bool = false)
+
+Adds tables for transmission sets and parameters to a |nemo scenario database. If the tables
+exist already, does not recreate them.
+
+# Arguments
+- `db::SQLite.DB`: Target database.
+- `foreignkeys::Bool = false`: Indicates whether new tables should include foreign keys.
+- `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to STDOUT).
+"""
+function addtransmissiontables(db::SQLite.DB; foreignkeys::Bool = false, quiet::Bool = false)
+    # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
+    try
+        # BEGIN: SQLite transaction.
+        SQLite.execute!(db, "BEGIN")
+
+        SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `NODE` ( `val` TEXT, `desc` TEXT, `r` TEXT, PRIMARY KEY(`val`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * ")")
+        SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TransmissionCapacityToActivityUnit` ( `id` INTEGER NOT NULL UNIQUE, `f` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
+        SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TransmissionModelingEnabled` ( `id` INTEGER, `r` text, `f` TEXT, `y` TEXT, `type` INTEGER DEFAULT 1, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * ")")
+        SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TransmissionLine` ( `id` TEXT, `n1` TEXT, `n2` TEXT, `f` TEXT, `maxflow` REAL, `reactance` REAL, `yconstruction` INTEGER, `capitalcost` REAL, `fixedcost` REAL, `variablecost` REAL, `operationallife` INTEGER, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`n2`) REFERENCES `NODE`(`val`), FOREIGN KEY(`n1`) REFERENCES `NODE`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * ")")
+        SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `NodalDistributionDemand` ( `id` INTEGER, `n` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`n`) REFERENCES `NODE`(`val`)" : "") * ")")
+        SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `NodalDistributionStorageCapacity` ( `id` INTEGER, `n` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`n`) REFERENCES `NODE`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`)" : "") * ")")
+        SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `NodalDistributionTechnologyCapacity` ( `id` INTEGER, `n` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`n`) REFERENCES `NODE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * ")")
+
+        SQLite.execute!(db, "COMMIT")
+        # END: SQLite transaction.
+
+        logmsg("Added transmission tables to database.", quiet)
+    catch
+        # Rollback transaction and rethrow error
+        SQLite.execute!(db, "ROLLBACK")
+        rethrow()
+    end
+    # END: Wrap database operations in try-catch block to allow rollback on error.
+end  # addtransmissiontables(db::SQLite.DB; foreignkeys::Bool = false, quiet::Bool = false)
+
+# Temporary function
+function addstoragefullloadhours(db::SQLite.DB; foreignkeys::Bool = false, quiet::Bool = false)
+    # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
+    try
+        # BEGIN: SQLite transaction.
+        SQLite.execute!(db, "BEGIN")
+
+        SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `StorageFullLoadHours` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * ")")
+
+        SQLite.execute!(db, "COMMIT")
+        # END: SQLite transaction.
+
+        logmsg("Added StorageFullLoadHours table to database.", quiet)
+    catch
+        # Rollback transaction and rethrow error
+        SQLite.execute!(db, "ROLLBACK")
+        rethrow()
+    end
+    # END: Wrap database operations in try-catch block to allow rollback on error.
+end  # addstoragefullloadhours(db::SQLite.DB; foreignkeys::Bool = false, quiet::Bool = false)
 
 # This function is deprecated.
 #=
