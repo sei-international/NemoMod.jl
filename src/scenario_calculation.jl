@@ -1265,12 +1265,14 @@ end
 
 # BEGIN: VRateOfProduction1.
 queryvrateofproduse::DataFrames.DataFrame = DataFrames.DataFrame()  # Populated below if transmissionmodeling
+vrateofproduction1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 if !transmissionmodeling
-    @constraint(jumpmodel, vrateofproduction1[r = sregion, l = stimeslice, f = sfuel, y = syear], vrateofproduction[r,l,f,y] == vrateofproductionnn[r,l,f,y])
+    for (r, l, f, y) in Base.product(sregion, stimeslice, sfuel, syear)
+        push!(vrateofproduction1, @constraint(jumpmodel, vrateofproduction[r,l,f,y] == vrateofproductionnn[r,l,f,y]))
+    end
 else
     # Combine nodal and non-nodal
-    vrateofproduction1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproductionnodal sum
 
@@ -1494,11 +1496,14 @@ end
 # END: EBa6Tr_RateOfFuelUse3.
 
 # BEGIN: VRateOfUse1.
+vrateofuse1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
 if !transmissionmodeling
-    @constraint(jumpmodel, vrateofuse1[r = sregion, l = stimeslice, f = sfuel, y = syear], vrateofuse[r,l,f,y] == vrateofusenn[r,l,f,y])
+    for (r, l, f, y) in Base.product(sregion, stimeslice, sfuel, syear)
+        push!(vrateofuse1, @constraint(jumpmodel, vrateofuse[r,l,f,y] == vrateofusenn[r,l,f,y]))
+    end
 else
     # Combine nodal and non-nodal
-    vrateofuse1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofusenodal sum
 
