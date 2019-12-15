@@ -815,13 +815,11 @@ and sdp.val <> 0 and sad.val <> 0 and ys.val <> 0
 and tme.id is null")
 
 if in("vrateofdemandnn", varstosavearr)
-    constraintnum::Int = 1  # Number of next constraint to be added to constraint array
-    @constraintref ceq_specifieddemand[1:length(sregion) * length(stimeslice) * length(sfuel) * length(syear)]
+    ceq_specifieddemand::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for row in DataFrames.eachrow(queryvrateofdemandnn)
-        ceq_specifieddemand[constraintnum] = @constraint(jumpmodel, row[:specifiedannualdemand] * row[:specifieddemandprofile] / row[:ys]
-            == vrateofdemandnn[row[:r], row[:l], row[:f], row[:y]])
-        constraintnum += 1
+        push!(ceq_specifieddemand, @constraint(jumpmodel, row[:specifiedannualdemand] * row[:specifieddemandprofile] / row[:ys]
+            == vrateofdemandnn[row[:r], row[:l], row[:f], row[:y]]))
     end
 
     logmsg("Created constraint EQ_SpecifiedDemand.", quiet)
@@ -829,12 +827,9 @@ end
 # END: EQ_SpecifiedDemand.
 
 # BEGIN: CAa1_TotalNewCapacity.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref caa1_totalnewcapacity[1:length(sregion) * length(stechnology) * length(syear)]
-
+caa1_totalnewcapacity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = y
-sumexps = Array{AffExpr, 1}([AffExpr()])
-# sumexps[1] = vnewcapacity sum
+sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vnewcapacity sum
 
 for row in DataFrames.eachrow(SQLite.query(db,"select r.val as r, t.val as t, y.val as y, yy.val as yy
 from REGION r, TECHNOLOGY t, YEAR y, OperationalLife_def ol, YEAR yy
@@ -847,9 +842,7 @@ order by r.val, t.val, y.val"))
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2] || y != lastkeys[3])
         # Create constraint
-        caa1_totalnewcapacity[constraintnum] = @constraint(jumpmodel, sumexps[1] == vaccumulatednewcapacity[lastkeys[1],lastkeys[2],lastkeys[3]])
-        constraintnum += 1
-
+        push!(caa1_totalnewcapacity, @constraint(jumpmodel, sumexps[1] == vaccumulatednewcapacity[lastkeys[1],lastkeys[2],lastkeys[3]]))
         sumexps[1] = AffExpr()
     end
 
@@ -862,15 +855,14 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    caa1_totalnewcapacity[constraintnum] = @constraint(jumpmodel, sumexps[1] == vaccumulatednewcapacity[lastkeys[1],lastkeys[2],lastkeys[3]])
+    push!(caa1_totalnewcapacity, @constraint(jumpmodel, sumexps[1] == vaccumulatednewcapacity[lastkeys[1],lastkeys[2],lastkeys[3]]))
 end
 
 logmsg("Created constraint CAa1_TotalNewCapacity.", quiet)
 # END: CAa1_TotalNewCapacity.
 
 # BEGIN: CAa2_TotalAnnualCapacity.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref caa2_totalannualcapacity[1:length(sregion) * length(stechnology) * length(syear)]
+caa2_totalannualcapacity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db,"select r.val as r, t.val as t, y.val as y, cast(rc.val as real) as rc
 from REGION r, TECHNOLOGY t, YEAR y
@@ -880,16 +872,14 @@ left join ResidualCapacity_def rc on rc.r = r.val and rc.t = t.val and rc.y = y.
     local y = row[:y]
     local rc = ismissing(row[:rc]) ? 0 : row[:rc]
 
-    caa2_totalannualcapacity[constraintnum] = @constraint(jumpmodel, vaccumulatednewcapacity[r,t,y] + rc == vtotalcapacityannual[r,t,y])
-    constraintnum += 1
+    push!(caa2_totalannualcapacity, @constraint(jumpmodel, vaccumulatednewcapacity[r,t,y] + rc == vtotalcapacityannual[r,t,y]))
 end
 
 logmsg("Created constraint CAa2_TotalAnnualCapacity.", quiet)
 # END: CAa2_TotalAnnualCapacity.
 
 # BEGIN: VRateOfActivity1.
-# This constraint sets activity to sum of nodal activity for technologies involved in nodal modeling. The implication is that
-#   the non-nodal activity is controls total activity.
+# This constraint sets activity to sum of nodal activity for technologies involved in nodal modeling.
 vrateofactivity1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = m, lastkeys[5] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivitynodal sum
@@ -977,8 +967,7 @@ end
 # END: CAa3Tr_TotalActivityOfEachTechnology.
 
 # BEGIN: CAa4_Constraint_Capacity.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref caa4_constraint_capacity[1:length(sregion) * length(stimeslice) * length(stechnology) * length(syear)]
+caa4_constraint_capacity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db,"select r.val as r, l.val as l, t.val as t, y.val as y,
     cast(cf.val as real) as cf, cast(cta.val as real) as cta
@@ -990,9 +979,8 @@ and cta.r = r.val and cta.t = t.val"))
     local l = row[:l]
     local y = row[:y]
 
-    caa4_constraint_capacity[constraintnum] = @constraint(jumpmodel, vrateoftotalactivity[r,t,l,y]
-        <= vtotalcapacityannual[r,t,y] * row[:cf] * row[:cta])
-    constraintnum += 1
+    push!(caa4_constraint_capacity, @constraint(jumpmodel, vrateoftotalactivity[r,t,l,y]
+        <= vtotalcapacityannual[r,t,y] * row[:cf] * row[:cta]))
 end
 
 logmsg("Created constraint CAa4_Constraint_Capacity.", quiet)
@@ -1000,8 +988,7 @@ logmsg("Created constraint CAa4_Constraint_Capacity.", quiet)
 
 # BEGIN: CAa4Tr_Constraint_Capacity.
 if transmissionmodeling
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref caa4tr_constraint_capacity[1:length(snode) * length(stimeslice) * length(stechnology) * length(syear)]
+    caa4tr_constraint_capacity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for row in DataFrames.eachrow(SQLite.query(db,"select ntc.n as n, ntc.t as t, l.val as l, ntc.y as y, n.r as r,
     	cast(ntc.val as real) as ntc, cast(cf.val as real) as cf,
@@ -1018,9 +1005,8 @@ if transmissionmodeling
         local y = row[:y]
         local r = row[:r]
 
-        caa4tr_constraint_capacity[constraintnum] = @constraint(jumpmodel, vrateoftotalactivitynodal[n,t,l,y]
-            <= vtotalcapacityannual[r,t,y] * row[:ntc] * row[:cf] * row[:cta])
-        constraintnum += 1
+        push!(caa4tr_constraint_capacity, @constraint(jumpmodel, vrateoftotalactivitynodal[n,t,l,y]
+            <= vtotalcapacityannual[r,t,y] * row[:ntc] * row[:cf] * row[:cta]))
     end
 
     logmsg("Created constraint CAa4Tr_Constraint_Capacity.", quiet)
@@ -1028,8 +1014,7 @@ end
 # END: CAa4Tr_Constraint_Capacity.
 
 # BEGIN: CAa5_TotalNewCapacity.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref caa5_totalnewcapacity[1:length(sregion) * length(stechnology) * length(syear)]
+caa5_totalnewcapacity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db,"select cot.r as r, cot.t as t, cot.y as y, cast(cot.val as real) as cot
 from CapacityOfOneTechnologyUnit_def cot where cot.val <> 0"))
@@ -1037,9 +1022,8 @@ from CapacityOfOneTechnologyUnit_def cot where cot.val <> 0"))
     local t = row[:t]
     local y = row[:y]
 
-    caa5_totalnewcapacity[constraintnum] = @constraint(jumpmodel, row[:cot] * vnumberofnewtechnologyunits[r,t,y]
-        == vnewcapacity[r,t,y])
-    constraintnum += 1
+    push!(caa5_totalnewcapacity, @constraint(jumpmodel, row[:cot] * vnumberofnewtechnologyunits[r,t,y]
+        == vnewcapacity[r,t,y]))
 end
 
 logmsg("Created constraint CAa5_TotalNewCapacity.", quiet)
@@ -1104,8 +1088,7 @@ logmsg("Created constraint CAb1_PlannedMaintenance.", quiet)
 
 # BEGIN: EBa1_RateOfFuelProduction1.
 if in("vrateofproductionbytechnologybymodenn", varstosavearr)
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref eba1_rateoffuelproduction1[1:size(queryvrateofproductionbytechnologybymodenn)[1]]
+    eba1_rateoffuelproduction1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for row in DataFrames.eachrow(queryvrateofproductionbytechnologybymodenn)
         local r = row[:r]
@@ -1115,8 +1098,7 @@ if in("vrateofproductionbytechnologybymodenn", varstosavearr)
         local f = row[:f]
         local y = row[:y]
 
-        eba1_rateoffuelproduction1[constraintnum] = @constraint(jumpmodel, vrateofactivity[r,l,t,m,y] * row[:oar] == vrateofproductionbytechnologybymodenn[r,l,t,m,f,y])
-        constraintnum += 1
+        push!(eba1_rateoffuelproduction1, @constraint(jumpmodel, vrateofactivity[r,l,t,m,y] * row[:oar] == vrateofproductionbytechnologybymodenn[r,l,t,m,f,y]))
     end
 
     logmsg("Created constraint EBa1_RateOfFuelProduction1.", quiet)
@@ -1124,9 +1106,7 @@ end  # in("vrateofproductionbytechnologybymodenn", varstosavearr)
 # END: EBa1_RateOfFuelProduction1.
 
 # BEGIN: EBa2_RateOfFuelProduction2.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref eba2_rateoffuelproduction2[1:size(queryvrateofproductionbytechnologynn)[1]]
-
+eba2_rateoffuelproduction2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])
 # sumexps[1] = vrateofproductionbytechnologybymodenn-equivalent sum
@@ -1140,10 +1120,8 @@ for row in DataFrames.eachrow(queryvrateofproductionbytechnologybymodenn)
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || t != lastkeys[3] || f != lastkeys[4] || y != lastkeys[5])
         # Create constraint
-        eba2_rateoffuelproduction2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-            vrateofproductionbytechnologynn[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
-        constraintnum += 1
-
+        push!(eba2_rateoffuelproduction2, @constraint(jumpmodel, sumexps[1] ==
+            vrateofproductionbytechnologynn[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]]))
         sumexps[1] = AffExpr()
     end
 
@@ -1159,8 +1137,8 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    eba2_rateoffuelproduction2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-        vrateofproductionbytechnologynn[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
+    push!(eba2_rateoffuelproduction2, @constraint(jumpmodel, sumexps[1] ==
+        vrateofproductionbytechnologynn[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]]))
 end
 
 logmsg("Created constraint EBa2_RateOfFuelProduction2.", quiet)
@@ -1168,9 +1146,7 @@ logmsg("Created constraint EBa2_RateOfFuelProduction2.", quiet)
 
 # BEGIN: EBa2Tr_RateOfFuelProduction2.
 if transmissionmodeling
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref eba2tr_rateoffuelproduction2[1:size(queryvrateofproductionbytechnologynodal)[1]]
-
+    eba2tr_rateoffuelproduction2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
     sumexps = Array{AffExpr, 1}([AffExpr()])
     # sumexps[1] = vrateofactivitynodal sum
@@ -1195,10 +1171,8 @@ if transmissionmodeling
 
         if isassigned(lastkeys, 1) && (n != lastkeys[1] || l != lastkeys[2] || t != lastkeys[3] || f != lastkeys[4] || y != lastkeys[5])
             # Create constraint
-            eba2tr_rateoffuelproduction2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-                vrateofproductionbytechnologynodal[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
-            constraintnum += 1
-
+            push!(eba2tr_rateoffuelproduction2, @constraint(jumpmodel, sumexps[1] ==
+                vrateofproductionbytechnologynodal[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]]))
             sumexps[1] = AffExpr()
         end
 
@@ -1213,8 +1187,8 @@ if transmissionmodeling
 
     # Create last constraint
     if isassigned(lastkeys, 1)
-        eba2tr_rateoffuelproduction2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-            vrateofproductionbytechnologynodal[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
+        push!(eba2tr_rateoffuelproduction2, @constraint(jumpmodel, sumexps[1] ==
+            vrateofproductionbytechnologynodal[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]]))
     end
 
     logmsg("Created constraint EBa2Tr_RateOfFuelProduction2.", quiet)
@@ -1222,9 +1196,7 @@ end
 # END: EBa2Tr_RateOfFuelProduction2.
 
 # BEGIN: EBa3_RateOfFuelProduction3.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref eba3_rateoffuelproduction3[1:length(sregion) * length(stimeslice) * length(sfuel) * length(syear)]
-
+eba3_rateoffuelproduction3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproductionbytechnologynn sum
 
@@ -1236,9 +1208,7 @@ for row in DataFrames.eachrow(queryvrateofproductionbytechnologynn)
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
         # Create constraint
-        eba3_rateoffuelproduction3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
-        constraintnum += 1
-
+        push!(eba3_rateoffuelproduction3, @constraint(jumpmodel, sumexps[1] == vrateofproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
         sumexps[1] = AffExpr()
     end
 
@@ -1252,7 +1222,7 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    eba3_rateoffuelproduction3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+    push!(eba3_rateoffuelproduction3, @constraint(jumpmodel, sumexps[1] == vrateofproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
 end
 
 logmsg("Created constraint EBa3_RateOfFuelProduction3.", quiet)
@@ -1260,9 +1230,7 @@ logmsg("Created constraint EBa3_RateOfFuelProduction3.", quiet)
 
 # BEGIN: EBa3Tr_RateOfFuelProduction3.
 if transmissionmodeling
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref eba3tr_rateoffuelproduction3[1:length(snode) * length(stimeslice) * length(sfuel) * length(syear)]
-
+    eba3tr_rateoffuelproduction3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproductionbytechnologynodal sum
 
@@ -1274,9 +1242,7 @@ if transmissionmodeling
 
         if isassigned(lastkeys, 1) && (n != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
             # Create constraint
-            eba3tr_rateoffuelproduction3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
-            constraintnum += 1
-
+            push!(eba3tr_rateoffuelproduction3, @constraint(jumpmodel, sumexps[1] == vrateofproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
             sumexps[1] = AffExpr()
         end
 
@@ -1290,7 +1256,7 @@ if transmissionmodeling
 
     # Create last constraint
     if isassigned(lastkeys, 1)
-        eba3tr_rateoffuelproduction3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+        push!(eba3tr_rateoffuelproduction3, @constraint(jumpmodel, sumexps[1] == vrateofproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
     end
 
     logmsg("Created constraint EBa3Tr_RateOfFuelProduction3.", quiet)
@@ -1304,9 +1270,7 @@ if !transmissionmodeling
     @constraint(jumpmodel, vrateofproduction1[r = sregion, l = stimeslice, f = sfuel, y = syear], vrateofproduction[r,l,f,y] == vrateofproductionnn[r,l,f,y])
 else
     # Combine nodal and non-nodal
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref vrateofproduction1[1:length(sregion) * length(stimeslice) * length(sfuel) * length(syear)]
-
+    vrateofproduction1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproductionnodal sum
 
@@ -1327,11 +1291,9 @@ else
 
         if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
             # Create constraint
-            vrateofproduction1[constraintnum] = @constraint(jumpmodel,
+            push!(vrateofproduction1, @constraint(jumpmodel,
                 (sumexps[1] == AffExpr() ? vrateofproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] : sumexps[1])
-                == vrateofproduction[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
-            constraintnum += 1
-
+                == vrateofproduction[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
             sumexps[1] = AffExpr()
         end
 
@@ -1347,9 +1309,9 @@ else
 
     # Create last constraint
     if isassigned(lastkeys, 1)
-        vrateofproduction1[constraintnum] = @constraint(jumpmodel,
+        push!(vrateofproduction1, @constraint(jumpmodel,
             (sumexps[1] == AffExpr() ? vrateofproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] : sumexps[1])
-            == vrateofproduction[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+            == vrateofproduction[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
     end
 end
 
@@ -1358,8 +1320,7 @@ logmsg("Created constraint VRateOfProduction1.", quiet)
 
 # BEGIN: EBa4_RateOfFuelUse1.
 if in("vrateofusebytechnologybymodenn", varstosavearr)
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref eba4_rateoffueluse1[1:size(queryvrateofusebytechnologybymodenn)[1]]
+    eba4_rateoffueluse1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for row in DataFrames.eachrow(queryvrateofusebytechnologybymodenn)
         local r = row[:r]
@@ -1369,8 +1330,7 @@ if in("vrateofusebytechnologybymodenn", varstosavearr)
         local m = row[:m]
         local y = row[:y]
 
-        eba4_rateoffueluse1[constraintnum] = @constraint(jumpmodel, vrateofactivity[r,l,t,m,y] * row[:iar] == vrateofusebytechnologybymodenn[r,l,t,m,f,y])
-        constraintnum += 1
+        push!(eba4_rateoffueluse1, @constraint(jumpmodel, vrateofactivity[r,l,t,m,y] * row[:iar] == vrateofusebytechnologybymodenn[r,l,t,m,f,y]))
     end
 
     logmsg("Created constraint EBa4_RateOfFuelUse1.", quiet)
@@ -1378,12 +1338,9 @@ end
 # END: EBa4_RateOfFuelUse1.
 
 # BEGIN: EBa5_RateOfFuelUse2.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref eba5_rateoffueluse2[1:size(queryvrateofusebytechnologynn)[1]]
-
+eba5_rateoffueluse2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
-sumexps = Array{AffExpr, 1}([AffExpr()])
-# sumexps[1] = vrateofusebytechnologybymodenn-equivalent sum
+sumexps = Array{AffExpr, 1}([AffExpr()]) # sumexps[1] = vrateofusebytechnologybymodenn-equivalent sum
 
 for row in DataFrames.eachrow(queryvrateofusebytechnologybymodenn)
     local r = row[:r]
@@ -1394,10 +1351,8 @@ for row in DataFrames.eachrow(queryvrateofusebytechnologybymodenn)
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || t != lastkeys[3] || f != lastkeys[4] || y != lastkeys[5])
         # Create constraint
-        eba5_rateoffueluse2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-            vrateofusebytechnologynn[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
-        constraintnum += 1
-
+        push!(eba5_rateoffueluse2, @constraint(jumpmodel, sumexps[1] ==
+            vrateofusebytechnologynn[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]]))
         sumexps[1] = AffExpr()
     end
 
@@ -1413,8 +1368,8 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    eba5_rateoffueluse2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-        vrateofusebytechnologynn[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
+    push!(eba5_rateoffueluse2, @constraint(jumpmodel, sumexps[1] ==
+        vrateofusebytechnologynn[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]]))
 end
 
 logmsg("Created constraint EBa5_RateOfFuelUse2.", quiet)
@@ -1422,12 +1377,9 @@ logmsg("Created constraint EBa5_RateOfFuelUse2.", quiet)
 
 # BEGIN: EBa5Tr_RateOfFuelUse2.
 if transmissionmodeling
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref eba5tr_rateoffueluse2[1:size(queryvrateofusebytechnologynodal)[1]]
-
+    eba5tr_rateoffueluse2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
-    sumexps = Array{AffExpr, 1}([AffExpr()])
-    # sumexps[1] = vrateofactivitynodal sum
+    sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivitynodal sum
 
     for row in DataFrames.eachrow(SQLite.query(db,
     "select ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y, m.val as m,
@@ -1449,10 +1401,8 @@ if transmissionmodeling
 
         if isassigned(lastkeys, 1) && (n != lastkeys[1] || l != lastkeys[2] || t != lastkeys[3] || f != lastkeys[4] || y != lastkeys[5])
             # Create constraint
-            eba5tr_rateoffueluse2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-                vrateofusebytechnologynodal[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
-            constraintnum += 1
-
+            push!(eba5tr_rateoffueluse2, @constraint(jumpmodel, sumexps[1] ==
+                vrateofusebytechnologynodal[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]]))
             sumexps[1] = AffExpr()
         end
 
@@ -1467,8 +1417,8 @@ if transmissionmodeling
 
     # Create last constraint
     if isassigned(lastkeys, 1)
-        eba5tr_rateoffueluse2[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-            vrateofusebytechnologynodal[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]])
+        push!(eba5tr_rateoffueluse2, @constraint(jumpmodel, sumexps[1] ==
+            vrateofusebytechnologynodal[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]]))
     end
 
     logmsg("Created constraint EBa5Tr_RateOfFuelUse2.", quiet)
@@ -1476,9 +1426,7 @@ end
 # END: EBa5Tr_RateOfFuelUse2.
 
 # BEGIN: EBa6_RateOfFuelUse3.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref eba6_rateoffueluse3[1:length(sregion) * length(stimeslice) * length(sfuel) * length(syear)]
-
+eba6_rateoffueluse3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofusebytechnologynn sum
 
@@ -1490,9 +1438,7 @@ for row in DataFrames.eachrow(queryvrateofusebytechnologynn)
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
         # Create constraint
-        eba6_rateoffueluse3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
-        constraintnum += 1
-
+        push!(eba6_rateoffueluse3, @constraint(jumpmodel, sumexps[1] == vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
         sumexps[1] = AffExpr()
     end
 
@@ -1506,7 +1452,7 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    eba6_rateoffueluse3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+    push!(eba6_rateoffueluse3, @constraint(jumpmodel, sumexps[1] == vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
 end
 
 logmsg("Created constraint EBa6_RateOfFuelUse3.", quiet)
@@ -1514,9 +1460,7 @@ logmsg("Created constraint EBa6_RateOfFuelUse3.", quiet)
 
 # BEGIN: EBa6Tr_RateOfFuelUse3.
 if transmissionmodeling
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref eba6tr_rateoffueluse3[1:length(snode) * length(stimeslice) * length(sfuel) * length(syear)]
-
+    eba6tr_rateoffueluse3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofusebytechnologynodal sum
 
@@ -1528,9 +1472,7 @@ if transmissionmodeling
 
         if isassigned(lastkeys, 1) && (n != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
             # Create constraint
-            eba6tr_rateoffueluse3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
-            constraintnum += 1
-
+            push!(eba6tr_rateoffueluse3, @constraint(jumpmodel, sumexps[1] == vrateofusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
             sumexps[1] = AffExpr()
         end
 
@@ -1544,7 +1486,7 @@ if transmissionmodeling
 
     # Create last constraint
     if isassigned(lastkeys, 1)
-        eba6tr_rateoffueluse3[constraintnum] = @constraint(jumpmodel, sumexps[1] == vrateofusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+        push!(eba6tr_rateoffueluse3, @constraint(jumpmodel, sumexps[1] == vrateofusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
     end
 
     logmsg("Created constraint EBa6Tr_RateOfFuelUse3.", quiet)
@@ -1556,9 +1498,7 @@ if !transmissionmodeling
     @constraint(jumpmodel, vrateofuse1[r = sregion, l = stimeslice, f = sfuel, y = syear], vrateofuse[r,l,f,y] == vrateofusenn[r,l,f,y])
 else
     # Combine nodal and non-nodal
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref vrateofuse1[1:length(sregion) * length(stimeslice) * length(sfuel) * length(syear)]
-
+    vrateofuse1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofusenodal sum
 
@@ -1570,11 +1510,9 @@ else
 
         if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
             # Create constraint
-            vrateofuse1[constraintnum] = @constraint(jumpmodel,
+            push!(vrateofuse1, @constraint(jumpmodel,
                 (sumexps[1] == AffExpr() ? vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] : sumexps[1])
-                == vrateofuse[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
-            constraintnum += 1
-
+                == vrateofuse[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
             sumexps[1] = AffExpr()
         end
 
@@ -1590,9 +1528,9 @@ else
 
     # Create last constraint
     if isassigned(lastkeys, 1)
-        vrateofuse1[constraintnum] = @constraint(jumpmodel,
+        push!(vrateofuse1, @constraint(jumpmodel,
             (sumexps[1] == AffExpr() ? vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] : sumexps[1])
-            == vrateofuse[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+            == vrateofuse[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
     end
 end
 
@@ -1607,9 +1545,8 @@ where
 ys.l = l.val and ys.y = y.val
 and tme.id is null")
 
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref eba7_energybalanceeachts1[1:size(queryvproduse)[1]]
-@constraintref eba8_energybalanceeachts2[1:size(queryvproduse)[1]]
+eba7_energybalanceeachts1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+eba8_energybalanceeachts2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(queryvproduse)
     local r = row[:r]
@@ -1617,10 +1554,8 @@ for row in DataFrames.eachrow(queryvproduse)
     local f = row[:f]
     local y = row[:y]
 
-    eba7_energybalanceeachts1[constraintnum] = @constraint(jumpmodel, vrateofproductionnn[r,l,f,y] * row[:ys] == vproductionnn[r,l,f,y])
-    eba8_energybalanceeachts2[constraintnum] = @constraint(jumpmodel, vrateofusenn[r,l,f,y] * row[:ys] == vusenn[r,l,f,y])
-
-    constraintnum += 1
+    push!(eba7_energybalanceeachts1, @constraint(jumpmodel, vrateofproductionnn[r,l,f,y] * row[:ys] == vproductionnn[r,l,f,y]))
+    push!(eba8_energybalanceeachts2, @constraint(jumpmodel, vrateofusenn[r,l,f,y] * row[:ys] == vusenn[r,l,f,y]))
 end
 
 logmsg("Created constraints EBa7_EnergyBalanceEachTS1 and EBa8_EnergyBalanceEachTS2.", quiet)
@@ -1635,9 +1570,8 @@ if transmissionmodeling
     ys.l = l.val and ys.y = y.val
     and tme.r = n.r and tme.f = f.val and tme.y = y.val")
 
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref eba7tr_energybalanceeachts1[1:size(queryvproduse)[1]]
-    @constraintref eba8tr_energybalanceeachts2[1:size(queryvproduse)[1]]
+    eba7tr_energybalanceeachts1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    eba8tr_energybalanceeachts2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for row in DataFrames.eachrow(queryvproduse)
         local n = row[:n]
@@ -1645,10 +1579,8 @@ if transmissionmodeling
         local f = row[:f]
         local y = row[:y]
 
-        eba7tr_energybalanceeachts1[constraintnum] = @constraint(jumpmodel, vrateofproductionnodal[n,l,f,y] * row[:ys] == vproductionnodal[n,l,f,y])
-        eba8tr_energybalanceeachts2[constraintnum] = @constraint(jumpmodel, vrateofusenodal[n,l,f,y] * row[:ys] == vusenodal[n,l,f,y])
-
-        constraintnum += 1
+        push!(eba7tr_energybalanceeachts1, @constraint(jumpmodel, vrateofproductionnodal[n,l,f,y] * row[:ys] == vproductionnodal[n,l,f,y]))
+        push!(eba8tr_energybalanceeachts2, @constraint(jumpmodel, vrateofusenodal[n,l,f,y] * row[:ys] == vusenodal[n,l,f,y]))
     end
 
     logmsg("Created constraints EBa7Tr_EnergyBalanceEachTS1 and EBa8Tr_EnergyBalanceEachTS2.", quiet)
@@ -1656,8 +1588,7 @@ end
 # END: EBa7Tr_EnergyBalanceEachTS1 and EBa8Tr_EnergyBalanceEachTS2.
 
 # BEGIN: EBa9_EnergyBalanceEachTS3.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref eba9_energybalanceeachts3[1:size(queryvrateofdemandnn)[1]]
+eba9_energybalanceeachts3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(queryvrateofdemandnn)
     local r = row[:r]
@@ -1665,8 +1596,7 @@ for row in DataFrames.eachrow(queryvrateofdemandnn)
     local f = row[:f]
     local y = row[:y]
 
-    eba9_energybalanceeachts3[constraintnum] = @constraint(jumpmodel, row[:specifiedannualdemand] * row[:specifieddemandprofile] == vdemandnn[r,l,f,y])
-    constraintnum += 1
+    push!(eba9_energybalanceeachts3, @constraint(jumpmodel, row[:specifiedannualdemand] * row[:specifieddemandprofile] == vdemandnn[r,l,f,y]))
 end
 
 logmsg("Created constraint EBa9_EnergyBalanceEachTS3.", quiet)
@@ -1686,8 +1616,7 @@ if transmissionmodeling
     and n.r = sad.r and ndd.f = sad.f and ndd.y = sad.y
     and ndd.val > 0")
 
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref eba9tr_energybalanceeachts3[1:size(querytemp)[1]]
+    eba9tr_energybalanceeachts3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for row in DataFrames.eachrow(querytemp)
         local n = row[:n]
@@ -1695,9 +1624,8 @@ if transmissionmodeling
         local f = row[:f]
         local y = row[:y]
 
-        eba9tr_energybalanceeachts3[constraintnum] = @constraint(jumpmodel, row[:specifiedannualdemand] * row[:specifieddemandprofile]
-            * row[:ndd] == vdemandnodal[n,l,f,y])
-        constraintnum += 1
+        push!(eba9tr_energybalanceeachts3, @constraint(jumpmodel, row[:specifiedannualdemand] * row[:specifieddemandprofile]
+            * row[:ndd] == vdemandnodal[n,l,f,y]))
     end
 
     logmsg("Created constraint EBa9Tr_EnergyBalanceEachTS3.", quiet)
@@ -1705,21 +1633,17 @@ end
 # END: EBa9Tr_EnergyBalanceEachTS3.
 
 # BEGIN: EBa10_EnergyBalanceEachTS4.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref eba10_energybalanceeachts4[1:length(sregion)^2 * length(stimeslice) * length(sfuel) * length(syear)]
+eba10_energybalanceeachts4::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for (r, rr, l, f, y) in Base.product(sregion, sregion, stimeslice, sfuel, syear)
-    eba10_energybalanceeachts4[constraintnum] = @constraint(jumpmodel, vtrade[r,rr,l,f,y] == -vtrade[rr,r,l,f,y])
-    constraintnum += 1
+    push!(eba10_energybalanceeachts4, @constraint(jumpmodel, vtrade[r,rr,l,f,y] == -vtrade[rr,r,l,f,y]))
 end
 
 logmsg("Created constraint EBa10_EnergyBalanceEachTS4.", quiet)
 # END: EBa10_EnergyBalanceEachTS4.
 
 # BEGIN: EBa11_EnergyBalanceEachTS5.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref eba11_energybalanceeachts5[1:length(sregion) * length(stimeslice) * length(sfuel) * length(syear)]
-
+eba11_energybalanceeachts5::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])
 # sumexps[1] = vtrade sum
@@ -1738,10 +1662,8 @@ order by r.val, l.val, f.val, y.val"))
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
         # Create constraint
-        eba11_energybalanceeachts5[constraintnum] = @constraint(jumpmodel, vproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
-            vdemandnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1])
-        constraintnum += 1
-
+        push!(eba11_energybalanceeachts5, @constraint(jumpmodel, vproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
+            vdemandnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]))
         sumexps[1] = AffExpr()
     end
 
@@ -1758,8 +1680,8 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    eba11_energybalanceeachts5[constraintnum] = @constraint(jumpmodel, vproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
-        vdemandnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1])
+    push!(eba11_energybalanceeachts5, @constraint(jumpmodel, vproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
+        vdemandnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]))
 end
 
 logmsg("Created constraint EBa11_EnergyBalanceEachTS5.", quiet)
@@ -1768,12 +1690,10 @@ logmsg("Created constraint EBa11_EnergyBalanceEachTS5.", quiet)
 # BEGIN: Tr1_SumBuilt.
 # Ensures vtransmissionbuilt can be 1 in at most one year
 if transmissionmodeling
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref tr1_sumbuilt[1:length(stransmission)]
+    tr1_sumbuilt::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for tr in stransmission
-        tr1_sumbuilt[constraintnum] = @constraint(jumpmodel, sum([vtransmissionbuilt[tr,y] for y in syear]) <= 1)
-        constraintnum += 1
+        push!(tr1_sumbuilt, @constraint(jumpmodel, sum([vtransmissionbuilt[tr,y] for y in syear]) <= 1))
     end
 
     logmsg("Created constraint Tr1_SumBuilt.", quiet)
@@ -1782,9 +1702,7 @@ end
 
 # BEGIN: Tr2_TransmissionExists.
 if transmissionmodeling
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref tr2_transmissionexists[1:length(stransmission) * length(syear)]
-
+    tr2_transmissionexists::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     lastkeys = Array{String, 1}(undef,2)  # lastkeys[1] = tr, lastkeys[2] = y
     lastvalsint = Array{Int64, 1}(undef,2)  # lastvalsint[1] = yconstruction, lastvalsint[2] = operationallife
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtransmissionbuilt sum
@@ -1809,16 +1727,15 @@ if transmissionmodeling
             if sumexps[1] == AffExpr()
                 # Exogenously built line
                 if (lastvalsint[1] <= Meta.parse(lastkeys[2])) && (lastvalsint[1] + lastvalsint[2] > Meta.parse(lastkeys[2]))
-                    tr2_transmissionexists[constraintnum] = @constraint(jumpmodel, vtransmissionexists[lastkeys[1],lastkeys[2]] == 1)
+                    push!(tr2_transmissionexists, @constraint(jumpmodel, vtransmissionexists[lastkeys[1],lastkeys[2]] == 1))
                 else
-                    tr2_transmissionexists[constraintnum] = @constraint(jumpmodel, vtransmissionexists[lastkeys[1],lastkeys[2]] == 0)
+                    push!(tr2_transmissionexists, @constraint(jumpmodel, vtransmissionexists[lastkeys[1],lastkeys[2]] == 0))
                 end
             else
                 # Endogenous option
-                tr2_transmissionexists[constraintnum] = @constraint(jumpmodel, sumexps[1] == vtransmissionexists[lastkeys[1],lastkeys[2]])
+                push!(tr2_transmissionexists, @constraint(jumpmodel, sumexps[1] == vtransmissionexists[lastkeys[1],lastkeys[2]]))
             end
 
-            constraintnum += 1
             sumexps[1] = AffExpr()
         end
 
@@ -1837,13 +1754,13 @@ if transmissionmodeling
         if sumexps[1] == AffExpr()
             # Exogenously built line
             if (lastvalsint[1] <= Meta.parse(lastkeys[2])) && (lastvalsint[1] + lastvalsint[2] > Meta.parse(lastkeys[2]))
-                tr2_transmissionexists[constraintnum] = @constraint(jumpmodel, vtransmissionexists[lastkeys[1],lastkeys[2]] == 1)
+                push!(tr2_transmissionexists, @constraint(jumpmodel, vtransmissionexists[lastkeys[1],lastkeys[2]] == 1))
             else
-                tr2_transmissionexists[constraintnum] = @constraint(jumpmodel, vtransmissionexists[lastkeys[1],lastkeys[2]] == 0)
+                push!(tr2_transmissionexists, @constraint(jumpmodel, vtransmissionexists[lastkeys[1],lastkeys[2]] == 0))
             end
         else
             # Endogenous option
-            tr2_transmissionexists[constraintnum] = @constraint(jumpmodel, sumexps[1] == vtransmissionexists[lastkeys[1],lastkeys[2]])
+            push!(tr2_transmissionexists, @constraint(jumpmodel, sumexps[1] == vtransmissionexists[lastkeys[1],lastkeys[2]]))
         end
     end
 
@@ -1853,11 +1770,10 @@ end
 
 # BEGIN: Tr3_Flow, Tr4_MaxFlow, and Tr5_MinFlow.
 if transmissionmodeling
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref tr3_flow[1:size(queryvtransmissionbyline)[1]]
+    tr3_flow::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     tr3a_flow::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
-    @constraintref tr4_maxflow[1:size(queryvtransmissionbyline)[1]]
-    @constraintref tr5_minflow[1:size(queryvtransmissionbyline)[1]]
+    tr4_maxflow::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    tr5_minflow::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for row in DataFrames.eachrow(queryvtransmissionbyline)
         local tr = row[:tr]
@@ -1870,24 +1786,22 @@ if transmissionmodeling
 
         # vtransmissionbyline is flow over line tr from n1 to n2; if type == 1 or 2, unit is MW
         if type == 1  # DCOPF
-            tr3_flow[constraintnum] = @constraint(jumpmodel, -1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]) * vtransmissionexists[tr,y]
-                == vtransmissionbyline[tr,l,f,y])
-            tr4_maxflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] <= row[:maxflow])
-            tr5_minflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] >= -row[:maxflow])
+            push!(tr3_flow, @constraint(jumpmodel, -1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]) * vtransmissionexists[tr,y]
+                == vtransmissionbyline[tr,l,f,y]))
+            push!(tr4_maxflow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] <= row[:maxflow]))
+            push!(tr5_minflow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] >= -row[:maxflow]))
         elseif type == 2  # DCOPF with disjunctive formulation
-            tr3_flow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] -
+            push!(tr3_flow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] -
                 (-1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]))
-                <= (1 - vtransmissionexists[tr,y]) * 100000)
+                <= (1 - vtransmissionexists[tr,y]) * 100000))
             push!(tr3a_flow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] -
                 (-1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]))
                 >= (vtransmissionexists[tr,y] - 1) * 100000))
             #tr4_maxflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y]^2 <= vtransmissionexists[tr,y] * row[:maxflow]^2)
             #tr5_minflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y]^2 >= 0)
-            tr4_maxflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] <= vtransmissionexists[tr,y] * row[:maxflow])
-            tr5_minflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] >= -vtransmissionexists[tr,y] * row[:maxflow])
+            push!(tr4_maxflow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] <= vtransmissionexists[tr,y] * row[:maxflow]))
+            push!(tr5_minflow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] >= -vtransmissionexists[tr,y] * row[:maxflow]))
         end
-
-        constraintnum += 1
     end
 
     logmsg("Created constraints Tr3_Flow, Tr4_MaxFlow, and Tr5_MinFlow.", quiet)
@@ -1992,12 +1906,10 @@ end
 # END: EBa11Tr_EnergyBalanceEachTS5.
 
 # BEGIN: EBb1_EnergyBalanceEachYear1.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref ebb1_energybalanceeachyear1[1:length(sregion) * length(sfuel) * length(syear)]
+ebb1_energybalanceeachyear1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for (r, f, y) in Base.product(sregion, sfuel, syear)
-    ebb1_energybalanceeachyear1[constraintnum] = @constraint(jumpmodel, sum([vproductionnn[r,l,f,y] for l = stimeslice]) == vproductionannualnn[r,f,y])
-    constraintnum += 1
+    push!(ebb1_energybalanceeachyear1, @constraint(jumpmodel, sum([vproductionnn[r,l,f,y] for l = stimeslice]) == vproductionannualnn[r,f,y]))
 end
 
 logmsg("Created constraint EBb1_EnergyBalanceEachYear1.", quiet)
@@ -2005,12 +1917,10 @@ logmsg("Created constraint EBb1_EnergyBalanceEachYear1.", quiet)
 
 # BEGIN: EBb1Tr_EnergyBalanceEachYear1.
 if transmissionmodeling
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref ebb1tr_energybalanceeachyear1[1:length(snode) * length(sfuel) * length(syear)]
+    ebb1tr_energybalanceeachyear1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for (n, f, y) in Base.product(snode, sfuel, syear)
-        ebb1tr_energybalanceeachyear1[constraintnum] = @constraint(jumpmodel, sum([vproductionnodal[n,l,f,y] for l = stimeslice]) == vproductionannualnodal[n,f,y])
-        constraintnum += 1
+        push!(ebb1tr_energybalanceeachyear1, @constraint(jumpmodel, sum([vproductionnodal[n,l,f,y] for l = stimeslice]) == vproductionannualnodal[n,f,y]))
     end
 
     logmsg("Created constraint EBb1Tr_EnergyBalanceEachYear1.", quiet)
@@ -2018,12 +1928,10 @@ end
 # END: EBb1Tr_EnergyBalanceEachYear1.
 
 # BEGIN: EBb2_EnergyBalanceEachYear2.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref ebb2_energybalanceeachyear2[1:length(sregion) * length(sfuel) * length(syear)]
+ebb2_energybalanceeachyear2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for (r, f, y) in Base.product(sregion, sfuel, syear)
-    ebb2_energybalanceeachyear2[constraintnum] = @constraint(jumpmodel, sum([vusenn[r,l,f,y] for l = stimeslice]) == vuseannualnn[r,f,y])
-    constraintnum += 1
+    push!(ebb2_energybalanceeachyear2, @constraint(jumpmodel, sum([vusenn[r,l,f,y] for l = stimeslice]) == vuseannualnn[r,f,y]))
 end
 
 logmsg("Created constraint EBb2_EnergyBalanceEachYear2.", quiet)
@@ -2031,12 +1939,10 @@ logmsg("Created constraint EBb2_EnergyBalanceEachYear2.", quiet)
 
 # BEGIN: EBb2Tr_EnergyBalanceEachYear2.
 if transmissionmodeling
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref ebb2tr_energybalanceeachyear2[1:length(snode) * length(sfuel) * length(syear)]
+    ebb2tr_energybalanceeachyear2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for (n, f, y) in Base.product(snode, sfuel, syear)
-        ebb2tr_energybalanceeachyear2[constraintnum] = @constraint(jumpmodel, sum([vusenodal[n,l,f,y] for l = stimeslice]) == vuseannualnodal[n,f,y])
-        constraintnum += 1
+        push!(ebb2tr_energybalanceeachyear2, @constraint(jumpmodel, sum([vusenodal[n,l,f,y] for l = stimeslice]) == vuseannualnodal[n,f,y]))
     end
 
     logmsg("Created constraint EBb2Tr_EnergyBalanceEachYear2.", quiet)
@@ -2044,21 +1950,17 @@ end
 # END: EBb2Tr_EnergyBalanceEachYear2.
 
 # BEGIN: EBb3_EnergyBalanceEachYear3.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref ebb3_energybalanceeachyear3[1:length(sregion) * length(sfuel) * length(syear)]
+ebb3_energybalanceeachyear3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for (r, rr, f, y) in Base.product(sregion, sregion, sfuel, syear)
-    ebb3_energybalanceeachyear3[constraintnum] = @constraint(jumpmodel, sum([vtrade[r,rr,l,f,y] for l = stimeslice]) == vtradeannual[r,rr,f,y])
-    constraintnum += 1
+    push!(ebb3_energybalanceeachyear3, @constraint(jumpmodel, sum([vtrade[r,rr,l,f,y] for l = stimeslice]) == vtradeannual[r,rr,f,y]))
 end
 
 logmsg("Created constraint EBb3_EnergyBalanceEachYear3.", quiet)
 # END: EBb3_EnergyBalanceEachYear3.
 
 # BEGIN: EBb4_EnergyBalanceEachYear4.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref ebb4_energybalanceeachyear4[1:length(sregion) * length(sfuel) * length(syear)]
-
+ebb4_energybalanceeachyear4::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = f, lastkeys[3] = y
 lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = aad
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtradeannual sum
@@ -2077,10 +1979,8 @@ order by r.val, f.val, y.val"))
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || f != lastkeys[2] || y != lastkeys[3])
         # Create constraint
-        ebb4_energybalanceeachyear4[constraintnum] = @constraint(jumpmodel, vproductionannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] >=
-            vuseannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] + sumexps[1] + lastvals[1])
-        constraintnum += 1
-
+        push!(ebb4_energybalanceeachyear4, @constraint(jumpmodel, vproductionannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] >=
+            vuseannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] + sumexps[1] + lastvals[1]))
         sumexps[1] = AffExpr()
         lastvals[1] = 0.0
     end
@@ -2100,8 +2000,8 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    ebb4_energybalanceeachyear4[constraintnum] = @constraint(jumpmodel, vproductionannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] >=
-        vuseannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] + sumexps[1] + lastvals[1])
+    push!(ebb4_energybalanceeachyear4, @constraint(jumpmodel, vproductionannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] >=
+        vuseannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] + sumexps[1] + lastvals[1]))
 end
 
 logmsg("Created constraint EBb4_EnergyBalanceEachYear4.", quiet)
@@ -2110,8 +2010,7 @@ logmsg("Created constraint EBb4_EnergyBalanceEachYear4.", quiet)
 # BEGIN: EBb4Tr_EnergyBalanceEachYear4.
 # For nodal modeling, where there is not trade, this constraint accounts for AccumulatedAnnualDemand only.
 if transmissionmodeling
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref ebb4tr_energybalanceeachyear4[1:length(snode) * length(sfuel) * length(syear)]
+    ebb4tr_energybalanceeachyear4::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for row in DataFrames.eachrow(SQLite.query(db,
         "select ndd.n as n, ndd.f as f, ndd.y as y, cast(ndd.val as real) as ndd, cast(aad.val as real) as aad
@@ -2125,9 +2024,8 @@ if transmissionmodeling
         local f = row[:f]
         local y = row[:y]
 
-        ebb4tr_energybalanceeachyear4[constraintnum] = @constraint(jumpmodel, vproductionannualnodal[n,f,y] >=
-            vuseannualnodal[n,f,y] + row[:aad] * row[:ndd])
-        constraintnum += 1
+        push!(ebb4tr_energybalanceeachyear4, @constraint(jumpmodel, vproductionannualnodal[n,f,y] >=
+            vuseannualnodal[n,f,y] + row[:aad] * row[:ndd]))
     end
 
     logmsg("Created constraint EBb4Tr_EnergyBalanceEachYear4.", quiet)
@@ -2136,8 +2034,7 @@ end
 
 # BEGIN: Acc1_FuelProductionByTechnology.
 if in("vproductionbytechnology", varstosavearr)
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref acc1_fuelproductionbytechnology[1:size(queryvproductionbytechnologyindices)[1]]
+    acc1_fuelproductionbytechnology::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for row in DataFrames.eachrow(queryvrateofproductionbytechnologynn)
         local r = row[:r]
@@ -2146,8 +2043,7 @@ if in("vproductionbytechnology", varstosavearr)
         local f = row[:f]
         local y = row[:y]
 
-        acc1_fuelproductionbytechnology[constraintnum] = @constraint(jumpmodel, vrateofproductionbytechnologynn[r,l,t,f,y] * row[:ys] == vproductionbytechnology[r,l,t,f,y])
-        constraintnum += 1
+        push!(acc1_fuelproductionbytechnology, @constraint(jumpmodel, vrateofproductionbytechnologynn[r,l,t,f,y] * row[:ys] == vproductionbytechnology[r,l,t,f,y]))
     end
 
     if transmissionmodeling
@@ -2163,10 +2059,8 @@ if in("vproductionbytechnology", varstosavearr)
 
             if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || t != lastkeys[3] || f != lastkeys[4] || y != lastkeys[5])
                 # Create constraint
-                acc1_fuelproductionbytechnology[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-                    vproductionbytechnology[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4],lastkeys[5]])
-                constraintnum += 1
-
+                push!(acc1_fuelproductionbytechnology, @constraint(jumpmodel, sumexps[1] ==
+                    vproductionbytechnology[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4],lastkeys[5]]))
                 sumexps[1] = AffExpr()
             end
 
@@ -2181,8 +2075,8 @@ if in("vproductionbytechnology", varstosavearr)
 
         # Create last constraint
         if isassigned(lastkeys, 1)
-            acc1_fuelproductionbytechnology[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-                vproductionbytechnology[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4],lastkeys[5]])
+            push!(acc1_fuelproductionbytechnology, @constraint(jumpmodel, sumexps[1] ==
+                vproductionbytechnology[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4],lastkeys[5]]))
         end
     end  # transmissionmodeling
 
@@ -2192,8 +2086,7 @@ end  # in("vproductionbytechnology", varstosavearr)
 
 # BEGIN: Acc2_FuelUseByTechnology.
 if in("vusebytechnology", varstosavearr)
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref acc2_fuelusebytechnology[1:size(queryvusebytechnologyindices)[1]]
+    acc2_fuelusebytechnology::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for row in DataFrames.eachrow(queryvrateofusebytechnologynn)
         local r = row[:r]
@@ -2202,8 +2095,7 @@ if in("vusebytechnology", varstosavearr)
         local f = row[:f]
         local y = row[:y]
 
-        acc2_fuelusebytechnology[constraintnum] = @constraint(jumpmodel, vrateofusebytechnologynn[r,l,t,f,y] * row[:ys] == vusebytechnology[r,l,t,f,y])
-        constraintnum += 1
+        push!(acc2_fuelusebytechnology, @constraint(jumpmodel, vrateofusebytechnologynn[r,l,t,f,y] * row[:ys] == vusebytechnology[r,l,t,f,y]))
     end
 
     if transmissionmodeling
@@ -2219,10 +2111,8 @@ if in("vusebytechnology", varstosavearr)
 
             if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || t != lastkeys[3] || f != lastkeys[4] || y != lastkeys[5])
                 # Create constraint
-                acc2_fuelusebytechnology[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-                    vusebytechnology[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4],lastkeys[5]])
-                constraintnum += 1
-
+                push!(acc2_fuelusebytechnology, @constraint(jumpmodel, sumexps[1] ==
+                    vusebytechnology[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4],lastkeys[5]]))
                 sumexps[1] = AffExpr()
             end
 
@@ -2237,8 +2127,8 @@ if in("vusebytechnology", varstosavearr)
 
         # Create last constraint
         if isassigned(lastkeys, 1)
-            acc2_fuelusebytechnology[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-                vusebytechnology[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4],lastkeys[5]])
+            push!(acc2_fuelusebytechnology, @constraint(jumpmodel, sumexps[1] ==
+                vusebytechnology[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4],lastkeys[5]]))
         end
     end  # transmissionmodeling
 
@@ -2247,9 +2137,7 @@ end  # in("vusebytechnology", varstosavearr)
 # END: Acc2_FuelUseByTechnology.
 
 # BEGIN: Acc3_AverageAnnualRateOfActivity.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref acc3_averageannualrateofactivity[1:length(sregion) * length(stechnology) * length(smode_of_operation) * length(syear)]
-
+acc3_averageannualrateofactivity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = m, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivity sum
 
@@ -2264,10 +2152,8 @@ order by r.val, t.val, m.val, y.val"))
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2] || m != lastkeys[3] || y != lastkeys[4])
         # Create constraint
-        acc3_averageannualrateofactivity[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-            vtotalannualtechnologyactivitybymode[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
-        constraintnum += 1
-
+        push!(acc3_averageannualrateofactivity, @constraint(jumpmodel, sumexps[1] ==
+            vtotalannualtechnologyactivitybymode[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
         sumexps[1] = AffExpr()
     end
 
@@ -2281,8 +2167,8 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    acc3_averageannualrateofactivity[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-        vtotalannualtechnologyactivitybymode[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+    push!(acc3_averageannualrateofactivity, @constraint(jumpmodel, sumexps[1] ==
+        vtotalannualtechnologyactivitybymode[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
 end
 
 logmsg("Created constraint Acc3_AverageAnnualRateOfActivity.", quiet)
@@ -2290,12 +2176,10 @@ logmsg("Created constraint Acc3_AverageAnnualRateOfActivity.", quiet)
 
 # BEGIN: Acc4_ModelPeriodCostByRegion.
 if in("vmodelperiodcostbyregion", varstosavearr)
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref acc4_modelperiodcostbyregion[1:length(sregion)]
+    acc4_modelperiodcostbyregion::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for r in sregion
-        acc4_modelperiodcostbyregion[constraintnum] = @constraint(jumpmodel, sum([vtotaldiscountedcost[r,y] for y in syear]) == vmodelperiodcostbyregion[r])
-        constraintnum += 1
+        push!(acc4_modelperiodcostbyregion, @constraint(jumpmodel, sum([vtotaldiscountedcost[r,y] for y in syear]) == vmodelperiodcostbyregion[r]))
     end
 
     logmsg("Created constraint Acc4_ModelPeriodCostByRegion.", quiet)
@@ -2304,12 +2188,9 @@ end
 
 # BEGIN: NS1_RateOfStorageCharge.
 # vrateofstoragecharge is in terms of energy output/year (e.g., PJ/yr, depending on CapacityToActivityUnit)
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref ns1_rateofstoragecharge[1:length(sregion) * length(sstorage) * length(stimeslice) * length(syear)]
-
+ns1_rateofstoragecharge::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = s, lastkeys[3] = l, lastkeys[4] = y
-sumexps = Array{AffExpr, 1}([AffExpr()])
-# sumexps[1] = vrateofactivity sum
+sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivity sum
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, l.val as l, y.val as y, tts.m as m, tts.t as t
 from region r, storage s, TIMESLICE l, year y, TechnologyToStorage_def tts
@@ -2323,10 +2204,8 @@ order by r.val, s.val, l.val, y.val"))
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || s != lastkeys[2] || l != lastkeys[3] || y != lastkeys[4])
         # Create constraint
-        ns1_rateofstoragecharge[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-            vrateofstoragecharge[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
-        constraintnum += 1
-
+        push!(ns1_rateofstoragecharge, @constraint(jumpmodel, sumexps[1] ==
+            vrateofstoragecharge[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
         sumexps[1] = AffExpr()
     end
 
@@ -2340,8 +2219,8 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    ns1_rateofstoragecharge[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-        vrateofstoragecharge[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+    push!(ns1_rateofstoragecharge, @constraint(jumpmodel, sumexps[1] ==
+        vrateofstoragecharge[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
 end
 
 logmsg("Created constraint NS1_RateOfStorageCharge.", quiet)
@@ -2349,12 +2228,9 @@ logmsg("Created constraint NS1_RateOfStorageCharge.", quiet)
 
 # BEGIN: NS2_RateOfStorageDischarge.
 # vrateofstoragedischarge is in terms of energy output/year (e.g., PJ/yr, depending on CapacityToActivityUnit)
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref ns2_rateofstoragedischarge[1:length(sregion) * length(sstorage) * length(stimeslice) * length(syear)]
-
+ns2_rateofstoragedischarge::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = s, lastkeys[3] = l, lastkeys[4] = y
-sumexps = Array{AffExpr, 1}([AffExpr()])
-# sumexps[1] = vrateofactivity sum
+sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivity sum
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, l.val as l, y.val as y, tfs.m as m, tfs.t as t
 from region r, storage s, TIMESLICE l, year y, TechnologyFromStorage_def tfs
@@ -2368,10 +2244,8 @@ order by r.val, s.val, l.val, y.val"))
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || s != lastkeys[2] || l != lastkeys[3] || y != lastkeys[4])
         # Create constraint
-        ns2_rateofstoragedischarge[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-            vrateofstoragedischarge[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
-        constraintnum += 1
-
+        push!(ns2_rateofstoragedischarge, @constraint(jumpmodel, sumexps[1] ==
+            vrateofstoragedischarge[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
         sumexps[1] = AffExpr()
     end
 
@@ -2385,8 +2259,8 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    ns2_rateofstoragedischarge[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-        vrateofstoragedischarge[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+    push!(ns2_rateofstoragedischarge, @constraint(jumpmodel, sumexps[1] ==
+        vrateofstoragedischarge[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
 end
 
 logmsg("Created constraint NS2_RateOfStorageDischarge.", quiet)
@@ -2394,11 +2268,9 @@ logmsg("Created constraint NS2_RateOfStorageDischarge.", quiet)
 
 # BEGIN: NS3_StorageLevelTsGroup1Start, NS4_StorageLevelTsGroup2Start, NS5_StorageLevelTimesliceEnd.
 # Note that vstorageleveltsend represents storage level (in energy terms) at end of first hour in time slice
-constraintnum = 1  # Number of next constraint to be added to constraint array
-constraint2num::Int, constraint3num::Int = 1, 1  # Supplemental constraint counters needed because three constraints are defined in subsequent loop
-@constraintref ns3_storageleveltsgroup1start[1:length(sregion) * length(sstorage) * length(stsgroup1) * length(syear)]
-@constraintref ns4_storageleveltsgroup2start[1:length(sregion) * length(sstorage) * length(stsgroup1) * length(stsgroup2) * length(syear)]
-@constraintref ns5_storageleveltimesliceend[1:length(sregion) * length(sstorage) * length(stimeslice) * length(syear)]
+ns3_storageleveltsgroup1start::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+ns4_storageleveltsgroup2start::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+ns5_storageleveltimesliceend::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, ltg.l as l, y.val as y, ltg.lorder as lo,
     ltg.tg2 as tg2, tg2.[order] as tg2o, ltg.tg1 as tg1, tg1.[order] as tg1o, cast(sls.val as real) as sls
@@ -2440,25 +2312,21 @@ and ltg.tg1 = tg1.name"))
     end
 
     if addns3
-        ns3_storageleveltsgroup1start[constraintnum] = @constraint(jumpmodel, startlevel == vstorageleveltsgroup1start[r, s, tg1, y])
-        constraintnum += 1
+        push!(ns3_storageleveltsgroup1start, @constraint(jumpmodel, startlevel == vstorageleveltsgroup1start[r, s, tg1, y]))
     end
 
     if addns4
-        ns4_storageleveltsgroup2start[constraint2num] = @constraint(jumpmodel, startlevel == vstorageleveltsgroup2start[r, s, tg1, tg2, y])
-        constraint2num += 1
+        push!(ns4_storageleveltsgroup2start, @constraint(jumpmodel, startlevel == vstorageleveltsgroup2start[r, s, tg1, tg2, y]))
     end
 
-    ns5_storageleveltimesliceend[constraint3num] = @constraint(jumpmodel,
-        startlevel + (vrateofstoragecharge[r, s, l, y] - vrateofstoragedischarge[r, s, l, y]) / 8760 == vstorageleveltsend[r, s, l, y])
-    constraint3num += 1
+    push!(ns5_storageleveltimesliceend, @constraint(jumpmodel,
+        startlevel + (vrateofstoragecharge[r, s, l, y] - vrateofstoragedischarge[r, s, l, y]) / 8760 == vstorageleveltsend[r, s, l, y]))
 end
 logmsg("Created constraints NS3_StorageLevelTsGroup1Start, NS4_StorageLevelTsGroup2Start, and NS5_StorageLevelTimesliceEnd.", quiet)
 # BEGIN: NS3_StorageLevelTsGroup1Start, NS4_StorageLevelTsGroup2Start, NS5_StorageLevelTimesliceEnd.
 
 # BEGIN: NS6_StorageLevelTsGroup2End.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref ns6_storageleveltsgroup2end[1:length(sregion) * length(sstorage) * length(stsgroup1) * length(stsgroup2) * length(syear)]
+ns6_storageleveltsgroup2end::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select main.r, main.s, main.tg1, main.tg1o, main.tg2, main.tg2o, cast(main.tg2m as real) as tg2m,
     main.y, ltg2.l as maxl, main.maxlo
@@ -2480,17 +2348,15 @@ and ltg2.lorder = main.maxlo"))
     local tg2 = row[:tg2]
     local y = row[:y]
 
-    ns6_storageleveltsgroup2end[constraintnum] = @constraint(jumpmodel, vstorageleveltsgroup2start[r, s, tg1, tg2, y] +
+    push!(ns6_storageleveltsgroup2end, @constraint(jumpmodel, vstorageleveltsgroup2start[r, s, tg1, tg2, y] +
         (vstorageleveltsend[r, s, row[:maxl], y] - vstorageleveltsgroup2start[r, s, tg1, tg2, y]) * row[:tg2m]
-        == vstorageleveltsgroup2end[r, s, tg1, tg2, y])
-    constraintnum += 1
+        == vstorageleveltsgroup2end[r, s, tg1, tg2, y]))
 end
 logmsg("Created constraint NS6_StorageLevelTsGroup2End.", quiet)
 # END: NS6_StorageLevelTsGroup2End.
 
 # BEGIN: NS7_StorageLevelTsGroup1End.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref ns7_storageleveltsgroup1end[1:length(sregion) * length(sstorage) * length(stsgroup1) * length(syear)]
+ns7_storageleveltsgroup1end::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, tg1.name as tg1, tg1.[order] as tg1o, cast(tg1.multiplier as real) as tg1m,
     y.val as y, max(tg2.[order]) as maxtg2o
@@ -2504,18 +2370,15 @@ group by r.val, s.val, tg1.name, tg1.[order], tg1.multiplier, y.val"))
     local tg1 = row[:tg1]
     local y = row[:y]
 
-    ns7_storageleveltsgroup1end[constraintnum] = @constraint(jumpmodel, vstorageleveltsgroup1start[r, s, tg1, y] +
+    push!(ns7_storageleveltsgroup1end, @constraint(jumpmodel, vstorageleveltsgroup1start[r, s, tg1, y] +
         (vstorageleveltsgroup2end[r, s, tg1, tsgroup2dict[row[:maxtg2o]][1], y] - vstorageleveltsgroup1start[r, s, tg1, y]) * row[:tg1m]
-        == vstorageleveltsgroup1end[r, s, tg1, y])
-    constraintnum += 1
+        == vstorageleveltsgroup1end[r, s, tg1, y]))
 end
 logmsg("Created constraint NS7_StorageLevelTsGroup1End.", quiet)
 # END: NS7_StorageLevelTsGroup1End.
 
 # BEGIN: NS8_StorageLevelYearEnd.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref ns8_storagelevelyearend[1:length(sregion) * length(sstorage) * length(syear)]
-
+ns8_storagelevelyearend::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = s, lastkeys[3] = y
 lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = sls
 sumexps = Array{AffExpr, 1}([AffExpr()])
@@ -2533,11 +2396,9 @@ order by r.val, s.val, y.val"))
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || s != lastkeys[2] || y != lastkeys[3])
         # Create constraint
-        ns8_storagelevelyearend[constraintnum] = @constraint(jumpmodel,
+        push!(ns8_storagelevelyearend, @constraint(jumpmodel,
             (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearend[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
-            + sumexps[1] == vstoragelevelyearend[lastkeys[1], lastkeys[2], lastkeys[3]])
-        constraintnum += 1
-
+            + sumexps[1] == vstoragelevelyearend[lastkeys[1], lastkeys[2], lastkeys[3]]))
         sumexps[1] = AffExpr()
         lastvals[1] = 0.0
     end
@@ -2555,18 +2416,16 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    ns8_storagelevelyearend[constraintnum] = @constraint(jumpmodel,
+    push!(ns8_storagelevelyearend, @constraint(jumpmodel,
         (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearend[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
-        + sumexps[1] == vstoragelevelyearend[lastkeys[1], lastkeys[2], lastkeys[3]])
+        + sumexps[1] == vstoragelevelyearend[lastkeys[1], lastkeys[2], lastkeys[3]]))
 end
 
 logmsg("Created constraint NS8_StorageLevelYearEnd.", quiet)
 # END: NS8_StorageLevelYearEnd.
 
 # BEGIN: SI1_StorageUpperLimit.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref si1_storageupperlimit[1:length(sregion) * length(sstorage) * length(syear)]
+si1_storageupperlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(rsc.val as real) as rsc
 from region r, storage s, year y
@@ -2575,17 +2434,14 @@ left join ResidualStorageCapacity_def rsc on rsc.r = r.val and rsc.s = s.val and
     local s = row[:s]
     local y = row[:y]
 
-    si1_storageupperlimit[constraintnum] = @constraint(jumpmodel, vaccumulatednewstoragecapacity[r,s,y] + (ismissing(row[:rsc]) ? 0 : row[:rsc]) == vstorageupperlimit[r,s,y])
-    constraintnum += 1
+    push!(si1_storageupperlimit, @constraint(jumpmodel, vaccumulatednewstoragecapacity[r,s,y] + (ismissing(row[:rsc]) ? 0 : row[:rsc]) == vstorageupperlimit[r,s,y]))
 end
 
 logmsg("Created constraint SI1_StorageUpperLimit.", quiet)
 # END: SI1_StorageUpperLimit.
 
 # BEGIN: SI2_StorageLowerLimit.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref si2_storagelowerlimit[1:length(sregion) * length(sstorage) * length(syear)]
+si2_storagelowerlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(msc.val as real) as msc
 from region r, storage s, year y, MinStorageCharge_def msc
@@ -2594,20 +2450,16 @@ where msc.r = r.val and msc.s = s.val and msc.y = y.val"))
     local s = row[:s]
     local y = row[:y]
 
-    si2_storagelowerlimit[constraintnum] = @constraint(jumpmodel, row[:msc] * vstorageupperlimit[r,s,y] == vstoragelowerlimit[r,s,y])
-    constraintnum += 1
+    push!(si2_storagelowerlimit, @constraint(jumpmodel, row[:msc] * vstorageupperlimit[r,s,y] == vstoragelowerlimit[r,s,y]))
 end
 
 logmsg("Created constraint SI2_StorageLowerLimit.", quiet)
 # END: SI2_StorageLowerLimit.
 
 # BEGIN: SI3_TotalNewStorage.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref si3_totalnewstorage[1:length(sregion) * length(sstorage) * length(syear)]
-
+si3_totalnewstorage::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = s, lastkeys[3] = y
-sumexps = Array{AffExpr, 1}([AffExpr()])
-# sumexps[1] = vnewstoragecapacity sum
+sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vnewstoragecapacity sum
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols, yy.val as yy
 from region r, storage s, year y, OperationalLifeStorage_def ols, year yy
@@ -2620,10 +2472,8 @@ order by r.val, s.val, y.val"))
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || s != lastkeys[2] || y != lastkeys[3])
         # Create constraint
-        si3_totalnewstorage[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-            vaccumulatednewstoragecapacity[lastkeys[1],lastkeys[2],lastkeys[3]])
-        constraintnum += 1
-
+        push!(si3_totalnewstorage, @constraint(jumpmodel, sumexps[1] ==
+            vaccumulatednewstoragecapacity[lastkeys[1],lastkeys[2],lastkeys[3]]))
         sumexps[1] = AffExpr()
     end
 
@@ -2636,143 +2486,116 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    si3_totalnewstorage[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-        vaccumulatednewstoragecapacity[lastkeys[1],lastkeys[2],lastkeys[3]])
+    push!(si3_totalnewstorage, @constraint(jumpmodel, sumexps[1] ==
+        vaccumulatednewstoragecapacity[lastkeys[1],lastkeys[2],lastkeys[3]]))
 end
 
 logmsg("Created constraint SI3_TotalNewStorage.", quiet)
 # END: SI3_TotalNewStorage.
 
 # BEGIN: NS9a_StorageLevelTsLowerLimit and NS9b_StorageLevelTsUpperLimit.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref ns9a_storageleveltslowerlimit[1:length(sregion) * length(sstorage) * length(stimeslice) * length(syear)]
-@constraintref ns9b_storageleveltsupperlimit[1:length(sregion) * length(sstorage) * length(stimeslice) * length(syear)]
+ns9a_storageleveltslowerlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+ns9b_storageleveltsupperlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for (r, s, l, y) in Base.product(sregion, sstorage, stimeslice, syear)
-    ns9a_storageleveltslowerlimit[constraintnum] = @constraint(jumpmodel, vstoragelowerlimit[r,s,y] <= vstorageleveltsend[r,s,l,y])
-    ns9b_storageleveltsupperlimit[constraintnum] = @constraint(jumpmodel, vstorageleveltsend[r,s,l,y] <= vstorageupperlimit[r,s,y])
-    constraintnum += 1
+    push!(ns9a_storageleveltslowerlimit, @constraint(jumpmodel, vstoragelowerlimit[r,s,y] <= vstorageleveltsend[r,s,l,y]))
+    push!(ns9b_storageleveltsupperlimit, @constraint(jumpmodel, vstorageleveltsend[r,s,l,y] <= vstorageupperlimit[r,s,y]))
 end
 
 logmsg("Created constraints NS9a_StorageLevelTsLowerLimit and NS9b_StorageLevelTsUpperLimit.", quiet)
 # END: NS9a_StorageLevelTsLowerLimit and NS9b_StorageLevelTsUpperLimit.
 
 # BEGIN: NS10_StorageChargeLimit.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref ns10_storagechargelimit[1:length(sregion) * length(sstorage) * length(stimeslice) * length(syear)]
+ns10_storagechargelimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, l.val as l, y.val as y, cast(smc.val as real) as smc
 from region r, storage s, TIMESLICE l, year y, StorageMaxChargeRate_def smc
 where
 r.val = smc.r
 and s.val = smc.s"))
-    ns10_storagechargelimit[constraintnum] = @constraint(jumpmodel, vrateofstoragecharge[row[:r], row[:s], row[:l], row[:y]] <= row[:smc])
-    constraintnum += 1
+    push!(ns10_storagechargelimit, @constraint(jumpmodel, vrateofstoragecharge[row[:r], row[:s], row[:l], row[:y]] <= row[:smc]))
 end
 
 logmsg("Created constraint NS10_StorageChargeLimit.", quiet)
 # END: NS10_StorageChargeLimit.
 
 # BEGIN: NS11_StorageDischargeLimit.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref ns11_storagedischargelimit[1:length(sregion) * length(sstorage) * length(stimeslice) * length(syear)]
+ns11_storagedischargelimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, l.val as l, y.val as y, cast(smd.val as real) as smd
 from region r, storage s, TIMESLICE l, year y, StorageMaxDischargeRate_def smd
 where
 r.val = smd.r
 and s.val = smd.s"))
-    ns11_storagedischargelimit[constraintnum] = @constraint(jumpmodel, vrateofstoragedischarge[row[:r], row[:s], row[:l], row[:y]] <= row[:smd])
-    constraintnum += 1
+    push!(ns11_storagedischargelimit, @constraint(jumpmodel, vrateofstoragedischarge[row[:r], row[:s], row[:l], row[:y]] <= row[:smd]))
 end
 
 logmsg("Created constraint NS11_StorageDischargeLimit.", quiet)
 # END: NS11_StorageDischargeLimit.
 
 # BEGIN: NS12a_StorageLevelTsGroup2LowerLimit and NS12b_StorageLevelTsGroup2UpperLimit.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref ns12a_storageleveltsgroup2lowerlimit[1:length(sregion) * length(sstorage) * length(stsgroup1) * length(stsgroup2) * length(syear)]
-@constraintref ns12b_storageleveltsgroup2upperlimit[1:length(sregion) * length(sstorage) * length(stsgroup1) * length(stsgroup2) * length(syear)]
+ns12a_storageleveltsgroup2lowerlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+ns12b_storageleveltsgroup2upperlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for (r, s, tg1, tg2, y) in Base.product(sregion, sstorage, stsgroup1, stsgroup2, syear)
-    ns12a_storageleveltsgroup2lowerlimit[constraintnum] = @constraint(jumpmodel, vstoragelowerlimit[r,s,y] <= vstorageleveltsgroup2end[r,s,tg1,tg2,y])
-    ns12b_storageleveltsgroup2upperlimit[constraintnum] = @constraint(jumpmodel, vstorageleveltsgroup2end[r,s,tg1,tg2,y] <= vstorageupperlimit[r,s,y])
-    constraintnum += 1
+    push!(ns12a_storageleveltsgroup2lowerlimit, @constraint(jumpmodel, vstoragelowerlimit[r,s,y] <= vstorageleveltsgroup2end[r,s,tg1,tg2,y]))
+    push!(ns12b_storageleveltsgroup2upperlimit, @constraint(jumpmodel, vstorageleveltsgroup2end[r,s,tg1,tg2,y] <= vstorageupperlimit[r,s,y]))
 end
 
 logmsg("Created constraints NS12a_StorageLevelTsGroup2LowerLimit and NS12b_StorageLevelTsGroup2UpperLimit.", quiet)
 # END: NS12a_StorageLevelTsGroup2LowerLimit and NS12b_StorageLevelTsGroup2UpperLimit.
 
 # BEGIN: NS13a_StorageLevelTsGroup1LowerLimit and NS13b_StorageLevelTsGroup1UpperLimit.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref ns13a_storageleveltsgroup1lowerlimit[1:length(sregion) * length(sstorage) * length(stsgroup1) * length(syear)]
-@constraintref ns13b_storageleveltsgroup1upperlimit[1:length(sregion) * length(sstorage) * length(stsgroup1) * length(syear)]
+ns13a_storageleveltsgroup1lowerlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+ns13b_storageleveltsgroup1upperlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for (r, s, tg1, y) in Base.product(sregion, sstorage, stsgroup1, syear)
-    ns13a_storageleveltsgroup1lowerlimit[constraintnum] = @constraint(jumpmodel, vstoragelowerlimit[r,s,y] <= vstorageleveltsgroup1end[r,s,tg1,y])
-    ns13b_storageleveltsgroup1upperlimit[constraintnum] = @constraint(jumpmodel, vstorageleveltsgroup1end[r,s,tg1,y] <= vstorageupperlimit[r,s,y])
-    constraintnum += 1
+    push!(ns13a_storageleveltsgroup1lowerlimit, @constraint(jumpmodel, vstoragelowerlimit[r,s,y] <= vstorageleveltsgroup1end[r,s,tg1,y]))
+    push!(ns13b_storageleveltsgroup1upperlimit, @constraint(jumpmodel, vstorageleveltsgroup1end[r,s,tg1,y] <= vstorageupperlimit[r,s,y]))
 end
 
 logmsg("Created constraints NS13a_StorageLevelTsGroup1LowerLimit and NS13b_StorageLevelTsGroup1UpperLimit.", quiet)
 # END: NS13a_StorageLevelTsGroup2LowerLimit and NS13b_StorageLevelTsGroup2UpperLimit.
 
 # BEGIN: NS14_MaxStorageCapacity.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref ns14_maxstoragecapacity[1:length(sregion) * length(sstorage) * length(syear)]
+ns14_maxstoragecapacity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select smc.r, smc.s, smc.y, cast(smc.val as real) as smc
 from TotalAnnualMaxCapacityStorage_def smc"))
-    ns14_maxstoragecapacity[constraintnum] = @constraint(jumpmodel, vstorageupperlimit[row[:r],row[:s],row[:y]] <= row[:smc])
-    constraintnum += 1
+    push!(ns14_maxstoragecapacity, @constraint(jumpmodel, vstorageupperlimit[row[:r],row[:s],row[:y]] <= row[:smc]))
 end
 
 logmsg("Created constraint NS14_MaxStorageCapacity.", quiet)
 # END: NS14_MaxStorageCapacity.
 
 # BEGIN: NS15_MinStorageCapacity.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref ns15_minstoragecapacity[1:length(sregion) * length(sstorage) * length(syear)]
+ns15_minstoragecapacity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select smc.r, smc.s, smc.y, cast(smc.val as real) as smc
 from TotalAnnualMinCapacityStorage_def smc"))
-    ns15_minstoragecapacity[constraintnum] = @constraint(jumpmodel, row[:smc] <= vstorageupperlimit[row[:r],row[:s],row[:y]])
-    constraintnum += 1
+    push!(ns15_minstoragecapacity, @constraint(jumpmodel, row[:smc] <= vstorageupperlimit[row[:r],row[:s],row[:y]]))
 end
 
 logmsg("Created constraint NS15_MinStorageCapacity.", quiet)
 # END: NS15_MinStorageCapacity.
 
 # BEGIN: NS16_MaxStorageCapacityInvestment.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref ns16_maxstoragecapacityinvestment[1:length(sregion) * length(sstorage) * length(syear)]
+ns16_maxstoragecapacityinvestment::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select smc.r, smc.s, smc.y, cast(smc.val as real) as smc
 from TotalAnnualMaxCapacityInvestmentStorage_def smc"))
-    ns16_maxstoragecapacityinvestment[constraintnum] = @constraint(jumpmodel, vnewstoragecapacity[row[:r],row[:s],row[:y]] <= row[:smc])
-    constraintnum += 1
+    push!(ns16_maxstoragecapacityinvestment, @constraint(jumpmodel, vnewstoragecapacity[row[:r],row[:s],row[:y]] <= row[:smc]))
 end
 
 logmsg("Created constraint NS16_MaxStorageCapacityInvestment.", quiet)
 # END: NS16_MaxStorageCapacityInvestment.
 
 # BEGIN: NS17_MinStorageCapacityInvestment.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref ns17_minstoragecapacityinvestment[1:length(sregion) * length(sstorage) * length(syear)]
+ns17_minstoragecapacityinvestment::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select smc.r, smc.s, smc.y, cast(smc.val as real) as smc
 from TotalAnnualMinCapacityInvestmentStorage_def smc"))
-    ns17_minstoragecapacityinvestment[constraintnum] = @constraint(jumpmodel, row[:smc] <= vnewstoragecapacity[row[:r],row[:s],row[:y]])
-    constraintnum += 1
+    push!(ns17_minstoragecapacityinvestment, @constraint(jumpmodel, row[:smc] <= vnewstoragecapacity[row[:r],row[:s],row[:y]]))
 end
 
 logmsg("Created constraint NS17_MinStorageCapacityInvestment.", quiet)
@@ -2780,7 +2603,6 @@ logmsg("Created constraint NS17_MinStorageCapacityInvestment.", quiet)
 
 # BEGIN: NS18_FullLoadHours.
 ns18_fullloadhours::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
-
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = s, lastkeys[3] = y
 lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = flh
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vnewcapacity sum
@@ -2826,9 +2648,7 @@ logmsg("Created constraint NS18_FullLoadHours.", quiet)
 # END: NS18_FullLoadHours.
 
 # BEGIN: SI4_UndiscountedCapitalInvestmentStorage.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref si4_undiscountedcapitalinvestmentstorage[1:length(sregion) * length(sstorage) * length(syear)]
+si4_undiscountedcapitalinvestmentstorage::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(ccs.val as real) as ccs
 from region r, storage s, year y, CapitalCostStorage_def ccs
@@ -2837,16 +2657,14 @@ where ccs.r = r.val and ccs.s = s.val and ccs.y = y.val"))
     local s = row[:s]
     local y = row[:y]
 
-    si4_undiscountedcapitalinvestmentstorage[constraintnum] = @constraint(jumpmodel, row[:ccs] * vnewstoragecapacity[r,s,y] == vcapitalinvestmentstorage[r,s,y])
-    constraintnum += 1
+    push!(si4_undiscountedcapitalinvestmentstorage, @constraint(jumpmodel, row[:ccs] * vnewstoragecapacity[r,s,y] == vcapitalinvestmentstorage[r,s,y]))
 end
 
 logmsg("Created constraint SI4_UndiscountedCapitalInvestmentStorage.", quiet)
 # END: SI4_UndiscountedCapitalInvestmentStorage.
 
 # BEGIN: SI5_DiscountingCapitalInvestmentStorage.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref si5_discountingcapitalinvestmentstorage[1:length(sregion) * length(sstorage) * length(syear)]
+si5_discountingcapitalinvestmentstorage::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr
 from region r, storage s, year y, DiscountRate_def dr
@@ -2855,17 +2673,14 @@ where dr.r = r.val"))
     local s = row[:s]
     local y = row[:y]
 
-    si5_discountingcapitalinvestmentstorage[constraintnum] = @constraint(jumpmodel, vcapitalinvestmentstorage[r,s,y] / ((1 + row[:dr])^(Meta.parse(y) - Meta.parse(first(syear)))) == vdiscountedcapitalinvestmentstorage[r,s,y])
-    constraintnum += 1
+    push!(si5_discountingcapitalinvestmentstorage, @constraint(jumpmodel, vcapitalinvestmentstorage[r,s,y] / ((1 + row[:dr])^(Meta.parse(y) - Meta.parse(first(syear)))) == vdiscountedcapitalinvestmentstorage[r,s,y]))
 end
 
 logmsg("Created constraint SI5_DiscountingCapitalInvestmentStorage.", quiet)
 # END: SI5_DiscountingCapitalInvestmentStorage.
 
 # BEGIN: SI6_SalvageValueStorageAtEndOfPeriod1.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref si6_salvagevaluestorageatendofperiod1[1:length(sregion) * length(sstorage) * length(syear)]
+si6_salvagevaluestorageatendofperiod1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y
 from region r, storage s, year y, OperationalLifeStorage_def ols
@@ -2875,17 +2690,14 @@ and y.val + ols.val - 1 <= " * last(syear)))
     local s = row[:s]
     local y = row[:y]
 
-    si6_salvagevaluestorageatendofperiod1[constraintnum] = @constraint(jumpmodel, 0 == vsalvagevaluestorage[r,s,y])
-    constraintnum += 1
+    push!(si6_salvagevaluestorageatendofperiod1, @constraint(jumpmodel, 0 == vsalvagevaluestorage[r,s,y]))
 end
 
 logmsg("Created constraint SI6_SalvageValueStorageAtEndOfPeriod1.", quiet)
 # END: SI6_SalvageValueStorageAtEndOfPeriod1.
 
 # BEGIN: SI7_SalvageValueStorageAtEndOfPeriod2.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref si7_salvagevaluestorageatendofperiod2[1:length(sregion) * length(sstorage) * length(syear)]
+si7_salvagevaluestorageatendofperiod2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols
 from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStorage_def ols, DiscountRate_def dr
@@ -2903,16 +2715,14 @@ and y.val + ols.val - 1 > " * last(syear)))
     local s = row[:s]
     local y = row[:y]
 
-    si7_salvagevaluestorageatendofperiod2[constraintnum] = @constraint(jumpmodel, vcapitalinvestmentstorage[r,s,y] * (1 - (Meta.parse(last(syear)) - Meta.parse(y) + 1) / row[:ols]) == vsalvagevaluestorage[r,s,y])
-    constraintnum += 1
+    push!(si7_salvagevaluestorageatendofperiod2, @constraint(jumpmodel, vcapitalinvestmentstorage[r,s,y] * (1 - (Meta.parse(last(syear)) - Meta.parse(y) + 1) / row[:ols]) == vsalvagevaluestorage[r,s,y]))
 end
 
 logmsg("Created constraint SI7_SalvageValueStorageAtEndOfPeriod2.", quiet)
 # END: SI7_SalvageValueStorageAtEndOfPeriod2.
 
 # BEGIN: SI8_SalvageValueStorageAtEndOfPeriod3.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref si8_salvagevaluestorageatendofperiod3[1:length(sregion) * length(sstorage) * length(syear)]
+si8_salvagevaluestorageatendofperiod3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr, cast(ols.val as real) as ols
 from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStorage_def ols, DiscountRate_def dr
@@ -2925,16 +2735,14 @@ and y.val + ols.val - 1 > " * last(syear) *
     local y = row[:y]
     local dr = row[:dr]
 
-    si8_salvagevaluestorageatendofperiod3[constraintnum] = @constraint(jumpmodel, vcapitalinvestmentstorage[r,s,y] * (1 - (((1 + dr)^(Meta.parse(last(syear)) - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ols]) - 1))) == vsalvagevaluestorage[r,s,y])
-    constraintnum += 1
+    push!(si8_salvagevaluestorageatendofperiod3, @constraint(jumpmodel, vcapitalinvestmentstorage[r,s,y] * (1 - (((1 + dr)^(Meta.parse(last(syear)) - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ols]) - 1))) == vsalvagevaluestorage[r,s,y]))
 end
 
 logmsg("Created constraint SI8_SalvageValueStorageAtEndOfPeriod3.", quiet)
 # END: SI8_SalvageValueStorageAtEndOfPeriod3.
 
 # BEGIN: SI9_SalvageValueStorageDiscountedToStartYear.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref si9_salvagevaluestoragediscountedtostartyear[1:length(sregion) * length(sstorage) * length(syear)]
+si9_salvagevaluestoragediscountedtostartyear::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr
 from region r, storage s, year y, DiscountRate_def dr
@@ -2943,28 +2751,24 @@ where dr.r = r.val"))
     local s = row[:s]
     local y = row[:y]
 
-    si9_salvagevaluestoragediscountedtostartyear[constraintnum] = @constraint(jumpmodel, vsalvagevaluestorage[r,s,y] / ((1 + row[:dr])^(Meta.parse(last(syear)) - Meta.parse(first(syear)) + 1)) == vdiscountedsalvagevaluestorage[r,s,y])
-    constraintnum += 1
+    push!(si9_salvagevaluestoragediscountedtostartyear, @constraint(jumpmodel, vsalvagevaluestorage[r,s,y] / ((1 + row[:dr])^(Meta.parse(last(syear)) - Meta.parse(first(syear)) + 1)) == vdiscountedsalvagevaluestorage[r,s,y]))
 end
 
 logmsg("Created constraint SI9_SalvageValueStorageDiscountedToStartYear.", quiet)
 # END: SI9_SalvageValueStorageDiscountedToStartYear.
 
 # BEGIN: SI10_TotalDiscountedCostByStorage.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref si10_totaldiscountedcostbystorage[1:length(sregion) * length(sstorage) * length(syear)]
+si10_totaldiscountedcostbystorage::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for (r, s, y) in Base.product(sregion, sstorage, syear)
-    si10_totaldiscountedcostbystorage[constraintnum] = @constraint(jumpmodel, vdiscountedcapitalinvestmentstorage[r,s,y] - vdiscountedsalvagevaluestorage[r,s,y] == vtotaldiscountedstoragecost[r,s,y])
-    constraintnum += 1
+    push!(si10_totaldiscountedcostbystorage, @constraint(jumpmodel, vdiscountedcapitalinvestmentstorage[r,s,y] - vdiscountedsalvagevaluestorage[r,s,y] == vtotaldiscountedstoragecost[r,s,y]))
 end
 
 logmsg("Created constraint SI10_TotalDiscountedCostByStorage.", quiet)
 # END: SI10_TotalDiscountedCostByStorage.
 
 # BEGIN: CC1_UndiscountedCapitalInvestment.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref cc1_undiscountedcapitalinvestment[1:length(sregion) * length(stechnology) * length(syear)]
+cc1_undiscountedcapitalinvestment::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc
 from region r, technology t, year y, CapitalCost_def cc
@@ -2973,8 +2777,7 @@ where cc.r = r.val and cc.t = t.val and cc.y = y.val"))
     local t = row[:t]
     local y = row[:y]
 
-    cc1_undiscountedcapitalinvestment[constraintnum] = @constraint(jumpmodel, row[:cc] * vnewcapacity[r,t,y] == vcapitalinvestment[r,t,y])
-    constraintnum += 1
+    push!(cc1_undiscountedcapitalinvestment, @constraint(jumpmodel, row[:cc] * vnewcapacity[r,t,y] == vcapitalinvestment[r,t,y]))
 end
 
 logmsg("Created constraint CC1_UndiscountedCapitalInvestment.", quiet)
@@ -2998,21 +2801,18 @@ end
 # END: CC1Tr_UndiscountedCapitalInvestment.
 
 # BEGIN: CC2_DiscountingCapitalInvestment.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
 queryrtydr::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(dr.val as real) as dr
 from region r, technology t, year y, DiscountRate_def dr
 where dr.r = r.val")
 
-@constraintref cc2_discountingcapitalinvestment[1:size(queryrtydr)[1]]
+cc2_discountingcapitalinvestment::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(queryrtydr)
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
 
-    cc2_discountingcapitalinvestment[constraintnum] = @constraint(jumpmodel, vcapitalinvestment[r,t,y] / ((1 + row[:dr])^(Meta.parse(y) - Meta.parse(first(syear)))) == vdiscountedcapitalinvestment[r,t,y])
-    constraintnum += 1
+    push!(cc2_discountingcapitalinvestment, @constraint(jumpmodel, vcapitalinvestment[r,t,y] / ((1 + row[:dr])^(Meta.parse(y) - Meta.parse(first(syear)))) == vdiscountedcapitalinvestment[r,t,y]))
 end
 
 logmsg("Created constraint CC2_DiscountingCapitalInvestment.", quiet)
@@ -3043,8 +2843,7 @@ end
 # BEGIN: SV1_SalvageValueAtEndOfPeriod1.
 # DepreciationMethod 1 (if discount rate > 0): base salvage value on % of discounted value remaining at end of modeling period.
 # DepreciationMethod 2 (or dm 1 if discount rate = 0): base salvage value on % of operational life remaining at end of modeling period.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref sv1_salvagevalueatendofperiod1[1:length(sregion) * length(stechnology) * length(syear)]
+sv1_salvagevalueatendofperiod1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc, cast(dr.val as real) as dr,
 cast(ol.val as real) as ol
@@ -3060,9 +2859,8 @@ and cc.r = r.val and cc.t = t.val and cc.y = y.val"))
     local y = row[:y]
     local dr = row[:dr]
 
-    sv1_salvagevalueatendofperiod1[constraintnum] = @constraint(jumpmodel, vsalvagevalue[r,t,y] ==
-        row[:cc] * vnewcapacity[r,t,y] * (1 - (((1 + dr)^(Meta.parse(last(syear)) - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ol]) - 1))))
-    constraintnum += 1
+    push!(sv1_salvagevalueatendofperiod1, @constraint(jumpmodel, vsalvagevalue[r,t,y] ==
+        row[:cc] * vnewcapacity[r,t,y] * (1 - (((1 + dr)^(Meta.parse(last(syear)) - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ol]) - 1)))))
 end
 
 logmsg("Created constraint SV1_SalvageValueAtEndOfPeriod1.", quiet)
@@ -3094,8 +2892,7 @@ end
 # END: SV1Tr_SalvageValueAtEndOfPeriod1.
 
 # BEGIN: SV2_SalvageValueAtEndOfPeriod2.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref sv2_salvagevalueatendofperiod2[1:length(sregion) * length(stechnology) * length(syear)]
+sv2_salvagevalueatendofperiod2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc, cast(ol.val as real) as ol
 from region r, technology t, year y, DepreciationMethod_def dm, OperationalLife_def ol, DiscountRate_def dr,
@@ -3117,9 +2914,8 @@ and y.val + ol.val - 1 > " * last(syear) *
     local t = row[:t]
     local y = row[:y]
 
-    sv2_salvagevalueatendofperiod2[constraintnum] = @constraint(jumpmodel, vsalvagevalue[r,t,y] ==
-        row[:cc] * vnewcapacity[r,t,y] * (1 - (Meta.parse(last(syear)) - Meta.parse(y) + 1) / row[:ol]))
-    constraintnum += 1
+    push!(sv2_salvagevalueatendofperiod2, @constraint(jumpmodel, vsalvagevalue[r,t,y] ==
+        row[:cc] * vnewcapacity[r,t,y] * (1 - (Meta.parse(last(syear)) - Meta.parse(y) + 1) / row[:ol])))
 end
 
 logmsg("Created constraint SV2_SalvageValueAtEndOfPeriod2.", quiet)
@@ -3150,8 +2946,7 @@ end
 # END: SV2Tr_SalvageValueAtEndOfPeriod2.
 
 # BEGIN: SV3_SalvageValueAtEndOfPeriod3.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref sv3_salvagevalueatendofperiod3[1:length(sregion) * length(stechnology) * length(syear)]
+sv3_salvagevalueatendofperiod3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y
 from region r, technology t, year y, OperationalLife_def ol
@@ -3161,8 +2956,7 @@ and y.val + ol.val - 1 <= " * last(syear)))
     local t = row[:t]
     local y = row[:y]
 
-    sv3_salvagevalueatendofperiod3[constraintnum] = @constraint(jumpmodel, vsalvagevalue[r,t,y] == 0)
-    constraintnum += 1
+    push!(sv3_salvagevalueatendofperiod3, @constraint(jumpmodel, vsalvagevalue[r,t,y] == 0))
 end
 
 logmsg("Created constraint SV3_SalvageValueAtEndOfPeriod3.", quiet)
@@ -3187,17 +2981,15 @@ end
 # END: SV3Tr_SalvageValueAtEndOfPeriod3.
 
 # BEGIN: SV4_SalvageValueDiscountedToStartYear.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref sv4_salvagevaluediscountedtostartyear[1:size(queryrtydr)[1]]
+sv4_salvagevaluediscountedtostartyear::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(queryrtydr)
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
 
-    sv4_salvagevaluediscountedtostartyear[constraintnum] = @constraint(jumpmodel, vdiscountedsalvagevalue[r,t,y] ==
-        vsalvagevalue[r,t,y] / ((1 + row[:dr])^(1 + Meta.parse(last(syear)) - Meta.parse(first(syear)))))
-    constraintnum += 1
+    push!(sv4_salvagevaluediscountedtostartyear, @constraint(jumpmodel, vdiscountedsalvagevalue[r,t,y] ==
+        vsalvagevalue[r,t,y] / ((1 + row[:dr])^(1 + Meta.parse(last(syear)) - Meta.parse(first(syear))))))
 end
 
 logmsg("Created constraint SV4_SalvageValueDiscountedToStartYear.", quiet)
@@ -3220,12 +3012,9 @@ end
 # END: SV4Tr_SalvageValueDiscountedToStartYear.
 
 # BEGIN: OC1_OperatingCostsVariable.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref oc1_operatingcostsvariable[1:length(sregion) * length(stechnology) * length(syear)]
-
+oc1_operatingcostsvariable::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = y
-sumexps = Array{AffExpr, 1}([AffExpr()])
-# sumexps[1] = vtotalannualtechnologyactivitybymode sum
+sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtotalannualtechnologyactivitybymode sum
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, vc.m as m, cast(vc.val as real) as vc
 from region r, technology t, year y, VariableCost_def vc
@@ -3238,10 +3027,8 @@ order by r.val, t.val, y.val"))
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2] || y != lastkeys[3])
         # Create constraint
-        oc1_operatingcostsvariable[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-            vannualvariableoperatingcost[lastkeys[1],lastkeys[2],lastkeys[3]])
-        constraintnum += 1
-
+        push!(oc1_operatingcostsvariable, @constraint(jumpmodel, sumexps[1] ==
+            vannualvariableoperatingcost[lastkeys[1],lastkeys[2],lastkeys[3]]))
         sumexps[1] = AffExpr()
     end
 
@@ -3254,17 +3041,15 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    oc1_operatingcostsvariable[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-        vannualvariableoperatingcost[lastkeys[1],lastkeys[2],lastkeys[3]])
+    push!(oc1_operatingcostsvariable, @constraint(jumpmodel, sumexps[1] ==
+        vannualvariableoperatingcost[lastkeys[1],lastkeys[2],lastkeys[3]]))
 end
 
 logmsg("Created constraint OC1_OperatingCostsVariable.", quiet)
 # END: OC1_OperatingCostsVariable.
 
 # BEGIN: OC2_OperatingCostsFixedAnnual.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref oc2_operatingcostsfixedannual[1:length(sregion) * length(stechnology) * length(syear)]
+oc2_operatingcostsfixedannual::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(fc.val as real) as fc
 from region r, technology t, year y, FixedCost_def fc
@@ -3273,20 +3058,17 @@ where fc.r = r.val and fc.t = t.val and fc.y = y.val"))
     local t = row[:t]
     local y = row[:y]
 
-    oc2_operatingcostsfixedannual[constraintnum] = @constraint(jumpmodel, vtotalcapacityannual[r,t,y] * row[:fc] == vannualfixedoperatingcost[r,t,y])
-    constraintnum += 1
+    push!(oc2_operatingcostsfixedannual, @constraint(jumpmodel, vtotalcapacityannual[r,t,y] * row[:fc] == vannualfixedoperatingcost[r,t,y]))
 end
 
 logmsg("Created constraint OC2_OperatingCostsFixedAnnual.", quiet)
 # END: OC2_OperatingCostsFixedAnnual.
 
 # BEGIN: OC3_OperatingCostsTotalAnnual.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref oc3_operatingcoststotalannual[1:length(sregion) * length(stechnology) * length(syear)]
+oc3_operatingcoststotalannual::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for (r, t, y) in Base.product(sregion, stechnology, syear)
-    oc3_operatingcoststotalannual[constraintnum] = @constraint(jumpmodel, vannualfixedoperatingcost[r,t,y] + vannualvariableoperatingcost[r,t,y] == voperatingcost[r,t,y])
-    constraintnum += 1
+    push!(oc3_operatingcoststotalannual, @constraint(jumpmodel, vannualfixedoperatingcost[r,t,y] + vannualvariableoperatingcost[r,t,y] == voperatingcost[r,t,y]))
 end
 
 logmsg("Created constraint OC3_OperatingCostsTotalAnnual.", quiet)
@@ -3330,9 +3112,7 @@ end
 # END: OCTr_OperatingCosts.
 
 # BEGIN: OC4_DiscountedOperatingCostsTotalAnnual.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref oc4_discountedoperatingcoststotalannual[1:length(sregion) * length(stechnology) * length(syear)]
+oc4_discountedoperatingcoststotalannual::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(queryrtydr)
     local r = row[:r]
@@ -3340,9 +3120,8 @@ for row in DataFrames.eachrow(queryrtydr)
     local y = row[:y]
     local dr = row[:dr]
 
-    oc4_discountedoperatingcoststotalannual[constraintnum] = @constraint(jumpmodel,
-        voperatingcost[r,t,y] / ((1 + dr)^(Meta.parse(y) - Meta.parse(first(syear)) + 0.5)) == vdiscountedoperatingcost[r,t,y])
-    constraintnum += 1
+    push!(oc4_discountedoperatingcoststotalannual, @constraint(jumpmodel,
+        voperatingcost[r,t,y] / ((1 + dr)^(Meta.parse(y) - Meta.parse(first(syear)) + 0.5)) == vdiscountedoperatingcost[r,t,y]))
 end
 
 logmsg("Created constraint OC4_DiscountedOperatingCostsTotalAnnual.", quiet)
@@ -3366,15 +3145,13 @@ end
 # END: OC4Tr_DiscountedOperatingCostsTotalAnnual.
 
 # BEGIN: TDC1_TotalDiscountedCostByTechnology.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref tdc1_totaldiscountedcostbytechnology[1:length(sregion) * length(stechnology) * length(syear)]
+tdc1_totaldiscountedcostbytechnology::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for (r, t, y) in Base.product(sregion, stechnology, syear)
-    tdc1_totaldiscountedcostbytechnology[constraintnum] = @constraint(jumpmodel,
+    push!(tdc1_totaldiscountedcostbytechnology, @constraint(jumpmodel,
         vdiscountedoperatingcost[r,t,y] + vdiscountedcapitalinvestment[r,t,y]
         + vdiscountedtechnologyemissionspenalty[r,t,y] - vdiscountedsalvagevalue[r,t,y]
-        == vtotaldiscountedcostbytechnology[r,t,y])
-    constraintnum += 1
+        == vtotaldiscountedcostbytechnology[r,t,y]))
 end
 
 logmsg("Created constraint TDC1_TotalDiscountedCostByTechnology.", quiet)
@@ -3419,23 +3196,20 @@ end
 # END: TDCTr_TotalDiscountedTransmissionCostByRegion.
 
 # BEGIN: TDC2_TotalDiscountedCost.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref tdc2_totaldiscountedcost[1:length(sregion) * length(syear)]
+tdc2_totaldiscountedcost::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for (r, y) in Base.product(sregion, syear)
-    tdc2_totaldiscountedcost[constraintnum] = @constraint(jumpmodel, (length(stechnology) == 0 ? 0 : sum([vtotaldiscountedcostbytechnology[r,t,y] for t = stechnology]))
+    push!(tdc2_totaldiscountedcost, @constraint(jumpmodel, (length(stechnology) == 0 ? 0 : sum([vtotaldiscountedcostbytechnology[r,t,y] for t = stechnology]))
         + (length(sstorage) == 0 ? 0 : sum([vtotaldiscountedstoragecost[r,s,y] for s = sstorage]))
         + (transmissionmodeling ? vtotaldiscountedtransmissioncostbyregion[r,y] : 0)
-        == vtotaldiscountedcost[r,y])
-    constraintnum += 1
+        == vtotaldiscountedcost[r,y]))
 end
 
 logmsg("Created constraint TDC2_TotalDiscountedCost.", quiet)
 # END: TDC2_TotalDiscountedCost.
 
 # BEGIN: TCC1_TotalAnnualMaxCapacityConstraint.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref tcc1_totalannualmaxcapacityconstraint[1:length(sregion) * length(stechnology) * length(syear)]
+tcc1_totalannualmaxcapacityconstraint::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmx
 from TotalAnnualMaxCapacity_def"))
@@ -3443,16 +3217,14 @@ from TotalAnnualMaxCapacity_def"))
     local t = row[:t]
     local y = row[:y]
 
-    tcc1_totalannualmaxcapacityconstraint[constraintnum] = @constraint(jumpmodel, vtotalcapacityannual[r,t,y] <= row[:tmx])
-    constraintnum += 1
+    push!(tcc1_totalannualmaxcapacityconstraint, @constraint(jumpmodel, vtotalcapacityannual[r,t,y] <= row[:tmx]))
 end
 
 logmsg("Created constraint TCC1_TotalAnnualMaxCapacityConstraint.", quiet)
 # END: TCC1_TotalAnnualMaxCapacityConstraint.
 
 # BEGIN: TCC2_TotalAnnualMinCapacityConstraint.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref tcc2_totalannualmincapacityconstraint[1:length(sregion) * length(stechnology) * length(syear)]
+tcc2_totalannualmincapacityconstraint::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmn
 from TotalAnnualMinCapacity_def
@@ -3461,16 +3233,14 @@ where val > 0"))
     local t = row[:t]
     local y = row[:y]
 
-    tcc2_totalannualmincapacityconstraint[constraintnum] = @constraint(jumpmodel, vtotalcapacityannual[r,t,y] >= row[:tmn])
-    constraintnum += 1
+    push!(tcc2_totalannualmincapacityconstraint, @constraint(jumpmodel, vtotalcapacityannual[r,t,y] >= row[:tmn]))
 end
 
 logmsg("Created constraint TCC2_TotalAnnualMinCapacityConstraint.", quiet)
 # END: TCC2_TotalAnnualMinCapacityConstraint.
 
 # BEGIN: NCC1_TotalAnnualMaxNewCapacityConstraint.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref ncc1_totalannualmaxnewcapacityconstraint[1:length(sregion) * length(stechnology) * length(syear)]
+ncc1_totalannualmaxnewcapacityconstraint::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmx
 from TotalAnnualMaxCapacityInvestment_def"))
@@ -3478,16 +3248,14 @@ from TotalAnnualMaxCapacityInvestment_def"))
     local t = row[:t]
     local y = row[:y]
 
-    ncc1_totalannualmaxnewcapacityconstraint[constraintnum] = @constraint(jumpmodel, vnewcapacity[r,t,y] <= row[:tmx])
-    constraintnum += 1
+    push!(ncc1_totalannualmaxnewcapacityconstraint, @constraint(jumpmodel, vnewcapacity[r,t,y] <= row[:tmx]))
 end
 
 logmsg("Created constraint NCC1_TotalAnnualMaxNewCapacityConstraint.", quiet)
 # END: NCC1_TotalAnnualMaxNewCapacityConstraint.
 
 # BEGIN: NCC2_TotalAnnualMinNewCapacityConstraint.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref ncc2_totalannualminnewcapacityconstraint[1:length(sregion) * length(stechnology) * length(syear)]
+ncc2_totalannualminnewcapacityconstraint::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmn
 from TotalAnnualMinCapacityInvestment_def
@@ -3496,8 +3264,7 @@ where val > 0"))
     local t = row[:t]
     local y = row[:y]
 
-    ncc2_totalannualminnewcapacityconstraint[constraintnum] = @constraint(jumpmodel, vnewcapacity[r,t,y] >= row[:tmn])
-    constraintnum += 1
+    push!(ncc2_totalannualminnewcapacityconstraint, @constraint(jumpmodel, vnewcapacity[r,t,y] >= row[:tmn]))
 end
 
 logmsg("Created constraint NCC2_TotalAnnualMinNewCapacityConstraint.", quiet)
@@ -3507,9 +3274,7 @@ logmsg("Created constraint NCC2_TotalAnnualMinNewCapacityConstraint.", quiet)
 if (annualactivityupperlimits || annualactivitylowerlimits || modelperiodactivityupperlimits || modelperiodactivitylowerlimits
     || in("vtotaltechnologyannualactivity", varstosavearr))
 
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref aac1_totalannualtechnologyactivity[1:length(sregion) * length(stechnology) * length(syear)]
-
+    aac1_totalannualtechnologyactivity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = y
     sumexps = Array{AffExpr, 1}([AffExpr()]) # sumexps[1] = vrateoftotalactivity sum
 
@@ -3522,10 +3287,8 @@ if (annualactivityupperlimits || annualactivitylowerlimits || modelperiodactivit
 
         if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2] || y != lastkeys[3])
             # Create constraint
-            aac1_totalannualtechnologyactivity[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-                vtotaltechnologyannualactivity[lastkeys[1],lastkeys[2],lastkeys[3]])
-            constraintnum += 1
-
+            push!(aac1_totalannualtechnologyactivity, @constraint(jumpmodel, sumexps[1] ==
+                vtotaltechnologyannualactivity[lastkeys[1],lastkeys[2],lastkeys[3]]))
             sumexps[1] = AffExpr()
         end
 
@@ -3538,8 +3301,8 @@ if (annualactivityupperlimits || annualactivitylowerlimits || modelperiodactivit
 
     # Create last constraint
     if isassigned(lastkeys, 1)
-        aac1_totalannualtechnologyactivity[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-            vtotaltechnologyannualactivity[lastkeys[1],lastkeys[2],lastkeys[3]])
+        push!(aac1_totalannualtechnologyactivity, @constraint(jumpmodel, sumexps[1] ==
+            vtotaltechnologyannualactivity[lastkeys[1],lastkeys[2],lastkeys[3]]))
     end
 
     logmsg("Created constraint AAC1_TotalAnnualTechnologyActivity.", quiet)
@@ -3548,8 +3311,7 @@ end
 
 # BEGIN: AAC2_TotalAnnualTechnologyActivityUpperLimit.
 if annualactivityupperlimits
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref aac2_totalannualtechnologyactivityupperlimit[1:length(sregion) * length(stechnology) * length(syear)]
+    aac2_totalannualtechnologyactivityupperlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for row in DataFrames.eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as amx
     from TotalTechnologyAnnualActivityUpperLimit_def"))
@@ -3557,8 +3319,7 @@ if annualactivityupperlimits
         local t = row[:t]
         local y = row[:y]
 
-        aac2_totalannualtechnologyactivityupperlimit[constraintnum] = @constraint(jumpmodel, vtotaltechnologyannualactivity[r,t,y] <= row[:amx])
-        constraintnum += 1
+        push!(aac2_totalannualtechnologyactivityupperlimit, @constraint(jumpmodel, vtotaltechnologyannualactivity[r,t,y] <= row[:amx]))
     end
 
     logmsg("Created constraint AAC2_TotalAnnualTechnologyActivityUpperLimit.", quiet)
@@ -3567,16 +3328,14 @@ end
 
 # BEGIN: AAC3_TotalAnnualTechnologyActivityLowerLimit.
 if annualactivitylowerlimits
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref aac3_totalannualtechnologyactivitylowerlimit[1:length(sregion) * length(stechnology) * length(syear)]
+    aac3_totalannualtechnologyactivitylowerlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for row in DataFrames.eachrow(queryannualactivitylowerlimit)
         local r = row[:r]
         local t = row[:t]
         local y = row[:y]
 
-        aac3_totalannualtechnologyactivitylowerlimit[constraintnum] = @constraint(jumpmodel, vtotaltechnologyannualactivity[r,t,y] >= row[:amn])
-        constraintnum += 1
+        push!(aac3_totalannualtechnologyactivitylowerlimit, @constraint(jumpmodel, vtotaltechnologyannualactivity[r,t,y] >= row[:amn]))
     end
 
     logmsg("Created constraint AAC3_TotalAnnualTechnologyActivityLowerLimit.", quiet)
@@ -3585,12 +3344,10 @@ end
 
 # BEGIN: TAC1_TotalModelHorizonTechnologyActivity.
 if modelperiodactivitylowerlimits || modelperiodactivityupperlimits || in("vtotaltechnologymodelperiodactivity", varstosavearr)
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref tac1_totalmodelhorizontechnologyactivity[1:length(sregion) * length(stechnology)]
+    tac1_totalmodelhorizontechnologyactivity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for (r, t) in Base.product(sregion, stechnology)
-        tac1_totalmodelhorizontechnologyactivity[constraintnum] = @constraint(jumpmodel, sum([vtotaltechnologyannualactivity[r,t,y] for y = syear]) == vtotaltechnologymodelperiodactivity[r,t])
-        constraintnum += 1
+        push!(tac1_totalmodelhorizontechnologyactivity, @constraint(jumpmodel, sum([vtotaltechnologyannualactivity[r,t,y] for y = syear]) == vtotaltechnologymodelperiodactivity[r,t]))
     end
 
     logmsg("Created constraint TAC1_TotalModelHorizonTechnologyActivity.", quiet)
@@ -3599,16 +3356,14 @@ end
 
 # BEGIN: TAC2_TotalModelHorizonTechnologyActivityUpperLimit.
 if modelperiodactivityupperlimits
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref tac2_totalmodelhorizontechnologyactivityupperlimit[1:length(sregion) * length(stechnology)]
+    tac2_totalmodelhorizontechnologyactivityupperlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for row in DataFrames.eachrow(SQLite.query(db, "select r, t, cast(val as real) as mmx
     from TotalTechnologyModelPeriodActivityUpperLimit_def"))
         local r = row[:r]
         local t = row[:t]
 
-        tac2_totalmodelhorizontechnologyactivityupperlimit[constraintnum] = @constraint(jumpmodel, vtotaltechnologymodelperiodactivity[r,t] <= row[:mmx])
-        constraintnum += 1
+        push!(tac2_totalmodelhorizontechnologyactivityupperlimit, @constraint(jumpmodel, vtotaltechnologymodelperiodactivity[r,t] <= row[:mmx]))
     end
 
     logmsg("Created constraint TAC2_TotalModelHorizonTechnologyActivityUpperLimit.", quiet)
@@ -3617,15 +3372,13 @@ end
 
 # BEGIN: TAC3_TotalModelHorizonTechnologyActivityLowerLimit.
 if modelperiodactivitylowerlimits
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref tac3_totalmodelhorizontechnologyactivitylowerlimit[1:length(sregion) * length(stechnology)]
+    tac3_totalmodelhorizontechnologyactivitylowerlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for row in DataFrames.eachrow(querymodelperiodactivitylowerlimit)
         local r = row[:r]
         local t = row[:t]
 
-        tac3_totalmodelhorizontechnologyactivitylowerlimit[constraintnum] = @constraint(jumpmodel, vtotaltechnologymodelperiodactivity[r,t] >= row[:mmn])
-        constraintnum += 1
+        push!(tac3_totalmodelhorizontechnologyactivitylowerlimit, @constraint(jumpmodel, vtotaltechnologymodelperiodactivity[r,t] >= row[:mmn]))
     end
 
     logmsg("Created constraint TAC3_TotalModelHorizonTechnologyActivityLowerLimit.", quiet)
@@ -3633,9 +3386,7 @@ end
 # END: TAC3_TotalModelHorizonTechnologyActivityLowerLimit.
 
 # BEGIN: RM1_ReserveMargin_TechnologiesIncluded_In_Activity_Units.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref rm1_reservemargin_technologiesincluded_in_activity_units[1:length(sregion) * length(syear)]
-
+rm1_reservemargin_technologiesincluded_in_activity_units::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,2)  # lastkeys[1] = r, lastkeys[2] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtotalcapacityannual sum
 
@@ -3649,10 +3400,8 @@ order by r.val, y.val"))
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || y != lastkeys[2])
         # Create constraint
-        rm1_reservemargin_technologiesincluded_in_activity_units[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-            vtotalcapacityinreservemargin[lastkeys[1],lastkeys[2]])
-        constraintnum += 1
-
+        push!(rm1_reservemargin_technologiesincluded_in_activity_units, @constraint(jumpmodel, sumexps[1] ==
+            vtotalcapacityinreservemargin[lastkeys[1],lastkeys[2]]))
         sumexps[1] = AffExpr()
     end
 
@@ -3664,17 +3413,15 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    rm1_reservemargin_technologiesincluded_in_activity_units[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-        vtotalcapacityinreservemargin[lastkeys[1],lastkeys[2]])
+    push!(rm1_reservemargin_technologiesincluded_in_activity_units, @constraint(jumpmodel, sumexps[1] ==
+        vtotalcapacityinreservemargin[lastkeys[1],lastkeys[2]]))
 end
 
 logmsg("Created constraint RM1_ReserveMargin_TechnologiesIncluded_In_Activity_Units.", quiet)
 # END: RM1_ReserveMargin_TechnologiesIncluded_In_Activity_Units.
 
 # BEGIN: RM2_ReserveMargin_FuelsIncluded.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref rm2_reservemargin_fuelsincluded[1:length(sregion) * length(stimeslice) * length(syear)]
-
+rm2_reservemargin_fuelsincluded::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])
 # sumexps[1] = vrateofproduction sum
@@ -3689,10 +3436,8 @@ order by r.val, l.val, y.val"))
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || y != lastkeys[3])
         # Create constraint
-        rm2_reservemargin_fuelsincluded[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-            vdemandneedingreservemargin[lastkeys[1],lastkeys[2],lastkeys[3]])
-        constraintnum += 1
-
+        push!(rm2_reservemargin_fuelsincluded, @constraint(jumpmodel, sumexps[1] ==
+            vdemandneedingreservemargin[lastkeys[1],lastkeys[2],lastkeys[3]]))
         sumexps[1] = AffExpr()
     end
 
@@ -3705,16 +3450,15 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    rm2_reservemargin_fuelsincluded[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-        vdemandneedingreservemargin[lastkeys[1],lastkeys[2],lastkeys[3]])
+    push!(rm2_reservemargin_fuelsincluded, @constraint(jumpmodel, sumexps[1] ==
+        vdemandneedingreservemargin[lastkeys[1],lastkeys[2],lastkeys[3]]))
 end
 
 logmsg("Created constraint RM2_ReserveMargin_FuelsIncluded.", quiet)
 # END: RM2_ReserveMargin_FuelsIncluded.
 
 # BEGIN: RM3_ReserveMargin_Constraint.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref rm3_reservemargin_constraint[1:length(sregion) * length(stimeslice) * length(syear)]
+rm3_reservemargin_constraint::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, l.val as l, y.val as y, cast(rm.val as real) as rm
 from region r, timeslice l, year y, ReserveMargin_def rm
@@ -3723,17 +3467,14 @@ where rm.r = r.val and rm.y = y.val"))
     local l = row[:l]
     local y = row[:y]
 
-    rm3_reservemargin_constraint[constraintnum] = @constraint(jumpmodel, vdemandneedingreservemargin[r,l,y] * row[:rm] <= vtotalcapacityinreservemargin[r,y])
-    constraintnum += 1
+    push!(rm3_reservemargin_constraint, @constraint(jumpmodel, vdemandneedingreservemargin[r,l,y] * row[:rm] <= vtotalcapacityinreservemargin[r,y]))
 end
 
 logmsg("Created constraint RM3_ReserveMargin_Constraint.", quiet)
 # END: RM3_ReserveMargin_Constraint.
 
 # BEGIN: RE1_FuelProductionByTechnologyAnnual.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref re1_fuelproductionbytechnologyannual[1:length(sregion) * length(stechnology) * length(sfuel) * length(syear)]
-
+re1_fuelproductionbytechnologyannual::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = f, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vproductionbytechnologynn-equivalent sum
 
@@ -3746,9 +3487,7 @@ for row in DataFrames.eachrow(queryvproductionbytechnologyannual)
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
         # Create constraint
-        re1_fuelproductionbytechnologyannual[constraintnum] = @constraint(jumpmodel, sumexps[1] == vproductionbytechnologyannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
-        constraintnum += 1
-
+        push!(re1_fuelproductionbytechnologyannual, @constraint(jumpmodel, sumexps[1] == vproductionbytechnologyannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
         sumexps[1] = AffExpr()
     end
 
@@ -3766,16 +3505,14 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    re1_fuelproductionbytechnologyannual[constraintnum] = @constraint(jumpmodel, sumexps[1] == vproductionbytechnologyannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+    push!(re1_fuelproductionbytechnologyannual, @constraint(jumpmodel, sumexps[1] == vproductionbytechnologyannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
 end
 
 logmsg("Created constraint RE1_FuelProductionByTechnologyAnnual.", quiet)
 # END: RE1_FuelProductionByTechnologyAnnual.
 
 # BEGIN: FuelUseByTechnologyAnnual.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref fuelusebytechnologyannual[1:length(sregion) * length(stechnology) * length(sfuel) * length(syear)]
-
+fuelusebytechnologyannual::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = f, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vusebytechnologynn-equivalent sum
 
@@ -3788,9 +3525,7 @@ for row in DataFrames.eachrow(queryvusebytechnologyannual)
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
         # Create constraint
-        fuelusebytechnologyannual[constraintnum] = @constraint(jumpmodel, sumexps[1] == vusebytechnologyannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
-        constraintnum += 1
-
+        push!(fuelusebytechnologyannual, @constraint(jumpmodel, sumexps[1] == vusebytechnologyannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
         sumexps[1] = AffExpr()
     end
 
@@ -3808,16 +3543,14 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    fuelusebytechnologyannual[constraintnum] = @constraint(jumpmodel, sumexps[1] == vusebytechnologyannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+    push!(fuelusebytechnologyannual, @constraint(jumpmodel, sumexps[1] == vusebytechnologyannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
 end
 
 logmsg("Created constraint FuelUseByTechnologyAnnual.", quiet)
 # END: FuelUseByTechnologyAnnual.
 
 # BEGIN: RE2_TechIncluded.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref re2_techincluded[1:length(sregion) * length(syear)]
-
+re2_techincluded::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,2)  # lastkeys[1] = r, lastkeys[2] = y
 sumexps = Array{AffExpr, 1}([AffExpr()]) # sumexps[1] = vproductionbytechnologyannual sum
 
@@ -3834,10 +3567,8 @@ order by r.val, y.val"))
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || y != lastkeys[2])
         # Create constraint
-        re2_techincluded[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-            vtotalreproductionannual[lastkeys[1],lastkeys[2]])
-        constraintnum += 1
-
+        push!(re2_techincluded, @constraint(jumpmodel, sumexps[1] ==
+            vtotalreproductionannual[lastkeys[1],lastkeys[2]]))
         sumexps[1] = AffExpr()
     end
 
@@ -3849,17 +3580,15 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    re2_techincluded[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-        vtotalreproductionannual[lastkeys[1],lastkeys[2]])
+    push!(re2_techincluded, @constraint(jumpmodel, sumexps[1] ==
+        vtotalreproductionannual[lastkeys[1],lastkeys[2]]))
 end
 
 logmsg("Created constraint RE2_TechIncluded.", quiet)
 # END: RE2_TechIncluded.
 
 # BEGIN: RE3_FuelIncluded.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref re3_fuelincluded[1:length(sregion) * length(syear)]
-
+re3_fuelincluded::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproduction sum
 
@@ -3874,10 +3603,8 @@ order by r.val, y.val"))
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || y != lastkeys[2])
         # Create constraint
-        re3_fuelincluded[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-            vretotalproductionoftargetfuelannual[lastkeys[1],lastkeys[2]])
-        constraintnum += 1
-
+        push!(re3_fuelincluded, @constraint(jumpmodel, sumexps[1] ==
+            vretotalproductionoftargetfuelannual[lastkeys[1],lastkeys[2]]))
         sumexps[1] = AffExpr()
     end
 
@@ -3889,17 +3616,15 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    re3_fuelincluded[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-        vretotalproductionoftargetfuelannual[lastkeys[1],lastkeys[2]])
+    push!(re3_fuelincluded, @constraint(jumpmodel, sumexps[1] ==
+        vretotalproductionoftargetfuelannual[lastkeys[1],lastkeys[2]]))
 end
 
 logmsg("Created constraint RE3_FuelIncluded.", quiet)
 # END: RE3_FuelIncluded.
 
 # BEGIN: RE4_EnergyConstraint.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref re4_energyconstraint[1:length(sregion) * length(syear)]
+re4_energyconstraint::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select ry.r as r, ry.y as y, cast(rmp.val as real) as rmp
 from
@@ -3916,8 +3641,7 @@ where rmp.r = ry.r and rmp.y = ry.y"))
     local r = row[:r]
     local y = row[:y]
 
-    re4_energyconstraint[constraintnum] = @constraint(jumpmodel, row[:rmp] * vretotalproductionoftargetfuelannual[r,y] <= vtotalreproductionannual[r,y])
-    constraintnum += 1
+    push!(re4_energyconstraint, @constraint(jumpmodel, row[:rmp] * vretotalproductionoftargetfuelannual[r,y] <= vtotalreproductionannual[r,y]))
 end
 
 logmsg("Created constraint RE4_EnergyConstraint.", quiet)
@@ -3932,8 +3656,7 @@ from EmissionActivityRatio_def ear
 order by r, t, e, y")
 
 if in("vannualtechnologyemissionbymode", varstosavearr)
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref e1_annualemissionproductionbymode[1:length(sregion) * length(stechnology) * length(semission) * length(smode_of_operation) * length(syear)]
+    e1_annualemissionproductionbymode::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for row in DataFrames.eachrow(queryvannualtechnologyemissionbymode)
         local r = row[:r]
@@ -3942,8 +3665,7 @@ if in("vannualtechnologyemissionbymode", varstosavearr)
         local m = row[:m]
         local y = row[:y]
 
-        e1_annualemissionproductionbymode[constraintnum] = @constraint(jumpmodel, row[:ear] * vtotalannualtechnologyactivitybymode[r,t,m,y] == vannualtechnologyemissionbymode[r,t,e,m,y])
-        constraintnum += 1
+        push!(e1_annualemissionproductionbymode, @constraint(jumpmodel, row[:ear] * vtotalannualtechnologyactivitybymode[r,t,m,y] == vannualtechnologyemissionbymode[r,t,e,m,y]))
     end
 
     logmsg("Created constraint E1_AnnualEmissionProductionByMode.", quiet)
@@ -3951,9 +3673,7 @@ end
 # END: E1_AnnualEmissionProductionByMode.
 
 # BEGIN: E2_AnnualEmissionProduction.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref e2_annualemissionproduction[1:length(sregion) * length(stechnology) * length(semission) * length(syear)]
-
+e2_annualemissionproduction::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = e, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vannualtechnologyemissionbymode-equivalent sum
 
@@ -3965,10 +3685,8 @@ for row in DataFrames.eachrow(queryvannualtechnologyemissionbymode)
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2] || e != lastkeys[3] || y != lastkeys[4])
         # Create constraint
-        e2_annualemissionproduction[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-            vannualtechnologyemission[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
-        constraintnum += 1
-
+        push!(e2_annualemissionproduction, @constraint(jumpmodel, sumexps[1] ==
+            vannualtechnologyemission[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
         sumexps[1] = AffExpr()
     end
 
@@ -3982,8 +3700,8 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    e2_annualemissionproduction[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-        vannualtechnologyemission[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]])
+    push!(e2_annualemissionproduction, @constraint(jumpmodel, sumexps[1] ==
+        vannualtechnologyemission[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
 end
 
 logmsg("Created constraint E2_AnnualEmissionProduction.", quiet)
@@ -3998,8 +3716,7 @@ and ep.val <> 0
 order by ear.r, ear.t, ear.y")
 
 if in("vannualtechnologyemissionpenaltybyemission", varstosavearr)
-    constraintnum = 1  # Number of next constraint to be added to constraint array
-    @constraintref e3_emissionspenaltybytechandemission[1:length(sregion) * length(stechnology) * length(semission) * length(syear)]
+    e3_emissionspenaltybytechandemission::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for row in DataFrames.eachrow(queryvannualtechnologyemissionpenaltybyemission)
         local r = row[:r]
@@ -4007,8 +3724,7 @@ if in("vannualtechnologyemissionpenaltybyemission", varstosavearr)
         local e = row[:e]
         local y = row[:y]
 
-        e3_emissionspenaltybytechandemission[constraintnum] = @constraint(jumpmodel, vannualtechnologyemission[r,t,e,y] * row[:ep] == vannualtechnologyemissionpenaltybyemission[r,t,e,y])
-        constraintnum += 1
+        push!(e3_emissionspenaltybytechandemission, @constraint(jumpmodel, vannualtechnologyemission[r,t,e,y] * row[:ep] == vannualtechnologyemissionpenaltybyemission[r,t,e,y]))
     end
 
     logmsg("Created constraint E3_EmissionsPenaltyByTechAndEmission.", quiet)
@@ -4016,9 +3732,7 @@ end
 # END: E3_EmissionsPenaltyByTechAndEmission.
 
 # BEGIN: E4_EmissionsPenaltyByTechnology.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref e4_emissionspenaltybytechnology[1:length(sregion) * length(stechnology) * length(syear)]
-
+e4_emissionspenaltybytechnology::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])
 # sumexps[1] = vannualtechnologyemissionpenaltybyemission-equivalent sum
@@ -4030,10 +3744,8 @@ for row in DataFrames.eachrow(queryvannualtechnologyemissionpenaltybyemission)
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2] || y != lastkeys[3])
         # Create constraint
-        e4_emissionspenaltybytechnology[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-            vannualtechnologyemissionspenalty[lastkeys[1],lastkeys[2],lastkeys[3]])
-        constraintnum += 1
-
+        push!(e4_emissionspenaltybytechnology, @constraint(jumpmodel, sumexps[1] ==
+            vannualtechnologyemissionspenalty[lastkeys[1],lastkeys[2],lastkeys[3]]))
         sumexps[1] = AffExpr()
     end
 
@@ -4046,16 +3758,15 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    e4_emissionspenaltybytechnology[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-        vannualtechnologyemissionspenalty[lastkeys[1],lastkeys[2],lastkeys[3]])
+    push!(e4_emissionspenaltybytechnology, @constraint(jumpmodel, sumexps[1] ==
+        vannualtechnologyemissionspenalty[lastkeys[1],lastkeys[2],lastkeys[3]]))
 end
 
 logmsg("Created constraint E4_EmissionsPenaltyByTechnology.", quiet)
 # END: E4_EmissionsPenaltyByTechnology.
 
 # BEGIN: E5_DiscountedEmissionsPenaltyByTechnology.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref e5_discountedemissionspenaltybytechnology[1:size(queryrtydr)[1]]
+e5_discountedemissionspenaltybytechnology::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(queryrtydr)
     local r = row[:r]
@@ -4063,17 +3774,14 @@ for row in DataFrames.eachrow(queryrtydr)
     local y = row[:y]
     local dr = row[:dr]
 
-    e5_discountedemissionspenaltybytechnology[constraintnum] = @constraint(jumpmodel, vannualtechnologyemissionspenalty[r,t,y] / ((1 + dr)^(Meta.parse(y) - Meta.parse(first(syear)) + 0.5)) == vdiscountedtechnologyemissionspenalty[r,t,y])
-    constraintnum += 1
+    push!(e5_discountedemissionspenaltybytechnology, @constraint(jumpmodel, vannualtechnologyemissionspenalty[r,t,y] / ((1 + dr)^(Meta.parse(y) - Meta.parse(first(syear)) + 0.5)) == vdiscountedtechnologyemissionspenalty[r,t,y]))
 end
 
 logmsg("Created constraint E5_DiscountedEmissionsPenaltyByTechnology.", quiet)
 # END: E5_DiscountedEmissionsPenaltyByTechnology.
 
 # BEGIN: E6_EmissionsAccounting1.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@constraintref e6_emissionsaccounting1[1:length(sregion) * length(semission) * length(syear)]
-
+e6_emissionsaccounting1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = e, lastkeys[3] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vannualtechnologyemission sum
 
@@ -4086,10 +3794,8 @@ order by r, e, y"))
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || e != lastkeys[2] || y != lastkeys[3])
         # Create constraint
-        e6_emissionsaccounting1[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-            vannualemissions[lastkeys[1],lastkeys[2],lastkeys[3]])
-        constraintnum += 1
-
+        push!(e6_emissionsaccounting1, @constraint(jumpmodel, sumexps[1] ==
+            vannualemissions[lastkeys[1],lastkeys[2],lastkeys[3]]))
         sumexps[1] = AffExpr()
     end
 
@@ -4102,17 +3808,15 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    e6_emissionsaccounting1[constraintnum] = @constraint(jumpmodel, sumexps[1] ==
-        vannualemissions[lastkeys[1],lastkeys[2],lastkeys[3]])
+    push!(e6_emissionsaccounting1, @constraint(jumpmodel, sumexps[1] ==
+        vannualemissions[lastkeys[1],lastkeys[2],lastkeys[3]]))
 end
 
 logmsg("Created constraint E6_EmissionsAccounting1.", quiet)
 # END: E6_EmissionsAccounting1.
 
 # BEGIN: E7_EmissionsAccounting2.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref e7_emissionsaccounting2[1:length(sregion) * length(semission)]
+e7_emissionsaccounting2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, e.val as e, cast(mpe.val as real) as mpe
 from region r, emission e
@@ -4121,17 +3825,14 @@ left join ModelPeriodExogenousEmission_def mpe on mpe.r = r.val and mpe.e = e.va
     local e = row[:e]
     local mpe = ismissing(row[:mpe]) ? 0 : row[:mpe]
 
-    e7_emissionsaccounting2[constraintnum] = @constraint(jumpmodel, sum([vannualemissions[r,e,y] for y = syear]) == vmodelperiodemissions[r,e] - mpe)
-    constraintnum += 1
+    push!(e7_emissionsaccounting2, @constraint(jumpmodel, sum([vannualemissions[r,e,y] for y = syear]) == vmodelperiodemissions[r,e] - mpe))
 end
 
 logmsg("Created constraint E7_EmissionsAccounting2.", quiet)
 # END: E7_EmissionsAccounting2.
 
 # BEGIN: E8_AnnualEmissionsLimit.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref e8_annualemissionslimit[1:length(sregion) * length(semission) * length(syear)]
+e8_annualemissionslimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, e.val as e, y.val as y, cast(aee.val as real) as aee, cast(ael.val as real) as ael
 from region r, emission e, year y, AnnualEmissionLimit_def ael
@@ -4142,17 +3843,14 @@ where ael.r = r.val and ael.e = e.val and ael.y = y.val"))
     local y = row[:y]
     local aee = ismissing(row[:aee]) ? 0 : row[:aee]
 
-    e8_annualemissionslimit[constraintnum] = @constraint(jumpmodel, vannualemissions[r,e,y] + aee <= row[:ael])
-    constraintnum += 1
+    push!(e8_annualemissionslimit, @constraint(jumpmodel, vannualemissions[r,e,y] + aee <= row[:ael]))
 end
 
 logmsg("Created constraint E8_AnnualEmissionsLimit.", quiet)
 # END: E8_AnnualEmissionsLimit.
 
 # BEGIN: E9_ModelPeriodEmissionsLimit.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-
-@constraintref e9_modelperiodemissionslimit[1:length(sregion) * length(semission)]
+e9_modelperiodemissionslimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, e.val as e, cast(mpl.val as real) as mpl
 from region r, emission e, ModelPeriodEmissionLimit_def mpl
@@ -4160,8 +3858,7 @@ where mpl.r = r.val and mpl.e = e.val"))
     local r = row[:r]
     local e = row[:e]
 
-    e9_modelperiodemissionslimit[constraintnum] = @constraint(jumpmodel, vmodelperiodemissions[r,e] <= row[:mpl])
-    constraintnum += 1
+    push!(e9_modelperiodemissionslimit, @constraint(jumpmodel, vmodelperiodemissions[r,e] <= row[:mpl]))
 end
 
 logmsg("Created constraint E9_ModelPeriodEmissionsLimit.", quiet)
