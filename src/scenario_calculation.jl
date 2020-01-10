@@ -101,10 +101,11 @@ db = SQLite.DB(dbpath)
 logmsg("Connected to scenario database. Path = " * dbpath * ".", quiet)
 # END: Connect to SQLite database.
 
-# BEGIN: Temporary - add new tables in dictionary v.1 to db.
+# BEGIN: Temporary - add new tables in dictionary v.1 and v.2 to db.
 addtransmissiontables(db; quiet = quiet)
 addstoragefullloadhours(db; quiet = quiet)
-# END: Temporary - add new tables in dictionary v.1 to db.
+addstoragenetzero(db; quiet = quiet)
+# END: Temporary - add new tables in dictionary v.1 and v.2 to db.
 
 # BEGIN: Perform beforescenariocalc include.
 if configfile != nothing && haskey(configfile, "includes", "beforescenariocalc")
@@ -2330,25 +2331,27 @@ end
 logmsg("Created constraints NS3_StorageLevelTsGroup1Start, NS4_StorageLevelTsGroup2Start, and NS5_StorageLevelTimesliceEnd.", quiet)
 # BEGIN: NS3_StorageLevelTsGroup1Start, NS4_StorageLevelTsGroup2Start, NS5_StorageLevelTimesliceEnd.
 
-# BEGIN: NS6_StorageLevelTsGroup2End.
+# BEGIN: NS6_StorageLevelTsGroup2End and NS6a_StorageLevelTsGroup2NetZero.
 ns6_storageleveltsgroup2end::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+ns6a_storageleveltsgroup2netzero::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select main.r, main.s, main.tg1, main.tg1o, main.tg2, main.tg2o, cast(main.tg2m as real) as tg2m,
+for row in DataFrames.eachrow(SQLite.query(db, "select main.r, main.s, main.tg2nz, main.tg1, main.tg1o, main.tg2, main.tg2o, cast(main.tg2m as real) as tg2m,
     main.y, ltg2.l as maxl, main.maxlo
 from
-(select r.val as r, s.val as s, tg1.name as tg1, tg1.[order] as tg1o, tg2.name as tg2, tg2.[order] as tg2o, tg2.multiplier as tg2m,
+(select r.val as r, s.val as s, s.netzerotg2 as tg2nz, tg1.name as tg1, tg1.[order] as tg1o, tg2.name as tg2, tg2.[order] as tg2o, tg2.multiplier as tg2m,
 y.val as y, max(ltg.lorder) as maxlo
 from REGION r, STORAGE s, TSGROUP1 tg1, TSGROUP2 tg2, YEAR as y, LTsGroup ltg
 where
 tg1.name = ltg.tg1
 and tg2.name = ltg.tg2
-group by r.val, s.val, tg1.name, tg1.[order], tg2.name, tg2.[order], tg2.multiplier, y.val) main, LTsGroup ltg2
+group by r.val, s.val, s.netzerotg2, tg1.name, tg1.[order], tg2.name, tg2.[order], tg2.multiplier, y.val) main, LTsGroup ltg2
 where
 ltg2.tg1 = main.tg1
 and ltg2.tg2 = main.tg2
 and ltg2.lorder = main.maxlo"))
     local r = row[:r]
     local s = row[:s]
+    local tg2nz = row[:tg2nz]  # 1 = tg2 end level must = tg2 start level
     local tg1 = row[:tg1]
     local tg2 = row[:tg2]
     local y = row[:y]
@@ -2356,14 +2359,22 @@ and ltg2.lorder = main.maxlo"))
     push!(ns6_storageleveltsgroup2end, @constraint(jumpmodel, vstorageleveltsgroup2start[r, s, tg1, tg2, y] +
         (vstorageleveltsend[r, s, row[:maxl], y] - vstorageleveltsgroup2start[r, s, tg1, tg2, y]) * row[:tg2m]
         == vstorageleveltsgroup2end[r, s, tg1, tg2, y]))
+
+    if tg2nz == 1
+        push!(ns6a_storageleveltsgroup2netzero, @constraint(jumpmodel, vstorageleveltsgroup2start[r, s, tg1, tg2, y]
+            == vstorageleveltsgroup2end[r, s, tg1, tg2, y]))
+    end
 end
-logmsg("Created constraint NS6_StorageLevelTsGroup2End.", quiet)
-# END: NS6_StorageLevelTsGroup2End.
+logmsg("Created constraints NS6_StorageLevelTsGroup2End and NS6a_StorageLevelTsGroup2NetZero.", quiet)
+# END: NS6_StorageLevelTsGroup2End and NS6a_StorageLevelTsGroup2NetZero.
 
-# BEGIN: NS7_StorageLevelTsGroup1End.
+# BEGIN: NS7_StorageLevelTsGroup1End and NS7a_StorageLevelTsGroup1NetZero.
 ns7_storageleveltsgroup1end::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+ns7a_storageleveltsgroup1netzero::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, tg1.name as tg1, tg1.[order] as tg1o, cast(tg1.multiplier as real) as tg1m,
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s,
+	case s.netzerotg2 when 1 then 0 else s.netzerotg1 end as tg1nz,
+	tg1.name as tg1, tg1.[order] as tg1o, cast(tg1.multiplier as real) as tg1m,
     y.val as y, max(tg2.[order]) as maxtg2o
 from REGION r, STORAGE s, TSGROUP1 tg1, YEAR as y, LTsGroup ltg, TSGROUP2 tg2
 where
@@ -2372,24 +2383,34 @@ and ltg.tg2 = tg2.name
 group by r.val, s.val, tg1.name, tg1.[order], tg1.multiplier, y.val"))
     local r = row[:r]
     local s = row[:s]
+    local tg1nz = row[:tg1nz]  # 1 = tg1 end level must = tg1 start level (zeroed out when tg2 net zero is activated as tg1 check isn't necessary)
     local tg1 = row[:tg1]
     local y = row[:y]
 
     push!(ns7_storageleveltsgroup1end, @constraint(jumpmodel, vstorageleveltsgroup1start[r, s, tg1, y] +
         (vstorageleveltsgroup2end[r, s, tg1, tsgroup2dict[row[:maxtg2o]][1], y] - vstorageleveltsgroup1start[r, s, tg1, y]) * row[:tg1m]
         == vstorageleveltsgroup1end[r, s, tg1, y]))
-end
-logmsg("Created constraint NS7_StorageLevelTsGroup1End.", quiet)
-# END: NS7_StorageLevelTsGroup1End.
 
-# BEGIN: NS8_StorageLevelYearEnd.
+    if tg1nz == 1
+        push!(ns7a_storageleveltsgroup1netzero, @constraint(jumpmodel, vstorageleveltsgroup1start[r, s, tg1, y]
+            == vstorageleveltsgroup1end[r, s, tg1, y]))
+    end
+end
+logmsg("Created constraints NS7_StorageLevelTsGroup1End and NS7a_StorageLevelTsGroup1NetZero.", quiet)
+# END: NS7_StorageLevelTsGroup1End and NS7a_StorageLevelTsGroup1NetZero.
+
+# BEGIN: NS8_StorageLevelYearEnd and NS8a_StorageLevelYearEndNetZero.
 ns8_storagelevelyearend::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+ns8a_storagelevelyearendnetzero::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = s, lastkeys[3] = y
 lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = sls
+lastvalsint = Array{Int64, 1}(undef,1)  # lastvalsint[1] = ynz
 sumexps = Array{AffExpr, 1}([AffExpr()])
 # sumexps[1] = vrateofstoragecharge and vrateofstoragedischarge sum
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, ys.l as l, cast(ys.val as real) as ys,
+for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s,
+case s.netzerotg2 when 1 then 0 else case s.netzerotg1 when 1 then 0 else s.netzeroyear end end as ynz,
+y.val as y, ys.l as l, cast(ys.val as real) as ys,
 cast(sls.val as real) as sls
 from REGION r, STORAGE s, YEAR as y, YearSplit_def ys
 left join StorageLevelStart_def sls on sls.r = r.val and sls.s = s.val
@@ -2397,6 +2418,7 @@ where y.val = ys.y
 order by r.val, s.val, y.val"))
     local r = row[:r]
     local s = row[:s]
+    local ynz = row[:ynz]  # 1 = year end level must = year start level (zeroed out when tg2 net zero or tg1 net zero is activated as year check isn't necessary)
     local y = row[:y]
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || s != lastkeys[2] || y != lastkeys[3])
@@ -2404,8 +2426,16 @@ order by r.val, s.val, y.val"))
         push!(ns8_storagelevelyearend, @constraint(jumpmodel,
             (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearend[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
             + sumexps[1] == vstoragelevelyearend[lastkeys[1], lastkeys[2], lastkeys[3]]))
+
+        if lastvalsint[1] == 1
+            push!(ns8a_storagelevelyearendnetzero, @constraint(jumpmodel,
+                (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearend[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
+                == vstoragelevelyearend[lastkeys[1], lastkeys[2], lastkeys[3]]))
+        end
+
         sumexps[1] = AffExpr()
         lastvals[1] = 0.0
+        lastvalsint[1] = 0
     end
 
     append!(sumexps[1], (vrateofstoragecharge[r,s,row[:l],y] - vrateofstoragedischarge[r,s,row[:l],y]) * row[:ys])
@@ -2414,6 +2444,7 @@ order by r.val, s.val, y.val"))
         lastvals[1] = row[:sls]
     end
 
+    lastvalsint[1] = ynz
     lastkeys[1] = r
     lastkeys[2] = s
     lastkeys[3] = y
@@ -2424,10 +2455,16 @@ if isassigned(lastkeys, 1)
     push!(ns8_storagelevelyearend, @constraint(jumpmodel,
         (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearend[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
         + sumexps[1] == vstoragelevelyearend[lastkeys[1], lastkeys[2], lastkeys[3]]))
+
+    if lastvalsint[1] == 1
+        push!(ns8a_storagelevelyearendnetzero, @constraint(jumpmodel,
+            (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearend[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
+            == vstoragelevelyearend[lastkeys[1], lastkeys[2], lastkeys[3]]))
+    end
 end
 
-logmsg("Created constraint NS8_StorageLevelYearEnd.", quiet)
-# END: NS8_StorageLevelYearEnd.
+logmsg("Created constraints NS8_StorageLevelYearEnd and NS8a_StorageLevelYearEndNetZero.", quiet)
+# END: NS8_StorageLevelYearEnd and NS8a_StorageLevelYearEndNetZero.
 
 # BEGIN: SI1_StorageUpperLimit.
 si1_storageupperlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()

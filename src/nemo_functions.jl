@@ -393,15 +393,16 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
 
     # BEGIN: Add new |nemo tables.
     # Version table is for |nemo data dictionary version
+    #   - 2: Added STORAGE.netzeroyear, STORAGE.netzerotg1, and STORAGE.netzerotg2
     SQLite.execute!(db, "CREATE TABLE `Version` (`version` INTEGER, PRIMARY KEY(`version`))")
-    SQLite.execute!(db, "INSERT INTO Version VALUES(1)")
+    SQLite.execute!(db, "INSERT INTO Version VALUES(2)")
 
     # No default values for sets/dimensions
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `EMISSION` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `FUEL` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `MODE_OF_OPERATION` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `REGION` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
-    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `STORAGE` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`) )")
+    SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `STORAGE` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, `netzeroyear` INTEGER NOT NULL DEFAULT 1, `netzerotg1` INTEGER NOT NULL DEFAULT 0, `netzerotg2` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`val`) )")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TECHNOLOGY` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TIMESLICE` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
     SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `TSGROUP1` (`name` TEXT, `desc` TEXT, `order` INTEGER NOT NULL UNIQUE, `multiplier` REAL NOT NULL DEFAULT 1, PRIMARY KEY(`name`))")
@@ -936,6 +937,35 @@ function addstoragefullloadhours(db::SQLite.DB; foreignkeys::Bool = false, quiet
     end
     # END: Wrap database operations in try-catch block to allow rollback on error.
 end  # addstoragefullloadhours(db::SQLite.DB; foreignkeys::Bool = false, quiet::Bool = false)
+
+# Temporary function
+function addstoragenetzero(db::SQLite.DB; quiet::Bool = false)
+    # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
+    try
+        # BEGIN: SQLite transaction.
+        SQLite.execute!(db, "BEGIN")
+
+        qry::DataFrame = SQLite.query(db, "PRAGMA table_info('STORAGE')")
+        updatestorage::Bool = !in("netzeroyear", qry.name) && !in("netzerotg1", qry.name) && !in("netzerotg2", qry.name)
+
+        if updatestorage
+            SQLite.execute!(db, "alter table STORAGE rename to STORAGE_old")
+            SQLite.execute!(db, "CREATE TABLE IF NOT EXISTS `STORAGE` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, `netzeroyear` INTEGER NOT NULL DEFAULT 1, `netzerotg1` INTEGER NOT NULL DEFAULT 0, `netzerotg2` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`val`) )")
+            SQLite.execute!(db, "insert into STORAGE select val, desc, 1, 0, 0 from STORAGE_old")
+            SQLite.execute!(db, "drop table STORAGE_old")
+        end
+
+        SQLite.execute!(db, "COMMIT")
+        # END: SQLite transaction.
+
+        updatestorage && logmsg("Updated STORAGE table in database.", quiet)
+    catch
+        # Rollback transaction and rethrow error
+        SQLite.execute!(db, "ROLLBACK")
+        rethrow()
+    end
+    # END: Wrap database operations in try-catch block to allow rollback on error.
+end  # addstoragenetzero(db::SQLite.DB; quiet::Bool = false)
 
 # This function is deprecated.
 #=
