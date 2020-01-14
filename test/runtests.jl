@@ -219,8 +219,8 @@ end  # delete_dbfile(path::String)
         @test isapprox(testqry[10,:val], 99.1923800166593; atol=TOL)
 
         # Test with restrictvars
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = CbcSolver(logLevel=1, presolve="on")),
             varstosave = "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vproductionbytechnology, vusebytechnology, "
-            NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = CbcSolver(logLevel=1, presolve="on")),
                 * "vtotaldiscountedcost",
             restrictvars = true, targetprocs = Array{Int, 1}([1]), quiet = false)
 

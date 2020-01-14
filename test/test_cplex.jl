@@ -15,8 +15,7 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
 
 @testset "Solving a scenario" begin
     @testset "Solving storage_test with CPLEX" begin
-        #dbfile = joinpath(@__DIR__, "storage_test.sqlite")
-        dbfile = "c:/temp/storage_test.sqlite"
+        dbfile = joinpath(@__DIR__, "storage_test.sqlite")
 
         # Test with default outputs
         NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = CplexSolver()), quiet = false)
