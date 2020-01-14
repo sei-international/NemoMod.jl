@@ -155,21 +155,22 @@ function compilenemo(packagesandusecases::Tuple{String, String}...=
     @info "compilenemo() replaced system image. This supersedes prior messages from PackageCompiler."
 end  # compilenemo(packagesandusecases::Tuple{String, String}...= ("NemoMod", normpath(joinpath(pathof(NemoMod), "..", "..", "test", "runtests.jl"))))
 
-"""A convenience function for compiling |nemo with support for Gurobi and/or CPLEX
+"""A convenience function for compiling |nemo with support for Gurobi, CPLEX, and/or Mosek
     included (corresponding parameter = true) or excluded (corresponding parameter = false).
-    Support for GLPK and Cbc is included in all cases, even if both parameters are false."""
-function compilenemo(; gurobi = false, cplex = false)
-    # BEGIN: Ensure Julia packages for Gurobi and CPLEX, as needed, are installed.
+    Support for GLPK and Cbc is included in all cases, even if all parameters are false."""
+function compilenemo(; gurobi = false, cplex = false, mosek = false)
+    # BEGIN: Ensure Julia packages for Gurobi, CPLEX, and Mosek, as needed, are installed.
     local pkgs::Array{String,1} = Array{String,1}()
         # Array of names of packages whose installation will be verified
 
     gurobi && push!(pkgs, "Gurobi")
     cplex && push!(pkgs, "CPLEX")
+    mosek && push!(pkgs, "Mosek")
 
     pkgs = setdiff(pkgs, collect(keys(Pkg.installed())))
 
     length(pkgs) > 0 && Pkg.add(pkgs)
-    # END: Ensure Julia packages for Gurobi and CPLEX, as needed, are installed.
+    # END: Ensure Julia packages for Gurobi, CPLEX, and Mosek, as needed, are installed.
 
     # BEGIN: Call compilenemo() with appropriate packagesandusecases.
     local puc::Array{Tuple{String,String},1} = Array{Tuple{String,String},1}()
@@ -178,7 +179,8 @@ function compilenemo(; gurobi = false, cplex = false)
     push!(puc, ("NemoMod", normpath(joinpath(pathof(NemoMod), "..", "..", "test", "runtests.jl"))))
     gurobi && push!(puc, ("Gurobi", normpath(joinpath(pathof(NemoMod), "..", "..", "test", "test_gurobi.jl"))))
     cplex && push!(puc, ("CPLEX", normpath(joinpath(pathof(NemoMod), "..", "..", "test", "test_cplex.jl"))))
+    mosek && push!(puc, ("Mosek", normpath(joinpath(pathof(NemoMod), "..", "..", "test", "test_mosek.jl"))))
 
     compilenemo(puc...)
     # END: Call compilenemo() with appropriate packagesandusecases.
-end  # compilenemo(; gurobi = false, cplex = false)
+end  # compilenemo(; gurobi = false, cplex = false, mosek = false)
