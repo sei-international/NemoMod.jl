@@ -194,7 +194,6 @@ end  # delete_dbfile(path::String)
                 * "vtotaldiscountedcost",
             quiet = false)
 
-        db = SQLite.DB(dbfile)
         testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
 
         @test testqry[1,:y] == "2020"
@@ -220,12 +219,11 @@ end  # delete_dbfile(path::String)
         @test isapprox(testqry[10,:val], 99.1923800166593; atol=TOL)
 
         # Test with restrictvars
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = CbcSolver(logLevel=1, presolve="on")),
             varstosave = "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vproductionbytechnology, vusebytechnology, "
+            NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = CbcSolver(logLevel=1, presolve="on")),
                 * "vtotaldiscountedcost",
             restrictvars = true, targetprocs = Array{Int, 1}([1]), quiet = false)
 
-        db = SQLite.DB(dbfile)
         testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
 
         @test testqry[1,:y] == "2020"
@@ -249,6 +247,35 @@ end  # delete_dbfile(path::String)
         @test isapprox(testqry[8,:val], 109.359598968367; atol=TOL)
         @test isapprox(testqry[9,:val], 104.151999017492; atol=TOL)
         @test isapprox(testqry[10,:val], 99.1923800166593; atol=TOL)
+
+        # Test with storage net zero constraints
+        SQLite.execute!(db, "update STORAGE set netzeroyear = 1")
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = CbcSolver(logLevel=1, presolve="on")))
+        testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
+
+        @test testqry[1,:y] == "2020"
+        @test testqry[2,:y] == "2021"
+        @test testqry[3,:y] == "2022"
+        @test testqry[4,:y] == "2023"
+        @test testqry[5,:y] == "2024"
+        @test testqry[6,:y] == "2025"
+        @test testqry[7,:y] == "2026"
+        @test testqry[8,:y] == "2027"
+        @test testqry[9,:y] == "2028"
+        @test testqry[10,:y] == "2029"
+
+        @test isapprox(testqry[1,:val], 3840.94023817782; atol=TOL)
+        @test isapprox(testqry[2,:val], 459.29493842479; atol=TOL)
+        @test isapprox(testqry[3,:val], 437.423750880753; atol=TOL)
+        @test isapprox(testqry[4,:val], 416.59404845786; atol=TOL)
+        @test isapprox(testqry[5,:val], 396.756236626533; atol=TOL)
+        @test isapprox(testqry[6,:val], 377.86308250146; atol=TOL)
+        @test isapprox(testqry[7,:val], 359.8696023823438; atol=TOL)
+        @test isapprox(testqry[8,:val], 342.73295464985; atol=TOL)
+        @test isapprox(testqry[9,:val], 326.412337761762; atol=TOL)
+        @test isapprox(testqry[10,:val], 310.86889310644; atol=TOL)
+
+        SQLite.execute!(db, "update STORAGE set netzeroyear = 0")
 
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
