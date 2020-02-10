@@ -32,6 +32,7 @@ end  # delete_dbfile(path::String)
 @testset "Solving a scenario" begin
     @testset "Solving storage_test with GLPK" begin
         dbfile = joinpath(@__DIR__, "storage_test.sqlite")
+        chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
         NemoMod.calculatescenario(dbfile; quiet = false)  # GLPK is default solver

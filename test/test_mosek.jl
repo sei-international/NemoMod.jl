@@ -15,8 +15,8 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
 
 @testset "Solving a scenario" begin
     @testset "Solving storage_test with Mosek" begin
-        #dbfile = joinpath(@__DIR__, "storage_test.sqlite")
-        dbfile = "c:/temp/storage_test.sqlite"
+        dbfile = joinpath(@__DIR__, "storage_test.sqlite")
+        chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
         NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = solver=MosekSolver()), quiet = false)
