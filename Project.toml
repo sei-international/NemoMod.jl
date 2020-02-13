@@ -17,6 +17,7 @@ SQLite = "0aa819cd-b072-5ff4-a722-6bc24af294d9"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 Mosek = "6405355b-0ac2-5fba-af84-adbd65488c0e"
 CPLEX = "a076750e-1247-5638-91d2-ce28b192dca0"
+Gurobi = "2e9cd046-0924-5485-92f1-d5272153d98b"
 
 [compat]
 Cbc = "0.6.3"
@@ -29,4 +30,5 @@ PackageCompiler = "0.5.1"
 SQLite = "0.7.0"
 Mosek = "0.9.8"
 CPLEX = "0.5.1"
+Gurobi = "0.6.0"
 julia = "1.3"
