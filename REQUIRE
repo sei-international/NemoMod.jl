@@ -1,8 +1,0 @@
-julia 1.0 1.1-
-JuMP
-SQLite
-DataFrames
-GLPKMathProgInterface
-CPLEX
-# Cbc not yet supported in Julia 0.7
-PackageCompiler
