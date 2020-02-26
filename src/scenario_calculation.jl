@@ -125,8 +125,8 @@ logmsg("Dropped pre-existing result tables from database.", quiet)
 
 # BEGIN: Check if transmission modeling is required.
 local transmissionmodeling::Bool = false  # Indicates whether scenario involves transmission modeling
-local transmissionmodelingtypes::Array{Int64, 1} =
-    collect(skipmissing(SQLite.query(db, "select distinct type from TransmissionModelingEnabled")[:type]))
+local tempquery::SQLite.Query = SQLite.DBInterface.execute(db, "select distinct type from TransmissionModelingEnabled")  # Temporary SQLite.Query object
+local transmissionmodelingtypes::Array{Int64, 1} = SQLite.done(tempquery) ? Array{Int64, 1}() : collect(skipmissing(DataFrame(tempquery)[:type]))
     # Array of transmission modeling types requested for scenario
 
 if length(transmissionmodelingtypes) > 0
@@ -162,34 +162,46 @@ logmsg("Created parameter views.", quiet)
 # END: Create parameter views showing default values.
 
 # BEGIN: Define sets.
-syear::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from YEAR order by val")[:val]))  # YEAR set
-stechnology::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from TECHNOLOGY")[:val]))  # TECHNOLOGY set
-stimeslice::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from TIMESLICE")[:val]))  # TIMESLICE set
-sfuel::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from FUEL")[:val]))  # FUEL set
-semission::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from EMISSION")[:val]))  # EMISSION set
-smode_of_operation::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from MODE_OF_OPERATION")[:val]))  # MODE_OF_OPERATION set
-sregion::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from REGION")[:val]))  # REGION set
-sstorage::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from STORAGE")[:val]))  # STORAGE set
-stsgroup1::Array{String,1} = collect(skipmissing(SQLite.query(db, "select name from TSGROUP1")[:name]))  # Time slice group 1 set
-stsgroup2::Array{String,1} = collect(skipmissing(SQLite.query(db, "select name from TSGROUP2")[:name]))  # Time slice group 2 set
+tempquery = SQLite.DBInterface.execute(db, "select val from YEAR order by val")
+syear::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[:val]))  # YEAR set
+tempquery = SQLite.DBInterface.execute(db, "select val from TECHNOLOGY")
+stechnology::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[:val]))  # TECHNOLOGY set
+tempquery = SQLite.DBInterface.execute(db, "select val from TIMESLICE")
+stimeslice::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[:val]))  # TIMESLICE set
+tempquery = SQLite.DBInterface.execute(db, "select val from FUEL")
+sfuel::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[:val]))  # FUEL set
+tempquery = SQLite.DBInterface.execute(db, "select val from EMISSION")
+semission::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[:val]))  # EMISSION set
+tempquery = SQLite.DBInterface.execute(db, "select val from MODE_OF_OPERATION")
+smode_of_operation::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[:val]))  # MODE_OF_OPERATION set
+tempquery = SQLite.DBInterface.execute(db, "select val from REGION")
+sregion::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[:val]))  # REGION set
+tempquery = SQLite.DBInterface.execute(db, "select val from STORAGE")
+sstorage::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[:val]))  # STORAGE set
+tempquery = SQLite.DBInterface.execute(db, "select name from TSGROUP1")
+stsgroup1::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[:name]))  # Time slice group 1 set
+tempquery = SQLite.DBInterface.execute(db, "select name from TSGROUP2")
+stsgroup2::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[:name]))  # Time slice group 2 set
 
 if transmissionmodeling
-    snode::Array{String,1} = collect(skipmissing(SQLite.query(db, "select val from NODE")[:val]))  # Node set
-    stransmission::Array{String,1} = collect(skipmissing(SQLite.query(db, "select id from TransmissionLine")[:id]))  # Transmission line set
+    tempquery = SQLite.DBInterface.execute(db, "select val from NODE")
+    snode::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[:val]))  # Node set
+    tempquery = SQLite.DBInterface.execute(db, "select id from TransmissionLine")
+    stransmission::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[:id]))  # Transmission line set
 end
 
 tsgroup1dict::Dict{Int, Tuple{String, Float64}} = Dict{Int, Tuple{String, Float64}}(row[:order] => (row[:name], row[:multiplier]) for row in
-    DataFrames.eachrow(SQLite.query(db, "select [order], name, cast (multiplier as real) as multiplier from tsgroup1 order by [order]")))
+    SQLite.DBInterface.execute(db, "select [order], name, cast (multiplier as real) as multiplier from tsgroup1 order by [order]"))
     # For TSGROUP1, a dictionary mapping orders to tuples of (name, multiplier)
 tsgroup2dict::Dict{Int, Tuple{String, Float64}} = Dict{Int, Tuple{String, Float64}}(row[:order] => (row[:name], row[:multiplier]) for row in
-    DataFrames.eachrow(SQLite.query(db, "select [order], name, cast (multiplier as real) as multiplier from tsgroup2 order by [order]")))
+    SQLite.DBInterface.execute(db, "select [order], name, cast (multiplier as real) as multiplier from tsgroup2 order by [order]"))
     # For TSGROUP2, a dictionary mapping orders to tuples of (name, multiplier)
 ltsgroupdict::Dict{Tuple{Int, Int, Int}, String} = Dict{Tuple{Int, Int, Int}, String}((row[:tg1o], row[:tg2o], row[:lo]) => row[:l] for row in
-    DataFrames.eachrow(SQLite.query(db, "select ltg.l as l, ltg.lorder as lo, ltg.tg2, tg2.[order] as tg2o, ltg.tg1, tg1.[order] as tg1o
+    SQLite.DBInterface.execute(db, "select ltg.l as l, ltg.lorder as lo, ltg.tg2, tg2.[order] as tg2o, ltg.tg1, tg1.[order] as tg1o
     from LTsGroup ltg, TSGROUP2 tg2, TSGROUP1 tg1
     where
     ltg.tg2 = tg2.name
-    and ltg.tg1 = tg1.name")))  # Dictionary of LTsGroup table mapping tuples of (tsgroup1 order, tsgroup2 order, time slice order) to time slice names
+    and ltg.tg1 = tg1.name"))  # Dictionary of LTsGroup table mapping tuples of (tsgroup1 order, tsgroup2 order, time slice order) to time slice names
 
 logmsg("Defined sets.", quiet)
 # END: Define sets.
@@ -272,6 +284,8 @@ local annualactivitylowerlimits::Bool = true
 # Indicates whether constraints for TotalTechnologyAnnualActivityLowerLimit should be added to model
 local modelperiodactivitylowerlimits::Bool = true
 # Indicates whether constraints for TotalTechnologyModelPeriodActivityLowerLimit should be added to model
+
+# Start revising SQLite calls here.
 
 queryannualactivitylowerlimit::DataFrames.DataFrame = SQLite.query(db,
 "select r, t, y, cast(val as real) as amn
@@ -803,7 +817,6 @@ local lastvals::Array{Float64, 1} = Array{Float64, 1}()  # Array of last float v
 local lastvalsint::Array{Int64, 1} = Array{Int64, 1}()  # Array of last integer values saved in constraint query loops
 local sumexps::Array{AffExpr, 1} = Array{AffExpr, 1}()  # Array of sums of variables assembled in constraint query loops
 local querytemp::DataFrames.DataFrame = DataFrames.DataFrame()  # Query object for temporary queries
-
 # BEGIN: EQ_SpecifiedDemand.
 queryvrateofdemandnn::DataFrames.DataFrame = SQLite.query(db,"select sdp.r as r, sdp.f as f, sdp.l as l, sdp.y as y,
 cast(sdp.val as real) as specifieddemandprofile, cast(sad.val as real) as specifiedannualdemand,
