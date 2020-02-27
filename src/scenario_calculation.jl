@@ -285,25 +285,25 @@ local annualactivitylowerlimits::Bool = true
 local modelperiodactivitylowerlimits::Bool = true
 # Indicates whether constraints for TotalTechnologyModelPeriodActivityLowerLimit should be added to model
 
-# Start revising SQLite calls here.
-
-queryannualactivitylowerlimit::DataFrames.DataFrame = SQLite.query(db,
+queryannualactivitylowerlimit::SQLite.Query = SQLite.DBInterface.execute(db,
 "select r, t, y, cast(val as real) as amn
 from TotalTechnologyAnnualActivityLowerLimit_def
 where val > 0")
 
-if size(queryannualactivitylowerlimit)[1] == 0
+if SQLite.done(queryannualactivitylowerlimit)
     annualactivitylowerlimits = false
 end
 
-querymodelperiodactivitylowerlimit::DataFrames.DataFrame = SQLite.query(db,
+querymodelperiodactivitylowerlimit::SQLite.Query = SQLite.DBInterface.execute(db,
 "select r, t, cast(val as real) as mmn
 from TotalTechnologyModelPeriodActivityLowerLimit_def
 where val > 0")
 
-if size(querymodelperiodactivitylowerlimit)[1] == 0
+if SQLite.done(querymodelperiodactivitylowerlimit)
     modelperiodactivitylowerlimits = false
 end
+
+# Start revising SQLite calls here.
 
 @variable(jumpmodel, vrateofactivity[sregion, stimeslice, stechnology, smode_of_operation, syear] >= 0)
 modelvarindices["vrateofactivity"] = (vrateofactivity, ["r", "l", "t", "m", "y"])
@@ -3385,7 +3385,7 @@ end
 if annualactivitylowerlimits
     aac3_totalannualtechnologyactivitylowerlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(queryannualactivitylowerlimit)
+    for row in queryannualactivitylowerlimit
         local r = row[:r]
         local t = row[:t]
         local y = row[:y]
@@ -3429,7 +3429,7 @@ end
 if modelperiodactivitylowerlimits
     tac3_totalmodelhorizontechnologyactivitylowerlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(querymodelperiodactivitylowerlimit)
+    for row in querymodelperiodactivitylowerlimit
         local r = row[:r]
         local t = row[:t]
 
