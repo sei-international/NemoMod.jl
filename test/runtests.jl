@@ -38,7 +38,7 @@ end  # delete_dbfile(path::String)
         NemoMod.calculatescenario(dbfile; quiet = false)  # GLPK is default solver
 
         db = SQLite.DB(dbfile)
-        testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
+        testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
         @test testqry[2,:y] == "2021"
@@ -68,7 +68,7 @@ end  # delete_dbfile(path::String)
             * "vtotaltechnologymodelperiodactivity, vusebytechnology, vmodelperiodcostbyregion, vannualtechnologyemissionpenaltybyemission, "
             * "vtotaldiscountedcost", quiet = false)
 
-        testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
+        testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
         @test testqry[2,:y] == "2021"
@@ -97,7 +97,7 @@ end  # delete_dbfile(path::String)
             "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vproductionbytechnology, vusebytechnology, "
             * "vtotaldiscountedcost", restrictvars = true, targetprocs = Array{Int, 1}([1]), quiet = false)
 
-        testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
+        testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
         @test testqry[2,:y] == "2021"
@@ -122,9 +122,9 @@ end  # delete_dbfile(path::String)
         @test isapprox(testqry[10,:val], 99.1923800166593; atol=TOL)
 
         # Test with storage net zero constraints
-        SQLite.execute!(db, "update STORAGE set netzeroyear = 1")
+        SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
         NemoMod.calculatescenario(dbfile)
-        testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
+        testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
         @test testqry[2,:y] == "2021"
@@ -148,11 +148,11 @@ end  # delete_dbfile(path::String)
         @test isapprox(testqry[9,:val], 326.412357958021; atol=TOL)
         @test isapprox(testqry[10,:val], 310.868912340972; atol=TOL)
 
-        SQLite.execute!(db, "update STORAGE set netzeroyear = 0")
+        SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 0")
 
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
-        testqry = SQLite.query(db, "VACUUM")
+        testqry = SQLite.DBInterface.execute(db, "VACUUM")
     end  # "Solving storage_test with GLPK"
 
     @testset "Solving storage_test with Cbc" begin
@@ -163,7 +163,7 @@ end  # delete_dbfile(path::String)
             quiet = false)
 
         db = SQLite.DB(dbfile)
-        testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
+        testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
         @test testqry[2,:y] == "2021"
@@ -195,7 +195,7 @@ end  # delete_dbfile(path::String)
                 * "vtotaldiscountedcost",
             quiet = false)
 
-        testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
+        testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
         @test testqry[2,:y] == "2021"
@@ -225,7 +225,7 @@ end  # delete_dbfile(path::String)
                 * "vtotaldiscountedcost",
             restrictvars = true, targetprocs = Array{Int, 1}([1]), quiet = false)
 
-        testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
+        testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
         @test testqry[2,:y] == "2021"
@@ -250,9 +250,9 @@ end  # delete_dbfile(path::String)
         @test isapprox(testqry[10,:val], 99.1923800166593; atol=TOL)
 
         # Test with storage net zero constraints
-        SQLite.execute!(db, "update STORAGE set netzeroyear = 1")
+        SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
         NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = CbcSolver(logLevel=1, presolve="on")))
-        testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
+        testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
         @test testqry[2,:y] == "2021"
@@ -276,11 +276,11 @@ end  # delete_dbfile(path::String)
         @test isapprox(testqry[9,:val], 326.412337761762; atol=TOL)
         @test isapprox(testqry[10,:val], 310.86889310644; atol=TOL)
 
-        SQLite.execute!(db, "update STORAGE set netzeroyear = 0")
+        SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 0")
 
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
-        testqry = SQLite.query(db, "VACUUM")
+        testqry = SQLite.DBInterface.execute(db, "VACUUM")
     end  # "Solving storage_test with Cbc"
 end  # @testset "Solving a scenario"
 
@@ -290,7 +290,7 @@ end  # @testset "Solving a scenario"
 
         @test isfile(joinpath(@__DIR__, "new_nemo.sqlite"))
         # Test that AccumulatedAnnualDemand table exists
-        @test size(SQLite.query(db, "PRAGMA table_info('AccumulatedAnnualDemand')"))[1] > 0
+        @test !SQLite.done(SQLite.DBInterface.execute(db, "PRAGMA table_info('AccumulatedAnnualDemand')"))
 
         # BEGIN: Delete new database file.
         # Get Julia to release file
@@ -308,9 +308,9 @@ end  # @testset "Solving a scenario"
 
         @test isfile(joinpath(@__DIR__, "new_nemo_leap.sqlite"))
         # Test that AccumulatedAnnualDemand table exists
-        @test size(SQLite.query(db, "PRAGMA table_info('AccumulatedAnnualDemand')"))[1] > 0
+        @test !SQLite.done(SQLite.DBInterface.execute(db, "PRAGMA table_info('AccumulatedAnnualDemand')"))
         # Look for default value for AccumulatedAnnualDemand parameter
-        @test SQLite.query(db, "SELECT val FROM DefaultParams WHERE tablename = 'AccumulatedAnnualDemand'")[1,:val] == 0.0
+        @test DataFrame(SQLite.DBInterface.execute(db, "SELECT val FROM DefaultParams WHERE tablename = 'AccumulatedAnnualDemand'"))[1,:val] == 0.0
 
         # BEGIN: Delete new database file.
         # Get Julia to release file
@@ -325,11 +325,11 @@ end  # @testset "Solving a scenario"
 
     @testset "Set parameter default" begin
         db = NemoMod.createnemodb(joinpath(@__DIR__, "param_default.sqlite"))
-        @test size(SQLite.query(db, "SELECT val FROM DefaultParams WHERE tablename = 'VariableCost'"))[1] == 0  # No rows in query result
+        @test SQLite.done(SQLite.DBInterface.execute(db, "SELECT val FROM DefaultParams WHERE tablename = 'VariableCost'"))  # No rows in query result
 
         NemoMod.setparamdefault(db, "VariableCost", 1.0)
 
-        @test SQLite.query(db, "SELECT val FROM DefaultParams WHERE tablename = 'VariableCost'")[1,:val] == 1.0
+        @test DataFrame(SQLite.DBInterface.execute(db, "SELECT val FROM DefaultParams WHERE tablename = 'VariableCost'"))[1,:val] == 1.0
 
         # BEGIN: Delete new database file.
         # Get Julia to release file

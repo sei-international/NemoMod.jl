@@ -1,10 +1,10 @@
 #=
-    |nemo: Next-generation Energy Modeling system for Optimization.
+    NEMO: Next-generation Energy Modeling system for Optimization.
     https://github.com/sei-international/NemoMod.jl
 
     Copyright © 2018: Stockholm Environment Institute U.S.
 
-    File description: Functions for calculating a |nemo scenario.
+    File description: Functions for calculating a NEMO scenario.
 =#
 
 """
@@ -15,7 +15,7 @@
     targetprocs = Array{Int, 1}([1]), restrictvars = false,
     reportzeros = false, quiet = false)
 
-Runs |nemo for a scenario specified in a SQLite database. Returns a Symbol indicating
+Runs NEMO for a scenario specified in a SQLite database. Returns a Symbol indicating
 the solve status reported by the solver.
 
 # Arguments
@@ -23,13 +23,13 @@ the solve status reported by the solver.
 - `jumpmodel::JuMP.Model`: JuMP model object specifying MIP solver to be used.
     Examples: Model(solver = GLPKSolverMIP(presolve=true)), Model(solver = CplexSolver()),
     Model(solver = CbcSolver(logLevel=1, presolve="on")).
-    Note that solver package must be installed (GLPK and Cbc are installed with |nemo by
+    Note that solver package must be installed (GLPK and Cbc are installed with NEMO by
     default).
 - `varstosave::String`: Comma-delimited list of model variables whose results should be
     saved in the SQLite database.
 - `targetprocs::Array{Int, 1}`: Processes that should be used for parallelized operations
     within the scenario calculation.
-- `restrictvars::Bool`: Indicates whether |nemo should conduct additional data analysis
+- `restrictvars::Bool`: Indicates whether NEMO should conduct additional data analysis
     to limit the set of model variables created. This option avoids creating variables
     for combinations of subscripts that do not exist in the scenario's data. It is
     generally only needed for very large models, in which case it can save substantial
@@ -113,7 +113,7 @@ if configfile != nothing && haskey(configfile, "includes", "beforescenariocalc")
         include(normpath(joinpath(pwd(), retrieve(configfile, "includes", "beforescenariocalc"))))
         logmsg("Performed beforescenariocalc include.", quiet)
     catch e
-        logmsg("Could not perform beforescenariocalc include. Error message: " * sprint(showerror, e) * ". Continuing with |nemo.", quiet)
+        logmsg("Could not perform beforescenariocalc include. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
     end
 end
 # END: Perform beforescenariocalc include.
@@ -303,8 +303,6 @@ if SQLite.done(querymodelperiodactivitylowerlimit)
     modelperiodactivitylowerlimits = false
 end
 
-# Start revising SQLite calls here.
-
 @variable(jumpmodel, vrateofactivity[sregion, stimeslice, stechnology, smode_of_operation, syear] >= 0)
 modelvarindices["vrateofactivity"] = (vrateofactivity, ["r", "l", "t", "m", "y"])
 @variable(jumpmodel, vrateoftotalactivity[sregion, stechnology, stimeslice, syear] >= 0)
@@ -325,7 +323,7 @@ if modelperiodactivityupperlimits || modelperiodactivitylowerlimits || in("vtota
     modelvarindices["vtotaltechnologymodelperiodactivity"] = (vtotaltechnologymodelperiodactivity, ["r", "t"])
 end
 
-queryvrateofproductionbytechnologybymodenn::DataFrames.DataFrame = SQLite.query(db,
+queryvrateofproductionbytechnologybymodenn::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
 "select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y,
 cast(oar.val as real) as oar
 from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, OutputActivityRatio_def oar
@@ -334,10 +332,10 @@ where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.m = m.val and oa
 and oar.val <> 0
 and ys.y = y.val
 and tme.id is null
-order by r.val, ys.l, t.val, f.val, y.val")
+order by r.val, ys.l, t.val, f.val, y.val") |> DataFrame
 
 # ys included because it's needed for some later constraints based on this query
-queryvrateofproductionbytechnologynn::DataFrames.DataFrame = SQLite.query(db,
+queryvrateofproductionbytechnologynn::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
 "select r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
 from region r, YearSplit_def ys, technology t, fuel f, year y,
 (select distinct r, t, f, y
@@ -347,7 +345,7 @@ left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and
 where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val
 and ys.y = y.val
 and tme.id is null
-order by r.val, ys.l, f.val, y.val")
+order by r.val, ys.l, f.val, y.val") |> DataFrame
 
 if in("vproductionbytechnology", varstosavearr)
     # Overall query showing indices of vproductionbytechnology; nodal contributions will be added later if needed
@@ -355,7 +353,7 @@ if in("vproductionbytechnology", varstosavearr)
 end
 
 # ys included because it's needed for some later constraints based on this query
-queryvproductionbytechnologyannual::DataFrames.DataFrame = SQLite.query(db,
+queryvproductionbytechnologyannual::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
 "select * from (
 select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l,
 cast(ys.val as real) as ys
@@ -381,7 +379,7 @@ and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
 and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
 and ntc.y = ys.y
 )
-order by r, t, f, y")
+order by r, t, f, y") |> DataFrame
 
 if restrictvars
     if in("vrateofproductionbytechnologybymodenn", varstosavearr)
@@ -418,7 +416,7 @@ modelvarindices["vrateofproductionnn"] = (vrateofproductionnn, ["r", "l", "f", "
 @variable(jumpmodel, vproductionnn[sregion, stimeslice, sfuel, syear] >= 0)
 modelvarindices["vproductionnn"] = (vproductionnn, ["r","l","f","y"])
 
-queryvrateofusebytechnologybymodenn::DataFrames.DataFrame = SQLite.query(db,
+queryvrateofusebytechnologybymodenn::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
 "select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y, cast(iar.val as real) as iar
 from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, InputActivityRatio_def iar
 left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
@@ -426,10 +424,10 @@ where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.m = m.val and ia
 and iar.val <> 0
 and ys.y = y.val
 and tme.id is null
-order by r.val, ys.l, t.val, f.val, y.val")
+order by r.val, ys.l, t.val, f.val, y.val") |> DataFrame
 
 # ys included because it's needed for some later constraints based on this query
-queryvrateofusebytechnologynn::DataFrames.DataFrame = SQLite.query(db, "select
+queryvrateofusebytechnologynn::DataFrames.DataFrame = SQLite.DBInterface.execute(db, "select
 r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
 from region r, YearSplit_def ys, technology t, fuel f, year y,
 (select distinct r, t, f, y from InputActivityRatio_def where val <> 0) iar
@@ -437,7 +435,7 @@ left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and
 where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
 and ys.y = y.val
 and tme.id is null
-order by r.val, ys.l, f.val, y.val")
+order by r.val, ys.l, f.val, y.val") |> DataFrame
 
 if in("vusebytechnology", varstosavearr)
     # Overall query showing indices of vusebytechnology; nodal contributions will be added later if needed
@@ -445,7 +443,7 @@ if in("vusebytechnology", varstosavearr)
 end
 
 # ys included because it's needed for some later constraints based on this query
-queryvusebytechnologyannual::DataFrames.DataFrame = SQLite.query(db,
+queryvusebytechnologyannual::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
 "select * from (
 select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l,
 cast(ys.val as real) as ys
@@ -467,7 +465,7 @@ and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
 and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
 and ntc.y = ys.y
 )
-order by r, t, f, y")
+order by r, t, f, y") |> DataFrame
 
 if restrictvars
     if in("vrateofusebytechnologybymodenn", varstosavearr)
@@ -587,14 +585,14 @@ logmsg("Defined emissions variables.", quiet)
 
 # Transmission
 if transmissionmodeling
-    queryvrateofactivitynodal::DataFrames.DataFrame = SQLite.query(db,
+    queryvrateofactivitynodal::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
     "select ntc.n as n, l.val as l, ntc.t as t, m.val as m, ntc.y as y
     from NodalDistributionTechnologyCapacity_def ntc, TIMESLICE l, MODE_OF_OPERATION m
     where
     ntc.val > 0
-    order by ntc.n, ntc.t, l.val, ntc.y")
+    order by ntc.n, ntc.t, l.val, ntc.y") |> DataFrame
 
-    queryvrateofproductionbytechnologynodal::DataFrames.DataFrame = SQLite.query(db,
+    queryvrateofproductionbytechnologynodal::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
     "select ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y,
     	cast(ys.val as real) as ys
     from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
@@ -607,10 +605,10 @@ if transmissionmodeling
     and ntc.n = n.val
     and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
 	and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
-    order by ntc.n, ys.l, oar.f, ntc.y")
+    order by ntc.n, ys.l, oar.f, ntc.y") |> DataFrame
 
     if in("vproductionbytechnology", varstosavearr)
-        queryvproductionbytechnologynodal::DataFrames.DataFrame = SQLite.query(db,
+        queryvproductionbytechnologynodal::SQLite.Query = SQLite.DBInterface.execute(db,
         "select n.r as r, ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y,
         	cast(ys.val as real) as ys
         from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
@@ -626,7 +624,7 @@ if transmissionmodeling
         order by n.r, ys.l, ntc.t, oar.f, ntc.y")
 
         queryvproductionbytechnologyindices = vcat(queryvproductionbytechnologyindices,
-        SQLite.query(db,
+        DataFrame(SQLite.DBInterface.execute(db,
         "select distinct n.r as r, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y, null as ys
         from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
         TransmissionModelingEnabled tme,
@@ -637,10 +635,10 @@ if transmissionmodeling
         and ntc.y = ys.y
         and ntc.n = n.val
         and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
-        and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y"))
+        and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y")))
     end
 
-    queryvrateofusebytechnologynodal::DataFrames.DataFrame = SQLite.query(db,
+    queryvrateofusebytechnologynodal::SQLite.Query = SQLite.DBInterface.execute(db,
     "select ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y,
     	cast(ys.val as real) as ys
     from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
@@ -656,7 +654,7 @@ if transmissionmodeling
     order by ntc.n, ys.l, iar.f, ntc.y")
 
     if in("vusebytechnology", varstosavearr)
-        queryvusebytechnologynodal::DataFrames.DataFrame = SQLite.query(db,
+        queryvusebytechnologynodal::SQLite.Query = SQLite.DBInterface.execute(db,
         "select n.r as r, ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y,
         	cast(ys.val as real) as ys
         from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
@@ -672,7 +670,7 @@ if transmissionmodeling
         order by n.r, ys.l, ntc.t, iar.f, ntc.y")
 
         queryvusebytechnologyindices = vcat(queryvusebytechnologyindices,
-        SQLite.query(db,
+        DataFrame(SQLite.DBInterface.execute(db,
         "select distinct n.r as r, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y, null as ys
         from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
         TransmissionModelingEnabled tme,
@@ -683,10 +681,10 @@ if transmissionmodeling
         and ntc.y = ys.y
         and ntc.n = n.val
         and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
-        and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y"))
+        and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y")))
     end
 
-    queryvtransmissionbyline::DataFrames.DataFrame = SQLite.query(db,
+    queryvtransmissionbyline::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
     "select tl.id as tr, ys.l as l, tl.f as f, tme1.y as y, tl.n1 as n1, tl.n2 as n2,
 	tl.reactance as reactance, tme1.type as type, tl.maxflow as maxflow,
     cast(tl.VariableCost as real) as vc, cast(ys.val as real) as ys,
@@ -700,7 +698,7 @@ if transmissionmodeling
     and tme1.y = tme2.y and tme1.type = tme2.type
 	and ys.y = tme1.y
 	and tl.f = tcta.f
-    order by tl.id, tme1.y")
+    order by tl.id, tme1.y") |> DataFrame
 
     if restrictvars
         indexdicts = keydicts_parallel(queryvrateofactivitynodal, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
@@ -816,9 +814,9 @@ local lastkeys::Array{String, 1} = Array{String, 1}()  # Array of last key value
 local lastvals::Array{Float64, 1} = Array{Float64, 1}()  # Array of last float values saved in constraint query loops
 local lastvalsint::Array{Int64, 1} = Array{Int64, 1}()  # Array of last integer values saved in constraint query loops
 local sumexps::Array{AffExpr, 1} = Array{AffExpr, 1}()  # Array of sums of variables assembled in constraint query loops
-local querytemp::DataFrames.DataFrame = DataFrames.DataFrame()  # Query object for temporary queries
+
 # BEGIN: EQ_SpecifiedDemand.
-queryvrateofdemandnn::DataFrames.DataFrame = SQLite.query(db,"select sdp.r as r, sdp.f as f, sdp.l as l, sdp.y as y,
+queryvrateofdemandnn::SQLite.Query = SQLite.DBInterface.execute(db,"select sdp.r as r, sdp.f as f, sdp.l as l, sdp.y as y,
 cast(sdp.val as real) as specifieddemandprofile, cast(sad.val as real) as specifiedannualdemand,
 cast(ys.val as real) as ys
 from SpecifiedDemandProfile_def sdp, SpecifiedAnnualDemand_def sad, YearSplit_def ys
@@ -831,10 +829,12 @@ and tme.id is null")
 if in("vrateofdemandnn", varstosavearr)
     ceq_specifieddemand::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(queryvrateofdemandnn)
+    for row in queryvrateofdemandnn
         push!(ceq_specifieddemand, @constraint(jumpmodel, row[:specifiedannualdemand] * row[:specifieddemandprofile] / row[:ys]
             == vrateofdemandnn[row[:r], row[:l], row[:f], row[:y]]))
     end
+
+    SQLite.reset!(queryvrateofdemandnn)
 
     logmsg("Created constraint EQ_SpecifiedDemand.", quiet)
 end
@@ -845,11 +845,11 @@ caa1_totalnewcapacity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vnewcapacity sum
 
-for row in DataFrames.eachrow(SQLite.query(db,"select r.val as r, t.val as t, y.val as y, yy.val as yy
+for row in SQLite.DBInterface.execute(db,"select r.val as r, t.val as t, y.val as y, yy.val as yy
 from REGION r, TECHNOLOGY t, YEAR y, OperationalLife_def ol, YEAR yy
 where ol.r = r.val and ol.t = t.val
 and y.val - yy.val < ol.val and y.val - yy.val >=0
-order by r.val, t.val, y.val"))
+order by r.val, t.val, y.val")
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -878,9 +878,9 @@ logmsg("Created constraint CAa1_TotalNewCapacity.", quiet)
 # BEGIN: CAa2_TotalAnnualCapacity.
 caa2_totalannualcapacity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db,"select r.val as r, t.val as t, y.val as y, cast(rc.val as real) as rc
+for row in SQLite.DBInterface.execute(db,"select r.val as r, t.val as t, y.val as y, cast(rc.val as real) as rc
 from REGION r, TECHNOLOGY t, YEAR y
-left join ResidualCapacity_def rc on rc.r = r.val and rc.t = t.val and rc.y = y.val"))
+left join ResidualCapacity_def rc on rc.r = r.val and rc.t = t.val and rc.y = y.val")
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -898,14 +898,14 @@ vrateofactivity1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = m, lastkeys[5] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivitynodal sum
 
-for row in DataFrames.eachrow(SQLite.query(db,
+for row in SQLite.DBInterface.execute(db,
 "select r.val as r, l.val as l, t.val as t, m.val as m, y.val as y, ntc.n as n
 from REGION r, TIMESLICE l, TECHNOLOGY t, MODE_OF_OPERATION m, YEAR y,
 NodalDistributionTechnologyCapacity_def ntc, NODE n
 where ntc.n = n.val
 and n.r = r.val and ntc.t = t.val and ntc.y = y.val
 and ntc.val > 0
-order by r.val, l.val, t.val, m.val, y.val"))
+order by r.val, l.val, t.val, m.val, y.val")
     local r = row[:r]
     local l = row[:l]
     local t = row[:t]
@@ -983,11 +983,11 @@ end
 # BEGIN: CAa4_Constraint_Capacity.
 caa4_constraint_capacity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db,"select r.val as r, l.val as l, t.val as t, y.val as y,
+for row in SQLite.DBInterface.execute(db,"select r.val as r, l.val as l, t.val as t, y.val as y,
     cast(cf.val as real) as cf, cast(cta.val as real) as cta
 from REGION r, TIMESLICE l, TECHNOLOGY t, YEAR y, CapacityFactor_def cf, CapacityToActivityUnit_def cta
 where cf.r = r.val and cf.t = t.val and cf.l = l.val and cf.y = y.val
-and cta.r = r.val and cta.t = t.val"))
+and cta.r = r.val and cta.t = t.val")
     local r = row[:r]
     local t = row[:t]
     local l = row[:l]
@@ -1004,7 +1004,7 @@ logmsg("Created constraint CAa4_Constraint_Capacity.", quiet)
 if transmissionmodeling
     caa4tr_constraint_capacity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(SQLite.query(db,"select ntc.n as n, ntc.t as t, l.val as l, ntc.y as y, n.r as r,
+    for row in SQLite.DBInterface.execute(db,"select ntc.n as n, ntc.t as t, l.val as l, ntc.y as y, n.r as r,
     	cast(ntc.val as real) as ntc, cast(cf.val as real) as cf,
     	cast(cta.val as real) as cta
     from NodalDistributionTechnologyCapacity_def ntc, TIMESLICE l, NODE n,
@@ -1012,7 +1012,7 @@ if transmissionmodeling
     where ntc.val > 0
     and ntc.n = n.val
     and cf.r = n.r and cf.t = ntc.t and cf.l = l.val and cf.y = ntc.y
-    and cta.r = n.r and cta.t = ntc.t"))
+    and cta.r = n.r and cta.t = ntc.t")
         local n = row[:n]
         local t = row[:t]
         local l = row[:l]
@@ -1030,8 +1030,8 @@ end
 # BEGIN: CAa5_TotalNewCapacity.
 caa5_totalnewcapacity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db,"select cot.r as r, cot.t as t, cot.y as y, cast(cot.val as real) as cot
-from CapacityOfOneTechnologyUnit_def cot where cot.val <> 0"))
+for row in SQLite.DBInterface.execute(db,"select cot.r as r, cot.t as t, cot.y as y, cast(cot.val as real) as cot
+from CapacityOfOneTechnologyUnit_def cot where cot.val <> 0")
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -1165,7 +1165,7 @@ if transmissionmodeling
     sumexps = Array{AffExpr, 1}([AffExpr()])
     # sumexps[1] = vrateofactivitynodal sum
 
-    for row in DataFrames.eachrow(SQLite.query(db,
+    for row in SQLite.DBInterface.execute(db,
     "select ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y, m.val as m,
 	   cast(oar.val as real) as oar
     from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, MODE_OF_OPERATION m, NODE n, OutputActivityRatio_def oar,
@@ -1176,7 +1176,7 @@ if transmissionmodeling
     and oar.r = n.r and oar.t = ntc.t and oar.m = m.val and oar.y = ntc.y
     and oar.val > 0
 	and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
-    order by ntc.n, ys.l, ntc.t, oar.f, ntc.y"))
+    order by ntc.n, ys.l, ntc.t, oar.f, ntc.y")
         local n = row[:n]
         local l = row[:l]
         local t = row[:t]
@@ -1278,7 +1278,7 @@ end
 # END: EBa3Tr_RateOfFuelProduction3.
 
 # BEGIN: VRateOfProduction1.
-queryvrateofproduse::DataFrames.DataFrame = DataFrames.DataFrame()  # Populated below if transmissionmodeling
+queryvrateofproduse::SQLite.Query = SQLite.DBInterface.execute(db, "select 1")  # Populated below if transmissionmodeling
 vrateofproduction1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 if !transmissionmodeling
@@ -1290,7 +1290,7 @@ else
     lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproductionnodal sum
 
-    queryvrateofproduse = SQLite.query(db,
+    queryvrateofproduse = SQLite.DBInterface.execute(db,
     "select r.val as r, l.val as l, f.val as f, y.val as y, tme.id as tme, n.val as n
     from region r, timeslice l, fuel f, year y, YearSplit_def ys
     left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
@@ -1299,7 +1299,7 @@ else
     ys.l = l.val and ys.y = y.val
     order by r.val, l.val, f.val, y.val")
 
-    for row in DataFrames.eachrow(queryvrateofproduse)
+    for row in queryvrateofproduse
         local r = row[:r]
         local l = row[:l]
         local f = row[:f]
@@ -1322,6 +1322,8 @@ else
         lastkeys[3] = f
         lastkeys[4] = y
     end
+
+    SQLite.reset!(queryvrateofproduse)
 
     # Create last constraint
     if isassigned(lastkeys, 1)
@@ -1397,7 +1399,7 @@ if transmissionmodeling
     lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivitynodal sum
 
-    for row in DataFrames.eachrow(SQLite.query(db,
+    for row in SQLite.DBInterface.execute(db,
     "select ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y, m.val as m,
 	   cast(iar.val as real) as iar
     from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, MODE_OF_OPERATION m, NODE n, InputActivityRatio_def iar,
@@ -1408,7 +1410,7 @@ if transmissionmodeling
     and iar.r = n.r and iar.t = ntc.t and iar.m = m.val and iar.y = ntc.y
     and iar.val > 0
 	and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
-    order by ntc.n, ys.l, ntc.t, iar.f, ntc.y"))
+    order by ntc.n, ys.l, ntc.t, iar.f, ntc.y")
         local n = row[:n]
         local l = row[:l]
         local t = row[:t]
@@ -1480,7 +1482,7 @@ if transmissionmodeling
     lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofusebytechnologynodal sum
 
-    for row in DataFrames.eachrow(queryvrateofusebytechnologynodal)
+    for row in queryvrateofusebytechnologynodal
         local n = row[:n]
         local l = row[:l]
         local f = row[:f]
@@ -1521,7 +1523,7 @@ else
     lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofusenodal sum
 
-    for row in DataFrames.eachrow(queryvrateofproduse)
+    for row in queryvrateofproduse
         local r = row[:r]
         local l = row[:l]
         local f = row[:f]
@@ -1557,7 +1559,7 @@ logmsg("Created constraint VRateOfUse1.", quiet)
 # END: VRateOfUse1.
 
 # BEGIN: EBa7_EnergyBalanceEachTS1 and EBa8_EnergyBalanceEachTS2.
-queryvproduse::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, l.val as l, f.val as f, y.val as y, cast(ys.val as real) as ys
+queryvproduse::SQLite.Query = SQLite.DBInterface.execute(db, "select r.val as r, l.val as l, f.val as f, y.val as y, cast(ys.val as real) as ys
 from region r, timeslice l, fuel f, year y, YearSplit_def ys
 left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
 where
@@ -1567,7 +1569,7 @@ and tme.id is null")
 eba7_energybalanceeachts1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 eba8_energybalanceeachts2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(queryvproduse)
+for row in queryvproduse
     local r = row[:r]
     local l = row[:l]
     local f = row[:f]
@@ -1582,7 +1584,7 @@ logmsg("Created constraints EBa7_EnergyBalanceEachTS1 and EBa8_EnergyBalanceEach
 
 # BEGIN: EBa7Tr_EnergyBalanceEachTS1 and EBa8Tr_EnergyBalanceEachTS2.
 if transmissionmodeling
-    queryvproduse = SQLite.query(db, "select n.val as n, l.val as l, f.val as f, y.val as y, cast(ys.val as real) as ys
+    queryvproduse = SQLite.DBInterface.execute(db, "select n.val as n, l.val as l, f.val as f, y.val as y, cast(ys.val as real) as ys
     from node n, timeslice l, fuel f, year y, YearSplit_def ys,
     TransmissionModelingEnabled tme
     where
@@ -1592,7 +1594,7 @@ if transmissionmodeling
     eba7tr_energybalanceeachts1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     eba8tr_energybalanceeachts2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(queryvproduse)
+    for row in queryvproduse
         local n = row[:n]
         local l = row[:l]
         local f = row[:f]
@@ -1609,7 +1611,7 @@ end
 # BEGIN: EBa9_EnergyBalanceEachTS3.
 eba9_energybalanceeachts3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(queryvrateofdemandnn)
+for row in queryvrateofdemandnn
     local r = row[:r]
     local l = row[:l]
     local f = row[:f]
@@ -1623,7 +1625,9 @@ logmsg("Created constraint EBa9_EnergyBalanceEachTS3.", quiet)
 
 # BEGIN: EBa9Tr_EnergyBalanceEachTS3.
 if transmissionmodeling
-    querytemp = SQLite.query(db, "select sdp.r as r, sdp.f as f, sdp.l as l, sdp.y as y, ndd.n as n,
+    eba9tr_energybalanceeachts3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+    for row in SQLite.DBInterface.execute(db, "select sdp.r as r, sdp.f as f, sdp.l as l, sdp.y as y, ndd.n as n,
     cast(sdp.val as real) as specifieddemandprofile, cast(sad.val as real) as specifiedannualdemand,
     cast(ndd.val as real) as ndd
     from SpecifiedDemandProfile_def sdp, SpecifiedAnnualDemand_def sad, TransmissionModelingEnabled tme,
@@ -1634,10 +1638,6 @@ if transmissionmodeling
     and ndd.n = n.val
     and n.r = sad.r and ndd.f = sad.f and ndd.y = sad.y
     and ndd.val > 0")
-
-    eba9tr_energybalanceeachts3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
-
-    for row in DataFrames.eachrow(querytemp)
         local n = row[:n]
         local l = row[:l]
         local f = row[:f]
@@ -1667,13 +1667,13 @@ lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastke
 sumexps = Array{AffExpr, 1}([AffExpr()])
 # sumexps[1] = vtrade sum
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, l.val as l, f.val as f, y.val as y, tr.rr as rr,
+for row in SQLite.DBInterface.execute(db, "select r.val as r, l.val as l, f.val as f, y.val as y, tr.rr as rr,
     cast(tr.val as real) as trv
 from region r, timeslice l, fuel f, year y
 left join traderoute_def tr on tr.r = r.val and tr.f = f.val and tr.y = y.val
 left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
 where tme.id is null
-order by r.val, l.val, f.val, y.val"))
+order by r.val, l.val, f.val, y.val")
     local r = row[:r]
     local l = row[:l]
     local f = row[:f]
@@ -1726,7 +1726,7 @@ if transmissionmodeling
     lastvalsint = Array{Int64, 1}(undef,2)  # lastvalsint[1] = yconstruction, lastvalsint[2] = operationallife
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtransmissionbuilt sum
 
-    for row in DataFrames.eachrow(SQLite.query(db, "select tl.id as tr, tl.yconstruction, tl.operationallife, y.val as y, null as yy
+    for row in SQLite.DBInterface.execute(db, "select tl.id as tr, tl.yconstruction, tl.operationallife, y.val as y, null as yy
     from TransmissionLine tl, YEAR y
     where tl.yconstruction is not null
     union all
@@ -1735,7 +1735,7 @@ if transmissionmodeling
     where tl.yconstruction is null
     and yy.val + tl.operationallife > y.val
     and yy.val <= y.val
-    order by tr, y"))
+    order by tr, y")
         local tr = row[:tr]
         local y = row[:y]
         local yy = row[:yy]
@@ -1837,7 +1837,7 @@ if transmissionmodeling
     # First query selects transmission-enabled nodes without any transmission lines, second selects transmission-enabled
     #   nodes that are n1 in a valid transmission line, third selects transmission-enabled nodes that are n2 in a
     #   valid transmission line
-    for row in DataFrames.eachrow(SQLite.query(db, "select n.val as n, ys.l as l, f.val as f, y.val as y,
+    for row in SQLite.DBInterface.execute(db, "select n.val as n, ys.l as l, f.val as f, y.val as y,
     cast(ys.val as real) as ys, null as tr, null as n2, null as trneg, null as n1,
 	tme.type as type, cast(tcta.val as real) as tcta
     from NODE n, YearSplit_def ys, FUEL f, YEAR y, TransmissionModelingEnabled tme,
@@ -1879,7 +1879,7 @@ select n.val as n, ys.l as l, f.val as f, y.val as y,
 	and n.val = tl.n2 and f.val = tl.f
 	and tl.n1 = n2.val
 	and n2.r = tme2.r and tl.f = tme2.f and y.val = tme2.y and tme.type = tme2.type
-order by n, l, f, y"))
+order by n, l, f, y")
         local n = row[:n]
         local l = row[:l]
         local f = row[:f]
@@ -1984,14 +1984,14 @@ lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = f, lastke
 lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = aad
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtradeannual sum
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, f.val as f, y.val as y, cast(aad.val as real) as aad,
+for row in SQLite.DBInterface.execute(db, "select r.val as r, f.val as f, y.val as y, cast(aad.val as real) as aad,
     tr.rr as rr, cast(tr.val as real) as trv
 from region r, fuel f, year y
 left join traderoute_def tr on tr.r = r.val and tr.f = f.val and tr.y = y.val
 left join AccumulatedAnnualDemand_def aad on aad.r = r.val and aad.f = f.val and aad.y = y.val
 left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
 where tme.id is null
-order by r.val, f.val, y.val"))
+order by r.val, f.val, y.val")
     local r = row[:r]
     local f = row[:f]
     local y = row[:y]
@@ -2031,14 +2031,14 @@ logmsg("Created constraint EBb4_EnergyBalanceEachYear4.", quiet)
 if transmissionmodeling
     ebb4tr_energybalanceeachyear4::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(SQLite.query(db,
+    for row in SQLite.DBInterface.execute(db,
         "select ndd.n as n, ndd.f as f, ndd.y as y, cast(ndd.val as real) as ndd, cast(aad.val as real) as aad
         from NodalDistributionDemand_def ndd, NODE n, TransmissionModelingEnabled tme, AccumulatedAnnualDemand_def aad
         where
         ndd.n = n.val
         and tme.r = n.r and tme.f = ndd.f and tme.y = ndd.y
         and aad.r = n.r and aad.f = ndd.f and aad.y = ndd.y
-        and aad.val > 0"))
+        and aad.val > 0")
         local n = row[:n]
         local f = row[:f]
         local y = row[:y]
@@ -2069,7 +2069,7 @@ if in("vproductionbytechnology", varstosavearr)
         lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
         sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproductionbytechnologynodal sum
 
-        for row in DataFrames.eachrow(queryvproductionbytechnologynodal)
+        for row in queryvproductionbytechnologynodal
             local r = row[:r]
             local l = row[:l]
             local t = row[:t]
@@ -2121,7 +2121,7 @@ if in("vusebytechnology", varstosavearr)
         lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
         sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofusebytechnologynodal sum
 
-        for row in DataFrames.eachrow(queryvusebytechnologynodal)
+        for row in queryvusebytechnologynodal
             local r = row[:r]
             local l = row[:l]
             local t = row[:t]
@@ -2160,10 +2160,10 @@ acc3_averageannualrateofactivity::Array{ConstraintRef, 1} = Array{ConstraintRef,
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = m, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivity sum
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, m.val as m, y.val as y, ys.l as l, cast(ys.val as real) as ys
+for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, m.val as m, y.val as y, ys.l as l, cast(ys.val as real) as ys
 from region r, technology t, mode_of_operation m, year y, YearSplit_def ys
 where ys.y = y.val
-order by r.val, t.val, m.val, y.val"))
+order by r.val, t.val, m.val, y.val")
     local r = row[:r]
     local t = row[:t]
     local m = row[:m]
@@ -2211,11 +2211,11 @@ ns1_rateofstoragecharge::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = s, lastkeys[3] = l, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivity sum
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, l.val as l, y.val as y, tts.m as m, tts.t as t
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, l.val as l, y.val as y, tts.m as m, tts.t as t
 from region r, storage s, TIMESLICE l, year y, TechnologyToStorage_def tts
 where
 tts.r = r.val and tts.s = s.val and tts.val = 1
-order by r.val, s.val, l.val, y.val"))
+order by r.val, s.val, l.val, y.val")
     local r = row[:r]
     local s = row[:s]
     local l = row[:l]
@@ -2251,11 +2251,11 @@ ns2_rateofstoragedischarge::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = s, lastkeys[3] = l, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivity sum
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, l.val as l, y.val as y, tfs.m as m, tfs.t as t
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, l.val as l, y.val as y, tfs.m as m, tfs.t as t
 from region r, storage s, TIMESLICE l, year y, TechnologyFromStorage_def tfs
 where
 tfs.r = r.val and tfs.s = s.val and tfs.val = 1
-order by r.val, s.val, l.val, y.val"))
+order by r.val, s.val, l.val, y.val")
     local r = row[:r]
     local s = row[:s]
     local l = row[:l]
@@ -2291,13 +2291,13 @@ ns3_storageleveltsgroup1start::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}
 ns4_storageleveltsgroup2start::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 ns5_storageleveltimesliceend::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, ltg.l as l, y.val as y, ltg.lorder as lo,
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, ltg.l as l, y.val as y, ltg.lorder as lo,
     ltg.tg2 as tg2, tg2.[order] as tg2o, ltg.tg1 as tg1, tg1.[order] as tg1o, cast(sls.val as real) as sls
 from REGION r, STORAGE s, YEAR y, LTsGroup ltg, TSGROUP2 tg2, TSGROUP1 tg1
 left join StorageLevelStart_def sls on sls.r = r.val and sls.s = s.val
 where
 ltg.tg2 = tg2.name
-and ltg.tg1 = tg1.name"))
+and ltg.tg1 = tg1.name")
     local r = row[:r]
     local s = row[:s]
     local l = row[:l]
@@ -2348,7 +2348,7 @@ logmsg("Created constraints NS3_StorageLevelTsGroup1Start, NS4_StorageLevelTsGro
 ns6_storageleveltsgroup2end::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 ns6a_storageleveltsgroup2netzero::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select main.r, main.s, main.tg2nz, main.tg1, main.tg1o, main.tg2, main.tg2o, cast(main.tg2m as real) as tg2m,
+for row in SQLite.DBInterface.execute(db, "select main.r, main.s, main.tg2nz, main.tg1, main.tg1o, main.tg2, main.tg2o, cast(main.tg2m as real) as tg2m,
     main.y, ltg2.l as maxl, main.maxlo
 from
 (select r.val as r, s.val as s, s.netzerotg2 as tg2nz, tg1.name as tg1, tg1.[order] as tg1o, tg2.name as tg2, tg2.[order] as tg2o, tg2.multiplier as tg2m,
@@ -2361,7 +2361,7 @@ group by r.val, s.val, s.netzerotg2, tg1.name, tg1.[order], tg2.name, tg2.[order
 where
 ltg2.tg1 = main.tg1
 and ltg2.tg2 = main.tg2
-and ltg2.lorder = main.maxlo"))
+and ltg2.lorder = main.maxlo")
     local r = row[:r]
     local s = row[:s]
     local tg2nz = row[:tg2nz]  # 1 = tg2 end level must = tg2 start level
@@ -2385,7 +2385,7 @@ logmsg("Created constraints NS6_StorageLevelTsGroup2End and NS6a_StorageLevelTsG
 ns7_storageleveltsgroup1end::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 ns7a_storageleveltsgroup1netzero::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s,
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s,
 	case s.netzerotg2 when 1 then 0 else s.netzerotg1 end as tg1nz,
 	tg1.name as tg1, tg1.[order] as tg1o, cast(tg1.multiplier as real) as tg1m,
     y.val as y, max(tg2.[order]) as maxtg2o
@@ -2393,7 +2393,7 @@ from REGION r, STORAGE s, TSGROUP1 tg1, YEAR as y, LTsGroup ltg, TSGROUP2 tg2
 where
 tg1.name = ltg.tg1
 and ltg.tg2 = tg2.name
-group by r.val, s.val, tg1.name, tg1.[order], tg1.multiplier, y.val"))
+group by r.val, s.val, tg1.name, tg1.[order], tg1.multiplier, y.val")
     local r = row[:r]
     local s = row[:s]
     local tg1nz = row[:tg1nz]  # 1 = tg1 end level must = tg1 start level (zeroed out when tg2 net zero is activated as tg1 check isn't necessary)
@@ -2421,14 +2421,14 @@ lastvalsint = Array{Int64, 1}(undef,1)  # lastvalsint[1] = ynz
 sumexps = Array{AffExpr, 1}([AffExpr()])
 # sumexps[1] = vrateofstoragecharge and vrateofstoragedischarge sum
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s,
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s,
 case s.netzerotg2 when 1 then 0 else case s.netzerotg1 when 1 then 0 else s.netzeroyear end end as ynz,
 y.val as y, ys.l as l, cast(ys.val as real) as ys,
 cast(sls.val as real) as sls
 from REGION r, STORAGE s, YEAR as y, YearSplit_def ys
 left join StorageLevelStart_def sls on sls.r = r.val and sls.s = s.val
 where y.val = ys.y
-order by r.val, s.val, y.val"))
+order by r.val, s.val, y.val")
     local r = row[:r]
     local s = row[:s]
     local ynz = row[:ynz]  # 1 = year end level must = year start level (zeroed out when tg2 net zero or tg1 net zero is activated as year check isn't necessary)
@@ -2482,9 +2482,9 @@ logmsg("Created constraints NS8_StorageLevelYearEnd and NS8a_StorageLevelYearEnd
 # BEGIN: SI1_StorageUpperLimit.
 si1_storageupperlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(rsc.val as real) as rsc
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(rsc.val as real) as rsc
 from region r, storage s, year y
-left join ResidualStorageCapacity_def rsc on rsc.r = r.val and rsc.s = s.val and rsc.y = y.val"))
+left join ResidualStorageCapacity_def rsc on rsc.r = r.val and rsc.s = s.val and rsc.y = y.val")
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
@@ -2498,9 +2498,9 @@ logmsg("Created constraint SI1_StorageUpperLimit.", quiet)
 # BEGIN: SI2_StorageLowerLimit.
 si2_storagelowerlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(msc.val as real) as msc
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(msc.val as real) as msc
 from region r, storage s, year y, MinStorageCharge_def msc
-where msc.r = r.val and msc.s = s.val and msc.y = y.val"))
+where msc.r = r.val and msc.s = s.val and msc.y = y.val")
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
@@ -2516,11 +2516,11 @@ si3_totalnewstorage::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = s, lastkeys[3] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vnewstoragecapacity sum
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols, yy.val as yy
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols, yy.val as yy
 from region r, storage s, year y, OperationalLifeStorage_def ols, year yy
 where ols.r = r.val and ols.s = s.val
 and y.val - yy.val < ols.val and y.val - yy.val >= 0
-order by r.val, s.val, y.val"))
+order by r.val, s.val, y.val")
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
@@ -2563,11 +2563,11 @@ logmsg("Created constraints NS9a_StorageLevelTsLowerLimit and NS9b_StorageLevelT
 # BEGIN: NS10_StorageChargeLimit.
 ns10_storagechargelimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, l.val as l, y.val as y, cast(smc.val as real) as smc
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, l.val as l, y.val as y, cast(smc.val as real) as smc
 from region r, storage s, TIMESLICE l, year y, StorageMaxChargeRate_def smc
 where
 r.val = smc.r
-and s.val = smc.s"))
+and s.val = smc.s")
     push!(ns10_storagechargelimit, @constraint(jumpmodel, vrateofstoragecharge[row[:r], row[:s], row[:l], row[:y]] <= row[:smc]))
 end
 
@@ -2577,11 +2577,11 @@ logmsg("Created constraint NS10_StorageChargeLimit.", quiet)
 # BEGIN: NS11_StorageDischargeLimit.
 ns11_storagedischargelimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, l.val as l, y.val as y, cast(smd.val as real) as smd
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, l.val as l, y.val as y, cast(smd.val as real) as smd
 from region r, storage s, TIMESLICE l, year y, StorageMaxDischargeRate_def smd
 where
 r.val = smd.r
-and s.val = smd.s"))
+and s.val = smd.s")
     push!(ns11_storagedischargelimit, @constraint(jumpmodel, vrateofstoragedischarge[row[:r], row[:s], row[:l], row[:y]] <= row[:smd]))
 end
 
@@ -2615,8 +2615,8 @@ logmsg("Created constraints NS13a_StorageLevelTsGroup1LowerLimit and NS13b_Stora
 # BEGIN: NS14_MaxStorageCapacity.
 ns14_maxstoragecapacity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select smc.r, smc.s, smc.y, cast(smc.val as real) as smc
-from TotalAnnualMaxCapacityStorage_def smc"))
+for row in SQLite.DBInterface.execute(db, "select smc.r, smc.s, smc.y, cast(smc.val as real) as smc
+from TotalAnnualMaxCapacityStorage_def smc")
     push!(ns14_maxstoragecapacity, @constraint(jumpmodel, vstorageupperlimit[row[:r],row[:s],row[:y]] <= row[:smc]))
 end
 
@@ -2626,8 +2626,8 @@ logmsg("Created constraint NS14_MaxStorageCapacity.", quiet)
 # BEGIN: NS15_MinStorageCapacity.
 ns15_minstoragecapacity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select smc.r, smc.s, smc.y, cast(smc.val as real) as smc
-from TotalAnnualMinCapacityStorage_def smc"))
+for row in SQLite.DBInterface.execute(db, "select smc.r, smc.s, smc.y, cast(smc.val as real) as smc
+from TotalAnnualMinCapacityStorage_def smc")
     push!(ns15_minstoragecapacity, @constraint(jumpmodel, row[:smc] <= vstorageupperlimit[row[:r],row[:s],row[:y]]))
 end
 
@@ -2637,8 +2637,8 @@ logmsg("Created constraint NS15_MinStorageCapacity.", quiet)
 # BEGIN: NS16_MaxStorageCapacityInvestment.
 ns16_maxstoragecapacityinvestment::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select smc.r, smc.s, smc.y, cast(smc.val as real) as smc
-from TotalAnnualMaxCapacityInvestmentStorage_def smc"))
+for row in SQLite.DBInterface.execute(db, "select smc.r, smc.s, smc.y, cast(smc.val as real) as smc
+from TotalAnnualMaxCapacityInvestmentStorage_def smc")
     push!(ns16_maxstoragecapacityinvestment, @constraint(jumpmodel, vnewstoragecapacity[row[:r],row[:s],row[:y]] <= row[:smc]))
 end
 
@@ -2648,8 +2648,8 @@ logmsg("Created constraint NS16_MaxStorageCapacityInvestment.", quiet)
 # BEGIN: NS17_MinStorageCapacityInvestment.
 ns17_minstoragecapacityinvestment::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select smc.r, smc.s, smc.y, cast(smc.val as real) as smc
-from TotalAnnualMinCapacityInvestmentStorage_def smc"))
+for row in SQLite.DBInterface.execute(db, "select smc.r, smc.s, smc.y, cast(smc.val as real) as smc
+from TotalAnnualMinCapacityInvestmentStorage_def smc")
     push!(ns17_minstoragecapacityinvestment, @constraint(jumpmodel, row[:smc] <= vnewstoragecapacity[row[:r],row[:s],row[:y]]))
 end
 
@@ -2663,7 +2663,7 @@ lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = flh
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vnewcapacity sum
 
 # Note: vnewcapacity is in power units; vnewstoragecapacity is in energy units
-for row in DataFrames.eachrow(SQLite.query(db, "select distinct sf.r as r, sf.s as s, sf.y as y, tfs.t as t, cast(sf.val as real) as flh,
+for row in SQLite.DBInterface.execute(db, "select distinct sf.r as r, sf.s as s, sf.y as y, tfs.t as t, cast(sf.val as real) as flh,
 cast(cta.val as real) as cta
 from StorageFullLoadHours_def sf, TechnologyFromStorage_def tfs, CapacityToActivityUnit_def cta
 where sf.r = tfs.r
@@ -2671,7 +2671,7 @@ and sf.s = tfs.s
 and tfs.val = 1
 and tfs.r = cta.r
 and tfs.t = cta.t
-order by sf.r, sf.s, sf.y"))
+order by sf.r, sf.s, sf.y")
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
@@ -2705,9 +2705,9 @@ logmsg("Created constraint NS18_FullLoadHours.", quiet)
 # BEGIN: SI4_UndiscountedCapitalInvestmentStorage.
 si4_undiscountedcapitalinvestmentstorage::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(ccs.val as real) as ccs
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(ccs.val as real) as ccs
 from region r, storage s, year y, CapitalCostStorage_def ccs
-where ccs.r = r.val and ccs.s = s.val and ccs.y = y.val"))
+where ccs.r = r.val and ccs.s = s.val and ccs.y = y.val")
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
@@ -2721,9 +2721,9 @@ logmsg("Created constraint SI4_UndiscountedCapitalInvestmentStorage.", quiet)
 # BEGIN: SI5_DiscountingCapitalInvestmentStorage.
 si5_discountingcapitalinvestmentstorage::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr
 from region r, storage s, year y, DiscountRate_def dr
-where dr.r = r.val"))
+where dr.r = r.val")
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
@@ -2737,10 +2737,10 @@ logmsg("Created constraint SI5_DiscountingCapitalInvestmentStorage.", quiet)
 # BEGIN: SI6_SalvageValueStorageAtEndOfPeriod1.
 si6_salvagevaluestorageatendofperiod1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y
 from region r, storage s, year y, OperationalLifeStorage_def ols
 where ols.r = r.val and ols.s = s.val
-and y.val + ols.val - 1 <= " * last(syear)))
+and y.val + ols.val - 1 <= " * last(syear))
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
@@ -2754,7 +2754,7 @@ logmsg("Created constraint SI6_SalvageValueStorageAtEndOfPeriod1.", quiet)
 # BEGIN: SI7_SalvageValueStorageAtEndOfPeriod2.
 si7_salvagevaluestorageatendofperiod2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols
 from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStorage_def ols, DiscountRate_def dr
 where dm.r = r.val and dm.val = 1
 and ols.r = r.val and ols.s = s.val
@@ -2765,7 +2765,7 @@ select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols
 from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStorage_def ols
 where dm.r = r.val and dm.val = 2
 and ols.r = r.val and ols.s = s.val
-and y.val + ols.val - 1 > " * last(syear)))
+and y.val + ols.val - 1 > " * last(syear))
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
@@ -2779,12 +2779,12 @@ logmsg("Created constraint SI7_SalvageValueStorageAtEndOfPeriod2.", quiet)
 # BEGIN: SI8_SalvageValueStorageAtEndOfPeriod3.
 si8_salvagevaluestorageatendofperiod3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr, cast(ols.val as real) as ols
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr, cast(ols.val as real) as ols
 from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStorage_def ols, DiscountRate_def dr
 where dm.r = r.val and dm.val = 1
 and ols.r = r.val and ols.s = s.val
 and y.val + ols.val - 1 > " * last(syear) *
-" and dr.r = r.val and dr.val > 0"))
+" and dr.r = r.val and dr.val > 0")
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
@@ -2799,9 +2799,9 @@ logmsg("Created constraint SI8_SalvageValueStorageAtEndOfPeriod3.", quiet)
 # BEGIN: SI9_SalvageValueStorageDiscountedToStartYear.
 si9_salvagevaluestoragediscountedtostartyear::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr
 from region r, storage s, year y, DiscountRate_def dr
-where dr.r = r.val"))
+where dr.r = r.val")
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
@@ -2825,9 +2825,9 @@ logmsg("Created constraint SI10_TotalDiscountedCostByStorage.", quiet)
 # BEGIN: CC1_UndiscountedCapitalInvestment.
 cc1_undiscountedcapitalinvestment::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc
+for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc
 from region r, technology t, year y, CapitalCost_def cc
-where cc.r = r.val and cc.t = t.val and cc.y = y.val"))
+where cc.r = r.val and cc.t = t.val and cc.y = y.val")
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -2842,9 +2842,9 @@ logmsg("Created constraint CC1_UndiscountedCapitalInvestment.", quiet)
 if transmissionmodeling
     cc1tr_undiscountedcapitalinvestment::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(SQLite.query(db, "select tl.id as tr, y.val as y, cast(tl.CapitalCost as real) as cc from
+    for row in SQLite.DBInterface.execute(db, "select tl.id as tr, y.val as y, cast(tl.CapitalCost as real) as cc from
     TransmissionLine tl, YEAR y
-    where tl.CapitalCost is not null"))
+    where tl.CapitalCost is not null")
         local tr = row[:tr]
         local y = row[:y]
 
@@ -2856,13 +2856,13 @@ end
 # END: CC1Tr_UndiscountedCapitalInvestment.
 
 # BEGIN: CC2_DiscountingCapitalInvestment.
-queryrtydr::DataFrames.DataFrame = SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(dr.val as real) as dr
+queryrtydr::SQLite.Query = SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, cast(dr.val as real) as dr
 from region r, technology t, year y, DiscountRate_def dr
 where dr.r = r.val")
 
 cc2_discountingcapitalinvestment::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(queryrtydr)
+for row in queryrtydr
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -2870,26 +2870,30 @@ for row in DataFrames.eachrow(queryrtydr)
     push!(cc2_discountingcapitalinvestment, @constraint(jumpmodel, vcapitalinvestment[r,t,y] / ((1 + row[:dr])^(Meta.parse(y) - Meta.parse(first(syear)))) == vdiscountedcapitalinvestment[r,t,y]))
 end
 
+SQLite.reset!(queryrtydr)
+
 logmsg("Created constraint CC2_DiscountingCapitalInvestment.", quiet)
 # END: CC2_DiscountingCapitalInvestment.
 
 # BEGIN: CC2Tr_DiscountingCapitalInvestment.
 if transmissionmodeling
     # Note: if a transmission line crosses regional boundaries, costs are assigned to from region (associated with n1)
-    querytrydr::DataFrames.DataFrame = SQLite.query(db, "select tl.id as tr, y.val as y, cast(dr.val as real) as dr
+    querytrydr::SQLite.Query = SQLite.DBInterface.execute(db, "select tl.id as tr, y.val as y, cast(dr.val as real) as dr
 	from TransmissionLine tl, NODE n, YEAR y, DiscountRate_def dr
     where tl.n1 = n.val
 	and n.r = dr.r")
 
     cc2tr_discountingcapitalinvestment::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(querytrydr)
+    for row in querytrydr
         local tr = row[:tr]
         local y = row[:y]
 
         push!(cc2tr_discountingcapitalinvestment, @constraint(jumpmodel,
             vcapitalinvestmenttransmission[tr,y] / ((1 + row[:dr])^(Meta.parse(y) - Meta.parse(first(syear)))) == vdiscountedcapitalinvestmenttransmission[tr,y]))
     end
+
+    SQLite.reset!(querytrydr)
 
     logmsg("Created constraint CC2Tr_DiscountingCapitalInvestment.", quiet)
 end
@@ -2900,7 +2904,7 @@ end
 # DepreciationMethod 2 (or dm 1 if discount rate = 0): base salvage value on % of operational life remaining at end of modeling period.
 sv1_salvagevalueatendofperiod1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc, cast(dr.val as real) as dr,
+for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc, cast(dr.val as real) as dr,
 cast(ol.val as real) as ol
 from region r, technology t, year y, DepreciationMethod_def dm, OperationalLife_def ol, DiscountRate_def dr,
 CapitalCost_def cc
@@ -2908,7 +2912,7 @@ where dm.r = r.val and dm.val = 1
 and ol.r = r.val and ol.t = t.val
 and y.val + ol.val - 1 > " * last(syear) *
 " and dr.r = r.val and dr.val > 0
-and cc.r = r.val and cc.t = t.val and cc.y = y.val"))
+and cc.r = r.val and cc.t = t.val and cc.y = y.val")
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -2925,7 +2929,7 @@ logmsg("Created constraint SV1_SalvageValueAtEndOfPeriod1.", quiet)
 if transmissionmodeling
     sv1tr_salvagevalueatendofperiod1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(SQLite.query(db, "select tl.id as tr, y.val as y, cast(tl.CapitalCost as real) as cc,
+    for row in SQLite.DBInterface.execute(db, "select tl.id as tr, y.val as y, cast(tl.CapitalCost as real) as cc,
 	cast(tl.operationallife as real) as ol, cast(dr.val as real) as dr
 	from TransmissionLine tl, NODE n, YEAR y, DepreciationMethod_def dm, DiscountRate_def dr
     where tl.CapitalCost is not null
@@ -2933,7 +2937,7 @@ if transmissionmodeling
 	and dm.r = n.r
 	and dr.r = n.r
 	and y.val + tl.operationallife - 1 > " * last(syear) *
-	" and (dm.val = 1 and dr.val > 0)"))
+	" and (dm.val = 1 and dr.val > 0)")
         local tr = row[:tr]
         local y = row[:y]
         local dr = row[:dr]
@@ -2949,7 +2953,7 @@ end
 # BEGIN: SV2_SalvageValueAtEndOfPeriod2.
 sv2_salvagevalueatendofperiod2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc, cast(ol.val as real) as ol
+for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc, cast(ol.val as real) as ol
 from region r, technology t, year y, DepreciationMethod_def dm, OperationalLife_def ol, DiscountRate_def dr,
 CapitalCost_def cc
 where dm.r = r.val and dm.val = 1
@@ -2964,7 +2968,7 @@ CapitalCost_def cc
 where dm.r = r.val and dm.val = 2
 and ol.r = r.val and ol.t = t.val
 and y.val + ol.val - 1 > " * last(syear) *
-" and cc.r = r.val and cc.t = t.val and cc.y = y.val"))
+" and cc.r = r.val and cc.t = t.val and cc.y = y.val")
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -2980,7 +2984,7 @@ logmsg("Created constraint SV2_SalvageValueAtEndOfPeriod2.", quiet)
 if transmissionmodeling
     sv2tr_salvagevalueatendofperiod2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(SQLite.query(db, "select tl.id as tr, y.val as y, cast(tl.CapitalCost as real) as cc,
+    for row in SQLite.DBInterface.execute(db, "select tl.id as tr, y.val as y, cast(tl.CapitalCost as real) as cc,
 	cast(tl.operationallife as real) as ol
 	from TransmissionLine tl, NODE n, YEAR y, DepreciationMethod_def dm, DiscountRate_def dr
     where tl.CapitalCost is not null
@@ -2988,7 +2992,7 @@ if transmissionmodeling
 	and dm.r = n.r
 	and dr.r = n.r
 	and y.val + tl.operationallife - 1 > " * last(syear) *
-	" and ((dm.val = 1 and dr.val = 0) or (dm.val = 2))"))
+	" and ((dm.val = 1 and dr.val = 0) or (dm.val = 2))")
         local tr = row[:tr]
         local y = row[:y]
 
@@ -3003,10 +3007,10 @@ end
 # BEGIN: SV3_SalvageValueAtEndOfPeriod3.
 sv3_salvagevalueatendofperiod3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y
+for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y
 from region r, technology t, year y, OperationalLife_def ol
 where ol.r = r.val and ol.t = t.val
-and y.val + ol.val - 1 <= " * last(syear)))
+and y.val + ol.val - 1 <= " * last(syear))
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -3021,10 +3025,10 @@ logmsg("Created constraint SV3_SalvageValueAtEndOfPeriod3.", quiet)
 if transmissionmodeling
     sv3tr_salvagevalueatendofperiod3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(SQLite.query(db, "select tl.id as tr, y.val as y
+    for row in SQLite.DBInterface.execute(db, "select tl.id as tr, y.val as y
 	from TransmissionLine tl, YEAR y
     where tl.CapitalCost is not null
-	and y.val + tl.operationallife - 1 <= " * last(syear)))
+	and y.val + tl.operationallife - 1 <= " * last(syear))
         local tr = row[:tr]
         local y = row[:y]
 
@@ -3038,7 +3042,7 @@ end
 # BEGIN: SV4_SalvageValueDiscountedToStartYear.
 sv4_salvagevaluediscountedtostartyear::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(queryrtydr)
+for row in queryrtydr
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -3047,6 +3051,8 @@ for row in DataFrames.eachrow(queryrtydr)
         vsalvagevalue[r,t,y] / ((1 + row[:dr])^(1 + Meta.parse(last(syear)) - Meta.parse(first(syear))))))
 end
 
+SQLite.reset!(queryrtydr)
+
 logmsg("Created constraint SV4_SalvageValueDiscountedToStartYear.", quiet)
 # END: SV4_SalvageValueDiscountedToStartYear.
 
@@ -3054,13 +3060,15 @@ logmsg("Created constraint SV4_SalvageValueDiscountedToStartYear.", quiet)
 if transmissionmodeling
     sv4tr_salvagevaluediscountedtostartyear::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(querytrydr)
+    for row in querytrydr
         local tr = row[:tr]
         local y = row[:y]
 
         push!(sv4tr_salvagevaluediscountedtostartyear, @constraint(jumpmodel, vdiscountedsalvagevaluetransmission[tr,y] ==
             vsalvagevaluetransmission[tr,y] / ((1 + row[:dr])^(1 + Meta.parse(last(syear)) - Meta.parse(first(syear))))))
     end
+
+    SQLite.reset!(querytrydr)
 
     logmsg("Created constraint SV4Tr_SalvageValueDiscountedToStartYear.", quiet)
 end
@@ -3071,11 +3079,11 @@ oc1_operatingcostsvariable::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtotalannualtechnologyactivitybymode sum
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, vc.m as m, cast(vc.val as real) as vc
+for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, vc.m as m, cast(vc.val as real) as vc
 from region r, technology t, year y, VariableCost_def vc
 where vc.r = r.val and vc.t = t.val and vc.y = y.val
 and vc.val <> 0
-order by r.val, t.val, y.val"))
+order by r.val, t.val, y.val")
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -3106,9 +3114,9 @@ logmsg("Created constraint OC1_OperatingCostsVariable.", quiet)
 # BEGIN: OC2_OperatingCostsFixedAnnual.
 oc2_operatingcostsfixedannual::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y, cast(fc.val as real) as fc
+for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, cast(fc.val as real) as fc
 from region r, technology t, year y, FixedCost_def fc
-where fc.r = r.val and fc.t = t.val and fc.y = y.val"))
+where fc.r = r.val and fc.t = t.val and fc.y = y.val")
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -3169,7 +3177,7 @@ end
 # BEGIN: OC4_DiscountedOperatingCostsTotalAnnual.
 oc4_discountedoperatingcoststotalannual::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(queryrtydr)
+for row in queryrtydr
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -3179,6 +3187,8 @@ for row in DataFrames.eachrow(queryrtydr)
         voperatingcost[r,t,y] / ((1 + dr)^(Meta.parse(y) - Meta.parse(first(syear)) + 0.5)) == vdiscountedoperatingcost[r,t,y]))
 end
 
+SQLite.reset!(queryrtydr)
+
 logmsg("Created constraint OC4_DiscountedOperatingCostsTotalAnnual.", quiet)
 # END: OC4_DiscountedOperatingCostsTotalAnnual.
 
@@ -3186,7 +3196,7 @@ logmsg("Created constraint OC4_DiscountedOperatingCostsTotalAnnual.", quiet)
 if transmissionmodeling
     oc4tr_discountedoperatingcoststotalannual::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(querytrydr)
+    for row in querytrydr
         local tr = row[:tr]
         local y = row[:y]
         local dr = row[:dr]
@@ -3218,10 +3228,10 @@ if transmissionmodeling
     lastkeys = Array{String, 1}(undef,2)  # lastkeys[1] = r, lastkeys[2] = y
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = costs sum
 
-    for row in DataFrames.eachrow(SQLite.query(db, "select n.r as r, tl.id as tr, y.val as y
+    for row in SQLite.DBInterface.execute(db, "select n.r as r, tl.id as tr, y.val as y
 	from TransmissionLine tl, NODE n, YEAR y
     where tl.n1 = n.val
-	order by n.r, y.val"))
+	order by n.r, y.val")
         local r = row[:r]
         local y = row[:y]
         local tr = row[:tr]
@@ -3266,8 +3276,8 @@ logmsg("Created constraint TDC2_TotalDiscountedCost.", quiet)
 # BEGIN: TCC1_TotalAnnualMaxCapacityConstraint.
 tcc1_totalannualmaxcapacityconstraint::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmx
-from TotalAnnualMaxCapacity_def"))
+for row in SQLite.DBInterface.execute(db, "select r, t, y, cast(val as real) as tmx
+from TotalAnnualMaxCapacity_def")
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -3281,9 +3291,9 @@ logmsg("Created constraint TCC1_TotalAnnualMaxCapacityConstraint.", quiet)
 # BEGIN: TCC2_TotalAnnualMinCapacityConstraint.
 tcc2_totalannualmincapacityconstraint::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmn
+for row in SQLite.DBInterface.execute(db, "select r, t, y, cast(val as real) as tmn
 from TotalAnnualMinCapacity_def
-where val > 0"))
+where val > 0")
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -3297,8 +3307,8 @@ logmsg("Created constraint TCC2_TotalAnnualMinCapacityConstraint.", quiet)
 # BEGIN: NCC1_TotalAnnualMaxNewCapacityConstraint.
 ncc1_totalannualmaxnewcapacityconstraint::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmx
-from TotalAnnualMaxCapacityInvestment_def"))
+for row in SQLite.DBInterface.execute(db, "select r, t, y, cast(val as real) as tmx
+from TotalAnnualMaxCapacityInvestment_def")
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -3312,9 +3322,9 @@ logmsg("Created constraint NCC1_TotalAnnualMaxNewCapacityConstraint.", quiet)
 # BEGIN: NCC2_TotalAnnualMinNewCapacityConstraint.
 ncc2_totalannualminnewcapacityconstraint::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as tmn
+for row in SQLite.DBInterface.execute(db, "select r, t, y, cast(val as real) as tmn
 from TotalAnnualMinCapacityInvestment_def
-where val > 0"))
+where val > 0")
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -3333,9 +3343,9 @@ if (annualactivityupperlimits || annualactivitylowerlimits || modelperiodactivit
     lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = y
     sumexps = Array{AffExpr, 1}([AffExpr()]) # sumexps[1] = vrateoftotalactivity sum
 
-    for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, ys.y as y, ys.l as l, cast(ys.val as real) as ys
+    for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, ys.y as y, ys.l as l, cast(ys.val as real) as ys
     from region r, technology t, YearSplit_def ys
-    order by r.val, t.val, ys.y"))
+    order by r.val, t.val, ys.y")
         local r = row[:r]
         local t = row[:t]
         local y = row[:y]
@@ -3368,8 +3378,8 @@ end
 if annualactivityupperlimits
     aac2_totalannualtechnologyactivityupperlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(SQLite.query(db, "select r, t, y, cast(val as real) as amx
-    from TotalTechnologyAnnualActivityUpperLimit_def"))
+    for row in SQLite.DBInterface.execute(db, "select r, t, y, cast(val as real) as amx
+    from TotalTechnologyAnnualActivityUpperLimit_def")
         local r = row[:r]
         local t = row[:t]
         local y = row[:y]
@@ -3413,8 +3423,8 @@ end
 if modelperiodactivityupperlimits
     tac2_totalmodelhorizontechnologyactivityupperlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(SQLite.query(db, "select r, t, cast(val as real) as mmx
-    from TotalTechnologyModelPeriodActivityUpperLimit_def"))
+    for row in SQLite.DBInterface.execute(db, "select r, t, cast(val as real) as mmx
+    from TotalTechnologyModelPeriodActivityUpperLimit_def")
         local r = row[:r]
         local t = row[:t]
 
@@ -3445,11 +3455,11 @@ rm1_reservemargin_technologiesincluded_in_activity_units::Array{ConstraintRef, 1
 lastkeys = Array{String, 1}(undef,2)  # lastkeys[1] = r, lastkeys[2] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtotalcapacityannual sum
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, y.val as y, rmt.t as t, cast(rmt.val as real) as rmt, cast(cau.val as real) as cau
+for row in SQLite.DBInterface.execute(db, "select r.val as r, y.val as y, rmt.t as t, cast(rmt.val as real) as rmt, cast(cau.val as real) as cau
 from region r, year y, ReserveMarginTagTechnology_def rmt, CapacityToActivityUnit_def cau
 where rmt.r = r.val and rmt.t = cau.t and rmt.y = y.val and rmt.val <> 0
 and cau.r = r.val and cau.val <> 0
-order by r.val, y.val"))
+order by r.val, y.val")
     local r = row[:r]
     local y = row[:y]
 
@@ -3481,10 +3491,10 @@ lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = l, lastke
 sumexps = Array{AffExpr, 1}([AffExpr()])
 # sumexps[1] = vrateofproduction sum
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, l.val as l, y.val as y, rmf.f as f, cast(rmf.val as real) as rmf
+for row in SQLite.DBInterface.execute(db, "select r.val as r, l.val as l, y.val as y, rmf.f as f, cast(rmf.val as real) as rmf
 from region r, timeslice l, year y, ReserveMarginTagFuel_def rmf
 where rmf.r = r.val and rmf.y = y.val and rmf.val <> 0
-order by r.val, l.val, y.val"))
+order by r.val, l.val, y.val")
     local r = row[:r]
     local l = row[:l]
     local y = row[:y]
@@ -3515,9 +3525,9 @@ logmsg("Created constraint RM2_ReserveMargin_FuelsIncluded.", quiet)
 # BEGIN: RM3_ReserveMargin_Constraint.
 rm3_reservemargin_constraint::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, l.val as l, y.val as y, cast(rm.val as real) as rm
+for row in SQLite.DBInterface.execute(db, "select r.val as r, l.val as l, y.val as y, cast(rm.val as real) as rm
 from region r, timeslice l, year y, ReserveMargin_def rm
-where rm.r = r.val and rm.y = y.val"))
+where rm.r = r.val and rm.y = y.val")
     local r = row[:r]
     local l = row[:l]
     local y = row[:y]
@@ -3609,14 +3619,14 @@ re2_techincluded::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,2)  # lastkeys[1] = r, lastkeys[2] = y
 sumexps = Array{AffExpr, 1}([AffExpr()]) # sumexps[1] = vproductionbytechnologyannual sum
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, y.val as y, oar.t as t, oar.f as f, cast(ret.val as real) as ret
+for row in SQLite.DBInterface.execute(db, "select r.val as r, y.val as y, oar.t as t, oar.f as f, cast(ret.val as real) as ret
 from REGION r, YEAR y, RETagTechnology_def ret,
 (select distinct r, t, f, y
 from OutputActivityRatio_def
 where val <> 0) oar
 where oar.r = r.val and oar.t = ret.t and oar.y = y.val
 and ret.r = r.val and ret.y = y.val and ret.val <> 0
-order by r.val, y.val"))
+order by r.val, y.val")
     local r = row[:r]
     local y = row[:y]
 
@@ -3647,12 +3657,12 @@ re3_fuelincluded::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproduction sum
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, y.val as y, ys.l as l, rtf.f as f, cast(ys.val as real) as ys,
+for row in SQLite.DBInterface.execute(db, "select r.val as r, y.val as y, ys.l as l, rtf.f as f, cast(ys.val as real) as ys,
 cast(rtf.val as real) as rtf
 from REGION r, YEAR y, YearSplit_def ys, RETagFuel_def rtf
 where ys.y = y.val and ys.val <> 0
 and rtf.r = r.val and rtf.y = y.val and rtf.val <> 0
-order by r.val, y.val"))
+order by r.val, y.val")
     local r = row[:r]
     local y = row[:y]
 
@@ -3681,7 +3691,7 @@ logmsg("Created constraint RE3_FuelIncluded.", quiet)
 # BEGIN: RE4_EnergyConstraint.
 re4_energyconstraint::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select ry.r as r, ry.y as y, cast(rmp.val as real) as rmp
+for row in SQLite.DBInterface.execute(db, "select ry.r as r, ry.y as y, cast(rmp.val as real) as rmp
 from
 (select distinct r.val as r, y.val as y
 from REGION r, TECHNOLOGY t, FUEL f, YEAR y, OutputActivityRatio_def oar, RETagTechnology_def ret
@@ -3692,7 +3702,7 @@ select distinct r.val as r, y.val as y
 from REGION r, YEAR y, TIMESLICE l, FUEL f, YearSplit_def ys, RETagFuel_def rtf
 where ys.l = l.val and ys.y = y.val
 and rtf.r = r.val and rtf.f = f.val and rtf.y = y.val and rtf.val <> 0) ry, REMinProductionTarget_def rmp
-where rmp.r = ry.r and rmp.y = ry.y"))
+where rmp.r = ry.r and rmp.y = ry.y")
     local r = row[:r]
     local y = row[:y]
 
@@ -3705,7 +3715,7 @@ logmsg("Created constraint RE4_EnergyConstraint.", quiet)
 # Omitting RE5_FuelUseByTechnologyAnnual because it's just an identity that's not used elsewhere in model
 
 # BEGIN: E1_AnnualEmissionProductionByMode.
-queryvannualtechnologyemissionbymode::DataFrames.DataFrame = SQLite.query(db,
+queryvannualtechnologyemissionbymode::SQLite.Query = SQLite.DBInterface.execute(db,
 "select r, t, e, y, m, cast(val as real) as ear
 from EmissionActivityRatio_def ear
 order by r, t, e, y")
@@ -3713,7 +3723,7 @@ order by r, t, e, y")
 if in("vannualtechnologyemissionbymode", varstosavearr)
     e1_annualemissionproductionbymode::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(queryvannualtechnologyemissionbymode)
+    for row in queryvannualtechnologyemissionbymode
         local r = row[:r]
         local t = row[:t]
         local e = row[:e]
@@ -3722,6 +3732,8 @@ if in("vannualtechnologyemissionbymode", varstosavearr)
 
         push!(e1_annualemissionproductionbymode, @constraint(jumpmodel, row[:ear] * vtotalannualtechnologyactivitybymode[r,t,m,y] == vannualtechnologyemissionbymode[r,t,e,m,y]))
     end
+
+    SQLite.reset!(queryvannualtechnologyemissionbymode)
 
     logmsg("Created constraint E1_AnnualEmissionProductionByMode.", quiet)
 end
@@ -3732,7 +3744,7 @@ e2_annualemissionproduction::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = e, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vannualtechnologyemissionbymode-equivalent sum
 
-for row in DataFrames.eachrow(queryvannualtechnologyemissionbymode)
+for row in queryvannualtechnologyemissionbymode
     local r = row[:r]
     local t = row[:t]
     local e = row[:e]
@@ -3763,7 +3775,7 @@ logmsg("Created constraint E2_AnnualEmissionProduction.", quiet)
 # END: E2_AnnualEmissionProduction.
 
 # BEGIN: E3_EmissionsPenaltyByTechAndEmission.
-queryvannualtechnologyemissionpenaltybyemission::DataFrames.DataFrame = SQLite.query(db,
+queryvannualtechnologyemissionpenaltybyemission::SQLite.Query = SQLite.DBInterface.execute(db,
 "select distinct ear.r as r, ear.t as t, ear.e as e, ear.y as y, cast(ep.val as real) as ep
 from EmissionActivityRatio_def ear, EmissionsPenalty_def ep
 where ep.r = ear.r and ep.e = ear.e and ep.y = ear.y
@@ -3773,7 +3785,7 @@ order by ear.r, ear.t, ear.y")
 if in("vannualtechnologyemissionpenaltybyemission", varstosavearr)
     e3_emissionspenaltybytechandemission::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(queryvannualtechnologyemissionpenaltybyemission)
+    for row in queryvannualtechnologyemissionpenaltybyemission
         local r = row[:r]
         local t = row[:t]
         local e = row[:e]
@@ -3781,6 +3793,8 @@ if in("vannualtechnologyemissionpenaltybyemission", varstosavearr)
 
         push!(e3_emissionspenaltybytechandemission, @constraint(jumpmodel, vannualtechnologyemission[r,t,e,y] * row[:ep] == vannualtechnologyemissionpenaltybyemission[r,t,e,y]))
     end
+
+    SQLite.reset!(queryvannualtechnologyemissionpenaltybyemission)
 
     logmsg("Created constraint E3_EmissionsPenaltyByTechAndEmission.", quiet)
 end
@@ -3792,7 +3806,7 @@ lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = t, lastke
 sumexps = Array{AffExpr, 1}([AffExpr()])
 # sumexps[1] = vannualtechnologyemissionpenaltybyemission-equivalent sum
 
-for row in DataFrames.eachrow(queryvannualtechnologyemissionpenaltybyemission)
+for row in queryvannualtechnologyemissionpenaltybyemission
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -3823,7 +3837,7 @@ logmsg("Created constraint E4_EmissionsPenaltyByTechnology.", quiet)
 # BEGIN: E5_DiscountedEmissionsPenaltyByTechnology.
 e5_discountedemissionspenaltybytechnology::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(queryrtydr)
+for row in queryrtydr
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -3840,9 +3854,9 @@ e6_emissionsaccounting1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = e, lastkeys[3] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vannualtechnologyemission sum
 
-for row in DataFrames.eachrow(SQLite.query(db, "select distinct r, e, y, t
+for row in SQLite.DBInterface.execute(db, "select distinct r, e, y, t
 from EmissionActivityRatio_def ear
-order by r, e, y"))
+order by r, e, y")
     local r = row[:r]
     local e = row[:e]
     local y = row[:y]
@@ -3873,9 +3887,9 @@ logmsg("Created constraint E6_EmissionsAccounting1.", quiet)
 # BEGIN: E7_EmissionsAccounting2.
 e7_emissionsaccounting2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, e.val as e, cast(mpe.val as real) as mpe
+for row in SQLite.DBInterface.execute(db, "select r.val as r, e.val as e, cast(mpe.val as real) as mpe
 from region r, emission e
-left join ModelPeriodExogenousEmission_def mpe on mpe.r = r.val and mpe.e = e.val"))
+left join ModelPeriodExogenousEmission_def mpe on mpe.r = r.val and mpe.e = e.val")
     local r = row[:r]
     local e = row[:e]
     local mpe = ismissing(row[:mpe]) ? 0 : row[:mpe]
@@ -3889,10 +3903,10 @@ logmsg("Created constraint E7_EmissionsAccounting2.", quiet)
 # BEGIN: E8_AnnualEmissionsLimit.
 e8_annualemissionslimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, e.val as e, y.val as y, cast(aee.val as real) as aee, cast(ael.val as real) as ael
+for row in SQLite.DBInterface.execute(db, "select r.val as r, e.val as e, y.val as y, cast(aee.val as real) as aee, cast(ael.val as real) as ael
 from region r, emission e, year y, AnnualEmissionLimit_def ael
 left join AnnualExogenousEmission_def aee on aee.r = r.val and aee.e = e.val and aee.y = y.val
-where ael.r = r.val and ael.e = e.val and ael.y = y.val"))
+where ael.r = r.val and ael.e = e.val and ael.y = y.val")
     local r = row[:r]
     local e = row[:e]
     local y = row[:y]
@@ -3907,9 +3921,9 @@ logmsg("Created constraint E8_AnnualEmissionsLimit.", quiet)
 # BEGIN: E9_ModelPeriodEmissionsLimit.
 e9_modelperiodemissionslimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, e.val as e, cast(mpl.val as real) as mpl
+for row in SQLite.DBInterface.execute(db, "select r.val as r, e.val as e, cast(mpl.val as real) as mpl
 from region r, emission e, ModelPeriodEmissionLimit_def mpl
-where mpl.r = r.val and mpl.e = e.val"))
+where mpl.r = r.val and mpl.e = e.val")
     local r = row[:r]
     local e = row[:e]
 
@@ -3925,7 +3939,7 @@ if configfile != nothing && haskey(configfile, "includes", "customconstraints")
         include(normpath(joinpath(pwd(), retrieve(configfile, "includes", "customconstraints"))))
         logmsg("Performed customconstraints include.", quiet)
     catch e
-        logmsg("Could not perform customconstraints include. Error message: " * sprint(showerror, e) * ". Continuing with |nemo.", quiet)
+        logmsg("Could not perform customconstraints include. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
     end
 end
 # END: Perform customconstraints include.
@@ -3972,8 +3986,8 @@ end  # calculatescenario()
     targetprocs::Array{Int, 1} = Array{Int, 1}([1]),
     quiet::Bool = false)
 
-Runs |nemo for a scenario specified in a GNU MathProg data file. Saves results in a
-|nemo-compatible SQLite database in same directory as GNU MathProg data file. Returns
+Runs NEMO for a scenario specified in a GNU MathProg data file. Saves results in a
+NEMO-compatible SQLite database in same directory as GNU MathProg data file. Returns
 a Symbol indicating the solve status reported by the solver.
 
 # Arguments
@@ -3983,7 +3997,7 @@ a Symbol indicating the solve status reported by the solver.
 - `jumpmodel::JuMP.Model`: JuMP model object specifying MIP solver to be used.
     Examples: Model(solver = GLPKSolverMIP(presolve=true)), Model(solver = CplexSolver()),
     Model(solver = CbcSolver(logLevel=1, presolve="on")).
-    Note that solver package must be installed (GLPK and Cbc are installed with |nemo by
+    Note that solver package must be installed (GLPK and Cbc are installed with NEMO by
     default).
 - `varstosave::String`: Comma-delimited list of model variables whose results should be
     saved in SQLite database.
@@ -4019,10 +4033,10 @@ function calculategmpscenario(
     logmsg("Validated run-time arguments.", quiet)
     # END: Validate arguments.
 
-    # BEGIN: Convert data file into |nemo SQLite database.
+    # BEGIN: Convert data file into NEMO SQLite database.
     local gmp2sqlprog::String = normpath(joinpath(@__DIR__, "..", "utils", "gmpl2sql", "gmpl2sql.exe"))  # Full path to gmp2sql.exe
     run(`$gmp2sqlprog -d $gmpdatapath -m $gmpmodelpath`)
-    # END: Convert data file into |nemo SQLite database.
+    # END: Convert data file into NEMO SQLite database.
 
     logmsg("Finished conversion of MathProg data file.")
 
