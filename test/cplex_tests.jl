@@ -4,16 +4,17 @@
 
     Copyright © 2019: Stockholm Environment Institute U.S.
 
-	File description: A test of NemoMod package using CPLEX solver. This file is provided for users wishing
-        to native compile NEMO with support for CPLEX.
+	File description: Tests of NemoMod package using CPLEX solver.
 =#
 
-using NemoMod
-using Test, SQLite, DataFrames, JuMP, CPLEX
+# Tests will be skipped if CPLEX package is not installed.
+try
+    using CPLEX
+catch
+    # Just continue
+end
 
-const TOL = 1e-4  # Default tolerance for isapprox() comparisons
-
-@testset "Solving a scenario" begin
+if @isdefined CPLEX
     @testset "Solving storage_test with CPLEX" begin
         dbfile = joinpath(@__DIR__, "storage_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
@@ -141,4 +142,4 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
     end  # "Solving storage_test with CPLEX"
-end  # @testset "Solving a scenario"
+end  # @isdefined CPLEX

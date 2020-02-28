@@ -4,22 +4,23 @@
 
     Copyright © 2019: Stockholm Environment Institute U.S.
 
-	File description: A test of NemoMod package using Mosek solver. This file is provided for users wishing
-        to native compile NEMO with support for Mosek.
+	File description: Tests of NemoMod package using Gurobi solver.
 =#
 
-using NemoMod
-using Test, SQLite, DataFrames, JuMP, Mosek
+# Tests will be skipped if Gurobi package is not installed.
+try
+    using Gurobi
+catch
+    # Just continue
+end
 
-const TOL = 1e-4  # Default tolerance for isapprox() comparisons
-
-@testset "Solving a scenario" begin
-    @testset "Solving storage_test with Mosek" begin
+if @isdefined Gurobi
+    @testset "Solving storage_test with Gurobi" begin
         dbfile = joinpath(@__DIR__, "storage_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = solver=MosekSolver()), quiet = false)
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = solver=GurobiSolver()), quiet = false)
 
         db = SQLite.DB(dbfile)
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -47,7 +48,7 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
         @test isapprox(testqry[10,:val], 99.1923723037184; atol=TOL)
 
         # Test with optional outputs
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = solver=MosekSolver()),
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = solver=GurobiSolver()),
             varstosave =
                 "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vrateofdemand, vproductionbytechnology, vtotaltechnologyannualactivity, "
                 * "vtotaltechnologymodelperiodactivity, vusebytechnology, vmodelperiodcostbyregion, vannualtechnologyemissionpenaltybyemission, "
@@ -79,7 +80,7 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
         @test isapprox(testqry[10,:val], 99.1923723037184; atol=TOL)
 
         # Test with restrictvars
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = solver=MosekSolver()),
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = solver=GurobiSolver()),
             varstosave = "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vproductionbytechnology, vusebytechnology, "
                 * "vtotaldiscountedcost",
             restrictvars = true, targetprocs = Array{Int, 1}([1]), quiet = false)
@@ -110,7 +111,7 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
 
         # Test with storage net zero constraints
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = MosekSolver()))
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = GurobiSolver()))
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
@@ -140,5 +141,5 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
-    end  # "Solving storage_test with Mosek"
-end  # @testset "Solving a scenario"
+    end  # "Solving storage_test with Gurobi"
+end  # @isdefined Gurobi
