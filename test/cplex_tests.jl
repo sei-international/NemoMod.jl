@@ -10,7 +10,10 @@
 # Tests will be skipped if CPLEX package is not installed.
 try
     using CPLEX
-catch
+catch e
+    @info "skipping CPLEX"
+    sprint(showerror, e)
+
     # Just continue
 end
 
