@@ -11,7 +11,8 @@
 try
     using Cbc
 catch
-    # Just continue
+    @info "Skipping Cbc tests."
+    # Continue
 end
 
 if @isdefined Cbc

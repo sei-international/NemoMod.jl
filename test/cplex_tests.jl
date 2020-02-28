@@ -8,15 +8,11 @@
 =#
 
 # Tests will be skipped if CPLEX package is not installed.
-using CPLEX
-
 try
     using CPLEX
 catch e
-    @info "skipping CPLEX"
-    sprint(showerror, e)
-
-    # Just continue
+    @info "Skipping CPLEX tests."
+    # Continue
 end
 
 if @isdefined CPLEX

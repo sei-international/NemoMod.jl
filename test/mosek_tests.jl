@@ -11,7 +11,7 @@
 try
     using Mosek
 catch
-    # Just continue
+    @info "Skipping Mosek tests."
 end
 
 if @isdefined Mosek

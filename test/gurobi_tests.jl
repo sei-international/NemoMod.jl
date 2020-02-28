@@ -11,7 +11,8 @@
 try
     using Gurobi
 catch
-    # Just continue
+    @info "Skipping Gurobi tests."
+    # Continue
 end
 
 if @isdefined Gurobi
