@@ -257,9 +257,9 @@ uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 
 [[SQLite]]
 deps = ["BinaryProvider", "DBInterface", "Dates", "Libdl", "Random", "SQLite_jll", "Serialization", "Tables", "Test", "WeakRefStrings"]
-git-tree-sha1 = "1fb44fc262049087fef7b2eb7b3bf2b0a6887645"
+git-tree-sha1 = "25d88a45ce804e04a13ca00f1d67a35ac0e2ede6"
 uuid = "0aa819cd-b072-5ff4-a722-6bc24af294d9"
-version = "1.0.2"
+version = "1.0.3"
 
 [[SQLite_jll]]
 deps = ["Libdl", "Pkg"]
