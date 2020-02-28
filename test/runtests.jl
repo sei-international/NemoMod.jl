@@ -6,7 +6,7 @@
 
 	File description: Tests for NemoMod package. Running full suite of tests requires
         GLPK, Cbc, CPLEX, Gurobi, and Mosek solvers. However, this file is configured
-        so that tests for proprietary solvers are skipped if solvers are not present.
+        so that tests for Cbc and proprietary solvers are skipped if solvers are not present.
 =#
 
 using NemoMod
