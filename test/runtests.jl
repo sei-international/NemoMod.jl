@@ -296,6 +296,7 @@ end  # @testset "Solving a scenario"
         end  # new_nemo_db()
 
         new_nemo_db()
+        GC.gc()
 
         # Try up to 20 times to delete file
         delete_dbfile(joinpath(@__DIR__, "new_nemo.sqlite"), 20)
@@ -317,6 +318,7 @@ end  # @testset "Solving a scenario"
         end  # new_nemo_leap_db()
 
         new_nemo_leap_db()
+        GC.gc()
 
         # Try up to 20 times to delete file
         delete_dbfile(joinpath(@__DIR__, "new_nemo_leap.sqlite"), 20)
@@ -335,6 +337,9 @@ end  # @testset "Solving a scenario"
 
             @test DataFrame(SQLite.DBInterface.execute(db, "SELECT val FROM DefaultParams WHERE tablename = 'VariableCost'"))[1,:val] == 1.0
         end  # param_default_db()
+
+        param_default_db()
+        GC.gc()
 
         # Try up to 20 times to delete file
         delete_dbfile(joinpath(@__DIR__, "param_default.sqlite"), 20)
