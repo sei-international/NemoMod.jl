@@ -126,7 +126,7 @@ logmsg("Dropped pre-existing result tables from database.", quiet)
 # BEGIN: Check if transmission modeling is required.
 local transmissionmodeling::Bool = false  # Indicates whether scenario involves transmission modeling
 local tempquery::SQLite.Query = SQLite.DBInterface.execute(db, "select distinct type from TransmissionModelingEnabled")  # Temporary SQLite.Query object
-local transmissionmodelingtypes::Array{Int64, 1} = SQLite.done(tempquery) ? Array{Int64, 1}() : collect(skipmissing(DataFrame(tempquery)[:type]))
+local transmissionmodelingtypes::Array{Int64, 1} = SQLite.done(tempquery) ? Array{Int64, 1}() : collect(skipmissing(DataFrame(tempquery)[!, :type]))
     # Array of transmission modeling types requested for scenario
 
 if length(transmissionmodelingtypes) > 0
