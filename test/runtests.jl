@@ -286,15 +286,16 @@ end  # @testset "Solving a scenario"
 
 @testset "Other database operations" begin
     @testset "Create a new |nemo database" begin
-        db = NemoMod.createnemodb(joinpath(@__DIR__, "new_nemo.sqlite"))
+        # Wrap SQLite operations in a function in order to get Julia to release new DB file for deletion
+        function new_nemo_db()
+            db = NemoMod.createnemodb(joinpath(@__DIR__, "new_nemo.sqlite"))
 
-        @test isfile(joinpath(@__DIR__, "new_nemo.sqlite"))
-        # Test that AccumulatedAnnualDemand table exists
-        @test !SQLite.done(SQLite.DBInterface.execute(db, "PRAGMA table_info('AccumulatedAnnualDemand')"))
+            @test isfile(joinpath(@__DIR__, "new_nemo.sqlite"))
+            # Test that AccumulatedAnnualDemand table exists
+            @test !SQLite.done(SQLite.DBInterface.execute(db, "PRAGMA table_info('AccumulatedAnnualDemand')"))
+        end  # new_nemo_db()
 
-        # BEGIN: Delete new database file.
-        # Get Julia to release file
-        finalize(db); db = nothing; GC.gc()
+        new_nemo_db()
 
         # Try up to 20 times to delete file
         delete_dbfile(joinpath(@__DIR__, "new_nemo.sqlite"), 20)
@@ -304,17 +305,18 @@ end  # @testset "Solving a scenario"
     end  # @testset "Create a new |nemo database"
 
     @testset "Create a new |nemo database with LEAP parameter defaults" begin
-        db = NemoMod.createnemodb_leap(joinpath(@__DIR__, "new_nemo_leap.sqlite"))
+        # Wrap SQLite operations in a function in order to get Julia to release new DB file for deletion
+        function new_nemo_leap_db()
+            db = NemoMod.createnemodb_leap(joinpath(@__DIR__, "new_nemo_leap.sqlite"))
 
-        @test isfile(joinpath(@__DIR__, "new_nemo_leap.sqlite"))
-        # Test that AccumulatedAnnualDemand table exists
-        @test !SQLite.done(SQLite.DBInterface.execute(db, "PRAGMA table_info('AccumulatedAnnualDemand')"))
-        # Look for default value for AccumulatedAnnualDemand parameter
-        @test DataFrame(SQLite.DBInterface.execute(db, "SELECT val FROM DefaultParams WHERE tablename = 'AccumulatedAnnualDemand'"))[1,:val] == 0.0
+            @test isfile(joinpath(@__DIR__, "new_nemo_leap.sqlite"))
+            # Test that AccumulatedAnnualDemand table exists
+            @test !SQLite.done(SQLite.DBInterface.execute(db, "PRAGMA table_info('AccumulatedAnnualDemand')"))
+            # Look for default value for AccumulatedAnnualDemand parameter
+            @test DataFrame(SQLite.DBInterface.execute(db, "SELECT val FROM DefaultParams WHERE tablename = 'AccumulatedAnnualDemand'"))[1,:val] == 0.0
+        end  # new_nemo_leap_db()
 
-        # BEGIN: Delete new database file.
-        # Get Julia to release file
-        finalize(db); db = nothing; GC.gc()
+        new_nemo_leap_db()
 
         # Try up to 20 times to delete file
         delete_dbfile(joinpath(@__DIR__, "new_nemo_leap.sqlite"), 20)
@@ -324,16 +326,15 @@ end  # @testset "Solving a scenario"
     end  # @testset "Create a new |nemo database with LEAP parameter defaults"
 
     @testset "Set parameter default" begin
-        db = NemoMod.createnemodb(joinpath(@__DIR__, "param_default.sqlite"))
-        @test SQLite.done(SQLite.DBInterface.execute(db, "SELECT val FROM DefaultParams WHERE tablename = 'VariableCost'"))  # No rows in query result
+        # Wrap SQLite operations in a function in order to get Julia to release new DB file for deletion
+        function param_default_db()
+            db = NemoMod.createnemodb(joinpath(@__DIR__, "param_default.sqlite"))
+            @test SQLite.done(SQLite.DBInterface.execute(db, "SELECT val FROM DefaultParams WHERE tablename = 'VariableCost'"))  # No rows in query result
 
-        NemoMod.setparamdefault(db, "VariableCost", 1.0)
+            NemoMod.setparamdefault(db, "VariableCost", 1.0)
 
-        @test DataFrame(SQLite.DBInterface.execute(db, "SELECT val FROM DefaultParams WHERE tablename = 'VariableCost'"))[1,:val] == 1.0
-
-        # BEGIN: Delete new database file.
-        # Get Julia to release file
-        finalize(db); db = nothing; GC.gc()
+            @test DataFrame(SQLite.DBInterface.execute(db, "SELECT val FROM DefaultParams WHERE tablename = 'VariableCost'"))[1,:val] == 1.0
+        end  # param_default_db()
 
         # Try up to 20 times to delete file
         delete_dbfile(joinpath(@__DIR__, "param_default.sqlite"), 20)
