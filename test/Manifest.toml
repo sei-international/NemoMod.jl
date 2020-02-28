@@ -27,6 +27,12 @@ git-tree-sha1 = "23d7324164c89638c18f6d7f90d972fa9c4fa9fb"
 uuid = "324d7699-5711-5eae-9e2f-1d82baa6b597"
 version = "0.7.7"
 
+[[Cbc]]
+deps = ["BinaryProvider", "Libdl", "MathOptInterface", "MathProgBase", "SparseArrays", "Test"]
+git-tree-sha1 = "c3a18f5f6ec5996354bea0cf6c5a950a26e86b7d"
+uuid = "9961bab8-2fa3-5c5a-9d89-47fab24efd76"
+version = "0.6.3"
+
 [[CommonSubexpressions]]
 deps = ["Test"]
 git-tree-sha1 = "efdaf19ab11c7889334ca247ff4c9f7c322817b0"
