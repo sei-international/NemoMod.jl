@@ -1,11 +1,11 @@
 #=
-    |nemo: Next-generation Energy Modeling system for Optimization.
+    NEMO: Next-generation Energy Modeling system for Optimization.
     https://github.com/sei-international/NemoMod.jl
 
     Copyright © 2019: Stockholm Environment Institute U.S.
 
 	File description: A test of NemoMod package using CPLEX solver. This file is provided for users wishing
-        to native compile |nemo with support for CPLEX.
+        to native compile NEMO with support for CPLEX.
 =#
 
 using NemoMod
@@ -22,7 +22,7 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
         NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = CplexSolver()), quiet = false)
 
         db = SQLite.DB(dbfile)
-        testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
+        testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
         @test testqry[2,:y] == "2021"
@@ -54,7 +54,7 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
                 * "vtotaldiscountedcost",
             quiet = false)
 
-        testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
+        testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
         @test testqry[2,:y] == "2021"
@@ -84,7 +84,7 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
                 * "vtotaldiscountedcost",
             restrictvars = true, targetprocs = Array{Int, 1}([1]), quiet = false)
 
-        testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
+        testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
         @test testqry[2,:y] == "2021"
@@ -109,9 +109,9 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
         @test isapprox(testqry[10,:val], 99.1923723037184; atol=TOL)
 
         # Test with storage net zero constraints
-        SQLite.execute!(db, "update STORAGE set netzeroyear = 1")
+        SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
         NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = CplexSolver()))
-        testqry = SQLite.query(db, "select * from vtotaldiscountedcost")
+        testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
         @test testqry[2,:y] == "2021"
@@ -135,10 +135,10 @@ const TOL = 1e-4  # Default tolerance for isapprox() comparisons
         @test isapprox(testqry[9,:val], 326.412337761762; atol=TOL)
         @test isapprox(testqry[10,:val], 310.86889310644; atol=TOL)
 
-        SQLite.execute!(db, "update STORAGE set netzeroyear = 0")
+        SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 0")
 
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
-        testqry = SQLite.query(db, "VACUUM")
+        testqry = SQLite.DBInterface.execute(db, "VACUUM")
     end  # "Solving storage_test with CPLEX"
 end  # @testset "Solving a scenario"
