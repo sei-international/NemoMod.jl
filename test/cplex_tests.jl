@@ -16,6 +16,8 @@ catch e
 end
 
 if @isdefined CPLEX
+    @info "Running CPLEX tests."
+
     @testset "Solving storage_test with CPLEX" begin
         dbfile = joinpath(@__DIR__, "storage_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only

@@ -40,6 +40,8 @@ end  # delete_dbfile(path::String)
 end  # @testset "Solving a scenario"
 
 @testset "Other database operations" begin
+    @info "Running tests of other database operations."
+
     @testset "Create a new NEMO database" begin
         # Wrap SQLite operations in a function in order to get Julia to release new DB file for deletion
         function new_nemo_db()
