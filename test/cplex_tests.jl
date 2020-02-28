@@ -8,6 +8,8 @@
 =#
 
 # Tests will be skipped if CPLEX package is not installed.
+using CPLEX
+
 try
     using CPLEX
 catch e
