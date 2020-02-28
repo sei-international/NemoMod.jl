@@ -640,7 +640,7 @@ function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
             defaultqry = SQLite.DBInterface.execute(db, "select * from DefaultParams where tablename = '" * t * "'") |> DataFrame
 
             if size(defaultqry)[1] >= 1
-                defaultval = defaultqry[:val][1]
+                defaultval = defaultqry[!, :val][1]
 
                 # Some special handling here to avoid creating large views where they're not necessary, given |nemo's logic
                 if (t == "OutputActivityRatio" || t == "InputActivityRatio") && defaultval == 0.0
@@ -859,7 +859,7 @@ function checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
     union
     select max(val) as mv from SpecifiedAnnualDemand_def)") |> DataFrame
 
-    maxdemand = qry[1][1]
+    maxdemand = qry[!,1][1]
 
     qry = SQLite.DBInterface.execute(db, "select tau.val from TotalTechnologyAnnualActivityUpperLimit_def tau
         where tau.val / :v1 <= :v2", [maxdemand, tolerance]) |> DataFrame
