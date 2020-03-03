@@ -129,6 +129,12 @@ git-tree-sha1 = "a7802595ed7e2ab69cd4e496bf2cf8f633082237"
 uuid = "3c7084bd-78ad-589a-b5bb-dbd673274bea"
 version = "0.4.4"
 
+[[Gurobi]]
+deps = ["Compat", "Libdl", "LinQuadOptInterface", "MathProgBase"]
+git-tree-sha1 = "c2e1b1d4ce50764188c6496f298fa58bbf5e923e"
+uuid = "2e9cd046-0924-5485-92f1-d5272153d98b"
+version = "0.6.0"
+
 [[InteractiveUtils]]
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
@@ -200,6 +206,12 @@ version = "0.4.3"
 
 [[Mmap]]
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
+
+[[Mosek]]
+deps = ["Libdl", "MathProgBase", "Pkg", "Printf", "SparseArrays", "Test"]
+git-tree-sha1 = "d8d0bafb73b8c77d79b51b45f636034d93921732"
+uuid = "6405355b-0ac2-5fba-af84-adbd65488c0e"
+version = "0.9.8"
 
 [[NaNMath]]
 git-tree-sha1 = "928b8ca9b2791081dc71a51c55347c27c618760f"
