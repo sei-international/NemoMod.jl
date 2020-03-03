@@ -1,5 +1,5 @@
 #=
-    |nemo: Next-generation Energy Modeling system for Optimization.
+    NEMO: Next-generation Energy Modeling system for Optimization.
     https://github.com/sei-international/NemoMod.jl
 
     Copyright © 2018: Stockholm Environment Institute U.S.
@@ -17,10 +17,10 @@ module NemoMod
 
 # BEGIN: Access other modules and code files.
 using JuMP, SQLite, DataFrames, Distributed, Dates, ConfParser
-using GLPKMathProgInterface, Cbc  # Default solvers
+using GLPKMathProgInterface, Cbc, CPLEX  # Included solvers
 
-include("nemo_functions.jl")  # Core |nemo functions
-include("scenario_calculation.jl")  # Functions for calculating a scenario with |nemo
+include("nemo_functions.jl")  # Core NEMO functions
+include("scenario_calculation.jl")  # Functions for calculating a scenario with NEMO
 # END: Access other modules and code files.
 
 end  # module NemoMod
