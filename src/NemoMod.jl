@@ -17,7 +17,26 @@ module NemoMod
 
 # BEGIN: Access other modules and code files.
 using JuMP, SQLite, DataFrames, Distributed, Dates, ConfParser
-using GLPKMathProgInterface, Cbc, CPLEX, Gurobi, Mosek  # Included solvers
+using GLPKMathProgInterface, Cbc  # Open-source solvers
+
+# Proprietary solvers - enclosed in try blocks for users who aren't using NEMO installer
+try
+    using CPLEX
+catch
+    # Just continue
+end
+
+try
+    using Gurobi
+catch
+    # Just continue
+end
+
+try
+    using Mosek
+catch
+    # Just continue
+end
 
 include("nemo_functions.jl")  # Core NEMO functions
 include("scenario_calculation.jl")  # Functions for calculating a scenario with NEMO
