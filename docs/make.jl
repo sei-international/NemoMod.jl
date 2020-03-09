@@ -2,8 +2,8 @@ using Documenter
 using NemoMod
 
 makedocs(
-    sitename = "|nemo",
-    format = :html,
+    sitename = "NEMO",
+    format = Documenter.HTML(),
     pages = [
         "Introduction" => "index.md"
         "Installation" => "installation.md"
