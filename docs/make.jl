@@ -7,6 +7,11 @@ makedocs(
     pages = [
         "Introduction" => "index.md"
         "Installation" => "installation.md"
+        "Model concept" => "model_concept.md"
+        "Inputs" => [
+            "Dimensions" => "dimensions.md"
+            "Parameters" => "parameters.md"
+        ]
     ],
 )
 

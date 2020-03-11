@@ -18,7 +18,7 @@ NEMO is a high performance, open source energy system optimization model intende
 - Support for multiple solvers: [GLPK](https://www.gnu.org/software/glpk/), [Cbc](https://projects.coin-or.org/Cbc), [CPLEX](https://www.ibm.com/analytics/cplex-optimizer), [Gurobi](https://www.gurobi.com/), and [Mosek](https://www.mosek.com/)
 - [SQLite](https://www.sqlite.org/) data store
 
-NEMO can be used as a stand-alone tool but is designed to interoperate with the [Long-range Energy Alternatives Planning system (LEAP)](https://energycommunity.org/) as a user interface. Many users will find it easiest to exploit NEMO via LEAP.
+NEMO can be used as a stand-alone tool but is designed to leverage the [Long-range Energy Alternatives Planning system (LEAP)](https://energycommunity.org/) as a user interface. Many users will find it easiest to exploit NEMO via LEAP.
 
 For more background on NEMO and its raison d’être, see the README at NEMO's [GitHub homepage](https://github.com/sei-international/NemoMod.jl).
 
@@ -33,20 +33,20 @@ NEMO is a project of the Energy Modeling Program at the [Stockholm Environment I
 ```@raw html
 <!---
 
-- Installation
-- Model specification
-  + Introduction
-  + Inputs
-    + Sets
+- Model concept
+- Inputs
+    + Dimensions
     + Parameters
-  + Outputs
+- Outputs
     + Variables
-  + Time slicing
-  + Other deeper dives
-  + Mathematical model
-- Data store
+(- Mathematical model)
+- Scenario database
 - Solving a scenario
   + Performance tips
-- Utility functions
+  + Configuration file
+- Additional information
+  + Time slicing
+  + Custom constraints
+- Julia interface (function documentation)
 --->
 ```
