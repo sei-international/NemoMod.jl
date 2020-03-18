@@ -33,14 +33,14 @@ NEMO is a project of the Energy Modeling Program at the [Stockholm Environment I
 ```@raw html
 <!---
 
-- Model concept
+X - Model concept
 - Inputs
-    + Dimensions
+    X + Dimensions
     + Parameters
 - Outputs
     + Variables
 (- Mathematical model)
-- Scenario database
+X - Scenario databases
 - Solving a scenario
   + Performance tips
   + Configuration file

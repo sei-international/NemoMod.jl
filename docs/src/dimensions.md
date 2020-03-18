@@ -1,23 +1,13 @@
 ```@meta
 CurrentModule = NemoMod
 ```
-# Dimensions
+# [Dimensions](@id dimensions)
 
-Input parameters and calculated variables in NEMO are segmented (subscripted) by certain key components of the energy system. These *model dimensions* describe geographical, technological, temporal, and other elements of the system. You define dimensions for each NEMO scenario, and they can vary between scenarios for a given energy system. Dimensions are specified in tables in a NEMO scenario database as outlined below. Each dimension has a short identifier that's used when referring to it in NEMO's code and scenario databases.
-
-!!! tip
-    For examples of scenario databases, look in the `test` directory for the NEMO Julia package. You can find this directory as follows.
-
-    ```
-    julia> using NemoMod
-    julia> println(normpath(joinpath(pathof(NemoMod), "..", "..", "test")))
-    ```
-
-    NEMO databases are in SQLite. If you need a SQLite browser, [DB Browser for SQLite](https://sqlitebrowser.org/) is a good open-source option.
+Input parameters and calculated variables in NEMO are segmented (subscripted) by certain key components of the energy system. These *model dimensions* describe geographical, technological, temporal, and other elements of the system. You define dimensions for each NEMO scenario, and they can vary between scenarios for a given energy system. Dimensions are specified in tables in a NEMO [scenario database](@ref scenario_db) as outlined below. Each dimension has an abbreviation that's used when referring to it in NEMO's code and scenario databases.
 
 ## [Emission](@id emission)
 
-Emissions or other externalities in the energy system. You can associate costs with emissions, and the quantity of emissions produced can be constrained (see [Parameters](@ref)). **Identifier: `e`.**
+Emissions or other externalities in the energy system. You can associate costs with emissions, and the quantity of emissions produced can be constrained (see [Parameters](@ref)). **Abbreviation: `e`.**
 
 #### NEMO database
 
@@ -25,7 +15,7 @@ Emissions or other externalities in the energy system. You can associate costs w
 
 | Name | Type | Description |
 |:--- | :--: |:----------- |
-| `val` | text | Identifier for emission |
+| `val` | text | Unique identifier for emission |
 | `desc` | text  | Description of emission |
 
 #### Julia code
@@ -35,7 +25,7 @@ Emissions or other externalities in the energy system. You can associate costs w
 
 ## [Fuel](@id fuel)
 
-Energy carriers. **Identifier: `f`.**
+Energy carriers. **Abbreviation: `f`.**
 
 #### NEMO database
 
@@ -43,7 +33,7 @@ Energy carriers. **Identifier: `f`.**
 
 | Name | Type | Description |
 |:--- | :--: |:----------- |
-| `val` | text | Identifier for fuel |
+| `val` | text | Unique identifier for fuel |
 | `desc` | text  | Description of fuel |
 
 #### Julia code
@@ -53,7 +43,7 @@ Energy carriers. **Identifier: `f`.**
 
 ## [Mode of operation](@id mode_of_operation)
 
-Different ways in which [technologies](@ref technology) can function. Typically, one mode is defined for energy generation or production; if a scenario models energy storage, another is defined for charging storage. **Identifier: `m`.**
+Different ways in which [technologies](@ref technology) can function. Typically, one mode is defined for energy generation or production; if a scenario models energy storage, another is defined for charging storage. **Abbreviation: `m`.**
 
 #### NEMO database
 
@@ -61,7 +51,7 @@ Different ways in which [technologies](@ref technology) can function. Typically,
 
 | Name | Type | Description |
 |:--- | :--: |:----------- |
-| `val` | text | Identifier for mode |
+| `val` | text | Unique identifier for mode |
 | `desc` | text  | Description of mode |
 
 #### Julia code
@@ -71,7 +61,7 @@ Different ways in which [technologies](@ref technology) can function. Typically,
 
 ## [Node](@id node)
 
-Locations in a transmission (or transmission and distribution) network. Networks are defined with nodes and [transmission lines or segments](@ref transmissionline), and nodal modeling of energy demand and supply can be enabled for individual [fuels](@ref fuel). **Identifier: `n`.**
+Locations in a transmission (or transmission and distribution) network. Networks are defined with nodes and [transmission lines or segments](@ref transmissionline), and nodal modeling of energy demand and supply can be enabled for individual [fuels](@ref fuel). **Abbreviation: `n`.**
 
 #### NEMO database
 
@@ -79,7 +69,7 @@ Locations in a transmission (or transmission and distribution) network. Networks
 
 | Name | Type | Description |
 |:--- | :--: |:----------- |
-| `val` | text | Identifier for node |
+| `val` | text | Unique identifier for node |
 | `desc` | text  | Description of node |
 | `r` | text  | Region in which node is located (`REGION.val`) |
 
@@ -90,7 +80,7 @@ Locations in a transmission (or transmission and distribution) network. Networks
 
 ## [Region](@id region)
 
-Geographic regions. **Identifier: `r`.**
+Geographic regions. **Abbreviation: `r`.**
 
 #### NEMO database
 
@@ -98,7 +88,7 @@ Geographic regions. **Identifier: `r`.**
 
 | Name | Type | Description |
 |:--- | :--: |:----------- |
-| `val` | text | Identifier for region |
+| `val` | text | Unique identifier for region |
 | `desc` | text  | Description of region |
 
 #### Julia code
@@ -108,7 +98,7 @@ Geographic regions. **Identifier: `r`.**
 
 ## [Storage](@id storage)
 
-Energy storage options or facilities. **Identifier: `s`.**
+Energy storage options or facilities. **Abbreviation: `s`.**
 
 #### NEMO database
 
@@ -116,7 +106,7 @@ Energy storage options or facilities. **Identifier: `s`.**
 
 | Name | Type | Description |
 |:--- | :--: |:----------- |
-| `val` | text | Identifier for region |
+| `val` | text | Unique identifier for region |
 | `desc` | text  | Description of region |
 | `netzeroyear` | integer  | Indicates that storage can have no net charging or discharging over a year (`1` = enabled) |
 | `netzerotg1` | integer  | Indicates that storage can have no net charging or discharging over a time slice group 1 (`1` = enabled) |
@@ -129,7 +119,7 @@ Energy storage options or facilities. **Identifier: `s`.**
 
 ## [Technology](@id technology)
 
-Energy-consuming or producing devices or equipment. **Identifier: `t`.**
+Energy-consuming or producing devices or equipment. **Abbreviation: `t`.**
 
 #### NEMO database
 
@@ -137,7 +127,7 @@ Energy-consuming or producing devices or equipment. **Identifier: `t`.**
 
 | Name | Type | Description |
 |:--- | :--: |:----------- |
-| `val` | text | Identifier for technology |
+| `val` | text | Unique identifier for technology |
 | `desc` | text  | Description of technology |
 
 #### Julia code
@@ -147,7 +137,7 @@ Energy-consuming or producing devices or equipment. **Identifier: `t`.**
 
 ## [Time slice](@id timeslice)
 
-Sub-annual periods used to model energy demand and supply in selected cases. The width of each time slice (as a fraction of the year) is defined with the parameter [YearSplit](@ref YearSplit). **Identifier: `l`.**
+Sub-annual periods used to model energy demand and supply in selected cases. The width of each time slice (as a fraction of the year) is defined with the parameter [YearSplit](@ref YearSplit). **Abbreviation: `l`.**
 
 #### NEMO database
 
@@ -155,7 +145,7 @@ Sub-annual periods used to model energy demand and supply in selected cases. The
 
 | Name | Type | Description |
 |:--- | :--: |:----------- |
-| `val` | text | Identifier for time slice |
+| `val` | text | Unique identifier for time slice |
 | `desc` | text  | Description of time slice |
 
 #### Julia code
@@ -165,7 +155,7 @@ Sub-annual periods used to model energy demand and supply in selected cases. The
 
 ## [Time slice group 1](@id tsgroup1)
 
-Groupings of [time slices](@ref timeslice) within a [year](@ref year). **Identifier: `tg1`.**
+Groupings of [time slices](@ref timeslice) within a [year](@ref year). **Abbreviation: `tg1`.**
 
 #### NEMO database
 
@@ -173,7 +163,7 @@ Groupings of [time slices](@ref timeslice) within a [year](@ref year). **Identif
 
 | Name | Type | Description |
 |:--- | :--: |:----------- |
-| `name` | text | Identifier for group |
+| `name` | text | Unique identifier for group |
 | `desc` | text  | Description of group |
 | `order` | integer  | Order of group within a year (should be `1` for first group, incremented by 1 for subsequent groups) |
 | `multiplier` | real  | Multiplier used in storage calculations (see [Time slicing](@ref time_slicing)) |
@@ -185,7 +175,7 @@ Groupings of [time slices](@ref timeslice) within a [year](@ref year). **Identif
 
 ## [Time slice group 2](@id tsgroup2)
 
-Groupings of [time slices](@ref timeslice) within a [time slice group 1](@ref tsgroup1). **Identifier: `tg2`.**
+Groupings of [time slices](@ref timeslice) within a [time slice group 1](@ref tsgroup1). **Abbreviation: `tg2`.**
 
 #### NEMO database
 
@@ -193,7 +183,7 @@ Groupings of [time slices](@ref timeslice) within a [time slice group 1](@ref ts
 
 | Name | Type | Description |
 |:--- | :--: |:----------- |
-| `name` | text | Identifier for group |
+| `name` | text | Unique identifier for group |
 | `desc` | text  | Description of group |
 | `order` | integer  | Order of group within a time slice group 1 (should be `1` for first group, incremented by 1 for subsequent groups) |
 | `multiplier` | real  | Multiplier used in storage calculations (see [Time slicing](@ref time_slicing)) |
@@ -205,7 +195,7 @@ Groupings of [time slices](@ref timeslice) within a [time slice group 1](@ref ts
 
 ## [Transmission line](@id transmissionline)
 
-Connections between [nodes](@ref node) in a transmission (or transmission and distribution) network - e.g., electrical lines or pipes in a natural gas network. Transmission lines allow energy to flow from one node to another. **Identifier: `tr`.**
+Connections between [nodes](@ref node) in a transmission (or transmission and distribution) network - e.g., electrical lines or pipes in a natural gas network. Transmission lines allow energy to flow from one node to another. **Abbreviation: `tr`.**
 
 #### NEMO database
 
@@ -213,7 +203,7 @@ Connections between [nodes](@ref node) in a transmission (or transmission and di
 
 | Name | Type | Description |
 |:--- | :--: |:----------- |
-| `id` | text | Identifier for line |
+| `id` | text | Unique identifier for line |
 | `n1` | text  | First node connected to line (`NODE.val`) |
 | `n2` | text  | Second node connected to line (`NODE.val`) |
 | `f` | text  | Fuel transported over line (`FUEL.val`) |
@@ -232,7 +222,7 @@ Connections between [nodes](@ref node) in a transmission (or transmission and di
 
 ## [Year](@id year)
 
-Years covered by scenario. Years must be integral and consecutive. **Identifier: `y`.**
+Years covered by scenario. Years must be integral and consecutive. **Abbreviation: `y`.**
 
 #### NEMO database
 
@@ -240,7 +230,7 @@ Years covered by scenario. Years must be integral and consecutive. **Identifier:
 
 | Name | Type | Description |
 |:--- | :--: |:----------- |
-| `val` | text | Identifier for year |
+| `val` | text | Unique identifier for year |
 | `desc` | text  | Description of year |
 
 #### Julia code

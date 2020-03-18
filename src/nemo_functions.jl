@@ -1,10 +1,10 @@
 #=
-    |nemo: Next-generation Energy Modeling system for Optimization.
+    NEMO: Next-generation Energy Modeling system for Optimization.
     https://github.com/sei-international/NemoMod.jl
 
     Copyright © 2018: Stockholm Environment Institute U.S.
 
-    File description: Main function library for |nemo.
+    File description: Main function library for NEMO.
 =#
 
 """
@@ -28,8 +28,8 @@ end  # logmsg(msg::String)
 """
     getconfig(quiet::Bool = false)
 
-Reads in |nemo's configuration file, which should be in the Julia working directory,
-in `ini` format, and named `nemo.ini` or `nemo.cfg`. See the sample file in the |nemo
+Reads in NEMO's configuration file, which should be in the Julia working directory,
+in `ini` format, and named `nemo.ini` or `nemo.cfg`. See the sample file in the NEMO
 package's `utils` directory for more information.
 
 # Arguments
@@ -51,10 +51,10 @@ function getconfig(quiet::Bool = false)
     try
         local conffile::ConfParse = ConfParse(configpath)
         parse_conf!(conffile)
-        logmsg("Read |nemo configuration file at " * configpath * ".", quiet)
+        logmsg("Read NEMO configuration file at " * configpath * ".", quiet)
         return conffile
     catch
-        logmsg("Could not parse |nemo configuration file at " * configpath * ". Please verify format.", quiet)
+        logmsg("Could not parse NEMO configuration file at " * configpath * ". Please verify format.", quiet)
     end
 end  # getconfig(quiet::Bool = false)
 
@@ -94,7 +94,7 @@ function getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, t
 
             logmsg("Read varstosave argument from configuration file.", quiet)
         catch e
-            logmsg("Could not read varstosave argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with |nemo.", quiet)
+            logmsg("Could not read varstosave argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
         end
     end
 
@@ -111,7 +111,7 @@ function getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, t
 
             logmsg("Read targetprocs argument from configuration file.", quiet)
         catch e
-            logmsg("Could not read targetprocs argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with |nemo.", quiet)
+            logmsg("Could not read targetprocs argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
         end
     end
 
@@ -120,7 +120,7 @@ function getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, t
             bools[1] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "restrictvars")))
             logmsg("Read restrictvars argument from configuration file.", quiet)
         catch e
-            logmsg("Could not read restrictvars argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with |nemo.", quiet)
+            logmsg("Could not read restrictvars argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
         end
     end
 
@@ -129,7 +129,7 @@ function getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, t
             bools[2] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "reportzeros")))
             logmsg("Read reportzeros argument from configuration file.", quiet)
         catch e
-            logmsg("Could not read reportzeros argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with |nemo.", quiet)
+            logmsg("Could not read reportzeros argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
         end
     end
 
@@ -138,7 +138,7 @@ function getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, t
             bools[3] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "quiet")))
             logmsg("Read quiet argument from configuration file. Value in configuration file will be used from this point forward.", quiet)
         catch e
-            logmsg("Could not read quiet argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with |nemo.", quiet)
+            logmsg("Could not read quiet argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
         end
     end
 end  # getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, targetprocs::Array{Int,1}, bools::Array{Bool,1}, quiet::Bool)
@@ -287,7 +287,7 @@ createconstraint(m, "TestConstraint", abc, DataFrames.eachrow(SQLite.query(db, "
     defaultvals::Dict{String, Float64} = Dict{String, Float64}(),
     foreignkeys::Bool = false)
 
-Creates an empty |nemo SQLite database. If specified database already exists, drops and recreates |nemo tables in database.
+Creates an empty NEMO SQLite database. If specified database already exists, drops and recreates NEMO tables in database.
 
 # Arguments
 - `path::String`: Full path to database, including database name.
@@ -303,7 +303,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     # BEGIN: DDL operations in an SQLite transaction.
     SQLite.DBInterface.execute(db, "BEGIN")
 
-    # BEGIN: Drop any existing |nemo tables.
+    # BEGIN: Drop any existing NEMO tables.
     SQLite.DBInterface.execute(db,"drop table if exists AccumulatedAnnualDemand")
     SQLite.DBInterface.execute(db,"drop table if exists AnnualEmissionLimit")
     SQLite.DBInterface.execute(db,"drop table if exists AnnualExogenousEmission")
@@ -389,10 +389,10 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.DBInterface.execute(db,"drop table if exists NODE")
 
     SQLite.DBInterface.execute(db,"drop table if exists Version")
-    # END: Drop any existing |nemo tables.
+    # END: Drop any existing NEMO tables.
 
-    # BEGIN: Add new |nemo tables.
-    # Version table is for |nemo data dictionary version
+    # BEGIN: Add new NEMO tables.
+    # Version table is for NEMO data dictionary version
     #   - 2: Added STORAGE.netzeroyear, STORAGE.netzerotg1, and STORAGE.netzerotg2
     SQLite.DBInterface.execute(db, "CREATE TABLE `Version` (`version` INTEGER, PRIMARY KEY(`version`))")
     SQLite.DBInterface.execute(db, "INSERT INTO Version VALUES(2)")
@@ -474,7 +474,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `AnnualExogenousEmission` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `e` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `AnnualEmissionLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `e` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`e`) REFERENCES `EMISSION`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `AccumulatedAnnualDemand` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
-    # END: Add new |nemo tables.
+    # END: Add new NEMO tables.
 
     # BEGIN: Write default values to DefaultParams.
     for (k, v) in defaultvals
@@ -485,7 +485,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.DBInterface.execute(db, "COMMIT")
     SQLite.DBInterface.execute(db, "VACUUM")
 
-    logmsg("Added |nemo structure to SQLite database at " * path * ".")
+    logmsg("Added NEMO structure to SQLite database at " * path * ".")
     # END: DDL operations in an SQLite transaction.
 
     # Return configured database
@@ -495,8 +495,8 @@ end  # createnemodb(path::String, defaultvals::Dict{String, Float64} = Dict{Stri
 """
     createnemodb_leap(path::String)
 
-Creates an empty |nemo SQLite database with parameter defaults set to values used in LEAP
-(and no foreign keys). If specified database already exists, drops and recreates |nemo tables
+Creates an empty NEMO SQLite database with parameter defaults set to values used in LEAP
+(and no foreign keys). If specified database already exists, drops and recreates NEMO tables
 in database.
 
 # Arguments
@@ -557,7 +557,7 @@ end  # createnemodb_leap(path::String)
 """
     setparamdefault(db::SQLite.DB, table::String, val::Float64)
 
-Sets the default value for a |nemo parameter table.
+Sets the default value for a NEMO parameter table.
 
 # Arguments
 - `db::SQLite.DB`: SQLite database containing parameter table.
@@ -642,7 +642,7 @@ function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
             if size(defaultqry)[1] >= 1
                 defaultval = defaultqry[!, :val][1]
 
-                # Some special handling here to avoid creating large views where they're not necessary, given |nemo's logic
+                # Some special handling here to avoid creating large views where they're not necessary, given NEMO's logic
                 if (t == "OutputActivityRatio" || t == "InputActivityRatio") && defaultval == 0.0
                     # OutputActivityRatio and InputActivityRatio are only used when != 0, so can ignore a default value of 0
                     hasdefault = false
@@ -881,7 +881,7 @@ end  # checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
 """
     addtransmissiontables(db::SQLite.DB; foreignkeys::Bool = false, quiet::Bool = false)
 
-Adds tables for transmission sets and parameters to a |nemo scenario database. If the tables
+Adds tables for transmission sets and parameters to a NEMO scenario database. If the tables
 exist already, does not recreate them.
 
 # Arguments
@@ -1000,10 +1000,10 @@ function startnemo(dbpath::String, solver::String = "Cbc", numprocs::Int = Sys.C
     end
     # END: Add worker processes.
 
-    # BEGIN: Call main function for |nemo.
+    # BEGIN: Call main function for NEMO.
     @everywhere include(joinpath(Pkg.dir(), "NemoMod\\src\\NemoMod.jl"))  # Note that @everywhere loads file in Main module on all processes
 
     @time NemoMod.nemomain(dbpath, solver)
-    # END: Call main function for |nemo.
+    # END: Call main function for NEMO.
 end  # startnemo(dbpath::String, solver::String = "Cbc", numprocs::Int = Sys.CPU_CORES)
 =#

@@ -134,7 +134,8 @@ if length(transmissionmodelingtypes) > 0
 end
 
 # Temporary - save transmission variables if transmission modeling is enabled
-transmissionmodeling && push!(varstosavearr, "vtransmissionbuilt", "vtransmissionexists", "vtransmissionbyline")
+transmissionmodeling && push!(varstosavearr, "vtransmissionbuilt", "vtransmissionexists", "vtransmissionbyline",
+    "vtransmissionannual")
 
 logmsg("Verified that transmission modeling " * (transmissionmodeling ? "is" : "is not") * " enabled.", quiet)
 # END: Check if transmission modeling is required.
@@ -212,13 +213,16 @@ modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}} = Dict{
 #   variable's results back to database
 
 # Demands
-@variable(jumpmodel, vdemandnn[sregion, stimeslice, sfuel, syear] >= 0)
-modelvarindices["vdemandnn"] = (vdemandnn, ["r","l","f","y"])
-
 if in("vrateofdemandnn", varstosavearr)
     @variable(jumpmodel, vrateofdemandnn[sregion, stimeslice, sfuel, syear] >= 0)
     modelvarindices["vrateofdemandnn"] = (vrateofdemandnn, ["r","l","f","y"])
 end
+
+@variable(jumpmodel, vdemandnn[sregion, stimeslice, sfuel, syear] >= 0)
+modelvarindices["vdemandnn"] = (vdemandnn, ["r","l","f","y"])
+
+@variable(jumpmodel, vdemandannualnn[sregion, sfuel, syear] >= 0)
+modelvarindices["vdemandannualnn"] = (vdemandannualnn, ["r","f","y"])
 
 logmsg("Defined demand variables.", quiet)
 
@@ -747,6 +751,13 @@ if transmissionmodeling
     @variable(jumpmodel, vdemandnodal[snode, stimeslice, sfuel, syear] >= 0)
     modelvarindices["vdemandnodal"] = (vdemandnodal, ["n","l","f","y"])
 
+    @variable(jumpmodel, vdemandannualnodal[snode, sfuel, syear] >= 0)
+    modelvarindices["vdemandannualnodal"] = (vdemandannualnodal, ["n","f","y"])
+
+    # vtransmissionannual is net annual transmission from n in energy terms
+    @variable(jumpmodel, vtransmissionannual[snode, sfuel, syear])
+    modelvarindices["vtransmissionannual"] = (vtransmissionannual, ["n","f","y"])
+
     @variable(jumpmodel, vtransmissionbuilt[stransmission, syear], Bin)  # Indicates whether tr is built in year
     modelvarindices["vtransmissionbuilt"] = (vtransmissionbuilt, ["tr","y"])
 
@@ -1214,6 +1225,7 @@ eba3_rateoffuelproduction3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproductionbytechnologynn sum
 
+# First step: define vrateofproductionnn where technologies exist
 for row in DataFrames.eachrow(queryvrateofproductionbytechnologynn)
     local r = row[:r]
     local l = row[:l]
@@ -1239,6 +1251,18 @@ if isassigned(lastkeys, 1)
     push!(eba3_rateoffuelproduction3, @constraint(jumpmodel, sumexps[1] == vrateofproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
 end
 
+# Second step: define vrateofproductionnn where technologies don't exist
+for row in SQLite.DBInterface.execute(db, "select r.val as r, l.val as l, f.val as f, y.val as y
+from region r, TIMESLICE l, fuel f, year y
+left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
+left join (select distinct r, t, f, y from OutputActivityRatio_def where val <> 0) oar
+	on oar.r = r.val and oar.f = f.val and oar.y = y.val
+where tme.id is null
+and oar.t is null")
+
+    push!(eba3_rateoffuelproduction3, @constraint(jumpmodel, 0 == vrateofproductionnn[row[:r],row[:l],row[:f],row[:y]]))
+end
+
 logmsg("Created constraint EBa3_RateOfFuelProduction3.", quiet)
 # END: EBa3_RateOfFuelProduction3.
 
@@ -1248,6 +1272,7 @@ if transmissionmodeling
     lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproductionbytechnologynodal sum
 
+    # First step: set vrateofproductionnodal for nodes with technologies
     for row in DataFrames.eachrow(queryvrateofproductionbytechnologynodal)
         local n = row[:n]
         local l = row[:l]
@@ -1271,6 +1296,18 @@ if transmissionmodeling
     # Create last constraint
     if isassigned(lastkeys, 1)
         push!(eba3tr_rateoffuelproduction3, @constraint(jumpmodel, sumexps[1] == vrateofproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
+    end
+
+    # Second step: set vrateofproductionnodal for nodes without technologies
+    for row in SQLite.DBInterface.execute(db, "select n.val as n, l.val as l, f.val as f, y.val as y, ntc.t as t
+        from node n, timeslice l, fuel f, year y, TransmissionModelingEnabled tme
+        left join NodalDistributionTechnologyCapacity_def ntc on ntc.n = n.val and ntc.y = y.val and ntc.val > 0
+        where n.r = tme.r
+        and f.val = tme.f
+        and y.val = tme.y
+        and ntc.t is null")
+
+        push!(eba3tr_rateoffuelproduction3, @constraint(jumpmodel, 0 == vrateofproductionnodal[row[:n],row[:l],row[:f],row[:y]]))
     end
 
     logmsg("Created constraint EBa3Tr_RateOfFuelProduction3.", quiet)
@@ -1827,12 +1864,14 @@ if transmissionmodeling
 end
 # END: Tr3_Flow, Tr4_MaxFlow, and Tr5_MinFlow.
 
-# BEGIN: EBa11Tr_EnergyBalanceEachTS5.
+# BEGIN: EBa11Tr_EnergyBalanceEachTS5 and EBb4_EnergyBalanceEachYear.
 if transmissionmodeling
     eba11tr_energybalanceeachts5::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    ebb4_energybalanceeachyear::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
-    sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtransmissionbyline sum
+    sumexps = Array{AffExpr, 1}([AffExpr(), AffExpr()])  # sumexps[1] = vtransmissionbyline sum for eba11tr_energybalanceeachts5 (aggregated by node),
+        # sumexps[2] = vtransmissionbyline sum for ebb4_energybalanceeachyear (aggregated by node and timeslice)
 
     # First query selects transmission-enabled nodes without any transmission lines, second selects transmission-enabled
     #   nodes that are n1 in a valid transmission line, third selects transmission-enabled nodes that are n2 in a
@@ -1879,7 +1918,7 @@ select n.val as n, ys.l as l, f.val as f, y.val as y,
 	and n.val = tl.n2 and f.val = tl.f
 	and tl.n1 = n2.val
 	and n2.r = tme2.r and tl.f = tme2.f and y.val = tme2.y and tme.type = tme2.type
-order by n, l, f, y")
+order by n, f, y, l")
         local n = row[:n]
         local l = row[:l]
         local f = row[:f]
@@ -1896,15 +1935,24 @@ order by n, l, f, y")
             sumexps[1] = AffExpr()
         end
 
+        if isassigned(lastkeys, 1) && (n != lastkeys[1] || f != lastkeys[3] || y != lastkeys[4])
+            # Create constraint
+            # vtransmissionannual is net annual transmission from n in energy terms
+            push!(ebb4_energybalanceeachyear, @constraint(jumpmodel, vtransmissionannual[lastkeys[1],lastkeys[3],lastkeys[4]] == sumexps[2]))
+            sumexps[2] = AffExpr()
+        end
+
         if !ismissing(tr)
             if trtype == 1 || trtype == 2
                 append!(sumexps[1], vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta])
+                append!(sumexps[2], vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta])
             end
         end
 
         if !ismissing(trneg)
             if trtype == 1 || trtype == 2
                 append!(sumexps[1], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta])
+                append!(sumexps[2], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta])
             end
         end
 
@@ -1918,68 +1966,91 @@ order by n, l, f, y")
     if isassigned(lastkeys, 1)
         push!(eba11tr_energybalanceeachts5, @constraint(jumpmodel, vproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
             vdemandnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]))
+        push!(ebb4_energybalanceeachyear, @constraint(jumpmodel, vtransmissionannual[lastkeys[1],lastkeys[3],lastkeys[4]] == sumexps[2]))
     end
 
-    logmsg("Created constraint EBa11Tr_EnergyBalanceEachTS5.", quiet)
+    logmsg("Created constraints EBa11Tr_EnergyBalanceEachTS5 and EBb4_EnergyBalanceEachYear.", quiet)
 end
-# END: EBa11Tr_EnergyBalanceEachTS5.
+# END: EBa11Tr_EnergyBalanceEachTS5 and EBb4_EnergyBalanceEachYear.
 
-# BEGIN: EBb1_EnergyBalanceEachYear1.
-ebb1_energybalanceeachyear1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+# BEGIN: EBb0_EnergyBalanceEachYear.
+ebb0_energybalanceeachyear::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for (r, f, y) in Base.product(sregion, sfuel, syear)
-    push!(ebb1_energybalanceeachyear1, @constraint(jumpmodel, sum([vproductionnn[r,l,f,y] for l = stimeslice]) == vproductionannualnn[r,f,y]))
+    push!(ebb0_energybalanceeachyear, @constraint(jumpmodel, sum([vdemandnn[r,l,f,y] for l = stimeslice]) == vdemandannualnn[r,f,y]))
 end
 
-logmsg("Created constraint EBb1_EnergyBalanceEachYear1.", quiet)
-# END: EBb1_EnergyBalanceEachYear1.
+logmsg("Created constraint EBb0_EnergyBalanceEachYear.", quiet)
+# END: EBb0_EnergyBalanceEachYear.
 
-# BEGIN: EBb1Tr_EnergyBalanceEachYear1.
+# BEGIN: EBb0Tr_EnergyBalanceEachYear.
 if transmissionmodeling
-    ebb1tr_energybalanceeachyear1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    ebb0tr_energybalanceeachyear::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for (n, f, y) in Base.product(snode, sfuel, syear)
-        push!(ebb1tr_energybalanceeachyear1, @constraint(jumpmodel, sum([vproductionnodal[n,l,f,y] for l = stimeslice]) == vproductionannualnodal[n,f,y]))
+        push!(ebb0tr_energybalanceeachyear, @constraint(jumpmodel, sum([vdemandnodal[n,l,f,y] for l = stimeslice]) == vdemandannualnodal[n,f,y]))
     end
 
-    logmsg("Created constraint EBb1Tr_EnergyBalanceEachYear1.", quiet)
+    logmsg("Created constraint EBb0Tr_EnergyBalanceEachYear.", quiet)
 end
-# END: EBb1Tr_EnergyBalanceEachYear1.
+# END: EBb0Tr_EnergyBalanceEachYear.
 
-# BEGIN: EBb2_EnergyBalanceEachYear2.
-ebb2_energybalanceeachyear2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+# BEGIN: EBb1_EnergyBalanceEachYear.
+ebb1_energybalanceeachyear::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for (r, f, y) in Base.product(sregion, sfuel, syear)
-    push!(ebb2_energybalanceeachyear2, @constraint(jumpmodel, sum([vusenn[r,l,f,y] for l = stimeslice]) == vuseannualnn[r,f,y]))
+    push!(ebb1_energybalanceeachyear, @constraint(jumpmodel, sum([vproductionnn[r,l,f,y] for l = stimeslice]) == vproductionannualnn[r,f,y]))
 end
 
-logmsg("Created constraint EBb2_EnergyBalanceEachYear2.", quiet)
-# END: EBb2_EnergyBalanceEachYear2.
+logmsg("Created constraint EBb1_EnergyBalanceEachYear.", quiet)
+# END: EBb1_EnergyBalanceEachYear.
 
-# BEGIN: EBb2Tr_EnergyBalanceEachYear2.
+# BEGIN: EBb1Tr_EnergyBalanceEachYear.
 if transmissionmodeling
-    ebb2tr_energybalanceeachyear2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    ebb1tr_energybalanceeachyear::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for (n, f, y) in Base.product(snode, sfuel, syear)
-        push!(ebb2tr_energybalanceeachyear2, @constraint(jumpmodel, sum([vusenodal[n,l,f,y] for l = stimeslice]) == vuseannualnodal[n,f,y]))
+        push!(ebb1tr_energybalanceeachyear, @constraint(jumpmodel, sum([vproductionnodal[n,l,f,y] for l = stimeslice]) == vproductionannualnodal[n,f,y]))
     end
 
-    logmsg("Created constraint EBb2Tr_EnergyBalanceEachYear2.", quiet)
+    logmsg("Created constraint EBb1Tr_EnergyBalanceEachYear.", quiet)
 end
-# END: EBb2Tr_EnergyBalanceEachYear2.
+# END: EBb1Tr_EnergyBalanceEachYear.
 
-# BEGIN: EBb3_EnergyBalanceEachYear3.
-ebb3_energybalanceeachyear3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+# BEGIN: EBb2_EnergyBalanceEachYear.
+ebb2_energybalanceeachyear::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+for (r, f, y) in Base.product(sregion, sfuel, syear)
+    push!(ebb2_energybalanceeachyear, @constraint(jumpmodel, sum([vusenn[r,l,f,y] for l = stimeslice]) == vuseannualnn[r,f,y]))
+end
+
+logmsg("Created constraint EBb2_EnergyBalanceEachYear.", quiet)
+# END: EBb2_EnergyBalanceEachYear.
+
+# BEGIN: EBb2Tr_EnergyBalanceEachYear.
+if transmissionmodeling
+    ebb2tr_energybalanceeachyear::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+    for (n, f, y) in Base.product(snode, sfuel, syear)
+        push!(ebb2tr_energybalanceeachyear, @constraint(jumpmodel, sum([vusenodal[n,l,f,y] for l = stimeslice]) == vuseannualnodal[n,f,y]))
+    end
+
+    logmsg("Created constraint EBb2Tr_EnergyBalanceEachYear.", quiet)
+end
+# END: EBb2Tr_EnergyBalanceEachYear.
+
+# BEGIN: EBb3_EnergyBalanceEachYear.
+ebb3_energybalanceeachyear::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for (r, rr, f, y) in Base.product(sregion, sregion, sfuel, syear)
-    push!(ebb3_energybalanceeachyear3, @constraint(jumpmodel, sum([vtrade[r,rr,l,f,y] for l = stimeslice]) == vtradeannual[r,rr,f,y]))
+    push!(ebb3_energybalanceeachyear, @constraint(jumpmodel, sum([vtrade[r,rr,l,f,y] for l = stimeslice]) == vtradeannual[r,rr,f,y]))
 end
 
-logmsg("Created constraint EBb3_EnergyBalanceEachYear3.", quiet)
-# END: EBb3_EnergyBalanceEachYear3.
+logmsg("Created constraint EBb3_EnergyBalanceEachYear.", quiet)
+# END: EBb3_EnergyBalanceEachYear.
 
-# BEGIN: EBb4_EnergyBalanceEachYear4.
-ebb4_energybalanceeachyear4::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+# BEGIN: EBb5_EnergyBalanceEachYear.
+ebb5_energybalanceeachyear::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = f, lastkeys[3] = y
 lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = aad
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtradeannual sum
@@ -1998,8 +2069,9 @@ order by r.val, f.val, y.val")
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || f != lastkeys[2] || y != lastkeys[3])
         # Create constraint
-        push!(ebb4_energybalanceeachyear4, @constraint(jumpmodel, vproductionannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] >=
-            vuseannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] + sumexps[1] + lastvals[1]))
+        # Inclusion of vdemandannualnn allows users to specify both timesliced and non-timesliced demands for a fuel
+        push!(ebb5_energybalanceeachyear, @constraint(jumpmodel, vproductionannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] >=
+            vdemandannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] + vuseannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] + sumexps[1] + lastvals[1]))
         sumexps[1] = AffExpr()
         lastvals[1] = 0.0
     end
@@ -2019,17 +2091,17 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    push!(ebb4_energybalanceeachyear4, @constraint(jumpmodel, vproductionannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] >=
-        vuseannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] + sumexps[1] + lastvals[1]))
+    push!(ebb5_energybalanceeachyear, @constraint(jumpmodel, vproductionannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] >=
+        vdemandannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] + vuseannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] + sumexps[1] + lastvals[1]))
 end
 
-logmsg("Created constraint EBb4_EnergyBalanceEachYear4.", quiet)
-# END: EBb4_EnergyBalanceEachYear4.
+logmsg("Created constraint EBb5_EnergyBalanceEachYear.", quiet)
+# END: EBb5_EnergyBalanceEachYear.
 
-# BEGIN: EBb4Tr_EnergyBalanceEachYear4.
-# For nodal modeling, where there is not trade, this constraint accounts for AccumulatedAnnualDemand only.
+# BEGIN: EBb5Tr_EnergyBalanceEachYear.
+# For nodal modeling, where there is no trade, this constraint accounts for AccumulatedAnnualDemand only.
 if transmissionmodeling
-    ebb4tr_energybalanceeachyear4::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    ebb5tr_energybalanceeachyear::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for row in SQLite.DBInterface.execute(db,
         "select ndd.n as n, ndd.f as f, ndd.y as y, cast(ndd.val as real) as ndd, cast(aad.val as real) as aad
@@ -2043,13 +2115,13 @@ if transmissionmodeling
         local f = row[:f]
         local y = row[:y]
 
-        push!(ebb4tr_energybalanceeachyear4, @constraint(jumpmodel, vproductionannualnodal[n,f,y] >=
-            vuseannualnodal[n,f,y] + row[:aad] * row[:ndd]))
+        push!(ebb5tr_energybalanceeachyear, @constraint(jumpmodel, vproductionannualnodal[n,f,y] >=
+            vdemandannualnodal[n,f,y] + vuseannualnodal[n,f,y] + vtransmissionannual[n,f,y] + row[:aad] * row[:ndd]))
     end
 
-    logmsg("Created constraint EBb4Tr_EnergyBalanceEachYear4.", quiet)
+    logmsg("Created constraint EBb5Tr_EnergyBalanceEachYear.", quiet)
 end
-# END: EBb4Tr_EnergyBalanceEachYear4.
+# END: EBb5Tr_EnergyBalanceEachYear.
 
 # BEGIN: Acc1_FuelProductionByTechnology.
 if in("vproductionbytechnology", varstosavearr)

@@ -12,6 +12,7 @@ makedocs(
             "Dimensions" => "dimensions.md"
             "Parameters" => "parameters.md"
         ]
+        "Scenario databases" => "scenario_db.md"
     ],
 )
 
