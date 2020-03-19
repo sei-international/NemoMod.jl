@@ -1842,16 +1842,16 @@ if transmissionmodeling
 
         # vtransmissionbyline is flow over line tr from n1 to n2; if type == 1 or 2, unit is MW
         if type == 1  # DCOPF
-            push!(tr3_flow, @constraint(jumpmodel, -1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]) * vtransmissionexists[tr,y]
+            push!(tr3_flow, @constraint(jumpmodel, 1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]) * vtransmissionexists[tr,y]
                 == vtransmissionbyline[tr,l,f,y]))
             push!(tr4_maxflow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] <= row[:maxflow]))
             push!(tr5_minflow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] >= -row[:maxflow]))
         elseif type == 2  # DCOPF with disjunctive formulation
             push!(tr3_flow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] -
-                (-1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]))
+                (1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]))
                 <= (1 - vtransmissionexists[tr,y]) * 100000))
             push!(tr3a_flow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] -
-                (-1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]))
+                (1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]))
                 >= (vtransmissionexists[tr,y] - 1) * 100000))
             #tr4_maxflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y]^2 <= vtransmissionexists[tr,y] * row[:maxflow]^2)
             #tr5_minflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y]^2 >= 0)
