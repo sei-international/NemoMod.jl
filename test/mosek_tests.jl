@@ -156,6 +156,7 @@ if @isdefined Mosek
                 * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
             quiet = false)
 
+        db = SQLite.DB(dbfile)
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
