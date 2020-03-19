@@ -152,7 +152,7 @@ if @isdefined CPLEX
 
         NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = CplexSolver()),
             varstosave =
-                "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost"
+                "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
                 * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
             quiet = false)
 
