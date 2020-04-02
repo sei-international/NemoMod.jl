@@ -140,7 +140,7 @@ transmissionmodeling && push!(varstosavearr, "vtransmissionbuilt", "vtransmissio
 logmsg("Verified that transmission modeling " * (transmissionmodeling ? "is" : "is not") * " enabled.", quiet)
 # END: Check if transmission modeling is required.
 
-# BEGIN: Create parameter views showing default values.
+# BEGIN: Create parameter views showing default values and parameter indices.
 # Array of parameter tables needing default views in scenario database
 local paramsneedingdefs::Array{String, 1} = ["OutputActivityRatio", "InputActivityRatio", "ResidualCapacity", "OperationalLife",
 "FixedCost", "YearSplit", "SpecifiedAnnualDemand", "SpecifiedDemandProfile", "VariableCost", "DiscountRate", "CapitalCost",
@@ -158,9 +158,10 @@ local paramsneedingdefs::Array{String, 1} = ["OutputActivityRatio", "InputActivi
 append!(paramsneedingdefs, ["NodalDistributionDemand", "NodalDistributionTechnologyCapacity", "NodalDistributionStorageCapacity"])
 
 createviewwithdefaults(db, paramsneedingdefs)
+create_other_nemo_indices(db)
 
-logmsg("Created parameter views.", quiet)
-# END: Create parameter views showing default values.
+logmsg("Created parameter views and indices.", quiet)
+# END: Create parameter views showing default values and parameter indices.
 
 # BEGIN: Define sets.
 tempquery = SQLite.DBInterface.execute(db, "select val from YEAR order by val")
@@ -202,7 +203,7 @@ ltsgroupdict::Dict{Tuple{Int, Int, Int}, String} = Dict{Tuple{Int, Int, Int}, St
     from LTsGroup ltg, TSGROUP2 tg2, TSGROUP1 tg1
     where
     ltg.tg2 = tg2.name
-    and ltg.tg1 = tg1.name"))  # Dictionary of LTsGroup table mapping tuples of (tsgroup1 order, tsgroup2 order, time slice order) to time slice names
+    and ltg.tg1 = tg1.name"))  # Dictionary of LTsGroup table mapping tuples of (tsgroup1 order, tsgroup2 order, time slice order) to time slice vals
 
 logmsg("Defined sets.", quiet)
 # END: Define sets.
@@ -227,14 +228,14 @@ modelvarindices["vdemandannualnn"] = (vdemandannualnn, ["r","f","y"])
 logmsg("Defined demand variables.", quiet)
 
 # Storage
-@variable(jumpmodel, vstorageleveltsgroup1start[sregion, sstorage, stsgroup1, syear] >= 0)
-@variable(jumpmodel, vstorageleveltsgroup1end[sregion, sstorage, stsgroup1, syear] >= 0)
-@variable(jumpmodel, vstorageleveltsgroup2start[sregion, sstorage, stsgroup1, stsgroup2, syear] >= 0)
-@variable(jumpmodel, vstorageleveltsgroup2end[sregion, sstorage, stsgroup1, stsgroup2, syear] >= 0)
-@variable(jumpmodel, vstorageleveltsend[sregion, sstorage, stimeslice, syear] >= 0)  # Storage level at end of first hour in time slice
-@variable(jumpmodel, vstoragelevelyearend[sregion, sstorage, syear] >= 0)
-@variable(jumpmodel, vrateofstoragecharge[sregion, sstorage, stimeslice, syear] >= 0)
-@variable(jumpmodel, vrateofstoragedischarge[sregion, sstorage, stimeslice, syear] >= 0)
+@variable(jumpmodel, vstorageleveltsgroup1startnn[sregion, sstorage, stsgroup1, syear] >= 0)
+@variable(jumpmodel, vstorageleveltsgroup1endnn[sregion, sstorage, stsgroup1, syear] >= 0)
+@variable(jumpmodel, vstorageleveltsgroup2startnn[sregion, sstorage, stsgroup1, stsgroup2, syear] >= 0)
+@variable(jumpmodel, vstorageleveltsgroup2endnn[sregion, sstorage, stsgroup1, stsgroup2, syear] >= 0)
+@variable(jumpmodel, vstorageleveltsendnn[sregion, sstorage, stimeslice, syear] >= 0)  # Storage level at end of first hour in time slice
+@variable(jumpmodel, vstoragelevelyearendnn[sregion, sstorage, syear] >= 0)
+@variable(jumpmodel, vrateofstoragechargenn[sregion, sstorage, stimeslice, syear] >= 0)
+@variable(jumpmodel, vrateofstoragedischargenn[sregion, sstorage, stimeslice, syear] >= 0)
 @variable(jumpmodel, vstoragelowerlimit[sregion, sstorage, syear] >= 0)
 @variable(jumpmodel, vstorageupperlimit[sregion, sstorage, syear] >= 0)
 @variable(jumpmodel, vaccumulatednewstoragecapacity[sregion, sstorage, syear] >= 0)
@@ -245,14 +246,14 @@ logmsg("Defined demand variables.", quiet)
 @variable(jumpmodel, vdiscountedsalvagevaluestorage[sregion, sstorage, syear] >= 0)
 @variable(jumpmodel, vtotaldiscountedstoragecost[sregion, sstorage, syear] >= 0)
 
-modelvarindices["vstorageleveltsgroup1start"] = (vstorageleveltsgroup1start, ["r", "s", "tg1", "y"])
-modelvarindices["vstorageleveltsgroup1end"] = (vstorageleveltsgroup1end, ["r", "s", "tg1", "y"])
-modelvarindices["vstorageleveltsgroup2start"] = (vstorageleveltsgroup2start, ["r", "s", "tg1", "tg2", "y"])
-modelvarindices["vstorageleveltsgroup2end"] = (vstorageleveltsgroup2end, ["r", "s", "tg1", "tg2", "y"])
-modelvarindices["vstorageleveltsend"] = (vstorageleveltsend, ["r", "s", "l", "y"])
-modelvarindices["vstoragelevelyearend"] = (vstoragelevelyearend, ["r", "s", "y"])
-modelvarindices["vrateofstoragecharge"] = (vrateofstoragecharge, ["r", "s", "l", "y"])
-modelvarindices["vrateofstoragedischarge"] = (vrateofstoragedischarge, ["r", "s", "l", "y"])
+modelvarindices["vstorageleveltsgroup1startnn"] = (vstorageleveltsgroup1startnn, ["r", "s", "tg1", "y"])
+modelvarindices["vstorageleveltsgroup1endnn"] = (vstorageleveltsgroup1endnn, ["r", "s", "tg1", "y"])
+modelvarindices["vstorageleveltsgroup2startnn"] = (vstorageleveltsgroup2startnn, ["r", "s", "tg1", "tg2", "y"])
+modelvarindices["vstorageleveltsgroup2endnn"] = (vstorageleveltsgroup2endnn, ["r", "s", "tg1", "tg2", "y"])
+modelvarindices["vstorageleveltsendnn"] = (vstorageleveltsendnn, ["r", "s", "l", "y"])
+modelvarindices["vstoragelevelyearendnn"] = (vstoragelevelyearendnn, ["r", "s", "y"])
+modelvarindices["vrateofstoragechargenn"] = (vrateofstoragechargenn, ["r", "s", "l", "y"])
+modelvarindices["vrateofstoragedischargenn"] = (vrateofstoragedischargenn, ["r", "s", "l", "y"])
 modelvarindices["vstoragelowerlimit"] = (vstoragelowerlimit, ["r", "s", "y"])
 modelvarindices["vstorageupperlimit"] = (vstorageupperlimit, ["r", "s", "y"])
 modelvarindices["vaccumulatednewstoragecapacity"] = (vaccumulatednewstoragecapacity, ["r", "s", "y"])
@@ -590,10 +591,18 @@ logmsg("Defined emissions variables.", quiet)
 # Transmission
 if transmissionmodeling
     queryvrateofactivitynodal::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
-    "select ntc.n as n, l.val as l, ntc.t as t, m.val as m, ntc.y as y
-    from NodalDistributionTechnologyCapacity_def ntc, TIMESLICE l, MODE_OF_OPERATION m
-    where
-    ntc.val > 0
+    "select ntc.n as n, l.val as l, ntc.t as t, ar.m as m, ntc.y as y
+    from NodalDistributionTechnologyCapacity_def ntc, node n,
+    	TransmissionModelingEnabled tme, TIMESLICE l,
+    (select r, t, f, m, y from OutputActivityRatio_def
+    where val <> 0
+    union
+    select r, t, f, m, y from InputActivityRatio_def
+    where val <> 0) ar
+    where ntc.val > 0
+    and ntc.n = n.val
+    and tme.r = n.r and tme.f = ar.f and tme.y = ntc.y
+    and ar.r = n.r and ar.t = ntc.t and ar.y = ntc.y
     order by ntc.n, ntc.t, l.val, ntc.y") |> DataFrame
 
     queryvrateofproductionbytechnologynodal::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
@@ -642,7 +651,7 @@ if transmissionmodeling
         and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y")))
     end
 
-    queryvrateofusebytechnologynodal::SQLite.Query = SQLite.DBInterface.execute(db,
+    queryvrateofusebytechnologynodal::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
     "select ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y,
     	cast(ys.val as real) as ys
     from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
@@ -655,7 +664,7 @@ if transmissionmodeling
     and ntc.n = n.val
     and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
 	and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
-    order by ntc.n, ys.l, iar.f, ntc.y")
+    order by ntc.n, ys.l, iar.f, ntc.y") |> DataFrame
 
     if in("vusebytechnology", varstosavearr)
         queryvusebytechnologynodal::SQLite.Query = SQLite.DBInterface.execute(db,
@@ -704,6 +713,39 @@ if transmissionmodeling
 	and tl.f = tcta.f
     order by tl.id, tme1.y") |> DataFrame
 
+    # Temporary table to avoid having to repeat query several times
+    SQLite.DBInterface.execute(db, "create temporary table nodalstorage as
+    select distinct n.r as r, nsc.n as n, nsc.s as s, nsc.y as y, nsc.val as val
+    from NodalDistributionStorageCapacity_def nsc, node n,
+    	NodalDistributionTechnologyCapacity_def ntc, TransmissionModelingEnabled tme,
+    	(select r, t, f, m, y from OutputActivityRatio_def
+        where val <> 0
+        union
+        select r, t, f, m, y from InputActivityRatio_def
+        where val <> 0) ar,
+    	(select r, t, s, m from TechnologyFromStorage_def where val = 1
+    	union
+    	select r, t, s, m from TechnologyToStorage_def where val = 1) ts
+    where nsc.val > 0
+    and n.val = nsc.n
+    and ntc.val > 0 and ntc.n = nsc.n and ntc.t = ar.t and ntc.y = nsc.y
+    and tme.r = n.r and tme.f = ar.f and tme.y = nsc.y
+    and ar.r = n.r and ar.y = nsc.y
+    and ts.r = n.r and ts.t = ntc.t and ts.s = nsc.s and ts.m = ar.m")
+
+    queryvstorageleveltsgroup1::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
+    "select ns.n as n, ns.s as s, tg1.name as tg1, ns.y as y
+    from nodalstorage ns, TSGROUP1 tg1") |> DataFrame
+
+    queryvstorageleveltsgroup2::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
+    "select ns.n as n, ns.s as s, tg1.name as tg1, tg2.name as tg2, ns.y as y
+    from nodalstorage ns, TSGROUP1 tg1, TSGROUP2 tg2") |> DataFrame
+
+    queryvstoragelevelts::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
+    "select ns.n as n, ns.s as s, l.val as l, ns.y as y
+    from nodalstorage ns, TIMESLICE l") |> DataFrame
+
+    # Activity
     if restrictvars
         indexdicts = keydicts_parallel(queryvrateofactivitynodal, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
         @variable(jumpmodel, vrateofactivitynodal[n=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[n]], t=indexdicts[2][[n,l]],
@@ -713,17 +755,23 @@ if transmissionmodeling
         @variable(jumpmodel, vrateofproductionbytechnologynodal[n=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[n]], t=indexdicts[2][[n,l]],
             f=indexdicts[3][[n,l,t]], y=indexdicts[4][[n,l,t,f]]] >= 0)
 
+        indexdicts = keydicts_parallel(queryvrateofusebytechnologynodal, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        @variable(jumpmodel, vrateofusebytechnologynodal[n=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[n]], t=indexdicts[2][[n,l]],
+            f=indexdicts[3][[n,l,t]], y=indexdicts[4][[n,l,t,f]]] >= 0)
+
         indexdicts = keydicts_parallel(queryvtransmissionbyline, 3, targetprocs)  # Array of Dicts used to restrict indices of following variable
         @variable(jumpmodel, vtransmissionbyline[tr=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[tr]], f=indexdicts[2][[tr,l]],
             y=indexdicts[3][[tr,l,f]]])
     else
         @variable(jumpmodel, vrateofactivitynodal[snode, stimeslice, stechnology, smode_of_operation, syear] >= 0)
         @variable(jumpmodel, vrateofproductionbytechnologynodal[snode, stimeslice, stechnology, sfuel, syear] >= 0)
+        @variable(jumpmodel, vrateofusebytechnologynodal[snode, stimeslice, stechnology, sfuel, syear] >= 0)
         @variable(jumpmodel, vtransmissionbyline[stransmission, stimeslice, sfuel, syear])
     end
 
     modelvarindices["vrateofactivitynodal"] = (vrateofactivitynodal, ["n", "l", "t", "m", "y"])
     modelvarindices["vrateofproductionbytechnologynodal"] = (vrateofproductionbytechnologynodal, ["n", "l", "t", "f", "y"])
+    modelvarindices["vrateofusebytechnologynodal"] = (vrateofusebytechnologynodal, ["n", "l", "t", "f", "y"])
     # Note: n1 is from node; n2 is to node
     modelvarindices["vtransmissionbyline"] = (vtransmissionbyline, ["tr", "l", "f", "y"])
 
@@ -748,12 +796,14 @@ if transmissionmodeling
     @variable(jumpmodel, vuseannualnodal[snode, sfuel, syear] >= 0)
     modelvarindices["vuseannualnodal"] = (vuseannualnodal, ["n","f","y"])
 
+    # Demands
     @variable(jumpmodel, vdemandnodal[snode, stimeslice, sfuel, syear] >= 0)
     modelvarindices["vdemandnodal"] = (vdemandnodal, ["n","l","f","y"])
 
     @variable(jumpmodel, vdemandannualnodal[snode, sfuel, syear] >= 0)
     modelvarindices["vdemandannualnodal"] = (vdemandannualnodal, ["n","f","y"])
 
+    # Capacity and other
     # vtransmissionannual is net annual transmission from n in energy terms
     @variable(jumpmodel, vtransmissionannual[snode, sfuel, syear])
     modelvarindices["vtransmissionannual"] = (vtransmissionannual, ["n","f","y"])
@@ -770,6 +820,49 @@ if transmissionmodeling
         modelvarindices["vvoltageangle"] = (vvoltageangle, ["n","l","y"])
     end
 
+    # Storage
+    if restrictvars
+        indexdicts = keydicts_parallel(queryvstorageleveltsgroup1, 3, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        @variable(jumpmodel, vstorageleveltsgroup1startnodal[n=[k[1] for k = keys(indexdicts[1])], s=indexdicts[1][[n]], tg1=indexdicts[2][[n,s]],
+            y=indexdicts[3][[n,s,tg1]]] >= 0)
+        @variable(jumpmodel, vstorageleveltsgroup1endnodal[n=[k[1] for k = keys(indexdicts[1])], s=indexdicts[1][[n]], tg1=indexdicts[2][[n,s]],
+            y=indexdicts[3][[n,s,tg1]]] >= 0)
+
+        indexdicts = keydicts_parallel(queryvstorageleveltsgroup2, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        @variable(jumpmodel, vstorageleveltsgroup2startnodal[n=[k[1] for k = keys(indexdicts[1])], s=indexdicts[1][[n]], tg1=indexdicts[2][[n,s]],
+            tg2=indexdicts[3][[n,s,tg1]], y=indexdicts[4][[n,s,tg1,tg2]]] >= 0)
+        @variable(jumpmodel, vstorageleveltsgroup2endnodal[n=[k[1] for k = keys(indexdicts[1])], s=indexdicts[1][[n]], tg1=indexdicts[2][[n,s]],
+            tg2=indexdicts[3][[n,s,tg1]], y=indexdicts[4][[n,s,tg1,tg2]]] >= 0)
+
+        indexdicts = keydicts_parallel(queryvstoragelevelts, 3, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        @variable(jumpmodel, vstorageleveltsendnodal[n=[k[1] for k = keys(indexdicts[1])], s=indexdicts[1][[n]], l=indexdicts[2][[n,s]],
+            y=indexdicts[3][[n,s,l]]] >= 0)
+        @variable(jumpmodel, vrateofstoragechargenodal[n=[k[1] for k = keys(indexdicts[1])], s=indexdicts[1][[n]], l=indexdicts[2][[n,s]],
+            y=indexdicts[3][[n,s,l]]] >= 0)
+        @variable(jumpmodel, vrateofstoragedischargenodal[n=[k[1] for k = keys(indexdicts[1])], s=indexdicts[1][[n]], l=indexdicts[2][[n,s]],
+            y=indexdicts[3][[n,s,l]]] >= 0)
+    else
+        @variable(jumpmodel, vstorageleveltsgroup1startnodal[snode, sstorage, stsgroup1, syear] >= 0)
+        @variable(jumpmodel, vstorageleveltsgroup1endnodal[snode, sstorage, stsgroup1, syear] >= 0)
+        @variable(jumpmodel, vstorageleveltsgroup2startnodal[snode, sstorage, stsgroup1, stsgroup2, syear] >= 0)
+        @variable(jumpmodel, vstorageleveltsgroup2endnodal[snode, sstorage, stsgroup1, stsgroup2, syear] >= 0)
+        @variable(jumpmodel, vstorageleveltsendnodal[snode, sstorage, stimeslice, syear] >= 0)  # Storage level at end of first hour in time slice
+        @variable(jumpmodel, vrateofstoragechargenodal[snode, sstorage, stimeslice, syear] >= 0)
+        @variable(jumpmodel, vrateofstoragedischargenodal[snode, sstorage, stimeslice, syear] >= 0)
+    end
+
+    @variable(jumpmodel, vstoragelevelyearendnodal[snode, sstorage, syear] >= 0)
+
+    modelvarindices["vstorageleveltsgroup1startnodal"] = (vstorageleveltsgroup1startnodal, ["n", "s", "tg1", "y"])
+    modelvarindices["vstorageleveltsgroup1endnodal"] = (vstorageleveltsgroup1endnodal, ["n", "s", "tg1", "y"])
+    modelvarindices["vstorageleveltsgroup2startnodal"] = (vstorageleveltsgroup2startnodal, ["n", "s", "tg1", "tg2", "y"])
+    modelvarindices["vstorageleveltsgroup2endnodal"] = (vstorageleveltsgroup2endnodal, ["n", "s", "tg1", "tg2", "y"])
+    modelvarindices["vstorageleveltsendnodal"] = (vstorageleveltsendnodal, ["n", "s", "l", "y"])
+    modelvarindices["vrateofstoragechargenodal"] = (vrateofstoragechargenodal, ["n", "s", "l", "y"])
+    modelvarindices["vrateofstoragedischargenodal"] = (vrateofstoragedischargenodal, ["n", "s", "l", "y"])
+    modelvarindices["vstoragelevelyearendnodal"] = (vstoragelevelyearendnodal, ["n", "s", "y"])
+
+    # Costing
     @variable(jumpmodel, vcapitalinvestmenttransmission[stransmission, syear] >= 0)
     modelvarindices["vcapitalinvestmenttransmission"] = (vcapitalinvestmenttransmission, ["tr","y"])
     @variable(jumpmodel, vdiscountedcapitalinvestmenttransmission[stransmission, syear] >= 0)
@@ -847,7 +940,7 @@ if in("vrateofdemandnn", varstosavearr)
 
     SQLite.reset!(queryvrateofdemandnn)
 
-    logmsg("Created constraint EQ_SpecifiedDemand.", quiet)
+    length(ceq_specifieddemand) > 0 && logmsg("Created constraint EQ_SpecifiedDemand.", quiet)
 end
 # END: EQ_SpecifiedDemand.
 
@@ -883,7 +976,7 @@ if isassigned(lastkeys, 1)
     push!(caa1_totalnewcapacity, @constraint(jumpmodel, sumexps[1] == vaccumulatednewcapacity[lastkeys[1],lastkeys[2],lastkeys[3]]))
 end
 
-logmsg("Created constraint CAa1_TotalNewCapacity.", quiet)
+length(caa1_totalnewcapacity) > 0 && logmsg("Created constraint CAa1_TotalNewCapacity.", quiet)
 # END: CAa1_TotalNewCapacity.
 
 # BEGIN: CAa2_TotalAnnualCapacity.
@@ -900,7 +993,7 @@ left join ResidualCapacity_def rc on rc.r = r.val and rc.t = t.val and rc.y = y.
     push!(caa2_totalannualcapacity, @constraint(jumpmodel, vaccumulatednewcapacity[r,t,y] + rc == vtotalcapacityannual[r,t,y]))
 end
 
-logmsg("Created constraint CAa2_TotalAnnualCapacity.", quiet)
+length(caa2_totalannualcapacity) > 0 && logmsg("Created constraint CAa2_TotalAnnualCapacity.", quiet)
 # END: CAa2_TotalAnnualCapacity.
 
 # BEGIN: VRateOfActivity1.
@@ -910,13 +1003,19 @@ lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastke
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivitynodal sum
 
 for row in SQLite.DBInterface.execute(db,
-"select r.val as r, l.val as l, t.val as t, m.val as m, y.val as y, ntc.n as n
-from REGION r, TIMESLICE l, TECHNOLOGY t, MODE_OF_OPERATION m, YEAR y,
-NodalDistributionTechnologyCapacity_def ntc, NODE n
-where ntc.n = n.val
-and n.r = r.val and ntc.t = t.val and ntc.y = y.val
-and ntc.val > 0
-order by r.val, l.val, t.val, m.val, y.val")
+"select n.r as r, l.val as l, ntc.t as t, ar.m as m, ntc.y as y, ntc.n as n
+from NodalDistributionTechnologyCapacity_def ntc, node n,
+	TransmissionModelingEnabled tme, TIMESLICE l,
+(select r, t, f, m, y from OutputActivityRatio_def
+where val <> 0
+union
+select r, t, f, m, y from InputActivityRatio_def
+where val <> 0) ar
+where ntc.val > 0
+and ntc.n = n.val
+and tme.r = n.r and tme.f = ar.f and tme.y = ntc.y
+and ar.r = n.r and ar.t = ntc.t and ar.y = ntc.y
+order by l.val, ntc.t, ar.m, ntc.y, n.r")
     local r = row[:r]
     local l = row[:l]
     local t = row[:t]
@@ -942,7 +1041,7 @@ if isassigned(lastkeys, 1)
     push!(vrateofactivity1, @constraint(jumpmodel, sumexps[1] == vrateofactivity[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4],lastkeys[5]]))
 end
 
-logmsg("Created constraint VRateOfActivity1.", quiet)
+length(vrateofactivity1) > 0 && logmsg("Created constraint VRateOfActivity1.", quiet)
 # END: VRateOfActivity1.
 
 # BEGIN: CAa3_TotalActivityOfEachTechnology.
@@ -953,7 +1052,7 @@ for (r, t, l, y) in Base.product(sregion, stechnology, stimeslice, syear)
         == vrateoftotalactivity[r,t,l,y]))
 end
 
-logmsg("Created constraint CAa3_TotalActivityOfEachTechnology.", quiet)
+length(caa3_totalactivityofeachtechnology) > 0 && logmsg("Created constraint CAa3_TotalActivityOfEachTechnology.", quiet)
 # END: CAa3_TotalActivityOfEachTechnology.
 
 # BEGIN: CAa3Tr_TotalActivityOfEachTechnology.
@@ -987,7 +1086,7 @@ if transmissionmodeling
         push!(caa3tr_totalactivityofeachtechnology, @constraint(jumpmodel, sumexps[1] == vrateoftotalactivitynodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
     end
 
-    logmsg("Created constraint CAa3Tr_TotalActivityOfEachTechnology.", quiet)
+    length(caa3tr_totalactivityofeachtechnology) > 0 && logmsg("Created constraint CAa3Tr_TotalActivityOfEachTechnology.", quiet)
 end
 # END: CAa3Tr_TotalActivityOfEachTechnology.
 
@@ -1008,7 +1107,7 @@ and cta.r = r.val and cta.t = t.val")
         <= vtotalcapacityannual[r,t,y] * row[:cf] * row[:cta]))
 end
 
-logmsg("Created constraint CAa4_Constraint_Capacity.", quiet)
+length(caa4_constraint_capacity) > 0 && logmsg("Created constraint CAa4_Constraint_Capacity.", quiet)
 # END: CAa4_Constraint_Capacity.
 
 # BEGIN: CAa4Tr_Constraint_Capacity.
@@ -1034,7 +1133,7 @@ if transmissionmodeling
             <= vtotalcapacityannual[r,t,y] * row[:ntc] * row[:cf] * row[:cta]))
     end
 
-    logmsg("Created constraint CAa4Tr_Constraint_Capacity.", quiet)
+    length(caa4tr_constraint_capacity) > 0 && logmsg("Created constraint CAa4Tr_Constraint_Capacity.", quiet)
 end
 # END: CAa4Tr_Constraint_Capacity.
 
@@ -1051,7 +1150,7 @@ from CapacityOfOneTechnologyUnit_def cot where cot.val <> 0")
         == vnewcapacity[r,t,y]))
 end
 
-logmsg("Created constraint CAa5_TotalNewCapacity.", quiet)
+length(caa5_totalnewcapacity) > 0 && logmsg("Created constraint CAa5_TotalNewCapacity.", quiet)
 # END: CAa5_TotalNewCapacity.
 
 #= BEGIN: CAb1_PlannedMaintenance.
@@ -1126,7 +1225,7 @@ if in("vrateofproductionbytechnologybymodenn", varstosavearr)
         push!(eba1_rateoffuelproduction1, @constraint(jumpmodel, vrateofactivity[r,l,t,m,y] * row[:oar] == vrateofproductionbytechnologybymodenn[r,l,t,m,f,y]))
     end
 
-    logmsg("Created constraint EBa1_RateOfFuelProduction1.", quiet)
+    length(eba1_rateoffuelproduction1) > 0 && logmsg("Created constraint EBa1_RateOfFuelProduction1.", quiet)
 end  # in("vrateofproductionbytechnologybymodenn", varstosavearr)
 # END: EBa1_RateOfFuelProduction1.
 
@@ -1166,7 +1265,7 @@ if isassigned(lastkeys, 1)
         vrateofproductionbytechnologynn[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]]))
 end
 
-logmsg("Created constraint EBa2_RateOfFuelProduction2.", quiet)
+length(eba2_rateoffuelproduction2) > 0 && logmsg("Created constraint EBa2_RateOfFuelProduction2.", quiet)
 # END: EBa2_RateOfFuelProduction2.
 
 # BEGIN: EBa2Tr_RateOfFuelProduction2.
@@ -1216,7 +1315,7 @@ if transmissionmodeling
             vrateofproductionbytechnologynodal[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]]))
     end
 
-    logmsg("Created constraint EBa2Tr_RateOfFuelProduction2.", quiet)
+    length(eba2tr_rateoffuelproduction2) > 0 && logmsg("Created constraint EBa2Tr_RateOfFuelProduction2.", quiet)
 end
 # END: EBa2Tr_RateOfFuelProduction2.
 
@@ -1263,7 +1362,7 @@ and oar.t is null")
     push!(eba3_rateoffuelproduction3, @constraint(jumpmodel, 0 == vrateofproductionnn[row[:r],row[:l],row[:f],row[:y]]))
 end
 
-logmsg("Created constraint EBa3_RateOfFuelProduction3.", quiet)
+length(eba3_rateoffuelproduction3) > 0 && logmsg("Created constraint EBa3_RateOfFuelProduction3.", quiet)
 # END: EBa3_RateOfFuelProduction3.
 
 # BEGIN: EBa3Tr_RateOfFuelProduction3.
@@ -1310,7 +1409,7 @@ if transmissionmodeling
         push!(eba3tr_rateoffuelproduction3, @constraint(jumpmodel, 0 == vrateofproductionnodal[row[:n],row[:l],row[:f],row[:y]]))
     end
 
-    logmsg("Created constraint EBa3Tr_RateOfFuelProduction3.", quiet)
+    length(eba3tr_rateoffuelproduction3) > 0 && logmsg("Created constraint EBa3Tr_RateOfFuelProduction3.", quiet)
 end
 # END: EBa3Tr_RateOfFuelProduction3.
 
@@ -1370,7 +1469,7 @@ else
     end
 end
 
-logmsg("Created constraint VRateOfProduction1.", quiet)
+length(vrateofproduction1) > 0 && logmsg("Created constraint VRateOfProduction1.", quiet)
 # END: VRateOfProduction1.
 
 # BEGIN: EBa4_RateOfFuelUse1.
@@ -1388,7 +1487,7 @@ if in("vrateofusebytechnologybymodenn", varstosavearr)
         push!(eba4_rateoffueluse1, @constraint(jumpmodel, vrateofactivity[r,l,t,m,y] * row[:iar] == vrateofusebytechnologybymodenn[r,l,t,m,f,y]))
     end
 
-    logmsg("Created constraint EBa4_RateOfFuelUse1.", quiet)
+    length(eba4_rateoffueluse1) > 0 && logmsg("Created constraint EBa4_RateOfFuelUse1.", quiet)
 end
 # END: EBa4_RateOfFuelUse1.
 
@@ -1427,7 +1526,7 @@ if isassigned(lastkeys, 1)
         vrateofusebytechnologynn[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]]))
 end
 
-logmsg("Created constraint EBa5_RateOfFuelUse2.", quiet)
+length(eba5_rateoffueluse2) > 0 && logmsg("Created constraint EBa5_RateOfFuelUse2.", quiet)
 # END: EBa5_RateOfFuelUse2.
 
 # BEGIN: EBa5Tr_RateOfFuelUse2.
@@ -1476,7 +1575,7 @@ if transmissionmodeling
             vrateofusebytechnologynodal[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]]))
     end
 
-    logmsg("Created constraint EBa5Tr_RateOfFuelUse2.", quiet)
+    length(eba5tr_rateoffueluse2) > 0 && logmsg("Created constraint EBa5Tr_RateOfFuelUse2.", quiet)
 end
 # END: EBa5Tr_RateOfFuelUse2.
 
@@ -1510,7 +1609,7 @@ if isassigned(lastkeys, 1)
     push!(eba6_rateoffueluse3, @constraint(jumpmodel, sumexps[1] == vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
 end
 
-logmsg("Created constraint EBa6_RateOfFuelUse3.", quiet)
+length(eba6_rateoffueluse3) > 0 && logmsg("Created constraint EBa6_RateOfFuelUse3.", quiet)
 # END: EBa6_RateOfFuelUse3.
 
 # BEGIN: EBa6Tr_RateOfFuelUse3.
@@ -1519,7 +1618,7 @@ if transmissionmodeling
     lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofusebytechnologynodal sum
 
-    for row in queryvrateofusebytechnologynodal
+    for row in DataFrames.eachrow(queryvrateofusebytechnologynodal)
         local n = row[:n]
         local l = row[:l]
         local f = row[:f]
@@ -1544,7 +1643,7 @@ if transmissionmodeling
         push!(eba6tr_rateoffueluse3, @constraint(jumpmodel, sumexps[1] == vrateofusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
     end
 
-    logmsg("Created constraint EBa6Tr_RateOfFuelUse3.", quiet)
+    length(eba6tr_rateoffueluse3) > 0 && logmsg("Created constraint EBa6Tr_RateOfFuelUse3.", quiet)
 end
 # END: EBa6Tr_RateOfFuelUse3.
 
@@ -1592,7 +1691,7 @@ else
     end
 end
 
-logmsg("Created constraint VRateOfUse1.", quiet)
+length(vrateofuse1) > 0 && logmsg("Created constraint VRateOfUse1.", quiet)
 # END: VRateOfUse1.
 
 # BEGIN: EBa7_EnergyBalanceEachTS1 and EBa8_EnergyBalanceEachTS2.
@@ -1616,7 +1715,8 @@ for row in queryvproduse
     push!(eba8_energybalanceeachts2, @constraint(jumpmodel, vrateofusenn[r,l,f,y] * row[:ys] == vusenn[r,l,f,y]))
 end
 
-logmsg("Created constraints EBa7_EnergyBalanceEachTS1 and EBa8_EnergyBalanceEachTS2.", quiet)
+length(eba7_energybalanceeachts1) > 0 && logmsg("Created constraint EBa7_EnergyBalanceEachTS1.", quiet)
+length(eba8_energybalanceeachts2) > 0 && logmsg("Created constraint EBa8_EnergyBalanceEachTS2.", quiet)
 # END: EBa7_EnergyBalanceEachTS1 and EBa8_EnergyBalanceEachTS2.
 
 # BEGIN: EBa7Tr_EnergyBalanceEachTS1 and EBa8Tr_EnergyBalanceEachTS2.
@@ -1641,7 +1741,8 @@ if transmissionmodeling
         push!(eba8tr_energybalanceeachts2, @constraint(jumpmodel, vrateofusenodal[n,l,f,y] * row[:ys] == vusenodal[n,l,f,y]))
     end
 
-    logmsg("Created constraints EBa7Tr_EnergyBalanceEachTS1 and EBa8Tr_EnergyBalanceEachTS2.", quiet)
+    length(eba7tr_energybalanceeachts1) > 0 && logmsg("Created constraint EBa7Tr_EnergyBalanceEachTS1.", quiet)
+    length(eba8tr_energybalanceeachts2) > 0 && logmsg("Created constraint EBa8Tr_EnergyBalanceEachTS2.", quiet)
 end
 # END: EBa7Tr_EnergyBalanceEachTS1 and EBa8Tr_EnergyBalanceEachTS2.
 
@@ -1657,7 +1758,7 @@ for row in queryvrateofdemandnn
     push!(eba9_energybalanceeachts3, @constraint(jumpmodel, row[:specifiedannualdemand] * row[:specifieddemandprofile] == vdemandnn[r,l,f,y]))
 end
 
-logmsg("Created constraint EBa9_EnergyBalanceEachTS3.", quiet)
+length(eba9_energybalanceeachts3) > 0 && logmsg("Created constraint EBa9_EnergyBalanceEachTS3.", quiet)
 # END: EBa9_EnergyBalanceEachTS3.
 
 # BEGIN: EBa9Tr_EnergyBalanceEachTS3.
@@ -1684,7 +1785,7 @@ if transmissionmodeling
             * row[:ndd] == vdemandnodal[n,l,f,y]))
     end
 
-    logmsg("Created constraint EBa9Tr_EnergyBalanceEachTS3.", quiet)
+    length(eba9tr_energybalanceeachts3) > 0 && logmsg("Created constraint EBa9Tr_EnergyBalanceEachTS3.", quiet)
 end
 # END: EBa9Tr_EnergyBalanceEachTS3.
 
@@ -1695,7 +1796,7 @@ for (r, rr, l, f, y) in Base.product(sregion, sregion, stimeslice, sfuel, syear)
     push!(eba10_energybalanceeachts4, @constraint(jumpmodel, vtrade[r,rr,l,f,y] == -vtrade[rr,r,l,f,y]))
 end
 
-logmsg("Created constraint EBa10_EnergyBalanceEachTS4.", quiet)
+length(eba10_energybalanceeachts4) > 0 && logmsg("Created constraint EBa10_EnergyBalanceEachTS4.", quiet)
 # END: EBa10_EnergyBalanceEachTS4.
 
 # BEGIN: EBa11_EnergyBalanceEachTS5.
@@ -1740,7 +1841,7 @@ if isassigned(lastkeys, 1)
         vdemandnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]))
 end
 
-logmsg("Created constraint EBa11_EnergyBalanceEachTS5.", quiet)
+length(eba11_energybalanceeachts5) > 0 && logmsg("Created constraint EBa11_EnergyBalanceEachTS5.", quiet)
 # END: EBa11_EnergyBalanceEachTS5.
 
 # BEGIN: Tr1_SumBuilt.
@@ -1752,7 +1853,7 @@ if transmissionmodeling
         push!(tr1_sumbuilt, @constraint(jumpmodel, sum([vtransmissionbuilt[tr,y] for y in syear]) <= 1))
     end
 
-    logmsg("Created constraint Tr1_SumBuilt.", quiet)
+    length(tr1_sumbuilt) > 0 && logmsg("Created constraint Tr1_SumBuilt.", quiet)
 end
 # END: Tr1_SumBuilt.
 
@@ -1820,7 +1921,7 @@ if transmissionmodeling
         end
     end
 
-    logmsg("Created constraint Tr2_TransmissionExists.", quiet)
+    length(tr2_transmissionexists) > 0 && logmsg("Created constraint Tr2_TransmissionExists.", quiet)
 end
 # END: Tr2_TransmissionExists.
 
@@ -1860,7 +1961,9 @@ if transmissionmodeling
         end
     end
 
-    logmsg("Created constraints Tr3_Flow, Tr4_MaxFlow, and Tr5_MinFlow.", quiet)
+    length(tr3_flow) > 0 && logmsg("Created constraint Tr3_Flow.", quiet)
+    length(tr4_maxflow) > 0 && logmsg("Created constraint Tr4_MaxFlow.", quiet)
+    length(tr5_minflow) > 0 && logmsg("Created constraint Tr5_MinFlow.", quiet)
 end
 # END: Tr3_Flow, Tr4_MaxFlow, and Tr5_MinFlow.
 
@@ -1969,7 +2072,8 @@ order by n, f, y, l")
         push!(ebb4_energybalanceeachyear, @constraint(jumpmodel, vtransmissionannual[lastkeys[1],lastkeys[3],lastkeys[4]] == sumexps[2]))
     end
 
-    logmsg("Created constraints EBa11Tr_EnergyBalanceEachTS5 and EBb4_EnergyBalanceEachYear.", quiet)
+    length(eba11tr_energybalanceeachts5) > 0 && logmsg("Created constraint EBa11Tr_EnergyBalanceEachTS5.", quiet)
+    length(ebb4_energybalanceeachyear) > 0 && logmsg("Created constraint EBb4_EnergyBalanceEachYear.", quiet)
 end
 # END: EBa11Tr_EnergyBalanceEachTS5 and EBb4_EnergyBalanceEachYear.
 
@@ -1980,7 +2084,7 @@ for (r, f, y) in Base.product(sregion, sfuel, syear)
     push!(ebb0_energybalanceeachyear, @constraint(jumpmodel, sum([vdemandnn[r,l,f,y] for l = stimeslice]) == vdemandannualnn[r,f,y]))
 end
 
-logmsg("Created constraint EBb0_EnergyBalanceEachYear.", quiet)
+length(ebb0_energybalanceeachyear) > 0 && logmsg("Created constraint EBb0_EnergyBalanceEachYear.", quiet)
 # END: EBb0_EnergyBalanceEachYear.
 
 # BEGIN: EBb0Tr_EnergyBalanceEachYear.
@@ -1991,7 +2095,7 @@ if transmissionmodeling
         push!(ebb0tr_energybalanceeachyear, @constraint(jumpmodel, sum([vdemandnodal[n,l,f,y] for l = stimeslice]) == vdemandannualnodal[n,f,y]))
     end
 
-    logmsg("Created constraint EBb0Tr_EnergyBalanceEachYear.", quiet)
+    length(ebb0tr_energybalanceeachyear) > 0 && logmsg("Created constraint EBb0Tr_EnergyBalanceEachYear.", quiet)
 end
 # END: EBb0Tr_EnergyBalanceEachYear.
 
@@ -2002,7 +2106,7 @@ for (r, f, y) in Base.product(sregion, sfuel, syear)
     push!(ebb1_energybalanceeachyear, @constraint(jumpmodel, sum([vproductionnn[r,l,f,y] for l = stimeslice]) == vproductionannualnn[r,f,y]))
 end
 
-logmsg("Created constraint EBb1_EnergyBalanceEachYear.", quiet)
+length(ebb1_energybalanceeachyear) > 0 && logmsg("Created constraint EBb1_EnergyBalanceEachYear.", quiet)
 # END: EBb1_EnergyBalanceEachYear.
 
 # BEGIN: EBb1Tr_EnergyBalanceEachYear.
@@ -2013,7 +2117,7 @@ if transmissionmodeling
         push!(ebb1tr_energybalanceeachyear, @constraint(jumpmodel, sum([vproductionnodal[n,l,f,y] for l = stimeslice]) == vproductionannualnodal[n,f,y]))
     end
 
-    logmsg("Created constraint EBb1Tr_EnergyBalanceEachYear.", quiet)
+    length(ebb1tr_energybalanceeachyear) > 0 && logmsg("Created constraint EBb1Tr_EnergyBalanceEachYear.", quiet)
 end
 # END: EBb1Tr_EnergyBalanceEachYear.
 
@@ -2024,7 +2128,7 @@ for (r, f, y) in Base.product(sregion, sfuel, syear)
     push!(ebb2_energybalanceeachyear, @constraint(jumpmodel, sum([vusenn[r,l,f,y] for l = stimeslice]) == vuseannualnn[r,f,y]))
 end
 
-logmsg("Created constraint EBb2_EnergyBalanceEachYear.", quiet)
+length(ebb2_energybalanceeachyear) > 0 && logmsg("Created constraint EBb2_EnergyBalanceEachYear.", quiet)
 # END: EBb2_EnergyBalanceEachYear.
 
 # BEGIN: EBb2Tr_EnergyBalanceEachYear.
@@ -2035,7 +2139,7 @@ if transmissionmodeling
         push!(ebb2tr_energybalanceeachyear, @constraint(jumpmodel, sum([vusenodal[n,l,f,y] for l = stimeslice]) == vuseannualnodal[n,f,y]))
     end
 
-    logmsg("Created constraint EBb2Tr_EnergyBalanceEachYear.", quiet)
+    length(ebb2tr_energybalanceeachyear) > 0 && logmsg("Created constraint EBb2Tr_EnergyBalanceEachYear.", quiet)
 end
 # END: EBb2Tr_EnergyBalanceEachYear.
 
@@ -2046,7 +2150,7 @@ for (r, rr, f, y) in Base.product(sregion, sregion, sfuel, syear)
     push!(ebb3_energybalanceeachyear, @constraint(jumpmodel, sum([vtrade[r,rr,l,f,y] for l = stimeslice]) == vtradeannual[r,rr,f,y]))
 end
 
-logmsg("Created constraint EBb3_EnergyBalanceEachYear.", quiet)
+length(ebb3_energybalanceeachyear) > 0 && logmsg("Created constraint EBb3_EnergyBalanceEachYear.", quiet)
 # END: EBb3_EnergyBalanceEachYear.
 
 # BEGIN: EBb5_EnergyBalanceEachYear.
@@ -2095,7 +2199,7 @@ if isassigned(lastkeys, 1)
         vdemandannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] + vuseannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] + sumexps[1] + lastvals[1]))
 end
 
-logmsg("Created constraint EBb5_EnergyBalanceEachYear.", quiet)
+length(ebb5_energybalanceeachyear) > 0 && logmsg("Created constraint EBb5_EnergyBalanceEachYear.", quiet)
 # END: EBb5_EnergyBalanceEachYear.
 
 # BEGIN: EBb5Tr_EnergyBalanceEachYear.
@@ -2119,7 +2223,7 @@ if transmissionmodeling
             vdemandannualnodal[n,f,y] + vuseannualnodal[n,f,y] + vtransmissionannual[n,f,y] + row[:aad] * row[:ndd]))
     end
 
-    logmsg("Created constraint EBb5Tr_EnergyBalanceEachYear.", quiet)
+    length(ebb5tr_energybalanceeachyear) > 0 && logmsg("Created constraint EBb5Tr_EnergyBalanceEachYear.", quiet)
 end
 # END: EBb5Tr_EnergyBalanceEachYear.
 
@@ -2171,7 +2275,7 @@ if in("vproductionbytechnology", varstosavearr)
         end
     end  # transmissionmodeling
 
-    logmsg("Created constraint Acc1_FuelProductionByTechnology.", quiet)
+    length(acc1_fuelproductionbytechnology) > 0 && logmsg("Created constraint Acc1_FuelProductionByTechnology.", quiet)
 end  # in("vproductionbytechnology", varstosavearr)
 # END: Acc1_FuelProductionByTechnology.
 
@@ -2223,7 +2327,7 @@ if in("vusebytechnology", varstosavearr)
         end
     end  # transmissionmodeling
 
-    logmsg("Created constraint Acc2_FuelUseByTechnology.", quiet)
+    length(acc2_fuelusebytechnology) > 0 && logmsg("Created constraint Acc2_FuelUseByTechnology.", quiet)
 end  # in("vusebytechnology", varstosavearr)
 # END: Acc2_FuelUseByTechnology.
 
@@ -2262,7 +2366,7 @@ if isassigned(lastkeys, 1)
         vtotalannualtechnologyactivitybymode[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
 end
 
-logmsg("Created constraint Acc3_AverageAnnualRateOfActivity.", quiet)
+length(acc3_averageannualrateofactivity) > 0 && logmsg("Created constraint Acc3_AverageAnnualRateOfActivity.", quiet)
 # END: Acc3_AverageAnnualRateOfActivity.
 
 # BEGIN: Acc4_ModelPeriodCostByRegion.
@@ -2273,20 +2377,22 @@ if in("vmodelperiodcostbyregion", varstosavearr)
         push!(acc4_modelperiodcostbyregion, @constraint(jumpmodel, sum([vtotaldiscountedcost[r,y] for y in syear]) == vmodelperiodcostbyregion[r]))
     end
 
-    logmsg("Created constraint Acc4_ModelPeriodCostByRegion.", quiet)
+    length(acc4_modelperiodcostbyregion) > 0 && logmsg("Created constraint Acc4_ModelPeriodCostByRegion.", quiet)
 end
 # END: Acc4_ModelPeriodCostByRegion.
 
 # BEGIN: NS1_RateOfStorageCharge.
-# vrateofstoragecharge is in terms of energy output/year (e.g., PJ/yr, depending on CapacityToActivityUnit)
+# vrateofstoragechargenn is in terms of energy output/year (e.g., PJ/yr, depending on CapacityToActivityUnit)
 ns1_rateofstoragecharge::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = s, lastkeys[3] = l, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivity sum
 
 for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, l.val as l, y.val as y, tts.m as m, tts.t as t
 from region r, storage s, TIMESLICE l, year y, TechnologyToStorage_def tts
+left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
 where
 tts.r = r.val and tts.s = s.val and tts.val = 1
+and ns.r is null
 order by r.val, s.val, l.val, y.val")
     local r = row[:r]
     local s = row[:s]
@@ -2296,7 +2402,7 @@ order by r.val, s.val, l.val, y.val")
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || s != lastkeys[2] || l != lastkeys[3] || y != lastkeys[4])
         # Create constraint
         push!(ns1_rateofstoragecharge, @constraint(jumpmodel, sumexps[1] ==
-            vrateofstoragecharge[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
+            vrateofstoragechargenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
         sumexps[1] = AffExpr()
     end
 
@@ -2311,22 +2417,75 @@ end
 # Create last constraint
 if isassigned(lastkeys, 1)
     push!(ns1_rateofstoragecharge, @constraint(jumpmodel, sumexps[1] ==
-        vrateofstoragecharge[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
+        vrateofstoragechargenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
 end
 
-logmsg("Created constraint NS1_RateOfStorageCharge.", quiet)
+length(ns1_rateofstoragecharge) > 0 && logmsg("Created constraint NS1_RateOfStorageCharge.", quiet)
 # END: NS1_RateOfStorageCharge.
 
+# BEGIN: NS1Tr_RateOfStorageCharge.
+# vrateofstoragechargenodal is in terms of energy output/year (e.g., PJ/yr, depending on CapacityToActivityUnit)
+if transmissionmodeling
+    ns1tr_rateofstoragecharge::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = s, lastkeys[3] = l, lastkeys[4] = y
+    sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivitynodal sum
+
+    for row in SQLite.DBInterface.execute(db, "select ns.n as n, ns.s as s, l.val as l, ns.y as y, tts.m as m, tts.t as t
+        from nodalstorage ns, TIMESLICE l, TechnologyToStorage_def tts,
+    	NodalDistributionTechnologyCapacity_def ntc, TransmissionModelingEnabled tme,
+    	(select r, t, f, m, y from OutputActivityRatio_def
+        where val <> 0
+        union
+        select r, t, f, m, y from InputActivityRatio_def
+        where val <> 0) ar
+    where
+    tts.r = ns.r and tts.s = ns.s and tts.val = 1
+    and ntc.n = ns.n and ntc.t = tts.t and ntc.y = ns.y and ntc.val > 0
+    and tme.r = ns.r and tme.f = ar.f and tme.y = ns.y
+    and ar.r = ns.r and ar.t = tts.t and ar.m = tts.m and ar.y = ns.y
+    order by ns.n, ns.s, l.val, ns.y")
+        local n = row[:n]
+        local s = row[:s]
+        local l = row[:l]
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (n != lastkeys[1] || s != lastkeys[2] || l != lastkeys[3] || y != lastkeys[4])
+            # Create constraint
+            push!(ns1tr_rateofstoragecharge, @constraint(jumpmodel, sumexps[1] ==
+                vrateofstoragechargenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
+            sumexps[1] = AffExpr()
+        end
+
+        append!(sumexps[1], vrateofactivitynodal[n,l,row[:t],row[:m],y])
+
+        lastkeys[1] = n
+        lastkeys[2] = s
+        lastkeys[3] = l
+        lastkeys[4] = y
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        push!(ns1tr_rateofstoragecharge, @constraint(jumpmodel, sumexps[1] ==
+            vrateofstoragechargenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
+    end
+
+    length(ns1tr_rateofstoragecharge) > 0 && logmsg("Created constraint NS1Tr_RateOfStorageCharge.", quiet)
+end
+# END: NS1Tr_RateOfStorageCharge.
+
 # BEGIN: NS2_RateOfStorageDischarge.
-# vrateofstoragedischarge is in terms of energy output/year (e.g., PJ/yr, depending on CapacityToActivityUnit)
+# vrateofstoragedischargenn is in terms of energy output/year (e.g., PJ/yr, depending on CapacityToActivityUnit)
 ns2_rateofstoragedischarge::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = s, lastkeys[3] = l, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivity sum
 
 for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, l.val as l, y.val as y, tfs.m as m, tfs.t as t
 from region r, storage s, TIMESLICE l, year y, TechnologyFromStorage_def tfs
+left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
 where
 tfs.r = r.val and tfs.s = s.val and tfs.val = 1
+and ns.r is null
 order by r.val, s.val, l.val, y.val")
     local r = row[:r]
     local s = row[:s]
@@ -2336,7 +2495,7 @@ order by r.val, s.val, l.val, y.val")
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || s != lastkeys[2] || l != lastkeys[3] || y != lastkeys[4])
         # Create constraint
         push!(ns2_rateofstoragedischarge, @constraint(jumpmodel, sumexps[1] ==
-            vrateofstoragedischarge[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
+            vrateofstoragedischargenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
         sumexps[1] = AffExpr()
     end
 
@@ -2351,14 +2510,65 @@ end
 # Create last constraint
 if isassigned(lastkeys, 1)
     push!(ns2_rateofstoragedischarge, @constraint(jumpmodel, sumexps[1] ==
-        vrateofstoragedischarge[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
+        vrateofstoragedischargenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
 end
 
-logmsg("Created constraint NS2_RateOfStorageDischarge.", quiet)
+length(ns2_rateofstoragedischarge) > 0 && logmsg("Created constraint NS2_RateOfStorageDischarge.", quiet)
 # END: NS2_RateOfStorageDischarge.
 
+# BEGIN: NS2Tr_RateOfStorageDischarge.
+# vrateofstoragedischargenodal is in terms of energy output/year (e.g., PJ/yr, depending on CapacityToActivityUnit)
+if transmissionmodeling
+    ns2tr_rateofstoragedischarge::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = s, lastkeys[3] = l, lastkeys[4] = y
+    sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivitynodal sum
+
+    for row in SQLite.DBInterface.execute(db, "select ns.n as n, ns.s as s, l.val as l, ns.y as y, tfs.m as m, tfs.t as t
+        from nodalstorage ns, TIMESLICE l, TechnologyFromStorage_def tfs,
+    	NodalDistributionTechnologyCapacity_def ntc, TransmissionModelingEnabled tme,
+    	(select r, t, f, m, y from OutputActivityRatio_def
+        where val <> 0
+        union
+        select r, t, f, m, y from InputActivityRatio_def
+        where val <> 0) ar
+    where
+    tfs.r = ns.r and tfs.s = ns.s and tfs.val = 1
+    and ntc.n = ns.n and ntc.t = tfs.t and ntc.y = ns.y and ntc.val > 0
+    and tme.r = ns.r and tme.f = ar.f and tme.y = ns.y
+    and ar.r = ns.r and ar.t = tfs.t and ar.m = tfs.m and ar.y = ns.y
+    order by ns.n, ns.s, l.val, ns.y")
+        local n = row[:n]
+        local s = row[:s]
+        local l = row[:l]
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (n != lastkeys[1] || s != lastkeys[2] || l != lastkeys[3] || y != lastkeys[4])
+            # Create constraint
+            push!(ns2tr_rateofstoragedischarge, @constraint(jumpmodel, sumexps[1] ==
+                vrateofstoragedischargenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
+            sumexps[1] = AffExpr()
+        end
+
+        append!(sumexps[1], vrateofactivitynodal[n,l,row[:t],row[:m],y])
+
+        lastkeys[1] = n
+        lastkeys[2] = s
+        lastkeys[3] = l
+        lastkeys[4] = y
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        push!(ns2tr_rateofstoragedischarge, @constraint(jumpmodel, sumexps[1] ==
+            vrateofstoragedischargenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
+    end
+
+    length(ns2tr_rateofstoragedischarge) > 0 && logmsg("Created constraint NS2Tr_RateOfStorageDischarge.", quiet)
+end
+# END: NS2Tr_RateOfStorageDischarge.
+
 # BEGIN: NS3_StorageLevelTsGroup1Start, NS4_StorageLevelTsGroup2Start, NS5_StorageLevelTimesliceEnd.
-# Note that vstorageleveltsend represents storage level (in energy terms) at end of first hour in time slice
+# Note that vstorageleveltsendnn represents storage level (in energy terms) at end of first hour in time slice
 ns3_storageleveltsgroup1start::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 ns4_storageleveltsgroup2start::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 ns5_storageleveltimesliceend::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
@@ -2367,9 +2577,11 @@ for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, ltg.l 
     ltg.tg2 as tg2, tg2.[order] as tg2o, ltg.tg1 as tg1, tg1.[order] as tg1o, cast(sls.val as real) as sls
 from REGION r, STORAGE s, YEAR y, LTsGroup ltg, TSGROUP2 tg2, TSGROUP1 tg1
 left join StorageLevelStart_def sls on sls.r = r.val and sls.s = s.val
+left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
 where
 ltg.tg2 = tg2.name
-and ltg.tg1 = tg1.name")
+and ltg.tg1 = tg1.name
+and ns.r is null")
     local r = row[:r]
     local s = row[:s]
     local l = row[:l]
@@ -2388,33 +2600,102 @@ and ltg.tg1 = tg1.name")
         addns3 = true
         addns4 = true
     elseif tg1o == 1 && tg2o == 1 && lo == 1
-        startlevel = vstoragelevelyearend[r, s, string(Meta.parse(y)-1)]
+        startlevel = vstoragelevelyearendnn[r, s, string(Meta.parse(y)-1)]
         addns3 = true
         addns4 = true
     elseif tg2o == 1 && lo == 1
-        startlevel = vstorageleveltsgroup1end[r, s, tsgroup1dict[tg1o-1][1], y]
+        startlevel = vstorageleveltsgroup1endnn[r, s, tsgroup1dict[tg1o-1][1], y]
         addns3 = true
         addns4 = true
     elseif lo == 1
-        startlevel = vstorageleveltsgroup2end[r, s, tg1, tsgroup2dict[tg2o-1][1], y]
+        startlevel = vstorageleveltsgroup2endnn[r, s, tg1, tsgroup2dict[tg2o-1][1], y]
         addns4 = true
     else
-        startlevel = vstorageleveltsend[r, s, ltsgroupdict[(tg1o, tg2o, lo-1)], y]
+        startlevel = vstorageleveltsendnn[r, s, ltsgroupdict[(tg1o, tg2o, lo-1)], y]
     end
 
     if addns3
-        push!(ns3_storageleveltsgroup1start, @constraint(jumpmodel, startlevel == vstorageleveltsgroup1start[r, s, tg1, y]))
+        push!(ns3_storageleveltsgroup1start, @constraint(jumpmodel, startlevel == vstorageleveltsgroup1startnn[r, s, tg1, y]))
     end
 
     if addns4
-        push!(ns4_storageleveltsgroup2start, @constraint(jumpmodel, startlevel == vstorageleveltsgroup2start[r, s, tg1, tg2, y]))
+        push!(ns4_storageleveltsgroup2start, @constraint(jumpmodel, startlevel == vstorageleveltsgroup2startnn[r, s, tg1, tg2, y]))
     end
 
     push!(ns5_storageleveltimesliceend, @constraint(jumpmodel,
-        startlevel + (vrateofstoragecharge[r, s, l, y] - vrateofstoragedischarge[r, s, l, y]) / 8760 == vstorageleveltsend[r, s, l, y]))
+        startlevel + (vrateofstoragechargenn[r, s, l, y] - vrateofstoragedischargenn[r, s, l, y]) / 8760 == vstorageleveltsendnn[r, s, l, y]))
 end
-logmsg("Created constraints NS3_StorageLevelTsGroup1Start, NS4_StorageLevelTsGroup2Start, and NS5_StorageLevelTimesliceEnd.", quiet)
-# BEGIN: NS3_StorageLevelTsGroup1Start, NS4_StorageLevelTsGroup2Start, NS5_StorageLevelTimesliceEnd.
+
+length(ns3_storageleveltsgroup1start) > 0 && logmsg("Created constraint NS3_StorageLevelTsGroup1Start.", quiet)
+length(ns4_storageleveltsgroup2start) > 0 && logmsg("Created constraint NS4_StorageLevelTsGroup2Start.", quiet)
+length(ns5_storageleveltimesliceend) > 0 && logmsg("Created constraint NS5_StorageLevelTimesliceEnd.", quiet)
+# END: NS3_StorageLevelTsGroup1Start, NS4_StorageLevelTsGroup2Start, NS5_StorageLevelTimesliceEnd.
+
+# BEGIN: NS3Tr_StorageLevelTsGroup1Start, NS4Tr_StorageLevelTsGroup2Start, NS5Tr_StorageLevelTimesliceEnd.
+# Note that vstorageleveltsendnodal represents storage level (in energy terms) at end of first hour in time slice
+if transmissionmodeling
+    ns3tr_storageleveltsgroup1start::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    ns4tr_storageleveltsgroup2start::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    ns5tr_storageleveltimesliceend::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+    # Note that this query distributes StorageLevelStart according to NodalDistributionStorageCapacity
+    for row in SQLite.DBInterface.execute(db, "select ns.n as n, ns.s as s, ltg.l as l, ns.y as y, ltg.lorder as lo,
+        ltg.tg2 as tg2, tg2.[order] as tg2o, ltg.tg1 as tg1, tg1.[order] as tg1o,
+    	cast(sls.val * ns.val as real) as sls
+    from nodalstorage ns, LTsGroup ltg, TSGROUP2 tg2, TSGROUP1 tg1
+    left join StorageLevelStart_def sls on sls.r = ns.r and sls.s = ns.s
+    where
+    ltg.tg2 = tg2.name
+    and ltg.tg1 = tg1.name")
+        local n = row[:n]
+        local s = row[:s]
+        local l = row[:l]
+        local y = row[:y]
+        local tg1 = row[:tg1]
+        local tg2 = row[:tg2]
+        local lo = row[:lo]
+        local tg2o = row[:tg2o]
+        local tg1o = row[:tg1o]
+        local startlevel  # Storage level at beginning of first hour in time slice
+        local addns3::Bool = false  # Indicates whether to add to constraint ns3tr
+        local addns4::Bool = false  #  Indicates whether to add to constraint ns4tr
+
+        if y == first(syear) && tg1o == 1 && tg2o == 1 && lo == 1
+            startlevel = ismissing(row[:sls]) ? 0 : row[:sls]
+            addns3 = true
+            addns4 = true
+        elseif tg1o == 1 && tg2o == 1 && lo == 1
+            startlevel = vstoragelevelyearendnodal[n, s, string(Meta.parse(y)-1)]
+            addns3 = true
+            addns4 = true
+        elseif tg2o == 1 && lo == 1
+            startlevel = vstorageleveltsgroup1endnodal[n, s, tsgroup1dict[tg1o-1][1], y]
+            addns3 = true
+            addns4 = true
+        elseif lo == 1
+            startlevel = vstorageleveltsgroup2endnodal[n, s, tg1, tsgroup2dict[tg2o-1][1], y]
+            addns4 = true
+        else
+            startlevel = vstorageleveltsendnodal[n, s, ltsgroupdict[(tg1o, tg2o, lo-1)], y]
+        end
+
+        if addns3
+            push!(ns3tr_storageleveltsgroup1start, @constraint(jumpmodel, startlevel == vstorageleveltsgroup1startnodal[n, s, tg1, y]))
+        end
+
+        if addns4
+            push!(ns4tr_storageleveltsgroup2start, @constraint(jumpmodel, startlevel == vstorageleveltsgroup2startnodal[n, s, tg1, tg2, y]))
+        end
+
+        push!(ns5tr_storageleveltimesliceend, @constraint(jumpmodel,
+            startlevel + (vrateofstoragechargenodal[n, s, l, y] - vrateofstoragedischargenodal[n, s, l, y]) / 8760 == vstorageleveltsendnodal[n, s, l, y]))
+    end
+
+    length(ns3tr_storageleveltsgroup1start) > 0 && logmsg("Created constraint NS3Tr_StorageLevelTsGroup1Start.", quiet)
+    length(ns4tr_storageleveltsgroup2start) > 0 && logmsg("Created constraint NS4Tr_StorageLevelTsGroup2Start.", quiet)
+    length(ns5tr_storageleveltimesliceend) > 0 && logmsg("Created constraint NS5Tr_StorageLevelTimesliceEnd.", quiet)
+end
+# END: NS3Tr_StorageLevelTsGroup1Start, NS4Tr_StorageLevelTsGroup2Start, NS5Tr_StorageLevelTimesliceEnd.
 
 # BEGIN: NS6_StorageLevelTsGroup2End and NS6a_StorageLevelTsGroup2NetZero.
 ns6_storageleveltsgroup2end::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
@@ -2430,10 +2711,12 @@ where
 tg1.name = ltg.tg1
 and tg2.name = ltg.tg2
 group by r.val, s.val, s.netzerotg2, tg1.name, tg1.[order], tg2.name, tg2.[order], tg2.multiplier, y.val) main, LTsGroup ltg2
+left join nodalstorage ns on ns.r = main.r and ns.s = main.s and ns.y = main.y
 where
 ltg2.tg1 = main.tg1
 and ltg2.tg2 = main.tg2
-and ltg2.lorder = main.maxlo")
+and ltg2.lorder = main.maxlo
+and ns.r is null")
     local r = row[:r]
     local s = row[:s]
     local tg2nz = row[:tg2nz]  # 1 = tg2 end level must = tg2 start level
@@ -2441,17 +2724,61 @@ and ltg2.lorder = main.maxlo")
     local tg2 = row[:tg2]
     local y = row[:y]
 
-    push!(ns6_storageleveltsgroup2end, @constraint(jumpmodel, vstorageleveltsgroup2start[r, s, tg1, tg2, y] +
-        (vstorageleveltsend[r, s, row[:maxl], y] - vstorageleveltsgroup2start[r, s, tg1, tg2, y]) * row[:tg2m]
-        == vstorageleveltsgroup2end[r, s, tg1, tg2, y]))
+    push!(ns6_storageleveltsgroup2end, @constraint(jumpmodel, vstorageleveltsgroup2startnn[r, s, tg1, tg2, y] +
+        (vstorageleveltsendnn[r, s, row[:maxl], y] - vstorageleveltsgroup2startnn[r, s, tg1, tg2, y]) * row[:tg2m]
+        == vstorageleveltsgroup2endnn[r, s, tg1, tg2, y]))
 
     if tg2nz == 1
-        push!(ns6a_storageleveltsgroup2netzero, @constraint(jumpmodel, vstorageleveltsgroup2start[r, s, tg1, tg2, y]
-            == vstorageleveltsgroup2end[r, s, tg1, tg2, y]))
+        push!(ns6a_storageleveltsgroup2netzero, @constraint(jumpmodel, vstorageleveltsgroup2startnn[r, s, tg1, tg2, y]
+            == vstorageleveltsgroup2endnn[r, s, tg1, tg2, y]))
     end
 end
-logmsg("Created constraints NS6_StorageLevelTsGroup2End and NS6a_StorageLevelTsGroup2NetZero.", quiet)
+
+length(ns6_storageleveltsgroup2end) > 0 && logmsg("Created constraint NS6_StorageLevelTsGroup2End.", quiet)
+length(ns6a_storageleveltsgroup2netzero) > 0 && logmsg("Created constraint NS6a_StorageLevelTsGroup2NetZero.", quiet)
 # END: NS6_StorageLevelTsGroup2End and NS6a_StorageLevelTsGroup2NetZero.
+
+# BEGIN: NS6Tr_StorageLevelTsGroup2End and NS6aTr_StorageLevelTsGroup2NetZero.
+if transmissionmodeling
+    ns6tr_storageleveltsgroup2end::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    ns6atr_storageleveltsgroup2netzero::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+    for row in SQLite.DBInterface.execute(db, "select main.n, main.s, main.tg2nz, main.tg1, main.tg1o, main.tg2, main.tg2o, cast(main.tg2m as real) as tg2m,
+        main.y, ltg2.l as maxl, main.maxlo
+    from
+    (select ns.n as n, ns.s as s, s.netzerotg2 as tg2nz, tg1.name as tg1, tg1.[order] as tg1o, tg2.name as tg2, tg2.[order] as tg2o,
+    tg2.multiplier as tg2m, ns.y as y, max(ltg.lorder) as maxlo
+    from nodalstorage ns, STORAGE s, TSGROUP1 tg1, TSGROUP2 tg2, LTsGroup ltg
+    where
+    ns.s = s.val
+    and tg1.name = ltg.tg1
+    and tg2.name = ltg.tg2
+    group by ns.n, ns.s, s.netzerotg2, tg1.name, tg1.[order], tg2.name, tg2.[order], tg2.multiplier, ns.y) main, LTsGroup ltg2
+    where
+    ltg2.tg1 = main.tg1
+    and ltg2.tg2 = main.tg2
+    and ltg2.lorder = main.maxlo")
+        local n = row[:n]
+        local s = row[:s]
+        local tg2nz = row[:tg2nz]  # 1 = tg2 end level must = tg2 start level
+        local tg1 = row[:tg1]
+        local tg2 = row[:tg2]
+        local y = row[:y]
+
+        push!(ns6tr_storageleveltsgroup2end, @constraint(jumpmodel, vstorageleveltsgroup2startnodal[n, s, tg1, tg2, y] +
+            (vstorageleveltsendnodal[n, s, row[:maxl], y] - vstorageleveltsgroup2startnodal[n, s, tg1, tg2, y]) * row[:tg2m]
+            == vstorageleveltsgroup2endnodal[n, s, tg1, tg2, y]))
+
+        if tg2nz == 1
+            push!(ns6atr_storageleveltsgroup2netzero, @constraint(jumpmodel, vstorageleveltsgroup2startnodal[n, s, tg1, tg2, y]
+                == vstorageleveltsgroup2endnodal[n, s, tg1, tg2, y]))
+        end
+    end
+
+    length(ns6tr_storageleveltsgroup2end) > 0 && logmsg("Created constraint NS6Tr_StorageLevelTsGroup2End.", quiet)
+    length(ns6atr_storageleveltsgroup2netzero) > 0 && logmsg("Created constraint NS6aTr_StorageLevelTsGroup2NetZero.", quiet)
+end
+# END: NS6Tr_StorageLevelTsGroup2End and NS6aTr_StorageLevelTsGroup2NetZero.
 
 # BEGIN: NS7_StorageLevelTsGroup1End and NS7a_StorageLevelTsGroup1NetZero.
 ns7_storageleveltsgroup1end::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
@@ -2462,9 +2789,11 @@ for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s,
 	tg1.name as tg1, tg1.[order] as tg1o, cast(tg1.multiplier as real) as tg1m,
     y.val as y, max(tg2.[order]) as maxtg2o
 from REGION r, STORAGE s, TSGROUP1 tg1, YEAR as y, LTsGroup ltg, TSGROUP2 tg2
+left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
 where
 tg1.name = ltg.tg1
 and ltg.tg2 = tg2.name
+and ns.r is null
 group by r.val, s.val, tg1.name, tg1.[order], tg1.multiplier, y.val")
     local r = row[:r]
     local s = row[:s]
@@ -2472,17 +2801,55 @@ group by r.val, s.val, tg1.name, tg1.[order], tg1.multiplier, y.val")
     local tg1 = row[:tg1]
     local y = row[:y]
 
-    push!(ns7_storageleveltsgroup1end, @constraint(jumpmodel, vstorageleveltsgroup1start[r, s, tg1, y] +
-        (vstorageleveltsgroup2end[r, s, tg1, tsgroup2dict[row[:maxtg2o]][1], y] - vstorageleveltsgroup1start[r, s, tg1, y]) * row[:tg1m]
-        == vstorageleveltsgroup1end[r, s, tg1, y]))
+    push!(ns7_storageleveltsgroup1end, @constraint(jumpmodel, vstorageleveltsgroup1startnn[r, s, tg1, y] +
+        (vstorageleveltsgroup2endnn[r, s, tg1, tsgroup2dict[row[:maxtg2o]][1], y] - vstorageleveltsgroup1startnn[r, s, tg1, y]) * row[:tg1m]
+        == vstorageleveltsgroup1endnn[r, s, tg1, y]))
 
     if tg1nz == 1
-        push!(ns7a_storageleveltsgroup1netzero, @constraint(jumpmodel, vstorageleveltsgroup1start[r, s, tg1, y]
-            == vstorageleveltsgroup1end[r, s, tg1, y]))
+        push!(ns7a_storageleveltsgroup1netzero, @constraint(jumpmodel, vstorageleveltsgroup1startnn[r, s, tg1, y]
+            == vstorageleveltsgroup1endnn[r, s, tg1, y]))
     end
 end
-logmsg("Created constraints NS7_StorageLevelTsGroup1End and NS7a_StorageLevelTsGroup1NetZero.", quiet)
+
+length(ns7_storageleveltsgroup1end) > 0 && logmsg("Created constraint NS7_StorageLevelTsGroup1End.", quiet)
+length(ns7a_storageleveltsgroup1netzero) > 0 && logmsg("Created constraint NS7a_StorageLevelTsGroup1NetZero.", quiet)
 # END: NS7_StorageLevelTsGroup1End and NS7a_StorageLevelTsGroup1NetZero.
+
+# BEGIN: NS7Tr_StorageLevelTsGroup1End and NS7aTr_StorageLevelTsGroup1NetZero.
+if transmissionmodeling
+    ns7tr_storageleveltsgroup1end::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    ns7atr_storageleveltsgroup1netzero::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+    for row in SQLite.DBInterface.execute(db, "select ns.n as n, ns.s as s,
+        	case s.netzerotg2 when 1 then 0 else s.netzerotg1 end as tg1nz,
+        	tg1.name as tg1, tg1.[order] as tg1o, cast(tg1.multiplier as real) as tg1m,
+            ns.y as y, max(tg2.[order]) as maxtg2o
+        from nodalstorage ns, STORAGE s, TSGROUP1 tg1, LTsGroup ltg, TSGROUP2 tg2
+    where
+    ns.s = s.val
+    and tg1.name = ltg.tg1
+    and ltg.tg2 = tg2.name
+    group by ns.n, ns.s, tg1.name, tg1.[order], tg1.multiplier, ns.y")
+        local n = row[:n]
+        local s = row[:s]
+        local tg1nz = row[:tg1nz]  # 1 = tg1 end level must = tg1 start level (zeroed out when tg2 net zero is activated as tg1 check isn't necessary)
+        local tg1 = row[:tg1]
+        local y = row[:y]
+
+        push!(ns7tr_storageleveltsgroup1end, @constraint(jumpmodel, vstorageleveltsgroup1startnodal[n, s, tg1, y] +
+            (vstorageleveltsgroup2endnodal[n, s, tg1, tsgroup2dict[row[:maxtg2o]][1], y] - vstorageleveltsgroup1startnodal[n, s, tg1, y]) * row[:tg1m]
+            == vstorageleveltsgroup1endnodal[n, s, tg1, y]))
+
+        if tg1nz == 1
+            push!(ns7atr_storageleveltsgroup1netzero, @constraint(jumpmodel, vstorageleveltsgroup1startnodal[n, s, tg1, y]
+                == vstorageleveltsgroup1endnodal[n, s, tg1, y]))
+        end
+    end
+
+    length(ns7tr_storageleveltsgroup1end) > 0 && logmsg("Created constraint NS7Tr_StorageLevelTsGroup1End.", quiet)
+    length(ns7atr_storageleveltsgroup1netzero) > 0 && logmsg("Created constraint NS7aTr_StorageLevelTsGroup1NetZero.", quiet)
+end
+# END: NS7Tr_StorageLevelTsGroup1End and NS7aTr_StorageLevelTsGroup1NetZero.
 
 # BEGIN: NS8_StorageLevelYearEnd and NS8a_StorageLevelYearEndNetZero.
 ns8_storagelevelyearend::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
@@ -2490,8 +2857,7 @@ ns8a_storagelevelyearendnetzero::Array{ConstraintRef, 1} = Array{ConstraintRef, 
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = s, lastkeys[3] = y
 lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = sls
 lastvalsint = Array{Int64, 1}(undef,1)  # lastvalsint[1] = ynz
-sumexps = Array{AffExpr, 1}([AffExpr()])
-# sumexps[1] = vrateofstoragecharge and vrateofstoragedischarge sum
+sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofstoragechargenn and vrateofstoragedischargenn sum
 
 for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s,
 case s.netzerotg2 when 1 then 0 else case s.netzerotg1 when 1 then 0 else s.netzeroyear end end as ynz,
@@ -2499,7 +2865,9 @@ y.val as y, ys.l as l, cast(ys.val as real) as ys,
 cast(sls.val as real) as sls
 from REGION r, STORAGE s, YEAR as y, YearSplit_def ys
 left join StorageLevelStart_def sls on sls.r = r.val and sls.s = s.val
+left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
 where y.val = ys.y
+and ns.r is null
 order by r.val, s.val, y.val")
     local r = row[:r]
     local s = row[:s]
@@ -2509,13 +2877,13 @@ order by r.val, s.val, y.val")
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || s != lastkeys[2] || y != lastkeys[3])
         # Create constraint
         push!(ns8_storagelevelyearend, @constraint(jumpmodel,
-            (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearend[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
-            + sumexps[1] == vstoragelevelyearend[lastkeys[1], lastkeys[2], lastkeys[3]]))
+            (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearendnn[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
+            + sumexps[1] == vstoragelevelyearendnn[lastkeys[1], lastkeys[2], lastkeys[3]]))
 
         if lastvalsint[1] == 1
             push!(ns8a_storagelevelyearendnetzero, @constraint(jumpmodel,
-                (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearend[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
-                == vstoragelevelyearend[lastkeys[1], lastkeys[2], lastkeys[3]]))
+                (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearendnn[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
+                == vstoragelevelyearendnn[lastkeys[1], lastkeys[2], lastkeys[3]]))
         end
 
         sumexps[1] = AffExpr()
@@ -2523,7 +2891,7 @@ order by r.val, s.val, y.val")
         lastvalsint[1] = 0
     end
 
-    append!(sumexps[1], (vrateofstoragecharge[r,s,row[:l],y] - vrateofstoragedischarge[r,s,row[:l],y]) * row[:ys])
+    append!(sumexps[1], (vrateofstoragechargenn[r,s,row[:l],y] - vrateofstoragedischargenn[r,s,row[:l],y]) * row[:ys])
 
     if !ismissing(row[:sls])
         lastvals[1] = row[:sls]
@@ -2538,18 +2906,90 @@ end
 # Create last constraint
 if isassigned(lastkeys, 1)
     push!(ns8_storagelevelyearend, @constraint(jumpmodel,
-        (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearend[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
-        + sumexps[1] == vstoragelevelyearend[lastkeys[1], lastkeys[2], lastkeys[3]]))
+        (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearendnn[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
+        + sumexps[1] == vstoragelevelyearendnn[lastkeys[1], lastkeys[2], lastkeys[3]]))
 
     if lastvalsint[1] == 1
         push!(ns8a_storagelevelyearendnetzero, @constraint(jumpmodel,
-            (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearend[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
-            == vstoragelevelyearend[lastkeys[1], lastkeys[2], lastkeys[3]]))
+            (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearendnn[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
+            == vstoragelevelyearendnn[lastkeys[1], lastkeys[2], lastkeys[3]]))
     end
 end
 
-logmsg("Created constraints NS8_StorageLevelYearEnd and NS8a_StorageLevelYearEndNetZero.", quiet)
+length(ns8_storagelevelyearend) > 0 && logmsg("Created constraint NS8_StorageLevelYearEnd.", quiet)
+length(ns8a_storagelevelyearendnetzero) > 0 && logmsg("Created constraint NS8a_StorageLevelYearEndNetZero.", quiet)
 # END: NS8_StorageLevelYearEnd and NS8a_StorageLevelYearEndNetZero.
+
+# BEGIN: NS8Tr_StorageLevelYearEnd and NS8aTr_StorageLevelYearEndNetZero.
+if transmissionmodeling
+    ns8tr_storagelevelyearend::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    ns8atr_storagelevelyearendnetzero::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = n, lastkeys[2] = s, lastkeys[3] = y
+    lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = sls
+    lastvalsint = Array{Int64, 1}(undef,1)  # lastvalsint[1] = ynz
+    sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofstoragechargenodal and vrateofstoragedischargenodal sum
+
+    # Note that this query distributes StorageLevelStart according to NodalDistributionStorageCapacity
+    for row in SQLite.DBInterface.execute(db, "select ns.n as n, s.val as s,
+    case s.netzerotg2 when 1 then 0 else case s.netzerotg1 when 1 then 0 else s.netzeroyear end end as ynz,
+    ns.y as y, ys.l as l, cast(ys.val as real) as ys,
+    cast(sls.val * ns.val as real) as sls
+    from nodalstorage ns, STORAGE s, YearSplit_def ys
+    left join StorageLevelStart_def sls on sls.r = ns.r and sls.s = ns.s
+    where ns.s = s.val
+	and ns.y = ys.y
+    order by ns.n, ns.s, ns.y")
+        local n = row[:n]
+        local s = row[:s]
+        local ynz = row[:ynz]  # 1 = year end level must = year start level (zeroed out when tg2 net zero or tg1 net zero is activated as year check isn't necessary)
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (n != lastkeys[1] || s != lastkeys[2] || y != lastkeys[3])
+            # Create constraint
+            push!(ns8tr_storagelevelyearend, @constraint(jumpmodel,
+                (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
+                + sumexps[1] == vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], lastkeys[3]]))
+
+            if lastvalsint[1] == 1
+                push!(ns8atr_storagelevelyearendnetzero, @constraint(jumpmodel,
+                    (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
+                    == vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], lastkeys[3]]))
+            end
+
+            sumexps[1] = AffExpr()
+            lastvals[1] = 0.0
+            lastvalsint[1] = 0
+        end
+
+        append!(sumexps[1], (vrateofstoragechargenodal[n,s,row[:l],y] - vrateofstoragedischargenodal[n,s,row[:l],y]) * row[:ys])
+
+        if !ismissing(row[:sls])
+            lastvals[1] = row[:sls]
+        end
+
+        lastvalsint[1] = ynz
+        lastkeys[1] = n
+        lastkeys[2] = s
+        lastkeys[3] = y
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        push!(ns8tr_storagelevelyearend, @constraint(jumpmodel,
+            (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
+            + sumexps[1] == vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], lastkeys[3]]))
+
+        if lastvalsint[1] == 1
+            push!(ns8atr_storagelevelyearendnetzero, @constraint(jumpmodel,
+                (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
+                == vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], lastkeys[3]]))
+        end
+    end
+
+    length(ns8tr_storagelevelyearend) > 0 && logmsg("Created constraint NS8Tr_StorageLevelYearEnd.", quiet)
+    length(ns8atr_storagelevelyearendnetzero) > 0 && logmsg("Created constraint NS8aTr_StorageLevelYearEndNetZero.", quiet)
+end
+# END: NS8Tr_StorageLevelYearEnd and NS8aTr_StorageLevelYearEndNetZero.
 
 # BEGIN: SI1_StorageUpperLimit.
 si1_storageupperlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
@@ -2564,7 +3004,7 @@ left join ResidualStorageCapacity_def rsc on rsc.r = r.val and rsc.s = s.val and
     push!(si1_storageupperlimit, @constraint(jumpmodel, vaccumulatednewstoragecapacity[r,s,y] + (ismissing(row[:rsc]) ? 0 : row[:rsc]) == vstorageupperlimit[r,s,y]))
 end
 
-logmsg("Created constraint SI1_StorageUpperLimit.", quiet)
+length(si1_storageupperlimit) > 0 && logmsg("Created constraint SI1_StorageUpperLimit.", quiet)
 # END: SI1_StorageUpperLimit.
 
 # BEGIN: SI2_StorageLowerLimit.
@@ -2580,7 +3020,7 @@ where msc.r = r.val and msc.s = s.val and msc.y = y.val")
     push!(si2_storagelowerlimit, @constraint(jumpmodel, row[:msc] * vstorageupperlimit[r,s,y] == vstoragelowerlimit[r,s,y]))
 end
 
-logmsg("Created constraint SI2_StorageLowerLimit.", quiet)
+length(si2_storagelowerlimit) > 0 && logmsg("Created constraint SI2_StorageLowerLimit.", quiet)
 # END: SI2_StorageLowerLimit.
 
 # BEGIN: SI3_TotalNewStorage.
@@ -2617,72 +3057,204 @@ if isassigned(lastkeys, 1)
         vaccumulatednewstoragecapacity[lastkeys[1],lastkeys[2],lastkeys[3]]))
 end
 
-logmsg("Created constraint SI3_TotalNewStorage.", quiet)
+length(si3_totalnewstorage) > 0 && logmsg("Created constraint SI3_TotalNewStorage.", quiet)
 # END: SI3_TotalNewStorage.
 
 # BEGIN: NS9a_StorageLevelTsLowerLimit and NS9b_StorageLevelTsUpperLimit.
 ns9a_storageleveltslowerlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 ns9b_storageleveltsupperlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for (r, s, l, y) in Base.product(sregion, sstorage, stimeslice, syear)
-    push!(ns9a_storageleveltslowerlimit, @constraint(jumpmodel, vstoragelowerlimit[r,s,y] <= vstorageleveltsend[r,s,l,y]))
-    push!(ns9b_storageleveltsupperlimit, @constraint(jumpmodel, vstorageleveltsend[r,s,l,y] <= vstorageupperlimit[r,s,y]))
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, l.val as l, y.val as y
+from REGION r, STORAGE s, TIMESLICE l, YEAR y
+left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
+where ns.r is null")
+    local r = row[:r]
+    local s = row[:s]
+    local l = row[:l]
+    local y = row[:y]
+
+    push!(ns9a_storageleveltslowerlimit, @constraint(jumpmodel, vstoragelowerlimit[r,s,y] <= vstorageleveltsendnn[r,s,l,y]))
+    push!(ns9b_storageleveltsupperlimit, @constraint(jumpmodel, vstorageleveltsendnn[r,s,l,y] <= vstorageupperlimit[r,s,y]))
 end
 
-logmsg("Created constraints NS9a_StorageLevelTsLowerLimit and NS9b_StorageLevelTsUpperLimit.", quiet)
+length(ns9a_storageleveltslowerlimit) > 0 && logmsg("Created constraint NS9a_StorageLevelTsLowerLimit.", quiet)
+length(ns9b_storageleveltsupperlimit) > 0 && logmsg("Created constraint NS9b_StorageLevelTsUpperLimit.", quiet)
 # END: NS9a_StorageLevelTsLowerLimit and NS9b_StorageLevelTsUpperLimit.
+
+# BEGIN: NS9aTr_StorageLevelTsLowerLimit and NS9bTr_StorageLevelTsUpperLimit.
+if transmissionmodeling
+    ns9atr_storageleveltslowerlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    ns9btr_storageleveltsupperlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+    for row in SQLite.DBInterface.execute(db, "select ns.r as r, ns.n as n, ns.s as s, l.val as l, ns.y as y, cast(ns.val as real) as nsc
+    from nodalstorage ns, TIMESLICE l")
+        local r = row[:r]
+        local n = row[:n]
+        local s = row[:s]
+        local l = row[:l]
+        local y = row[:y]
+        local nsc = row[:nsc]
+
+        push!(ns9atr_storageleveltslowerlimit, @constraint(jumpmodel, vstoragelowerlimit[r,s,y] * nsc <= vstorageleveltsendnodal[n,s,l,y]))
+        push!(ns9btr_storageleveltsupperlimit, @constraint(jumpmodel, vstorageleveltsendnodal[n,s,l,y] <= vstorageupperlimit[r,s,y] * nsc))
+    end
+
+    length(ns9atr_storageleveltslowerlimit) > 0 && logmsg("Created constraint NS9aTr_StorageLevelTsLowerLimit.", quiet)
+    length(ns9btr_storageleveltsupperlimit) > 0 && logmsg("Created constraint NS9bTr_StorageLevelTsUpperLimit.", quiet)
+end
+# END: NS9aTr_StorageLevelTsLowerLimit and NS9bTr_StorageLevelTsUpperLimit.
 
 # BEGIN: NS10_StorageChargeLimit.
 ns10_storagechargelimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, l.val as l, y.val as y, cast(smc.val as real) as smc
 from region r, storage s, TIMESLICE l, year y, StorageMaxChargeRate_def smc
+left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
 where
 r.val = smc.r
-and s.val = smc.s")
-    push!(ns10_storagechargelimit, @constraint(jumpmodel, vrateofstoragecharge[row[:r], row[:s], row[:l], row[:y]] <= row[:smc]))
+and s.val = smc.s
+and ns.r is null")
+    push!(ns10_storagechargelimit, @constraint(jumpmodel, vrateofstoragechargenn[row[:r], row[:s], row[:l], row[:y]] <= row[:smc]))
 end
 
-logmsg("Created constraint NS10_StorageChargeLimit.", quiet)
+length(ns10_storagechargelimit) > 0 && logmsg("Created constraint NS10_StorageChargeLimit.", quiet)
 # END: NS10_StorageChargeLimit.
+
+# BEGIN: NS10Tr_StorageChargeLimit.
+if transmissionmodeling
+    ns10tr_storagechargelimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+    for row in SQLite.DBInterface.execute(db, "select ns.n as n, ns.s as s, l.val as l, ns.y as y, cast(smc.val as real) as smc
+    from nodalstorage ns, TIMESLICE l, StorageMaxChargeRate_def smc
+    where
+    ns.r = smc.r and ns.s = smc.s")
+        push!(ns10tr_storagechargelimit, @constraint(jumpmodel, vrateofstoragechargenodal[row[:n], row[:s], row[:l], row[:y]] <= row[:smc]))
+    end
+
+    length(ns10tr_storagechargelimit) > 0 && logmsg("Created constraint NS10Tr_StorageChargeLimit.", quiet)
+end
+# END: NS10Tr_StorageChargeLimit.
 
 # BEGIN: NS11_StorageDischargeLimit.
 ns11_storagedischargelimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, l.val as l, y.val as y, cast(smd.val as real) as smd
 from region r, storage s, TIMESLICE l, year y, StorageMaxDischargeRate_def smd
+left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
 where
 r.val = smd.r
-and s.val = smd.s")
-    push!(ns11_storagedischargelimit, @constraint(jumpmodel, vrateofstoragedischarge[row[:r], row[:s], row[:l], row[:y]] <= row[:smd]))
+and s.val = smd.s
+and ns.r is null")
+    push!(ns11_storagedischargelimit, @constraint(jumpmodel, vrateofstoragedischargenn[row[:r], row[:s], row[:l], row[:y]] <= row[:smd]))
 end
 
-logmsg("Created constraint NS11_StorageDischargeLimit.", quiet)
+length(ns11_storagedischargelimit) > 0 && logmsg("Created constraint NS11_StorageDischargeLimit.", quiet)
 # END: NS11_StorageDischargeLimit.
+
+# BEGIN: NS11Tr_StorageDischargeLimit.
+if transmissionmodeling
+    ns11tr_storagedischargelimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+    for row in SQLite.DBInterface.execute(db, "select ns.n as n, ns.s as s, l.val as l, ns.y as y, cast(smd.val as real) as smd
+    from nodalstorage ns, TIMESLICE l, StorageMaxDischargeRate_def smd
+    where
+    ns.r = smd.r and ns.s = smd.s")
+        push!(ns11tr_storagedischargelimit, @constraint(jumpmodel, vrateofstoragedischargenodal[row[:n], row[:s], row[:l], row[:y]] <= row[:smd]))
+    end
+
+    length(ns11tr_storagedischargelimit) > 0 && logmsg("Created constraint NS11Tr_StorageDischargeLimit.", quiet)
+end
+# END: NS11Tr_StorageDischargeLimit.
 
 # BEGIN: NS12a_StorageLevelTsGroup2LowerLimit and NS12b_StorageLevelTsGroup2UpperLimit.
 ns12a_storageleveltsgroup2lowerlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 ns12b_storageleveltsgroup2upperlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for (r, s, tg1, tg2, y) in Base.product(sregion, sstorage, stsgroup1, stsgroup2, syear)
-    push!(ns12a_storageleveltsgroup2lowerlimit, @constraint(jumpmodel, vstoragelowerlimit[r,s,y] <= vstorageleveltsgroup2end[r,s,tg1,tg2,y]))
-    push!(ns12b_storageleveltsgroup2upperlimit, @constraint(jumpmodel, vstorageleveltsgroup2end[r,s,tg1,tg2,y] <= vstorageupperlimit[r,s,y]))
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, tg1.name as tg1, tg2.name as tg2, y.val as y
+from REGION r, STORAGE s, TSGROUP1 tg1, TSGROUP2 tg2, YEAR y
+left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
+where ns.r is null")
+    local r = row[:r]
+    local s = row[:s]
+    local tg1 = row[:tg1]
+    local tg2 = row[:tg2]
+    local y = row[:y]
+
+    push!(ns12a_storageleveltsgroup2lowerlimit, @constraint(jumpmodel, vstoragelowerlimit[r,s,y] <= vstorageleveltsgroup2endnn[r,s,tg1,tg2,y]))
+    push!(ns12b_storageleveltsgroup2upperlimit, @constraint(jumpmodel, vstorageleveltsgroup2endnn[r,s,tg1,tg2,y] <= vstorageupperlimit[r,s,y]))
 end
 
-logmsg("Created constraints NS12a_StorageLevelTsGroup2LowerLimit and NS12b_StorageLevelTsGroup2UpperLimit.", quiet)
+length(ns12a_storageleveltsgroup2lowerlimit) > 0 && logmsg("Created constraint NS12a_StorageLevelTsGroup2LowerLimit.", quiet)
+length(ns12b_storageleveltsgroup2upperlimit) > 0 && logmsg("Created constraint NS12b_StorageLevelTsGroup2UpperLimit.", quiet)
 # END: NS12a_StorageLevelTsGroup2LowerLimit and NS12b_StorageLevelTsGroup2UpperLimit.
+
+# BEGIN: NS12aTr_StorageLevelTsGroup2LowerLimit and NS12bTr_StorageLevelTsGroup2UpperLimit.
+if transmissionmodeling
+    ns12atr_storageleveltsgroup2lowerlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    ns12btr_storageleveltsgroup2upperlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+    for row in SQLite.DBInterface.execute(db, "select ns.r as r, ns.n as n, ns.s as s, tg1.name as tg1, tg2.name as tg2, ns.y as y, cast(ns.val as real) as nsc
+    from nodalstorage ns, TSGROUP1 tg1, TSGROUP2 tg2")
+        local r = row[:r]
+        local n = row[:n]
+        local s = row[:s]
+        local tg1 = row[:tg1]
+        local tg2 = row[:tg2]
+        local y = row[:y]
+        local nsc = row[:nsc]
+
+        push!(ns12atr_storageleveltsgroup2lowerlimit, @constraint(jumpmodel, vstoragelowerlimit[r,s,y] * nsc <= vstorageleveltsgroup2endnodal[n,s,tg1,tg2,y]))
+        push!(ns12btr_storageleveltsgroup2upperlimit, @constraint(jumpmodel, vstorageleveltsgroup2endnodal[n,s,tg1,tg2,y] <= vstorageupperlimit[r,s,y] * nsc))
+    end
+
+    length(ns12atr_storageleveltsgroup2lowerlimit) > 0 && logmsg("Created constraint NS12aTr_StorageLevelTsGroup2LowerLimit.", quiet)
+    length(ns12btr_storageleveltsgroup2upperlimit) > 0 && logmsg("Created constraint NS12bTr_StorageLevelTsGroup2UpperLimit.", quiet)
+end
+# END: NS12aTr_StorageLevelTsGroup2LowerLimit and NS12bTr_StorageLevelTsGroup2UpperLimit.
 
 # BEGIN: NS13a_StorageLevelTsGroup1LowerLimit and NS13b_StorageLevelTsGroup1UpperLimit.
 ns13a_storageleveltsgroup1lowerlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 ns13b_storageleveltsgroup1upperlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for (r, s, tg1, y) in Base.product(sregion, sstorage, stsgroup1, syear)
-    push!(ns13a_storageleveltsgroup1lowerlimit, @constraint(jumpmodel, vstoragelowerlimit[r,s,y] <= vstorageleveltsgroup1end[r,s,tg1,y]))
-    push!(ns13b_storageleveltsgroup1upperlimit, @constraint(jumpmodel, vstorageleveltsgroup1end[r,s,tg1,y] <= vstorageupperlimit[r,s,y]))
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, tg1.name as tg1, y.val as y
+from REGION r, STORAGE s, TSGROUP1 tg1, YEAR y
+left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
+where ns.r is null")
+    local r = row[:r]
+    local s = row[:s]
+    local tg1 = row[:tg1]
+    local y = row[:y]
+
+    push!(ns13a_storageleveltsgroup1lowerlimit, @constraint(jumpmodel, vstoragelowerlimit[r,s,y] <= vstorageleveltsgroup1endnn[r,s,tg1,y]))
+    push!(ns13b_storageleveltsgroup1upperlimit, @constraint(jumpmodel, vstorageleveltsgroup1endnn[r,s,tg1,y] <= vstorageupperlimit[r,s,y]))
 end
 
-logmsg("Created constraints NS13a_StorageLevelTsGroup1LowerLimit and NS13b_StorageLevelTsGroup1UpperLimit.", quiet)
+length(ns13a_storageleveltsgroup1lowerlimit) > 0 && logmsg("Created constraint NS13a_StorageLevelTsGroup1LowerLimit.", quiet)
+length(ns13b_storageleveltsgroup1upperlimit) > 0 && logmsg("Created constraint NS13b_StorageLevelTsGroup1UpperLimit.", quiet)
 # END: NS13a_StorageLevelTsGroup2LowerLimit and NS13b_StorageLevelTsGroup2UpperLimit.
+
+# BEGIN: NS13aTr_StorageLevelTsGroup1LowerLimit and NS13bTr_StorageLevelTsGroup1UpperLimit.
+if transmissionmodeling
+    ns13atr_storageleveltsgroup1lowerlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    ns13btr_storageleveltsgroup1upperlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+    for row in SQLite.DBInterface.execute(db, "select ns.r as r, ns.n as n, ns.s as s, tg1.name as tg1, ns.y as y, cast(ns.val as real) as nsc
+    from nodalstorage ns, TSGROUP1 tg1")
+        local r = row[:r]
+        local n = row[:n]
+        local s = row[:s]
+        local tg1 = row[:tg1]
+        local y = row[:y]
+        local nsc = row[:nsc]
+
+        push!(ns13atr_storageleveltsgroup1lowerlimit, @constraint(jumpmodel, vstoragelowerlimit[r,s,y] * nsc <= vstorageleveltsgroup1endnodal[n,s,tg1,y]))
+        push!(ns13btr_storageleveltsgroup1upperlimit, @constraint(jumpmodel, vstorageleveltsgroup1endnodal[n,s,tg1,y] <= vstorageupperlimit[r,s,y] * nsc))
+    end
+
+    length(ns13atr_storageleveltsgroup1lowerlimit) > 0 && logmsg("Created constraint NS13aTr_StorageLevelTsGroup2LowerLimit.", quiet)
+    length(ns13btr_storageleveltsgroup1upperlimit) > 0 && logmsg("Created constraint NS13bTr_StorageLevelTsGroup2UpperLimit.", quiet)
+end
+# END: NS13aTr_StorageLevelTsGroup2LowerLimit and NS13bTr_StorageLevelTsGroup2UpperLimit.
 
 # BEGIN: NS14_MaxStorageCapacity.
 ns14_maxstoragecapacity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
@@ -2692,7 +3264,7 @@ from TotalAnnualMaxCapacityStorage_def smc")
     push!(ns14_maxstoragecapacity, @constraint(jumpmodel, vstorageupperlimit[row[:r],row[:s],row[:y]] <= row[:smc]))
 end
 
-logmsg("Created constraint NS14_MaxStorageCapacity.", quiet)
+length(ns14_maxstoragecapacity) > 0 && logmsg("Created constraint NS14_MaxStorageCapacity.", quiet)
 # END: NS14_MaxStorageCapacity.
 
 # BEGIN: NS15_MinStorageCapacity.
@@ -2703,7 +3275,7 @@ from TotalAnnualMinCapacityStorage_def smc")
     push!(ns15_minstoragecapacity, @constraint(jumpmodel, row[:smc] <= vstorageupperlimit[row[:r],row[:s],row[:y]]))
 end
 
-logmsg("Created constraint NS15_MinStorageCapacity.", quiet)
+length(ns15_minstoragecapacity) > 0 && logmsg("Created constraint NS15_MinStorageCapacity.", quiet)
 # END: NS15_MinStorageCapacity.
 
 # BEGIN: NS16_MaxStorageCapacityInvestment.
@@ -2714,7 +3286,7 @@ from TotalAnnualMaxCapacityInvestmentStorage_def smc")
     push!(ns16_maxstoragecapacityinvestment, @constraint(jumpmodel, vnewstoragecapacity[row[:r],row[:s],row[:y]] <= row[:smc]))
 end
 
-logmsg("Created constraint NS16_MaxStorageCapacityInvestment.", quiet)
+length(ns16_maxstoragecapacityinvestment) > 0 && logmsg("Created constraint NS16_MaxStorageCapacityInvestment.", quiet)
 # END: NS16_MaxStorageCapacityInvestment.
 
 # BEGIN: NS17_MinStorageCapacityInvestment.
@@ -2725,7 +3297,7 @@ from TotalAnnualMinCapacityInvestmentStorage_def smc")
     push!(ns17_minstoragecapacityinvestment, @constraint(jumpmodel, row[:smc] <= vnewstoragecapacity[row[:r],row[:s],row[:y]]))
 end
 
-logmsg("Created constraint NS17_MinStorageCapacityInvestment.", quiet)
+length(ns17_minstoragecapacityinvestment) > 0 && logmsg("Created constraint NS17_MinStorageCapacityInvestment.", quiet)
 # END: NS17_MinStorageCapacityInvestment.
 
 # BEGIN: NS18_FullLoadHours.
@@ -2738,11 +3310,8 @@ sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vnewcapacity sum
 for row in SQLite.DBInterface.execute(db, "select distinct sf.r as r, sf.s as s, sf.y as y, tfs.t as t, cast(sf.val as real) as flh,
 cast(cta.val as real) as cta
 from StorageFullLoadHours_def sf, TechnologyFromStorage_def tfs, CapacityToActivityUnit_def cta
-where sf.r = tfs.r
-and sf.s = tfs.s
-and tfs.val = 1
-and tfs.r = cta.r
-and tfs.t = cta.t
+where sf.r = tfs.r and sf.s = tfs.s and tfs.val = 1
+and tfs.r = cta.r and tfs.t = cta.t
 order by sf.r, sf.s, sf.y")
     local r = row[:r]
     local s = row[:s]
@@ -2750,7 +3319,7 @@ order by sf.r, sf.s, sf.y")
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || s != lastkeys[2] || y != lastkeys[3])
         # Create constraint
-        push!(ns18_fullloadhours, @constraint(jumpmodel, sumexps[1] * lastvals[1] / 8760 == vnewstoragecapacity[lastkeys[1],lastkeys[2],lastkeys[3]]))
+        push!(ns18_fullloadhours, @constraint(jumpmodel, (sumexps[1]) * lastvals[1] / 8760 == vnewstoragecapacity[lastkeys[1],lastkeys[2],lastkeys[3]]))
         sumexps[1] = AffExpr()
         lastvals[1] = 0.0
     end
@@ -2768,10 +3337,10 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    push!(ns18_fullloadhours, @constraint(jumpmodel, sumexps[1] * lastvals[1] / 8760 == vnewstoragecapacity[lastkeys[1],lastkeys[2],lastkeys[3]]))
+    push!(ns18_fullloadhours, @constraint(jumpmodel, (sumexps[1]) * lastvals[1] / 8760 == vnewstoragecapacity[lastkeys[1],lastkeys[2],lastkeys[3]]))
 end
 
-logmsg("Created constraint NS18_FullLoadHours.", quiet)
+length(ns18_fullloadhours) > 0 && logmsg("Created constraint NS18_FullLoadHours.", quiet)
 # END: NS18_FullLoadHours.
 
 # BEGIN: SI4_UndiscountedCapitalInvestmentStorage.
@@ -2787,7 +3356,7 @@ where ccs.r = r.val and ccs.s = s.val and ccs.y = y.val")
     push!(si4_undiscountedcapitalinvestmentstorage, @constraint(jumpmodel, row[:ccs] * vnewstoragecapacity[r,s,y] == vcapitalinvestmentstorage[r,s,y]))
 end
 
-logmsg("Created constraint SI4_UndiscountedCapitalInvestmentStorage.", quiet)
+length(si4_undiscountedcapitalinvestmentstorage) > 0 && logmsg("Created constraint SI4_UndiscountedCapitalInvestmentStorage.", quiet)
 # END: SI4_UndiscountedCapitalInvestmentStorage.
 
 # BEGIN: SI5_DiscountingCapitalInvestmentStorage.
@@ -2803,7 +3372,7 @@ where dr.r = r.val")
     push!(si5_discountingcapitalinvestmentstorage, @constraint(jumpmodel, vcapitalinvestmentstorage[r,s,y] / ((1 + row[:dr])^(Meta.parse(y) - Meta.parse(first(syear)))) == vdiscountedcapitalinvestmentstorage[r,s,y]))
 end
 
-logmsg("Created constraint SI5_DiscountingCapitalInvestmentStorage.", quiet)
+length(si5_discountingcapitalinvestmentstorage) > 0 && logmsg("Created constraint SI5_DiscountingCapitalInvestmentStorage.", quiet)
 # END: SI5_DiscountingCapitalInvestmentStorage.
 
 # BEGIN: SI6_SalvageValueStorageAtEndOfPeriod1.
@@ -2820,7 +3389,7 @@ and y.val + ols.val - 1 <= " * last(syear))
     push!(si6_salvagevaluestorageatendofperiod1, @constraint(jumpmodel, 0 == vsalvagevaluestorage[r,s,y]))
 end
 
-logmsg("Created constraint SI6_SalvageValueStorageAtEndOfPeriod1.", quiet)
+length(si6_salvagevaluestorageatendofperiod1) > 0 && logmsg("Created constraint SI6_SalvageValueStorageAtEndOfPeriod1.", quiet)
 # END: SI6_SalvageValueStorageAtEndOfPeriod1.
 
 # BEGIN: SI7_SalvageValueStorageAtEndOfPeriod2.
@@ -2845,7 +3414,7 @@ and y.val + ols.val - 1 > " * last(syear))
     push!(si7_salvagevaluestorageatendofperiod2, @constraint(jumpmodel, vcapitalinvestmentstorage[r,s,y] * (1 - (Meta.parse(last(syear)) - Meta.parse(y) + 1) / row[:ols]) == vsalvagevaluestorage[r,s,y]))
 end
 
-logmsg("Created constraint SI7_SalvageValueStorageAtEndOfPeriod2.", quiet)
+length(si7_salvagevaluestorageatendofperiod2) > 0 && logmsg("Created constraint SI7_SalvageValueStorageAtEndOfPeriod2.", quiet)
 # END: SI7_SalvageValueStorageAtEndOfPeriod2.
 
 # BEGIN: SI8_SalvageValueStorageAtEndOfPeriod3.
@@ -2865,7 +3434,7 @@ and y.val + ols.val - 1 > " * last(syear) *
     push!(si8_salvagevaluestorageatendofperiod3, @constraint(jumpmodel, vcapitalinvestmentstorage[r,s,y] * (1 - (((1 + dr)^(Meta.parse(last(syear)) - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ols]) - 1))) == vsalvagevaluestorage[r,s,y]))
 end
 
-logmsg("Created constraint SI8_SalvageValueStorageAtEndOfPeriod3.", quiet)
+length(si8_salvagevaluestorageatendofperiod3) > 0 && logmsg("Created constraint SI8_SalvageValueStorageAtEndOfPeriod3.", quiet)
 # END: SI8_SalvageValueStorageAtEndOfPeriod3.
 
 # BEGIN: SI9_SalvageValueStorageDiscountedToStartYear.
@@ -2881,7 +3450,7 @@ where dr.r = r.val")
     push!(si9_salvagevaluestoragediscountedtostartyear, @constraint(jumpmodel, vsalvagevaluestorage[r,s,y] / ((1 + row[:dr])^(Meta.parse(last(syear)) - Meta.parse(first(syear)) + 1)) == vdiscountedsalvagevaluestorage[r,s,y]))
 end
 
-logmsg("Created constraint SI9_SalvageValueStorageDiscountedToStartYear.", quiet)
+length(si9_salvagevaluestoragediscountedtostartyear) > 0 && logmsg("Created constraint SI9_SalvageValueStorageDiscountedToStartYear.", quiet)
 # END: SI9_SalvageValueStorageDiscountedToStartYear.
 
 # BEGIN: SI10_TotalDiscountedCostByStorage.
@@ -2891,7 +3460,7 @@ for (r, s, y) in Base.product(sregion, sstorage, syear)
     push!(si10_totaldiscountedcostbystorage, @constraint(jumpmodel, vdiscountedcapitalinvestmentstorage[r,s,y] - vdiscountedsalvagevaluestorage[r,s,y] == vtotaldiscountedstoragecost[r,s,y]))
 end
 
-logmsg("Created constraint SI10_TotalDiscountedCostByStorage.", quiet)
+length(si10_totaldiscountedcostbystorage) > 0 && logmsg("Created constraint SI10_TotalDiscountedCostByStorage.", quiet)
 # END: SI10_TotalDiscountedCostByStorage.
 
 # BEGIN: CC1_UndiscountedCapitalInvestment.
@@ -2907,7 +3476,7 @@ where cc.r = r.val and cc.t = t.val and cc.y = y.val")
     push!(cc1_undiscountedcapitalinvestment, @constraint(jumpmodel, row[:cc] * vnewcapacity[r,t,y] == vcapitalinvestment[r,t,y]))
 end
 
-logmsg("Created constraint CC1_UndiscountedCapitalInvestment.", quiet)
+length(cc1_undiscountedcapitalinvestment) > 0 && logmsg("Created constraint CC1_UndiscountedCapitalInvestment.", quiet)
 # END: CC1_UndiscountedCapitalInvestment.
 
 # BEGIN: CC1Tr_UndiscountedCapitalInvestment.
@@ -2923,7 +3492,7 @@ if transmissionmodeling
         push!(cc1tr_undiscountedcapitalinvestment, @constraint(jumpmodel, row[:cc] * vtransmissionbuilt[tr,y] == vcapitalinvestmenttransmission[tr,y]))
     end
 
-    logmsg("Created constraint CC1Tr_UndiscountedCapitalInvestment.", quiet)
+    length(cc1tr_undiscountedcapitalinvestment) > 0 && logmsg("Created constraint CC1Tr_UndiscountedCapitalInvestment.", quiet)
 end
 # END: CC1Tr_UndiscountedCapitalInvestment.
 
@@ -2939,7 +3508,7 @@ for row in queryrtydr
     local t = row[:t]
     local y = row[:y]
 
-    push!(cc2_discountingcapitalinvestment, @constraint(jumpmodel, vcapitalinvestment[r,t,y] / ((1 + row[:dr])^(Meta.parse(y) - Meta.parse(first(syear)))) == vdiscountedcapitalinvestment[r,t,y]))
+    length(cc2_discountingcapitalinvestment) > 0 && push!(cc2_discountingcapitalinvestment, @constraint(jumpmodel, vcapitalinvestment[r,t,y] / ((1 + row[:dr])^(Meta.parse(y) - Meta.parse(first(syear)))) == vdiscountedcapitalinvestment[r,t,y]))
 end
 
 SQLite.reset!(queryrtydr)
@@ -2967,7 +3536,7 @@ if transmissionmodeling
 
     SQLite.reset!(querytrydr)
 
-    logmsg("Created constraint CC2Tr_DiscountingCapitalInvestment.", quiet)
+    length(cc2tr_discountingcapitalinvestment) > 0 && logmsg("Created constraint CC2Tr_DiscountingCapitalInvestment.", quiet)
 end
 # END: CC2Tr_DiscountingCapitalInvestment.
 
@@ -2994,7 +3563,7 @@ and cc.r = r.val and cc.t = t.val and cc.y = y.val")
         row[:cc] * vnewcapacity[r,t,y] * (1 - (((1 + dr)^(Meta.parse(last(syear)) - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ol]) - 1)))))
 end
 
-logmsg("Created constraint SV1_SalvageValueAtEndOfPeriod1.", quiet)
+length(sv1_salvagevalueatendofperiod1) > 0 && logmsg("Created constraint SV1_SalvageValueAtEndOfPeriod1.", quiet)
 # END: SV1_SalvageValueAtEndOfPeriod1.
 
 # BEGIN: SV1Tr_SalvageValueAtEndOfPeriod1.
@@ -3018,7 +3587,7 @@ if transmissionmodeling
             row[:cc] * vtransmissionbuilt[tr,y] * (1 - (((1 + dr)^(Meta.parse(last(syear)) - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ol]) - 1)))))
     end
 
-    logmsg("Created constraint SV1Tr_SalvageValueAtEndOfPeriod1.", quiet)
+    length(sv1tr_salvagevalueatendofperiod1) > 0 && logmsg("Created constraint SV1Tr_SalvageValueAtEndOfPeriod1.", quiet)
 end
 # END: SV1Tr_SalvageValueAtEndOfPeriod1.
 
@@ -3049,7 +3618,7 @@ and y.val + ol.val - 1 > " * last(syear) *
         row[:cc] * vnewcapacity[r,t,y] * (1 - (Meta.parse(last(syear)) - Meta.parse(y) + 1) / row[:ol])))
 end
 
-logmsg("Created constraint SV2_SalvageValueAtEndOfPeriod2.", quiet)
+length(sv2_salvagevalueatendofperiod2) > 0 && logmsg("Created constraint SV2_SalvageValueAtEndOfPeriod2.", quiet)
 # END: SV2_SalvageValueAtEndOfPeriod2.
 
 # BEGIN: SV2Tr_SalvageValueAtEndOfPeriod2.
@@ -3072,7 +3641,7 @@ if transmissionmodeling
             row[:cc] * vtransmissionbuilt[tr,y] * (1 - (Meta.parse(last(syear)) - Meta.parse(y) + 1) / row[:ol])))
     end
 
-    logmsg("Created constraint SV2Tr_SalvageValueAtEndOfPeriod2.", quiet)
+    length(sv2tr_salvagevalueatendofperiod2) > 0 && logmsg("Created constraint SV2Tr_SalvageValueAtEndOfPeriod2.", quiet)
 end
 # END: SV2Tr_SalvageValueAtEndOfPeriod2.
 
@@ -3090,7 +3659,7 @@ and y.val + ol.val - 1 <= " * last(syear))
     push!(sv3_salvagevalueatendofperiod3, @constraint(jumpmodel, vsalvagevalue[r,t,y] == 0))
 end
 
-logmsg("Created constraint SV3_SalvageValueAtEndOfPeriod3.", quiet)
+length(sv3_salvagevalueatendofperiod3) > 0 && logmsg("Created constraint SV3_SalvageValueAtEndOfPeriod3.", quiet)
 # END: SV3_SalvageValueAtEndOfPeriod3.
 
 # BEGIN: SV3Tr_SalvageValueAtEndOfPeriod3.
@@ -3107,7 +3676,7 @@ if transmissionmodeling
         push!(sv3tr_salvagevalueatendofperiod3, @constraint(jumpmodel, vsalvagevaluetransmission[tr,y] == 0))
     end
 
-    logmsg("Created constraint SV3Tr_SalvageValueAtEndOfPeriod3.", quiet)
+    length(sv3tr_salvagevalueatendofperiod3) > 0 && logmsg("Created constraint SV3Tr_SalvageValueAtEndOfPeriod3.", quiet)
 end
 # END: SV3Tr_SalvageValueAtEndOfPeriod3.
 
@@ -3125,7 +3694,7 @@ end
 
 SQLite.reset!(queryrtydr)
 
-logmsg("Created constraint SV4_SalvageValueDiscountedToStartYear.", quiet)
+length(sv4_salvagevaluediscountedtostartyear) > 0 && logmsg("Created constraint SV4_SalvageValueDiscountedToStartYear.", quiet)
 # END: SV4_SalvageValueDiscountedToStartYear.
 
 # BEGIN: SV4Tr_SalvageValueDiscountedToStartYear.
@@ -3142,7 +3711,7 @@ if transmissionmodeling
 
     SQLite.reset!(querytrydr)
 
-    logmsg("Created constraint SV4Tr_SalvageValueDiscountedToStartYear.", quiet)
+    length(sv4tr_salvagevaluediscountedtostartyear) > 0 && logmsg("Created constraint SV4Tr_SalvageValueDiscountedToStartYear.", quiet)
 end
 # END: SV4Tr_SalvageValueDiscountedToStartYear.
 
@@ -3180,7 +3749,7 @@ if isassigned(lastkeys, 1)
         vannualvariableoperatingcost[lastkeys[1],lastkeys[2],lastkeys[3]]))
 end
 
-logmsg("Created constraint OC1_OperatingCostsVariable.", quiet)
+length(oc1_operatingcostsvariable) > 0 && logmsg("Created constraint OC1_OperatingCostsVariable.", quiet)
 # END: OC1_OperatingCostsVariable.
 
 # BEGIN: OC2_OperatingCostsFixedAnnual.
@@ -3196,7 +3765,7 @@ where fc.r = r.val and fc.t = t.val and fc.y = y.val")
     push!(oc2_operatingcostsfixedannual, @constraint(jumpmodel, vtotalcapacityannual[r,t,y] * row[:fc] == vannualfixedoperatingcost[r,t,y]))
 end
 
-logmsg("Created constraint OC2_OperatingCostsFixedAnnual.", quiet)
+length(oc2_operatingcostsfixedannual) > 0 && logmsg("Created constraint OC2_OperatingCostsFixedAnnual.", quiet)
 # END: OC2_OperatingCostsFixedAnnual.
 
 # BEGIN: OC3_OperatingCostsTotalAnnual.
@@ -3206,7 +3775,7 @@ for (r, t, y) in Base.product(sregion, stechnology, syear)
     push!(oc3_operatingcoststotalannual, @constraint(jumpmodel, vannualfixedoperatingcost[r,t,y] + vannualvariableoperatingcost[r,t,y] == voperatingcost[r,t,y]))
 end
 
-logmsg("Created constraint OC3_OperatingCostsTotalAnnual.", quiet)
+length(oc3_operatingcoststotalannual) > 0 && logmsg("Created constraint OC3_OperatingCostsTotalAnnual.", quiet)
 # END: OC3_OperatingCostsTotalAnnual.
 
 # BEGIN: OCTr_OperatingCosts.
@@ -3242,7 +3811,7 @@ if transmissionmodeling
             + vtransmissionexists[lastkeys[1],lastkeys[2]] * lastvals[1] == voperatingcosttransmission[lastkeys[1],lastkeys[2]]))
     end
 
-    logmsg("Created constraint OCTr_OperatingCosts.", quiet)
+    length(octr_operatingcosts) > 0 && logmsg("Created constraint OCTr_OperatingCosts.", quiet)
 end
 # END: OCTr_OperatingCosts.
 
@@ -3261,7 +3830,7 @@ end
 
 SQLite.reset!(queryrtydr)
 
-logmsg("Created constraint OC4_DiscountedOperatingCostsTotalAnnual.", quiet)
+length(oc4_discountedoperatingcoststotalannual) > 0 && logmsg("Created constraint OC4_DiscountedOperatingCostsTotalAnnual.", quiet)
 # END: OC4_DiscountedOperatingCostsTotalAnnual.
 
 # BEGIN: OC4Tr_DiscountedOperatingCostsTotalAnnual.
@@ -3277,7 +3846,7 @@ if transmissionmodeling
             voperatingcosttransmission[tr,y] / ((1 + dr)^(Meta.parse(y) - Meta.parse(first(syear)) + 0.5)) == vdiscountedoperatingcosttransmission[tr,y]))
     end
 
-    logmsg("Created constraint OC4Tr_DiscountedOperatingCostsTotalAnnual.", quiet)
+    length(oc4tr_discountedoperatingcoststotalannual) > 0 && logmsg("Created constraint OC4Tr_DiscountedOperatingCostsTotalAnnual.", quiet)
 end
 # END: OC4Tr_DiscountedOperatingCostsTotalAnnual.
 
@@ -3291,7 +3860,7 @@ for (r, t, y) in Base.product(sregion, stechnology, syear)
         == vtotaldiscountedcostbytechnology[r,t,y]))
 end
 
-logmsg("Created constraint TDC1_TotalDiscountedCostByTechnology.", quiet)
+length(tdc1_totaldiscountedcostbytechnology) > 0 && logmsg("Created constraint TDC1_TotalDiscountedCostByTechnology.", quiet)
 # END: TDC1_TotalDiscountedCostByTechnology.
 
 # BEGIN: TDCTr_TotalDiscountedTransmissionCostByRegion.
@@ -3328,7 +3897,7 @@ if transmissionmodeling
             sumexps[1] == vtotaldiscountedtransmissioncostbyregion[lastkeys[1],lastkeys[2]]))
     end
 
-    logmsg("Created constraint TDCTr_TotalDiscountedTransmissionCostByRegion.", quiet)
+    length(tdctr_totaldiscountedtransmissioncostbyregion) > 0 && logmsg("Created constraint TDCTr_TotalDiscountedTransmissionCostByRegion.", quiet)
 end
 # END: TDCTr_TotalDiscountedTransmissionCostByRegion.
 
@@ -3342,7 +3911,7 @@ for (r, y) in Base.product(sregion, syear)
         == vtotaldiscountedcost[r,y]))
 end
 
-logmsg("Created constraint TDC2_TotalDiscountedCost.", quiet)
+length(tdc2_totaldiscountedcost) > 0 && logmsg("Created constraint TDC2_TotalDiscountedCost.", quiet)
 # END: TDC2_TotalDiscountedCost.
 
 # BEGIN: TCC1_TotalAnnualMaxCapacityConstraint.
@@ -3357,7 +3926,7 @@ from TotalAnnualMaxCapacity_def")
     push!(tcc1_totalannualmaxcapacityconstraint, @constraint(jumpmodel, vtotalcapacityannual[r,t,y] <= row[:tmx]))
 end
 
-logmsg("Created constraint TCC1_TotalAnnualMaxCapacityConstraint.", quiet)
+length(tcc1_totalannualmaxcapacityconstraint) > 0 && logmsg("Created constraint TCC1_TotalAnnualMaxCapacityConstraint.", quiet)
 # END: TCC1_TotalAnnualMaxCapacityConstraint.
 
 # BEGIN: TCC2_TotalAnnualMinCapacityConstraint.
@@ -3373,7 +3942,7 @@ where val > 0")
     push!(tcc2_totalannualmincapacityconstraint, @constraint(jumpmodel, vtotalcapacityannual[r,t,y] >= row[:tmn]))
 end
 
-logmsg("Created constraint TCC2_TotalAnnualMinCapacityConstraint.", quiet)
+length(tcc2_totalannualmincapacityconstraint) > 0 && logmsg("Created constraint TCC2_TotalAnnualMinCapacityConstraint.", quiet)
 # END: TCC2_TotalAnnualMinCapacityConstraint.
 
 # BEGIN: NCC1_TotalAnnualMaxNewCapacityConstraint.
@@ -3388,7 +3957,7 @@ from TotalAnnualMaxCapacityInvestment_def")
     push!(ncc1_totalannualmaxnewcapacityconstraint, @constraint(jumpmodel, vnewcapacity[r,t,y] <= row[:tmx]))
 end
 
-logmsg("Created constraint NCC1_TotalAnnualMaxNewCapacityConstraint.", quiet)
+length(ncc1_totalannualmaxnewcapacityconstraint) > 0 && logmsg("Created constraint NCC1_TotalAnnualMaxNewCapacityConstraint.", quiet)
 # END: NCC1_TotalAnnualMaxNewCapacityConstraint.
 
 # BEGIN: NCC2_TotalAnnualMinNewCapacityConstraint.
@@ -3404,7 +3973,7 @@ where val > 0")
     push!(ncc2_totalannualminnewcapacityconstraint, @constraint(jumpmodel, vnewcapacity[r,t,y] >= row[:tmn]))
 end
 
-logmsg("Created constraint NCC2_TotalAnnualMinNewCapacityConstraint.", quiet)
+length(ncc2_totalannualminnewcapacityconstraint) > 0 && logmsg("Created constraint NCC2_TotalAnnualMinNewCapacityConstraint.", quiet)
 # END: NCC2_TotalAnnualMinNewCapacityConstraint.
 
 # BEGIN: AAC1_TotalAnnualTechnologyActivity.
@@ -3442,7 +4011,7 @@ if (annualactivityupperlimits || annualactivitylowerlimits || modelperiodactivit
             vtotaltechnologyannualactivity[lastkeys[1],lastkeys[2],lastkeys[3]]))
     end
 
-    logmsg("Created constraint AAC1_TotalAnnualTechnologyActivity.", quiet)
+    length(aac1_totalannualtechnologyactivity) > 0 && logmsg("Created constraint AAC1_TotalAnnualTechnologyActivity.", quiet)
 end
 # END: AAC1_TotalAnnualTechnologyActivity.
 
@@ -3459,7 +4028,7 @@ if annualactivityupperlimits
         push!(aac2_totalannualtechnologyactivityupperlimit, @constraint(jumpmodel, vtotaltechnologyannualactivity[r,t,y] <= row[:amx]))
     end
 
-    logmsg("Created constraint AAC2_TotalAnnualTechnologyActivityUpperLimit.", quiet)
+    length(aac2_totalannualtechnologyactivityupperlimit) > 0 && logmsg("Created constraint AAC2_TotalAnnualTechnologyActivityUpperLimit.", quiet)
 end
 # END: AAC2_TotalAnnualTechnologyActivityUpperLimit.
 
@@ -3475,7 +4044,7 @@ if annualactivitylowerlimits
         push!(aac3_totalannualtechnologyactivitylowerlimit, @constraint(jumpmodel, vtotaltechnologyannualactivity[r,t,y] >= row[:amn]))
     end
 
-    logmsg("Created constraint AAC3_TotalAnnualTechnologyActivityLowerLimit.", quiet)
+    length(aac3_totalannualtechnologyactivitylowerlimit) > 0 && logmsg("Created constraint AAC3_TotalAnnualTechnologyActivityLowerLimit.", quiet)
 end
 # END: AAC3_TotalAnnualTechnologyActivityLowerLimit.
 
@@ -3487,7 +4056,7 @@ if modelperiodactivitylowerlimits || modelperiodactivityupperlimits || in("vtota
         push!(tac1_totalmodelhorizontechnologyactivity, @constraint(jumpmodel, sum([vtotaltechnologyannualactivity[r,t,y] for y = syear]) == vtotaltechnologymodelperiodactivity[r,t]))
     end
 
-    logmsg("Created constraint TAC1_TotalModelHorizonTechnologyActivity.", quiet)
+    length(tac1_totalmodelhorizontechnologyactivity) > 0 && logmsg("Created constraint TAC1_TotalModelHorizonTechnologyActivity.", quiet)
 end
 # END: TAC1_TotalModelHorizonTechnologyActivity.
 
@@ -3503,7 +4072,7 @@ if modelperiodactivityupperlimits
         push!(tac2_totalmodelhorizontechnologyactivityupperlimit, @constraint(jumpmodel, vtotaltechnologymodelperiodactivity[r,t] <= row[:mmx]))
     end
 
-    logmsg("Created constraint TAC2_TotalModelHorizonTechnologyActivityUpperLimit.", quiet)
+    length(tac2_totalmodelhorizontechnologyactivityupperlimit) > 0 && logmsg("Created constraint TAC2_TotalModelHorizonTechnologyActivityUpperLimit.", quiet)
 end
 # END: TAC2_TotalModelHorizonTechnologyActivityUpperLimit.
 
@@ -3518,7 +4087,7 @@ if modelperiodactivitylowerlimits
         push!(tac3_totalmodelhorizontechnologyactivitylowerlimit, @constraint(jumpmodel, vtotaltechnologymodelperiodactivity[r,t] >= row[:mmn]))
     end
 
-    logmsg("Created constraint TAC3_TotalModelHorizonTechnologyActivityLowerLimit.", quiet)
+    length(tac3_totalmodelhorizontechnologyactivitylowerlimit) > 0 && logmsg("Created constraint TAC3_TotalModelHorizonTechnologyActivityLowerLimit.", quiet)
 end
 # END: TAC3_TotalModelHorizonTechnologyActivityLowerLimit.
 
@@ -3554,7 +4123,7 @@ if isassigned(lastkeys, 1)
         vtotalcapacityinreservemargin[lastkeys[1],lastkeys[2]]))
 end
 
-logmsg("Created constraint RM1_ReserveMargin_TechnologiesIncluded_In_Activity_Units.", quiet)
+length(rm1_reservemargin_technologiesincluded_in_activity_units) > 0 && logmsg("Created constraint RM1_ReserveMargin_TechnologiesIncluded_In_Activity_Units.", quiet)
 # END: RM1_ReserveMargin_TechnologiesIncluded_In_Activity_Units.
 
 # BEGIN: RM2_ReserveMargin_FuelsIncluded.
@@ -3591,7 +4160,7 @@ if isassigned(lastkeys, 1)
         vdemandneedingreservemargin[lastkeys[1],lastkeys[2],lastkeys[3]]))
 end
 
-logmsg("Created constraint RM2_ReserveMargin_FuelsIncluded.", quiet)
+length(rm2_reservemargin_fuelsincluded) > 0 && logmsg("Created constraint RM2_ReserveMargin_FuelsIncluded.", quiet)
 # END: RM2_ReserveMargin_FuelsIncluded.
 
 # BEGIN: RM3_ReserveMargin_Constraint.
@@ -3607,7 +4176,7 @@ where rm.r = r.val and rm.y = y.val")
     push!(rm3_reservemargin_constraint, @constraint(jumpmodel, vdemandneedingreservemargin[r,l,y] * row[:rm] <= vtotalcapacityinreservemargin[r,y]))
 end
 
-logmsg("Created constraint RM3_ReserveMargin_Constraint.", quiet)
+length(rm3_reservemargin_constraint) > 0 && logmsg("Created constraint RM3_ReserveMargin_Constraint.", quiet)
 # END: RM3_ReserveMargin_Constraint.
 
 # BEGIN: RE1_FuelProductionByTechnologyAnnual.
@@ -3645,7 +4214,7 @@ if isassigned(lastkeys, 1)
     push!(re1_fuelproductionbytechnologyannual, @constraint(jumpmodel, sumexps[1] == vproductionbytechnologyannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
 end
 
-logmsg("Created constraint RE1_FuelProductionByTechnologyAnnual.", quiet)
+length(re1_fuelproductionbytechnologyannual) > 0 && logmsg("Created constraint RE1_FuelProductionByTechnologyAnnual.", quiet)
 # END: RE1_FuelProductionByTechnologyAnnual.
 
 # BEGIN: FuelUseByTechnologyAnnual.
@@ -3683,7 +4252,7 @@ if isassigned(lastkeys, 1)
     push!(fuelusebytechnologyannual, @constraint(jumpmodel, sumexps[1] == vusebytechnologyannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
 end
 
-logmsg("Created constraint FuelUseByTechnologyAnnual.", quiet)
+length(fuelusebytechnologyannual) > 0 && logmsg("Created constraint FuelUseByTechnologyAnnual.", quiet)
 # END: FuelUseByTechnologyAnnual.
 
 # BEGIN: RE2_TechIncluded.
@@ -3721,7 +4290,7 @@ if isassigned(lastkeys, 1)
         vtotalreproductionannual[lastkeys[1],lastkeys[2]]))
 end
 
-logmsg("Created constraint RE2_TechIncluded.", quiet)
+length(re2_techincluded) > 0 && logmsg("Created constraint RE2_TechIncluded.", quiet)
 # END: RE2_TechIncluded.
 
 # BEGIN: RE3_FuelIncluded.
@@ -3757,7 +4326,7 @@ if isassigned(lastkeys, 1)
         vretotalproductionoftargetfuelannual[lastkeys[1],lastkeys[2]]))
 end
 
-logmsg("Created constraint RE3_FuelIncluded.", quiet)
+length(re3_fuelincluded) > 0 && logmsg("Created constraint RE3_FuelIncluded.", quiet)
 # END: RE3_FuelIncluded.
 
 # BEGIN: RE4_EnergyConstraint.
@@ -3781,7 +4350,7 @@ where rmp.r = ry.r and rmp.y = ry.y")
     push!(re4_energyconstraint, @constraint(jumpmodel, row[:rmp] * vretotalproductionoftargetfuelannual[r,y] <= vtotalreproductionannual[r,y]))
 end
 
-logmsg("Created constraint RE4_EnergyConstraint.", quiet)
+length(re4_energyconstraint) > 0 && logmsg("Created constraint RE4_EnergyConstraint.", quiet)
 # END: RE4_EnergyConstraint.
 
 # Omitting RE5_FuelUseByTechnologyAnnual because it's just an identity that's not used elsewhere in model
@@ -3807,7 +4376,7 @@ if in("vannualtechnologyemissionbymode", varstosavearr)
 
     SQLite.reset!(queryvannualtechnologyemissionbymode)
 
-    logmsg("Created constraint E1_AnnualEmissionProductionByMode.", quiet)
+    length(e1_annualemissionproductionbymode) > 0 && logmsg("Created constraint E1_AnnualEmissionProductionByMode.", quiet)
 end
 # END: E1_AnnualEmissionProductionByMode.
 
@@ -3843,7 +4412,7 @@ if isassigned(lastkeys, 1)
         vannualtechnologyemission[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
 end
 
-logmsg("Created constraint E2_AnnualEmissionProduction.", quiet)
+length(e2_annualemissionproduction) > 0 && logmsg("Created constraint E2_AnnualEmissionProduction.", quiet)
 # END: E2_AnnualEmissionProduction.
 
 # BEGIN: E3_EmissionsPenaltyByTechAndEmission.
@@ -3868,7 +4437,7 @@ if in("vannualtechnologyemissionpenaltybyemission", varstosavearr)
 
     SQLite.reset!(queryvannualtechnologyemissionpenaltybyemission)
 
-    logmsg("Created constraint E3_EmissionsPenaltyByTechAndEmission.", quiet)
+    length(e3_emissionspenaltybytechandemission) > 0 && logmsg("Created constraint E3_EmissionsPenaltyByTechAndEmission.", quiet)
 end
 # END: E3_EmissionsPenaltyByTechAndEmission.
 
@@ -3903,7 +4472,7 @@ if isassigned(lastkeys, 1)
         vannualtechnologyemissionspenalty[lastkeys[1],lastkeys[2],lastkeys[3]]))
 end
 
-logmsg("Created constraint E4_EmissionsPenaltyByTechnology.", quiet)
+length(e4_emissionspenaltybytechnology) > 0 && logmsg("Created constraint E4_EmissionsPenaltyByTechnology.", quiet)
 # END: E4_EmissionsPenaltyByTechnology.
 
 # BEGIN: E5_DiscountedEmissionsPenaltyByTechnology.
@@ -3918,7 +4487,7 @@ for row in queryrtydr
     push!(e5_discountedemissionspenaltybytechnology, @constraint(jumpmodel, vannualtechnologyemissionspenalty[r,t,y] / ((1 + dr)^(Meta.parse(y) - Meta.parse(first(syear)) + 0.5)) == vdiscountedtechnologyemissionspenalty[r,t,y]))
 end
 
-logmsg("Created constraint E5_DiscountedEmissionsPenaltyByTechnology.", quiet)
+length(e5_discountedemissionspenaltybytechnology) > 0 && logmsg("Created constraint E5_DiscountedEmissionsPenaltyByTechnology.", quiet)
 # END: E5_DiscountedEmissionsPenaltyByTechnology.
 
 # BEGIN: E6_EmissionsAccounting1.
@@ -3953,7 +4522,7 @@ if isassigned(lastkeys, 1)
         vannualemissions[lastkeys[1],lastkeys[2],lastkeys[3]]))
 end
 
-logmsg("Created constraint E6_EmissionsAccounting1.", quiet)
+length(e6_emissionsaccounting1) > 0 && logmsg("Created constraint E6_EmissionsAccounting1.", quiet)
 # END: E6_EmissionsAccounting1.
 
 # BEGIN: E7_EmissionsAccounting2.
@@ -3969,7 +4538,7 @@ left join ModelPeriodExogenousEmission_def mpe on mpe.r = r.val and mpe.e = e.va
     push!(e7_emissionsaccounting2, @constraint(jumpmodel, sum([vannualemissions[r,e,y] for y = syear]) == vmodelperiodemissions[r,e] - mpe))
 end
 
-logmsg("Created constraint E7_EmissionsAccounting2.", quiet)
+length(e7_emissionsaccounting2) > 0 && logmsg("Created constraint E7_EmissionsAccounting2.", quiet)
 # END: E7_EmissionsAccounting2.
 
 # BEGIN: E8_AnnualEmissionsLimit.
@@ -3987,7 +4556,7 @@ where ael.r = r.val and ael.e = e.val and ael.y = y.val")
     push!(e8_annualemissionslimit, @constraint(jumpmodel, vannualemissions[r,e,y] + aee <= row[:ael]))
 end
 
-logmsg("Created constraint E8_AnnualEmissionsLimit.", quiet)
+length(e8_annualemissionslimit) > 0 && logmsg("Created constraint E8_AnnualEmissionsLimit.", quiet)
 # END: E8_AnnualEmissionsLimit.
 
 # BEGIN: E9_ModelPeriodEmissionsLimit.
@@ -4002,7 +4571,7 @@ where mpl.r = r.val and mpl.e = e.val")
     push!(e9_modelperiodemissionslimit, @constraint(jumpmodel, vmodelperiodemissions[r,e] <= row[:mpl]))
 end
 
-logmsg("Created constraint E9_ModelPeriodEmissionsLimit.", quiet)
+length(e9_modelperiodemissionslimit) > 0 && logmsg("Created constraint E9_ModelPeriodEmissionsLimit.", quiet)
 # END: E9_ModelPeriodEmissionsLimit.
 
 # BEGIN: Perform customconstraints include.
@@ -4037,82 +4606,3 @@ logmsg("Finished saving results to database.", quiet)
 logmsg("Finished scenario calculation.")
 return status
 end  # calculatescenario()
-
-"""
-    calculategmpscenario(
-    gmpdatapath::String,
-    gmpmodelpath::String = normpath(joinpath(@__DIR__, "..", "utils", "gmpl2sql",
-        "osemosys_2017_11_08_long.txt"));
-    jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
-    varstosave::String = "vdemand, vnewstoragecapacity,
-        vaccumulatednewstoragecapacity, vstorageupperlimit, vstoragelowerlimit,
-        vcapitalinvestmentstorage, vdiscountedcapitalinvestmentstorage,
-        vsalvagevaluestorage, vdiscountedsalvagevaluestorage, vnewcapacity,
-        vaccumulatednewcapacity, vtotalcapacityannual,
-        vtotaltechnologyannualactivity, vtotalannualtechnologyactivitybymode,
-        vproductionbytechnologyannual, vproduction, vusebytechnologyannual,
-        vusenn, vtrade, vtradeannual, vproductionannual, vuseannual,
-        vcapitalinvestment, vdiscountedcapitalinvestment, vsalvagevalue,
-        vdiscountedsalvagevalue, voperatingcost, vdiscountedoperatingcost,
-        vtotaldiscountedcost",
-    targetprocs::Array{Int, 1} = Array{Int, 1}([1]),
-    quiet::Bool = false)
-
-Runs NEMO for a scenario specified in a GNU MathProg data file. Saves results in a
-NEMO-compatible SQLite database in same directory as GNU MathProg data file. Returns
-a Symbol indicating the solve status reported by the solver.
-
-# Arguments
-
-- `gmpdatapath::String`: Path to GNU MathProg data file.
-- `gmpmodelpath::String`: Path to GNU MathProg model file corresponding to data file.
-- `jumpmodel::JuMP.Model`: JuMP model object specifying MIP solver to be used.
-    Examples: Model(solver = GLPKSolverMIP(presolve=true)), Model(solver = CplexSolver()),
-    Model(solver = CbcSolver(logLevel=1, presolve="on")).
-    Note that solver package must be installed (GLPK and Cbc are installed with NEMO by
-    default).
-- `varstosave::String`: Comma-delimited list of model variables whose results should be
-    saved in SQLite database.
-- `targetprocs::Array{Int, 1}`: Processes that should be used for parallelized operations
-    within this function.
-- `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to
-    STDOUT).
-
-!!! tip
-For small models, performance may be improved by turning off the solver's presolve function. For
-example, `jumpmodel = Model(solver = GLPKSolverMIP(presolve=false))` or
-`jumpmodel = Model(solver = CbcSolver(logLevel=1, presolve="off"))`.
-"""
-function calculategmpscenario(
-    gmpdatapath::String,
-    gmpmodelpath::String = normpath(joinpath(@__DIR__, "..", "utils", "gmpl2sql", "osemosys_2017_11_08_long.txt"));
-    jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
-    varstosave::String = "vdemand, vnewstoragecapacity, vaccumulatednewstoragecapacity, vstorageupperlimit, vstoragelowerlimit, vcapitalinvestmentstorage, vdiscountedcapitalinvestmentstorage, vsalvagevaluestorage, vdiscountedsalvagevaluestorage, vnewcapacity, vaccumulatednewcapacity, vtotalcapacityannual, vtotaltechnologyannualactivity, vtotalannualtechnologyactivitybymode, vproductionbytechnologyannual, vproduction, vusebytechnologyannual, vusenn, vtrade, vtradeannual, vproductionannual, vuseannual, vcapitalinvestment, vdiscountedcapitalinvestment, vsalvagevalue, vdiscountedsalvagevalue, voperatingcost, vdiscountedoperatingcost, vtotaldiscountedcost",
-    targetprocs::Array{Int, 1} = Array{Int, 1}([1]),
-    quiet::Bool = false)
-
-    logmsg("Started conversion of MathProg data file.")
-
-    # BEGIN: Validate arguments.
-    if !isfile(gmpdatapath)
-        error("gmpdatapath must refer to a file.")
-    end
-
-    if !isfile(gmpmodelpath)
-        error("gmpmodelpath must refer to a file.")
-    end
-
-    logmsg("Validated run-time arguments.", quiet)
-    # END: Validate arguments.
-
-    # BEGIN: Convert data file into NEMO SQLite database.
-    local gmp2sqlprog::String = normpath(joinpath(@__DIR__, "..", "utils", "gmpl2sql", "gmpl2sql.exe"))  # Full path to gmp2sql.exe
-    run(`$gmp2sqlprog -d $gmpdatapath -m $gmpmodelpath`)
-    # END: Convert data file into NEMO SQLite database.
-
-    logmsg("Finished conversion of MathProg data file.")
-
-    # Call calculatescenario()
-    status::Symbol = calculatescenario(splitext(gmpdatapath)[1] * ".sl3"; jumpmodel=jumpmodel, varstosave=varstosave, targetprocs=targetprocs, quiet=quiet)
-    return status
-end  # calculategmpscenario()

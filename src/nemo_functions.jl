@@ -721,6 +721,26 @@ function dropdefaultviews(db::SQLite.DB)
 end  # dropdefaultviews(db::SQLite.DB)
 
 """
+    create_other_nemo_indices(db::SQLite.DB)
+
+Creates miscellaneous indices needed by NEMO."""
+function create_other_nemo_indices(db::SQLite.DB)
+    try
+        # BEGIN: SQLite transaction.
+        SQLite.DBInterface.execute(db, "BEGIN")
+
+        SQLite.DBInterface.execute(db, "CREATE UNIQUE INDEX IF NOT EXISTS `TransmissionModelingEnabled_fks_unique` ON `TransmissionModelingEnabled` ( `r`, `f`, `y` )")
+
+        SQLite.DBInterface.execute(db, "COMMIT")
+        # END: SQLite transaction.
+    catch
+        # Rollback transaction and rethrow error
+        SQLite.DBInterface.execute(db, "ROLLBACK")
+        rethrow()
+    end
+end  # create_other_nemo_indices(db::SQLite.DB)
+
+"""
     savevarresults(vars::Array{String,1},
     modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}},
     db::SQLite.DB, solvedtmstr::String, quiet::Bool = false)
