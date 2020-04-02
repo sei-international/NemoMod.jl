@@ -589,6 +589,26 @@ modelvarindices["vmodelperiodemissions"] = (vmodelperiodemissions, ["r", "e"])
 logmsg("Defined emissions variables.", quiet)
 
 # Transmission
+# Temporary table to avoid having to repeat query several times; used as a filter in nodal and non-nodal storage modeling
+SQLite.DBInterface.execute(db, "create temporary table nodalstorage as
+select distinct n.r as r, nsc.n as n, nsc.s as s, nsc.y as y, nsc.val as val
+from NodalDistributionStorageCapacity_def nsc, node n,
+    NodalDistributionTechnologyCapacity_def ntc, TransmissionModelingEnabled tme,
+    (select r, t, f, m, y from OutputActivityRatio_def
+    where val <> 0
+    union
+    select r, t, f, m, y from InputActivityRatio_def
+    where val <> 0) ar,
+    (select r, t, s, m from TechnologyFromStorage_def where val = 1
+    union
+    select r, t, s, m from TechnologyToStorage_def where val = 1) ts
+where nsc.val > 0
+and n.val = nsc.n
+and ntc.val > 0 and ntc.n = nsc.n and ntc.t = ar.t and ntc.y = nsc.y
+and tme.r = n.r and tme.f = ar.f and tme.y = nsc.y
+and ar.r = n.r and ar.y = nsc.y
+and ts.r = n.r and ts.t = ntc.t and ts.s = nsc.s and ts.m = ar.m")
+
 if transmissionmodeling
     queryvrateofactivitynodal::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
     "select ntc.n as n, l.val as l, ntc.t as t, ar.m as m, ntc.y as y
@@ -712,26 +732,6 @@ if transmissionmodeling
 	and ys.y = tme1.y
 	and tl.f = tcta.f
     order by tl.id, tme1.y") |> DataFrame
-
-    # Temporary table to avoid having to repeat query several times
-    SQLite.DBInterface.execute(db, "create temporary table nodalstorage as
-    select distinct n.r as r, nsc.n as n, nsc.s as s, nsc.y as y, nsc.val as val
-    from NodalDistributionStorageCapacity_def nsc, node n,
-    	NodalDistributionTechnologyCapacity_def ntc, TransmissionModelingEnabled tme,
-    	(select r, t, f, m, y from OutputActivityRatio_def
-        where val <> 0
-        union
-        select r, t, f, m, y from InputActivityRatio_def
-        where val <> 0) ar,
-    	(select r, t, s, m from TechnologyFromStorage_def where val = 1
-    	union
-    	select r, t, s, m from TechnologyToStorage_def where val = 1) ts
-    where nsc.val > 0
-    and n.val = nsc.n
-    and ntc.val > 0 and ntc.n = nsc.n and ntc.t = ar.t and ntc.y = nsc.y
-    and tme.r = n.r and tme.f = ar.f and tme.y = nsc.y
-    and ar.r = n.r and ar.y = nsc.y
-    and ts.r = n.r and ts.t = ntc.t and ts.s = nsc.s and ts.m = ar.m")
 
     queryvstorageleveltsgroup1::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
     "select ns.n as n, ns.s as s, tg1.name as tg1, ns.y as y
