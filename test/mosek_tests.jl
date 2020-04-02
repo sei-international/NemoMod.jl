@@ -113,8 +113,7 @@ if @isdefined Mosek
 
         # Test with storage net zero constraints
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = MosekSolver()), restrictvars=true)
-            # Mosek has trouble with this problem without restrictvars
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = MosekSolver()))
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
