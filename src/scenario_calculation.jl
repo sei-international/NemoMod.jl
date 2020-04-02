@@ -89,6 +89,7 @@ end
 # BEGIN: Set module global variables that depend on arguments.
 global csdbpath = dbpath
 global csquiet = quiet
+global csjumpmodel = jumpmodel
 
 if configfile != nothing && haskey(configfile, "includes", "customconstraints")
     # Define global variable for jumpmodel
@@ -3508,12 +3509,12 @@ for row in queryrtydr
     local t = row[:t]
     local y = row[:y]
 
-    length(cc2_discountingcapitalinvestment) > 0 && push!(cc2_discountingcapitalinvestment, @constraint(jumpmodel, vcapitalinvestment[r,t,y] / ((1 + row[:dr])^(Meta.parse(y) - Meta.parse(first(syear)))) == vdiscountedcapitalinvestment[r,t,y]))
+    push!(cc2_discountingcapitalinvestment, @constraint(jumpmodel, vcapitalinvestment[r,t,y] / ((1 + row[:dr])^(Meta.parse(y) - Meta.parse(first(syear)))) == vdiscountedcapitalinvestment[r,t,y]))
 end
 
 SQLite.reset!(queryrtydr)
 
-logmsg("Created constraint CC2_DiscountingCapitalInvestment.", quiet)
+length(cc2_discountingcapitalinvestment) > 0 && logmsg("Created constraint CC2_DiscountingCapitalInvestment.", quiet)
 # END: CC2_DiscountingCapitalInvestment.
 
 # BEGIN: CC2Tr_DiscountingCapitalInvestment.
