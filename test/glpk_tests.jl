@@ -133,3 +133,43 @@
     NemoMod.dropresulttables(db)
     testqry = SQLite.DBInterface.execute(db, "VACUUM")
 end  # "Solving storage_test with GLPK"
+
+@testset "Solving storage_transmission_test with GLPK" begin
+    dbfile = joinpath(@__DIR__, "storage_transmission_test.sqlite")
+    chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
+
+    NemoMod.calculatescenario(dbfile;
+        varstosave =
+            "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
+            * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
+        quiet = false)
+
+    db = SQLite.DB(dbfile)
+    testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+
+    @test testqry[1,:y] == "2020"
+    @test testqry[2,:y] == "2021"
+    @test testqry[3,:y] == "2022"
+    @test testqry[4,:y] == "2023"
+    @test testqry[5,:y] == "2024"
+    @test testqry[6,:y] == "2025"
+    @test testqry[7,:y] == "2026"
+    @test testqry[8,:y] == "2027"
+    @test testqry[9,:y] == "2028"
+    @test testqry[10,:y] == "2029"
+
+    @test isapprox(testqry[1,:val], 9786.566266038; atol=TOL)
+    @test isapprox(testqry[2,:val], 239.49518743249; atol=TOL)
+    @test isapprox(testqry[3,:val], 228.090642412206; atol=TOL)
+    @test isapprox(testqry[4,:val], 217.22918324972; atol=TOL)
+    @test isapprox(testqry[5,:val], 206.884936428305; atol=TOL)
+    @test isapprox(testqry[6,:val], 197.033272788862; atol=TOL)
+    @test isapprox(testqry[7,:val], 187.650735989392; atol=TOL)
+    @test isapprox(testqry[8,:val], 178.714986656564; atol=TOL)
+    @test isapprox(testqry[9,:val], 170.204749196731; atol=TOL)
+    @test isapprox(testqry[10,:val], 162.099761139741; atol=TOL)
+
+    # Delete test results and re-compact test database
+    NemoMod.dropresulttables(db)
+    testqry = SQLite.DBInterface.execute(db, "VACUUM")
+end  # "Solving storage_transmission_test with GLPK"

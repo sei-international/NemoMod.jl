@@ -145,8 +145,8 @@ if @isdefined Mosek
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
     end  # "Solving storage_test with Mosek"
 
-    @testset "Solving transmission_test with Mosek" begin
-        dbfile = joinpath(@__DIR__, "transmission_test.sqlite")
+    @testset "Solving storage_transmission_test with Mosek" begin
+        dbfile = joinpath(@__DIR__, "storage_transmission_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = MosekSolver()),
@@ -169,19 +169,19 @@ if @isdefined Mosek
         @test testqry[9,:y] == "2028"
         @test testqry[10,:y] == "2029"
 
-        @test isapprox(testqry[1,:val], 9760.93950512949; atol=TOL)
-        @test isapprox(testqry[2,:val], 4617.89200131236; atol=TOL)
-        @test isapprox(testqry[3,:val], 4397.99238220224; atol=TOL)
-        @test isapprox(testqry[4,:val], 4188.56417352595; atol=TOL)
-        @test isapprox(testqry[5,:val], 3989.10873669138; atol=TOL)
-        @test isapprox(testqry[6,:val], 3799.15117780131; atol=TOL)
-        @test isapprox(testqry[7,:val], 3618.23921695363; atol=TOL)
-        @test isapprox(testqry[8,:val], 3445.94211138441; atol=TOL)
-        @test isapprox(testqry[9,:val], 3281.84962988991; atol=TOL)
-        @test isapprox(testqry[10,:val], 3125.57107608563; atol=TOL)
+        @test isapprox(testqry[1,:val], 9786.566268055; atol=TOL)
+        @test isapprox(testqry[2,:val], 239.495185664255; atol=TOL)
+        @test isapprox(testqry[3,:val], 228.090642412206; atol=TOL)
+        @test isapprox(testqry[4,:val], 217.22918324972; atol=TOL)
+        @test isapprox(testqry[5,:val], 206.884936428305; atol=TOL)
+        @test isapprox(testqry[6,:val], 197.033272788861; atol=TOL)
+        @test isapprox(testqry[7,:val], 187.650735989392; atol=TOL)
+        @test isapprox(testqry[8,:val], 178.714986656564; atol=TOL)
+        @test isapprox(testqry[9,:val], 170.204749196728; atol=TOL)
+        @test isapprox(testqry[10,:val], 162.099761139741; atol=TOL)
 
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
-    end  # "Solving transmission_test with Mosek"
+    end  # "Solving storage_transmission_test with Mosek"
 end  # @isdefined Mosek
