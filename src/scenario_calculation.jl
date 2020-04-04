@@ -102,11 +102,11 @@ db = SQLite.DB(dbpath)
 logmsg("Connected to scenario database. Path = " * dbpath * ".", quiet)
 # END: Connect to SQLite database.
 
-# BEGIN: Temporary - add new tables in dictionary v.1 and v.2 to db.
+# BEGIN: Temporary - add new objects in dictionary v.1-3 to db.
 addtransmissiontables(db; quiet = quiet)
 addstoragefullloadhours(db; quiet = quiet)
 addstoragenetzero(db; quiet = quiet)
-# END: Temporary - add new tables in dictionary v.1 and v.2 to db.
+# END: Temporary - add new objects in dictionary v.1-3 to db.
 
 # BEGIN: Perform beforescenariocalc include.
 if configfile != nothing && haskey(configfile, "includes", "beforescenariocalc")
@@ -1942,7 +1942,7 @@ if transmissionmodeling
         local y = row[:y]
         local type = row[:type]
 
-        # vtransmissionbyline is flow over line tr from n1 to n2; if type == 1 or 2, unit is MW
+        # vtransmissionbyline is flow over line tr from n1 to n2; unit is MW
         if type == 1  # DCOPF
             push!(tr3_flow, @constraint(jumpmodel, 1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]) * vtransmissionexists[tr,y]
                 == vtransmissionbyline[tr,l,f,y]))
@@ -1957,6 +1957,9 @@ if transmissionmodeling
                 >= (vtransmissionexists[tr,y] - 1) * 100000))
             #tr4_maxflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y]^2 <= vtransmissionexists[tr,y] * row[:maxflow]^2)
             #tr5_minflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y]^2 >= 0)
+            push!(tr4_maxflow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] <= vtransmissionexists[tr,y] * row[:maxflow]))
+            push!(tr5_minflow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] >= -vtransmissionexists[tr,y] * row[:maxflow]))
+        elseif type == 3  # Pipeline flow
             push!(tr4_maxflow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] <= vtransmissionexists[tr,y] * row[:maxflow]))
             push!(tr5_minflow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] >= -vtransmissionexists[tr,y] * row[:maxflow]))
         end
@@ -1982,7 +1985,7 @@ if transmissionmodeling
     #   valid transmission line
     for row in SQLite.DBInterface.execute(db, "select n.val as n, ys.l as l, f.val as f, y.val as y,
     cast(ys.val as real) as ys, null as tr, null as n2, null as trneg, null as n1,
-	tme.type as type, cast(tcta.val as real) as tcta
+	null as eff, tme.type as type, cast(tcta.val as real) as tcta
     from NODE n, YearSplit_def ys, FUEL f, YEAR y, TransmissionModelingEnabled tme,
 	TransmissionCapacityToActivityUnit_def tcta
 	where ys.y = y.val
@@ -2000,7 +2003,7 @@ if transmissionmodeling
 	and n2.r = tme2.r and tl.f = tme2.f and y.val = tme2.y and tme.type = tme2.type)
 union all
 select n.val as n, ys.l as l, f.val as f, y.val as y,
-    cast(ys.val as real) as ys, tl.id as tr, tl.n2 as n2, null as trneg, null as n1, tme.type as type,
+    cast(ys.val as real) as ys, tl.id as tr, tl.n2 as n2, null as trneg, null as n1, null as eff, tme.type as type,
 	cast(tcta.val as real) as tcta
     from NODE n, YearSplit_def ys, FUEL f, YEAR y, TransmissionModelingEnabled tme,
 	TransmissionLine tl, NODE n2, TransmissionModelingEnabled tme2, TransmissionCapacityToActivityUnit_def tcta
@@ -2012,7 +2015,8 @@ select n.val as n, ys.l as l, f.val as f, y.val as y,
 	and n2.r = tme2.r and tl.f = tme2.f and y.val = tme2.y and tme.type = tme2.type
 union all
 select n.val as n, ys.l as l, f.val as f, y.val as y,
-    cast(ys.val as real) as ys, null as tr, null as n2, tl.id as trneg, tl.n1 as n1, tme.type as type,
+    cast(ys.val as real) as ys, null as tr, null as n2, tl.id as trneg, tl.n1 as n1,
+	cast(tl.efficiency as real) as eff, tme.type as type,
 	cast(tcta.val as real) as tcta
     from NODE n, YearSplit_def ys, FUEL f, YEAR y, TransmissionModelingEnabled tme,
 	TransmissionLine tl, NODE n2, TransmissionModelingEnabled tme2, TransmissionCapacityToActivityUnit_def tcta
@@ -2029,6 +2033,7 @@ order by n, f, y, l")
         local y = row[:y]
         local tr = row[:tr]  # Transmission line for which n is from node (n1)
         local trneg = row[:trneg]  # Transmission line for which n is to node (n2)
+        local eff = ismissing(row[:eff]) ? 1.0 : row[:eff]
         local trtype = row[:type]  # Type of transmission modeling for node
 
         if isassigned(lastkeys, 1) && (n != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
@@ -2047,7 +2052,7 @@ order by n, f, y, l")
         end
 
         if !ismissing(tr)
-            if trtype == 1 || trtype == 2
+            if trtype == 1 || trtype == 2 || trtype == 3
                 append!(sumexps[1], vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta])
                 append!(sumexps[2], vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta])
             end
@@ -2057,6 +2062,9 @@ order by n, f, y, l")
             if trtype == 1 || trtype == 2
                 append!(sumexps[1], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta])
                 append!(sumexps[2], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta])
+            elseif trtype == 3  # Incorporate efficiency for to node in pipeline flow
+                append!(sumexps[1], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta] * eff)
+                append!(sumexps[2], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta] * eff)
             end
         end
 
