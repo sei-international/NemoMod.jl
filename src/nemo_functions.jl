@@ -899,132 +899,32 @@ function checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
     return (annual, modelperiod)
 end  # checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
 
-"""
-    addtransmissiontables(db::SQLite.DB; foreignkeys::Bool = false, quiet::Bool = false)
-
-Adds tables for transmission sets and parameters to a NEMO scenario database. If the tables
-exist already, does not recreate them.
-
-# Arguments
-- `db::SQLite.DB`: Target database.
-- `foreignkeys::Bool = false`: Indicates whether new tables should include foreign keys.
-- `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to STDOUT).
-"""
-function addtransmissiontables(db::SQLite.DB; foreignkeys::Bool = false, quiet::Bool = false)
+# Upgrades NEMO database from version 2 to version 3 by adding TransmissionLine.efficiency.
+function db_v2_to_v3(db::SQLite.DB; quiet::Bool = false)
     # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
     try
         # BEGIN: SQLite transaction.
         SQLite.DBInterface.execute(db, "BEGIN")
 
-        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `NODE` ( `val` TEXT, `desc` TEXT, `r` TEXT, PRIMARY KEY(`val`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * ")")
-        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionCapacityToActivityUnit` ( `id` INTEGER NOT NULL UNIQUE, `f` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
-        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionModelingEnabled` ( `id` INTEGER, `r` text, `f` TEXT, `y` TEXT, `type` INTEGER DEFAULT 1, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * ")")
-        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionLine` ( `id` TEXT, `n1` TEXT, `n2` TEXT, `f` TEXT, `maxflow` REAL, `reactance` REAL, `yconstruction` INTEGER, `capitalcost` REAL, `fixedcost` REAL, `variablecost` REAL, `operationallife` INTEGER, `efficiency` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`n2`) REFERENCES `NODE`(`val`), FOREIGN KEY(`n1`) REFERENCES `NODE`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * ")")
-        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `NodalDistributionDemand` ( `id` INTEGER, `n` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`n`) REFERENCES `NODE`(`val`)" : "") * ")")
-        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `NodalDistributionStorageCapacity` ( `id` INTEGER, `n` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`n`) REFERENCES `NODE`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`)" : "") * ")")
-        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `NodalDistributionTechnologyCapacity` ( `id` INTEGER, `n` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`n`) REFERENCES `NODE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * ")")
+        qry::DataFrame = SQLite.DBInterface.execute(db, "PRAGMA table_info('TransmissionLine')") |> DataFrame
+        updatetl::Bool = !in("efficiency", qry.name)
 
-        SQLite.DBInterface.execute(db, "COMMIT")
-        # END: SQLite transaction.
-
-        logmsg("Added transmission tables to database.", quiet)
-    catch
-        # Rollback transaction and rethrow error
-        SQLite.DBInterface.execute(db, "ROLLBACK")
-        rethrow()
-    end
-    # END: Wrap database operations in try-catch block to allow rollback on error.
-end  # addtransmissiontables(db::SQLite.DB; foreignkeys::Bool = false, quiet::Bool = false)
-
-# Temporary function
-function addstoragefullloadhours(db::SQLite.DB; foreignkeys::Bool = false, quiet::Bool = false)
-    # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
-    try
-        # BEGIN: SQLite transaction.
-        SQLite.DBInterface.execute(db, "BEGIN")
-
-        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `StorageFullLoadHours` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * ")")
-
-        SQLite.DBInterface.execute(db, "COMMIT")
-        # END: SQLite transaction.
-
-        logmsg("Added StorageFullLoadHours table to database.", quiet)
-    catch
-        # Rollback transaction and rethrow error
-        SQLite.DBInterface.execute(db, "ROLLBACK")
-        rethrow()
-    end
-    # END: Wrap database operations in try-catch block to allow rollback on error.
-end  # addstoragefullloadhours(db::SQLite.DB; foreignkeys::Bool = false, quiet::Bool = false)
-
-# Temporary function
-function addstoragenetzero(db::SQLite.DB; quiet::Bool = false)
-    # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
-    try
-        # BEGIN: SQLite transaction.
-        SQLite.DBInterface.execute(db, "BEGIN")
-
-        qry::DataFrame = SQLite.DBInterface.execute(db, "PRAGMA table_info('STORAGE')") |> DataFrame
-        updatestorage::Bool = !in("netzeroyear", qry.name) && !in("netzerotg1", qry.name) && !in("netzerotg2", qry.name)
-
-        if updatestorage
-            SQLite.DBInterface.execute(db, "alter table STORAGE rename to STORAGE_old")
-            SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `STORAGE` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, `netzeroyear` INTEGER NOT NULL DEFAULT 1, `netzerotg1` INTEGER NOT NULL DEFAULT 0, `netzerotg2` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`val`) )")
-            SQLite.DBInterface.execute(db, "insert into STORAGE select val, desc, 1, 0, 0 from STORAGE_old")
-            SQLite.DBInterface.execute(db, "drop table STORAGE_old")
+        if updatetl
+            SQLite.DBInterface.execute(db, "alter table TransmissionLine rename to TransmissionLine_old")
+            SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionLine` ( `id` TEXT, `n1` TEXT, `n2` TEXT, `f` TEXT, `maxflow` REAL, `reactance` REAL, `yconstruction` INTEGER, `capitalcost` REAL, `fixedcost` REAL, `variablecost` REAL, `operationallife` INTEGER, `efficiency` REAL, PRIMARY KEY(`id`) )")
+            SQLite.DBInterface.execute(db, "insert into TransmissionLine select id, n1, n2, f, maxflow, reactance, yconstruction, capitalcost, fixedcost, variablecost, operationallife, 1.0 from TransmissionLine_old")
+            SQLite.DBInterface.execute(db, "drop table TransmissionLine_old")
+            SQLite.DBInterface.execute(db, "update version set version = 3")
         end
 
         SQLite.DBInterface.execute(db, "COMMIT")
         # END: SQLite transaction.
 
-        updatestorage && logmsg("Updated STORAGE table in database.", quiet)
+        updatetl && logmsg("Upgraded database to version 3.", quiet)
     catch
         # Rollback transaction and rethrow error
         SQLite.DBInterface.execute(db, "ROLLBACK")
         rethrow()
     end
     # END: Wrap database operations in try-catch block to allow rollback on error.
-end  # addstoragenetzero(db::SQLite.DB; quiet::Bool = false)
-
-# This function is deprecated.
-#=
-function startnemo(dbpath::String, solver::String = "Cbc", numprocs::Int = Sys.CPU_THREADS)
-    # Note: Sys.CPU_THREADS was Sys.CPU_CORES in Julia 0.6
-
-    # Sample paths
-    # dbpath = "C:\\temp\\TEMBA_datafile.sl3"
-    # dbpath = "C:\\temp\\TEMBA_datafile_2010_only.sl3"
-    # dbpath = "C:\\temp\\SAMBA_datafile.sl3"
-    # dbpath = "C:\\temp\\utopia_2015_08_27.sl3"
-
-    # BEGIN: Parameter validation.
-    if !ispath(dbpath)
-        error("dbpath must refer to a valid file system path.")
-    end
-
-    if uppercase(solver) == "CPLEX"
-        solver = "CPLEX"
-    elseif uppercase(solver) == "CBC"
-        solver = "Cbc"
-    else
-        error("Requested solver (" * solver * ") is not supported.")
-    end
-
-    if numprocs < 1
-        error("numprocs must be >= 1.")
-    end
-    # END: Parameter validation.
-
-    # BEGIN: Add worker processes.
-    while nprocs() < numprocs
-        addprocs(1)
-    end
-    # END: Add worker processes.
-
-    # BEGIN: Call main function for NEMO.
-    @everywhere include(joinpath(Pkg.dir(), "NemoMod\\src\\NemoMod.jl"))  # Note that @everywhere loads file in Main module on all processes
-
-    @time NemoMod.nemomain(dbpath, solver)
-    # END: Call main function for NEMO.
-end  # startnemo(dbpath::String, solver::String = "Cbc", numprocs::Int = Sys.CPU_CORES)
-=#
+end  # db_v2_to_v3(db::SQLite.DB; quiet::Bool = false)

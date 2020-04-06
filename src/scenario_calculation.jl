@@ -102,11 +102,9 @@ db = SQLite.DB(dbpath)
 logmsg("Connected to scenario database. Path = " * dbpath * ".", quiet)
 # END: Connect to SQLite database.
 
-# BEGIN: Temporary - add new objects in dictionary v.1-3 to db.
-addtransmissiontables(db; quiet = quiet)
-addstoragefullloadhours(db; quiet = quiet)
-addstoragenetzero(db; quiet = quiet)
-# END: Temporary - add new objects in dictionary v.1-3 to db.
+# BEGIN: Update database if necessary.
+db_v2_to_v3(db; quiet = quiet)
+# END: Update database if necessary.
 
 # BEGIN: Perform beforescenariocalc include.
 if configfile != nothing && haskey(configfile, "includes", "beforescenariocalc")
