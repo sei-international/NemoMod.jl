@@ -38,6 +38,9 @@ the solve status reported by the solver.
 - `reportzeros::Bool`: Indicates whether results saved in the SQLite database should include
     values equal to zero. Specifying `false` can substantially improve the performance
     of large models.
+- `continuoustransmission::Bool`: Indicates whether continuous (true) or binary (false)
+    variables are used to represent investment decisions for candidate transmission lines. Not
+    relevant in scenarios that do not model transmission.
 - `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to
     STDOUT).
 
@@ -53,6 +56,7 @@ function calculatescenario(
     targetprocs::Array{Int, 1} = Array{Int, 1}([1]),
     restrictvars::Bool = false,
     reportzeros::Bool = false,
+    continuoustransmission::Bool = false,
     quiet::Bool = false)
 # Lines within calculatescenario() are not indented since the function is so lengthy. To make an otherwise local
 # variable visible outside the function, prefix it with global. For JuMP constraint references,
@@ -807,10 +811,17 @@ if transmissionmodeling
     @variable(jumpmodel, vtransmissionannual[snode, sfuel, syear])
     modelvarindices["vtransmissionannual"] = (vtransmissionannual, ["n","f","y"])
 
-    @variable(jumpmodel, vtransmissionbuilt[stransmission, syear], Bin)  # Indicates whether tr is built in year
+    # Indicates whether tr is built in year
+    if continuoustransmission
+        @variable(jumpmodel, 0 <= vtransmissionbuilt[stransmission, syear] <= 1)
+    else
+        @variable(jumpmodel, vtransmissionbuilt[stransmission, syear], Bin)
+    end
+
     modelvarindices["vtransmissionbuilt"] = (vtransmissionbuilt, ["tr","y"])
 
-    @variable(jumpmodel, vtransmissionexists[stransmission, syear], Bin)  # Indicates whether tr exists (exogenously or endogenously) in year
+    # Indicates whether tr exists (exogenously or endogenously) in year (0 or 1 if vtransmissionbuilt is Bin, otherwise between 0 and 1)
+    @variable(jumpmodel, 0 <= vtransmissionexists[stransmission, syear] <= 1)
     modelvarindices["vtransmissionexists"] = (vtransmissionexists, ["tr","y"])
 
     # 1 = DC optimized power flow, 2 = DCOPF with disjunctive relaxation
