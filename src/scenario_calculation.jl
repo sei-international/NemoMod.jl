@@ -79,14 +79,15 @@ logmsg("Validated run-time arguments.", quiet)
 configfile = getconfig(quiet)  # ConfParse structure for config file if one is found; otherwise nothing
 
 if configfile != nothing
-    local boolargs::Array{Bool,1} = [restrictvars,reportzeros,quiet]  # Array of Boolean arguments for calculatescenario();
+    local boolargs::Array{Bool,1} = [restrictvars,reportzeros,continuoustransmission,quiet]  # Array of Boolean arguments for calculatescenario();
         # necessary in order to have a mutable object for getconfigargs! call
 
     getconfigargs!(configfile, varstosavearr, targetprocs, boolargs, quiet)
 
     restrictvars = boolargs[1]
     reportzeros = boolargs[2]
-    quiet = boolargs[3]
+    continuoustransmission = boolargs[3]
+    quiet = boolargs[4]
 end
 # END: Read config file and process calculatescenarioargs.
 
@@ -1960,10 +1961,10 @@ if transmissionmodeling
         elseif type == 2  # DCOPF with disjunctive formulation
             push!(tr3_flow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] -
                 (1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]))
-                <= (1 - vtransmissionexists[tr,y]) * 100000))
+                <= (1 - vtransmissionexists[tr,y]) * 500000))
             push!(tr3a_flow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] -
                 (1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]))
-                >= (vtransmissionexists[tr,y] - 1) * 100000))
+                >= (vtransmissionexists[tr,y] - 1) * 500000))
             #tr4_maxflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y]^2 <= vtransmissionexists[tr,y] * row[:maxflow]^2)
             #tr5_minflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y]^2 >= 0)
             push!(tr4_maxflow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] <= vtransmissionexists[tr,y] * row[:maxflow]))

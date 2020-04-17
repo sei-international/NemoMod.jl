@@ -74,7 +74,8 @@ Loads run-time arguments for calculatescenario() from a configuration file.
 - `targetprocs::Array{Int,1}`: calculatescenario() targetprocs argument. New values in configuration
     file are added to this array.
 - `bools::Array{Bool,1}`: Array of Boolean arguments for calculatescenario(): restrictvars, reportzeros,
-    and quiet, in that order. New values in configuration file overwrite values in this array.
+    continuoustransmission, and quiet, in that order. New values in configuration file overwrite values
+    in this array.
 - `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to STDOUT).
     This argument is not changed by the function.
 """
@@ -133,9 +134,18 @@ function getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, t
         end
     end
 
+    if haskey(configfile, "calculatescenarioargs", "continuoustransmission")
+        try
+            bools[3] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "continuoustransmission")))
+            logmsg("Read continuoustransmission argument from configuration file.", quiet)
+        catch e
+            logmsg("Could not read continuoustransmission argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
+        end
+    end
+
     if haskey(configfile, "calculatescenarioargs", "quiet")
         try
-            bools[3] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "quiet")))
+            bools[4] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "quiet")))
             logmsg("Read quiet argument from configuration file. Value in configuration file will be used from this point forward.", quiet)
         catch e
             logmsg("Could not read quiet argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
