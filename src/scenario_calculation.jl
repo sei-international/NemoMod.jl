@@ -13,7 +13,7 @@
         vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
         vusenn, vtotaldiscountedcost",
     targetprocs = Array{Int, 1}([1]), restrictvars = false,
-    reportzeros = false, quiet = false)
+    reportzeros = false, continuoustransmission = false, quiet = false)
 
 Runs NEMO for a scenario specified in a SQLite database. Returns a Symbol indicating
 the solve status reported by the solver.
@@ -2593,9 +2593,11 @@ ns4_storageleveltsgroup2start::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}
 ns5_storageleveltimesliceend::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, ltg.l as l, y.val as y, ltg.lorder as lo,
-    ltg.tg2 as tg2, tg2.[order] as tg2o, ltg.tg1 as tg1, tg1.[order] as tg1o, cast(sls.val as real) as sls
+    ltg.tg2 as tg2, tg2.[order] as tg2o, ltg.tg1 as tg1, tg1.[order] as tg1o, cast(se.sls as real) as sls
 from REGION r, STORAGE s, YEAR y, LTsGroup ltg, TSGROUP2 tg2, TSGROUP1 tg1
-left join StorageLevelStart_def sls on sls.r = r.val and sls.s = s.val
+left join (select sls.r as r, sls.s as s, sls.val * rsc.val as sls
+from StorageLevelStart_def sls, ResidualStorageCapacity_def rsc
+where sls.r = rsc.r and sls.s = rsc.s and rsc.y = " * first(syear) * ") se on se.r = r.val and se.s = s.val
 left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
 where
 ltg.tg2 = tg2.name
@@ -2660,9 +2662,11 @@ if transmissionmodeling
     # Note that this query distributes StorageLevelStart according to NodalDistributionStorageCapacity
     for row in SQLite.DBInterface.execute(db, "select ns.n as n, ns.s as s, ltg.l as l, ns.y as y, ltg.lorder as lo,
         ltg.tg2 as tg2, tg2.[order] as tg2o, ltg.tg1 as tg1, tg1.[order] as tg1o,
-    	cast(sls.val * ns.val as real) as sls
+    	cast(se.sls * ns.val as real) as sls
     from nodalstorage ns, LTsGroup ltg, TSGROUP2 tg2, TSGROUP1 tg1
-    left join StorageLevelStart_def sls on sls.r = ns.r and sls.s = ns.s
+	left join (select sls.r as r, sls.s as s, sls.val * rsc.val as sls
+		from StorageLevelStart_def sls, ResidualStorageCapacity_def rsc
+		where sls.r = rsc.r and sls.s = rsc.s and rsc.y = " * first(syear) * ") se on se.r = ns.r and se.s = ns.s
     where
     ltg.tg2 = tg2.name
     and ltg.tg1 = tg1.name")
@@ -2881,9 +2885,11 @@ sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofstoragechargenn 
 for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s,
 case s.netzerotg2 when 1 then 0 else case s.netzerotg1 when 1 then 0 else s.netzeroyear end end as ynz,
 y.val as y, ys.l as l, cast(ys.val as real) as ys,
-cast(sls.val as real) as sls
+cast(se.sls as real) as sls
 from REGION r, STORAGE s, YEAR as y, YearSplit_def ys
-left join StorageLevelStart_def sls on sls.r = r.val and sls.s = s.val
+left join (select sls.r as r, sls.s as s, sls.val * rsc.val as sls
+from StorageLevelStart_def sls, ResidualStorageCapacity_def rsc
+where sls.r = rsc.r and sls.s = rsc.s and rsc.y = " * first(syear) * ") se on se.r = r.val and se.s = s.val
 left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
 where y.val = ys.y
 and ns.r is null
@@ -2952,9 +2958,11 @@ if transmissionmodeling
     for row in SQLite.DBInterface.execute(db, "select ns.n as n, s.val as s,
     case s.netzerotg2 when 1 then 0 else case s.netzerotg1 when 1 then 0 else s.netzeroyear end end as ynz,
     ns.y as y, ys.l as l, cast(ys.val as real) as ys,
-    cast(sls.val * ns.val as real) as sls
+    cast(se.sls * ns.val as real) as sls
     from nodalstorage ns, STORAGE s, YearSplit_def ys
-    left join StorageLevelStart_def sls on sls.r = ns.r and sls.s = ns.s
+    left join (select sls.r as r, sls.s as s, sls.val * rsc.val as sls
+		from StorageLevelStart_def sls, ResidualStorageCapacity_def rsc
+		where sls.r = rsc.r and sls.s = rsc.s and rsc.y = " * first(syear) * ") se on se.r = ns.r and se.s = ns.s
     where ns.s = s.val
 	and ns.y = ys.y
     order by ns.n, ns.s, ns.y")
