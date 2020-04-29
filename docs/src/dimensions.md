@@ -214,6 +214,7 @@ Connections between [nodes](@ref node) in a transmission (or transmission and di
 | `fixedcost` | real  | Line's fixed annual operation and maintenance cost (scenario's cost unit) |
 | `variablecost` | real  | Line's variable operation and maintenance (scenario's cost unit / energy unit) |
 | `operationallife` | integer  | Line's operational lifetime (years, used to retire both exogenously and endogenously built lines) |
+| `efficiency` | real  | Efficiency of transmission over line (%, only used for pipeline flow modeling) |
 
 #### Julia code
 
