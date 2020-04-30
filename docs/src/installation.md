@@ -7,7 +7,7 @@ NEMO can be installed in two ways: through an installer program and manually via
 
 ## [Installer program](@id installer_program)
 
-Using the installer is the easiest way to install NEMO. Here are the steps to follow:
+The installer program is the easiest way to install NEMO. Here are the steps to follow:
 
 1. Download a copy of the installer to your computer (see [Latest installers](@ref)) and run it.
 
@@ -76,7 +76,7 @@ Note that in order to do this, you must have the corresponding Julia interface (
 
 NEMO has been tested for compatibility with the following solver packages.
 
-### Current version of NEMO (1.0.5)
+### Current version of NEMO
 
 * [Cbc](https://github.com/JuliaOpt/Cbc.jl): 0.6.3
 * [CPLEX](https://github.com/JuliaOpt/CPLEX.jl): 0.5.1

@@ -11,6 +11,7 @@ makedocs(
         "Inputs" => [
             "Dimensions" => "dimensions.md"
             "Parameters" => "parameters.md"
+            "Model units" => "units.md"
         ]
         "Scenario databases" => "scenario_db.md"
     ],

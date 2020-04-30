@@ -9,7 +9,7 @@ Input parameters and calculated variables in NEMO are segmented (subscripted) by
 
 Emissions or other externalities in the energy system. You can associate costs with emissions, and the quantity of emissions produced can be constrained (see [Parameters](@ref)). **Abbreviation: `e`.**
 
-#### NEMO database
+#### Scenario database
 
 **Table: `EMISSION`**
 
@@ -27,7 +27,7 @@ Emissions or other externalities in the energy system. You can associate costs w
 
 Energy carriers. **Abbreviation: `f`.**
 
-#### NEMO database
+#### Scenario database
 
 **Table: `FUEL`**
 
@@ -43,9 +43,9 @@ Energy carriers. **Abbreviation: `f`.**
 
 ## [Mode of operation](@id mode_of_operation)
 
-Different ways in which [technologies](@ref technology) can function. Typically, one mode is defined for energy generation or production; if a scenario models energy storage, another is defined for charging storage. **Abbreviation: `m`.**
+Different ways in which [technologies](@ref technology) can function. Typically, one mode is defined for energy generation or production; if a scenario models energy [storage](@ref storage), another is defined for charging storage. **Abbreviation: `m`.**
 
-#### NEMO database
+#### Scenario database
 
 **Table: `MODE_OF_OPERATION`**
 
@@ -63,7 +63,7 @@ Different ways in which [technologies](@ref technology) can function. Typically,
 
 Locations in a transmission (or transmission and distribution) network. Networks are defined with nodes and [transmission lines or segments](@ref transmissionline), and nodal modeling of energy demand and supply can be enabled for individual [fuels](@ref fuel). **Abbreviation: `n`.**
 
-#### NEMO database
+#### Scenario database
 
 **Table: `NODE`**
 
@@ -82,7 +82,7 @@ Locations in a transmission (or transmission and distribution) network. Networks
 
 Geographic regions. **Abbreviation: `r`.**
 
-#### NEMO database
+#### Scenario database
 
 **Table: `REGION`**
 
@@ -100,17 +100,17 @@ Geographic regions. **Abbreviation: `r`.**
 
 Energy storage options or facilities. **Abbreviation: `s`.**
 
-#### NEMO database
+#### Scenario database
 
 **Table: `STORAGE`**
 
 | Name | Type | Description |
 |:--- | :--: |:----------- |
-| `val` | text | Unique identifier for region |
-| `desc` | text  | Description of region |
-| `netzeroyear` | integer  | Indicates that storage can have no net charging or discharging over a year (`1` = enabled) |
-| `netzerotg1` | integer  | Indicates that storage can have no net charging or discharging over a time slice group 1 (`1` = enabled) |
-| `netzerotg2` | integer  | Indicates that storage can have no net charging or discharging over a time slice group 2 (`1` = enabled) |
+| `val` | text | Unique identifier for storage |
+| `desc` | text  | Description of storage |
+| `netzeroyear` | integer  | Indicates that storage can have no net charging or discharging over a [year](@ref year) (`1` = enabled) |
+| `netzerotg1` | integer  | Indicates that storage can have no net charging or discharging over a [time slice group 1](@ref tsgroup1) (`1` = enabled) |
+| `netzerotg2` | integer  | Indicates that storage can have no net charging or discharging over a [time slice group 2](@ref tsgroup2) (`1` = enabled) |
 
 #### Julia code
 
@@ -121,7 +121,7 @@ Energy storage options or facilities. **Abbreviation: `s`.**
 
 Energy-consuming or producing devices or equipment. **Abbreviation: `t`.**
 
-#### NEMO database
+#### Scenario database
 
 **Table: `TECHNOLOGY`**
 
@@ -139,7 +139,7 @@ Energy-consuming or producing devices or equipment. **Abbreviation: `t`.**
 
 Sub-annual periods used to model energy demand and supply in selected cases. The width of each time slice (as a fraction of the year) is defined with the parameter [YearSplit](@ref YearSplit). **Abbreviation: `l`.**
 
-#### NEMO database
+#### Scenario database
 
 **Table: `TIMESLICE`**
 
@@ -157,7 +157,7 @@ Sub-annual periods used to model energy demand and supply in selected cases. The
 
 Groupings of [time slices](@ref timeslice) within a [year](@ref year). **Abbreviation: `tg1`.**
 
-#### NEMO database
+#### Scenario database
 
 **Table: `TSGROUP1`**
 
@@ -177,7 +177,7 @@ Groupings of [time slices](@ref timeslice) within a [year](@ref year). **Abbrevi
 
 Groupings of [time slices](@ref timeslice) within a [time slice group 1](@ref tsgroup1). **Abbreviation: `tg2`.**
 
-#### NEMO database
+#### Scenario database
 
 **Table: `TSGROUP2`**
 
@@ -197,7 +197,7 @@ Groupings of [time slices](@ref timeslice) within a [time slice group 1](@ref ts
 
 Connections between [nodes](@ref node) in a transmission (or transmission and distribution) network - e.g., electrical lines or pipes in a natural gas network. Transmission lines allow energy to flow from one node to another. **Abbreviation: `tr`.**
 
-#### NEMO database
+#### Scenario database
 
 **Table: `TransmissionLine`**
 
@@ -206,15 +206,15 @@ Connections between [nodes](@ref node) in a transmission (or transmission and di
 | `id` | text | Unique identifier for line |
 | `n1` | text  | First node connected to line (`NODE.val`) |
 | `n2` | text  | Second node connected to line (`NODE.val`) |
-| `f` | text  | Fuel transported over line (`FUEL.val`) |
+| `f` | text  | [Fuel](@ref fuel) transported over line (`FUEL.val`) |
 | `maxflow` | real  | Maximum flow supported by line (MW) |
-| `reactance` | real  | Line's reactance (per unit, only relevant for electrical lines) |
+| `reactance` | real  | Line's reactance (per unit, only relevant for electrical lines when using direct current optimized power flow modeling; see [TransmissionModelingEnabled](@ref TransmissionModelingEnabled)) |
 | `yconstruction` | integer  | Exogenously specified construction year for line (leave null if NEMO should endogenously determine whether to build line) |
 | `capitalcost` | real  | Line's capital cost (scenario's cost unit) |
 | `fixedcost` | real  | Line's fixed annual operation and maintenance cost (scenario's cost unit) |
 | `variablecost` | real  | Line's variable operation and maintenance (scenario's cost unit / energy unit) |
 | `operationallife` | integer  | Line's operational lifetime (years, used to retire both exogenously and endogenously built lines) |
-| `efficiency` | real  | Efficiency of transmission over line (%, only used for pipeline flow modeling) |
+| `efficiency` | real  | Efficiency of transmission over line (%, only used for pipeline flow modeling; see [TransmissionModelingEnabled](@ref TransmissionModelingEnabled)) |
 
 #### Julia code
 
@@ -225,7 +225,7 @@ Connections between [nodes](@ref node) in a transmission (or transmission and di
 
 Years covered by scenario. Years must be integral and consecutive. **Abbreviation: `y`.**
 
-#### NEMO database
+#### Scenario database
 
 **Table: `YEAR`**
 

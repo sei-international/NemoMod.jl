@@ -109,6 +109,7 @@ logmsg("Connected to scenario database. Path = " * dbpath * ".", quiet)
 
 # BEGIN: Update database if necessary.
 db_v2_to_v3(db; quiet = quiet)
+db_v3_to_v4(db; quiet = quiet)
 # END: Update database if necessary.
 
 # BEGIN: Perform beforescenariocalc include.

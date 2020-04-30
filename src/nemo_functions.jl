@@ -405,8 +405,9 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     # Version table is for NEMO data dictionary version
     #   - 2: Added STORAGE.netzeroyear, STORAGE.netzerotg1, and STORAGE.netzerotg2
     #   - 3: Added TransmissionLine.efficiency
+    #   - 4: Added TransmissionCapacityToActivityUnit.r
     SQLite.DBInterface.execute(db, "CREATE TABLE `Version` (`version` INTEGER, PRIMARY KEY(`version`))")
-    SQLite.DBInterface.execute(db, "INSERT INTO Version VALUES(3)")
+    SQLite.DBInterface.execute(db, "INSERT INTO Version VALUES(4)")
 
     # No default values for sets/dimensions
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `EMISSION` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`) )")
@@ -430,7 +431,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `VariableCost` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `m` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionModelingEnabled` ( `id` INTEGER, `r` TEXT, `f` TEXT, `y` TEXT, `type` INTEGER DEFAULT 1, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionLine` ( `id` TEXT, `n1` TEXT, `n2` TEXT, `f` TEXT, `maxflow` REAL, `reactance` REAL, `yconstruction` INTEGER, `capitalcost` REAL, `fixedcost` REAL, `variablecost` REAL, `operationallife` INTEGER, `efficiency` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`n2`) REFERENCES `NODE`(`val`), FOREIGN KEY(`n1`) REFERENCES `NODE`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
-    SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionCapacityToActivityUnit` ( `id` INTEGER NOT NULL UNIQUE, `f` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
+    SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionCapacityToActivityUnit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TradeRoute` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `rr` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`rr`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TotalTechnologyModelPeriodActivityUpperLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TotalTechnologyModelPeriodActivityLowerLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
@@ -938,3 +939,33 @@ function db_v2_to_v3(db::SQLite.DB; quiet::Bool = false)
     end
     # END: Wrap database operations in try-catch block to allow rollback on error.
 end  # db_v2_to_v3(db::SQLite.DB; quiet::Bool = false)
+
+# Upgrades NEMO database from version 3 to version 4 by adding TransmissionCapacityToActivityUnit.r.
+function db_v3_to_v4(db::SQLite.DB; quiet::Bool = false)
+    # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
+    try
+        # BEGIN: SQLite transaction.
+        SQLite.DBInterface.execute(db, "BEGIN")
+
+        qry::DataFrame = SQLite.DBInterface.execute(db, "PRAGMA table_info('TransmissionCapacityToActivityUnit')") |> DataFrame
+        updatetcta::Bool = !in("r", qry.name)
+
+        if updatetcta
+            SQLite.DBInterface.execute(db, "alter table TransmissionCapacityToActivityUnit rename to TransmissionCapacityToActivityUnit_old")
+            SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionCapacityToActivityUnit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `val` REAL, PRIMARY KEY(`id`) )")
+            SQLite.DBInterface.execute(db, "insert into TransmissionCapacityToActivityUnit select tcta.id, r.val, tcta.f, tcta.val from TransmissionCapacityToActivityUnit_old tcta, REGION r")
+            SQLite.DBInterface.execute(db, "drop table TransmissionCapacityToActivityUnit_old")
+            SQLite.DBInterface.execute(db, "update version set version = 4")
+        end
+
+        SQLite.DBInterface.execute(db, "COMMIT")
+        # END: SQLite transaction.
+
+        updatetcta && logmsg("Upgraded database to version 4.", quiet)
+    catch
+        # Rollback transaction and rethrow error
+        SQLite.DBInterface.execute(db, "ROLLBACK")
+        rethrow()
+    end
+    # END: Wrap database operations in try-catch block to allow rollback on error.
+end  # db_v3_to_v4(db::SQLite.DB; quiet::Bool = false)

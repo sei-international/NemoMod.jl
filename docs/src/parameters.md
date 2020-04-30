@@ -3,13 +3,13 @@ CurrentModule = NemoMod
 ```
 # Parameters
 
-NEMO supports a number of parameters that define data and set the terms of constraints for scenarios. As with model [dimensions](@ref dimensions), parameters are specified in a NEMO scenario database. NEMO reads them from the database and uses them to build constraints at run-time. Generally, NEMO does not create separate Julia variables for parameters.
+NEMO includes a number of parameters that define data and set the terms of constraints for scenarios. As with model [dimensions](@ref dimensions), parameters are specified in a NEMO scenario database. NEMO reads them from the database and uses them to build constraints at run-time. Generally, NEMO does not create separate Julia variables for parameters.
 
 Most parameters are subscripted by one or more dimensions. Parameter tables in a scenario database refer to dimensions by their abbreviation (`r` for [region](@ref region), `t` for [technology](@ref technology), and so on). The abbreviation serves as the name of the dimension's column, and the column should be populated with unique identifiers for the dimension (`val`, `name`, or `id`, depending on the dimension).
 
 ## [Accumulated annual demand](@id AccumulatedAnnualDemand)
 
-Description.
+Exogenous demand that is not time sliced. This demand can be met at any point in the specified year.
 
 #### NEMO database
 
@@ -104,13 +104,13 @@ Description.
 | `y` | text  | Year |
 | `val` | real  | Parameter value |
 
-## [Capacity to activate unit](@id CapacityToActivateUnit)
+## [Capacity to activity unit](@id CapacityToActivityUnit)
 
 Description.
 
 #### NEMO database
 
-**Table: `CapacityToActivateUnit`**
+**Table: `CapacityToActivityUnit`**
 
 | Name | Type | Description |
 |:--- | :--: |:----------- |
