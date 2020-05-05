@@ -14,7 +14,7 @@ To define [custom constraints](@ref custom_constraints) for a scenario, you writ
 
 NEMO supports simulating energy demand and supply on an annual and sub-annual basis. Sub-annual modeling is structured using time slices and time slice groups, which you can configure in a variety of ways. How these elements work together is discussed in depth in [Time slicing](@ref time_slicing).
 
-NEMO also allows considerable geographic flexibility. Multiple [regions](@ ref region) can be defined in a scenario, with trading allowed between specified regions, and a [nodal](@ref node) transmission (or transmission and distribution) network can be overlaid on the regions for specified [fuels](@ref fuel). [Network segments](@ref transmissionline) (e.g., transmission lines or pipelines) can cross regional borders.
+NEMO also allows considerable geographic flexibility. Multiple [regions](@ref region) can be defined in a scenario, with trading allowed between specified regions, and a [nodal](@ref node) transmission (or transmission and distribution) network can be overlaid on the regions for specified [fuels](@ref fuel). [Network segments](@ref transmissionline) (e.g., transmission lines or pipelines) can cross regional borders.
 
 NEMO can be used to model an entire energy system or certain parts of a system - for example, electricity supply and demand only. All NEMO scenarios are driven by some exogenously specified demands, but you can decide how to define these. For instance, demands can be defined for fuels themselves or for energy services that are provided by fuel-consuming devices. Note that NEMO is not a partial-equilibrium model, so it does not incorporate an endogenous demand response to energy supply costs.
 

@@ -7,7 +7,7 @@ Input parameters and calculated variables in NEMO are segmented (subscripted) by
 
 ## [Emission](@id emission)
 
-Emissions or other externalities in the energy system. You can associate costs with emissions, and the quantity of emissions produced can be constrained (see [Parameters](@ref)). **Abbreviation: `e`.**
+Emissions or other externalities in the energy system. You can associate costs with emissions, and the quantity of emissions produced can be constrained (see [Parameters](@ref parameters)). **Abbreviation: `e`.**
 
 #### Scenario database
 

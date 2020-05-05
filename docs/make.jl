@@ -11,9 +11,16 @@ makedocs(
         "Inputs" => [
             "Dimensions" => "dimensions.md"
             "Parameters" => "parameters.md"
-            "Model units" => "units.md"
+            "Units of measure" => "units.md"
+        ]
+        "Outputs" => [
+            "Variables" => "variables.md"
         ]
         "Scenario databases" => "scenario_db.md"
+        #"Calculating a scenario" => "scenario_calc.md"
+        #"Function reference" => "functions.md"
+
+        # custom_constraints, configuration_file, time_slicing
     ],
 )
 

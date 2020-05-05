@@ -2594,12 +2594,16 @@ ns4_storageleveltsgroup2start::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}
 ns5_storageleveltimesliceend::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, ltg.l as l, y.val as y, ltg.lorder as lo,
-    ltg.tg2 as tg2, tg2.[order] as tg2o, ltg.tg1 as tg1, tg1.[order] as tg1o, cast(se.sls as real) as sls
+    ltg.tg2 as tg2, tg2.[order] as tg2o, ltg.tg1 as tg1, tg1.[order] as tg1o, cast(se.sls as real) as sls,
+    cast(msc.val as real) as msc, cast(rsc.delta as real) as rsc_delta
 from REGION r, STORAGE s, YEAR y, LTsGroup ltg, TSGROUP2 tg2, TSGROUP1 tg1
 left join (select sls.r as r, sls.s as s, sls.val * rsc.val as sls
 from StorageLevelStart_def sls, ResidualStorageCapacity_def rsc
 where sls.r = rsc.r and sls.s = rsc.s and rsc.y = " * first(syear) * ") se on se.r = r.val and se.s = s.val
 left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
+left join MinStorageCharge_def msc on msc.r = r.val and msc.s = s.val and msc.y = y.val
+left join (select r, s, y, val - lag(val) over (partition by r, s order by y) as delta
+    from ResidualStorageCapacity) rsc on rsc.r = r.val and rsc.s = s.val and rsc.y = y.val
 where
 ltg.tg2 = tg2.name
 and ltg.tg1 = tg1.name
@@ -2618,11 +2622,23 @@ and ns.r is null")
     local addns4::Bool = false  #  Indicates whether to add to constraint ns4
 
     if y == first(syear) && tg1o == 1 && tg2o == 1 && lo == 1
-        startlevel = ismissing(row[:sls]) ? 0 : row[:sls]
+        # New endogenous storage capacity is assumed to be delivered with minimum charge
+        startlevel = (ismissing(row[:sls]) ? 0 : row[:sls]) + (ismissing(row[:msc]) ? 0 : row[:msc] * vnewstoragecapacity[r,s,y])
         addns3 = true
         addns4 = true
     elseif tg1o == 1 && tg2o == 1 && lo == 1
         startlevel = vstoragelevelyearendnn[r, s, string(Meta.parse(y)-1)]
+
+        # New endogenous and exogenous storage capacity is assumed to be delivered with minimum charge
+        # If exogenous capacity is retired, any charge is assumed to be transferred to other capacity existing at start of year; or lost if no capacity exists
+        if !ismissing(row[:msc])
+            startlevel += row[:msc] * vnewstoragecapacity[r,s,y]
+
+            if !ismissing(row[:rsc_delta]) && row[:rsc_delta] > 0
+                startlevel += row[:msc] * row[:rsc_delta]
+            end
+        end
+
         addns3 = true
         addns4 = true
     elseif tg2o == 1 && lo == 1
@@ -2660,17 +2676,21 @@ if transmissionmodeling
     ns4tr_storageleveltsgroup2start::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     ns5tr_storageleveltimesliceend::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    # Note that this query distributes StorageLevelStart according to NodalDistributionStorageCapacity
-    for row in SQLite.DBInterface.execute(db, "select ns.n as n, ns.s as s, ltg.l as l, ns.y as y, ltg.lorder as lo,
+    # Note that this query distributes StorageLevelStart, MinStorageCharge, and ResidualStorageCapacity according to NodalDistributionStorageCapacity
+    for row in SQLite.DBInterface.execute(db, "select ns.r as r, ns.n as n, ns.s as s, ltg.l as l, ns.y as y, ltg.lorder as lo,
         ltg.tg2 as tg2, tg2.[order] as tg2o, ltg.tg1 as tg1, tg1.[order] as tg1o,
-    	cast(se.sls * ns.val as real) as sls
+    	cast(se.sls * ns.val as real) as sls, cast(msc.val * ns.val as real) as msc, cast(rsc.delta * ns.val as real) as rsc_delta
     from nodalstorage ns, LTsGroup ltg, TSGROUP2 tg2, TSGROUP1 tg1
 	left join (select sls.r as r, sls.s as s, sls.val * rsc.val as sls
 		from StorageLevelStart_def sls, ResidualStorageCapacity_def rsc
 		where sls.r = rsc.r and sls.s = rsc.s and rsc.y = " * first(syear) * ") se on se.r = ns.r and se.s = ns.s
+    left join MinStorageCharge_def msc on msc.r = ns.r and msc.s = ns.s and msc.y = ns.y
+    left join (select r, s, y, val - lag(val) over (partition by r, s order by y) as delta
+        from ResidualStorageCapacity) rsc on rsc.r = ns.r and rsc.s = ns.s and rsc.y = ns.y
     where
     ltg.tg2 = tg2.name
     and ltg.tg1 = tg1.name")
+        local r = row[:r]
         local n = row[:n]
         local s = row[:s]
         local l = row[:l]
@@ -2685,11 +2705,23 @@ if transmissionmodeling
         local addns4::Bool = false  #  Indicates whether to add to constraint ns4tr
 
         if y == first(syear) && tg1o == 1 && tg2o == 1 && lo == 1
-            startlevel = ismissing(row[:sls]) ? 0 : row[:sls]
+            # New endogenous storage capacity is assumed to be delivered with minimum charge
+            startlevel = (ismissing(row[:sls]) ? 0 : row[:sls]) + (ismissing(row[:msc]) ? 0 : row[:msc] * vnewstoragecapacity[r,s,y])
             addns3 = true
             addns4 = true
         elseif tg1o == 1 && tg2o == 1 && lo == 1
             startlevel = vstoragelevelyearendnodal[n, s, string(Meta.parse(y)-1)]
+
+            # New endogenous and exogenous storage capacity is assumed to be delivered with minimum charge
+            # If exogenous capacity is retired, any charge is assumed to be transferred to other capacity existing at start of year; or lost if no capacity exists
+            if !ismissing(row[:msc])
+                startlevel += row[:msc] * vnewstoragecapacity[r,s,y]
+
+                if !ismissing(row[:rsc_delta]) && row[:rsc_delta] > 0
+                    startlevel += row[:msc] * row[:rsc_delta]
+                end
+            end
+
             addns3 = true
             addns4 = true
         elseif tg2o == 1 && lo == 1
@@ -2879,19 +2911,22 @@ end
 ns8_storagelevelyearend::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 ns8a_storagelevelyearendnetzero::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = s, lastkeys[3] = y
-lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = sls
+lastvals = Array{Float64, 1}([0.0, 0.0, 0.0])  # lastvals[1] = sls, lastvals[2] = msc, lastvals[3] = rsc_delta
 lastvalsint = Array{Int64, 1}(undef,1)  # lastvalsint[1] = ynz
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofstoragechargenn and vrateofstoragedischargenn sum
 
 for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s,
 case s.netzerotg2 when 1 then 0 else case s.netzerotg1 when 1 then 0 else s.netzeroyear end end as ynz,
 y.val as y, ys.l as l, cast(ys.val as real) as ys,
-cast(se.sls as real) as sls
+cast(se.sls as real) as sls, cast(msc.val as real) as msc, cast(rsc.delta as real) as rsc_delta
 from REGION r, STORAGE s, YEAR as y, YearSplit_def ys
 left join (select sls.r as r, sls.s as s, sls.val * rsc.val as sls
 from StorageLevelStart_def sls, ResidualStorageCapacity_def rsc
 where sls.r = rsc.r and sls.s = rsc.s and rsc.y = " * first(syear) * ") se on se.r = r.val and se.s = s.val
 left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
+left join MinStorageCharge_def msc on msc.r = r.val and msc.s = s.val and msc.y = y.val
+left join (select r, s, y, val - lag(val) over (partition by r, s order by y) as delta
+    from ResidualStorageCapacity) rsc on rsc.r = r.val and rsc.s = s.val and rsc.y = y.val
 where y.val = ys.y
 and ns.r is null
 order by r.val, s.val, y.val")
@@ -2902,18 +2937,24 @@ order by r.val, s.val, y.val")
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || s != lastkeys[2] || y != lastkeys[3])
         # Create constraint
+        # New endogenous and exogenous storage capacity is assumed to be delivered with minimum charge
+        # If exogenous capacity is retired, any charge is assumed to be transferred to other capacity existing at start of year; or lost if no capacity exists
         push!(ns8_storagelevelyearend, @constraint(jumpmodel,
             (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearendnn[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
-            + sumexps[1] == vstoragelevelyearendnn[lastkeys[1], lastkeys[2], lastkeys[3]]))
+            + lastvals[2] * vnewstoragecapacity[lastkeys[1], lastkeys[2], lastkeys[3]]
+            + lastvals[2] * (lastvals[3] > 0 ? lastvals[3] : 0) + sumexps[1]
+            == vstoragelevelyearendnn[lastkeys[1], lastkeys[2], lastkeys[3]]))
 
         if lastvalsint[1] == 1
             push!(ns8a_storagelevelyearendnetzero, @constraint(jumpmodel,
                 (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearendnn[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
+                + lastvals[2] * vnewstoragecapacity[lastkeys[1], lastkeys[2], lastkeys[3]]
+                + lastvals[2] * (lastvals[3] > 0 ? lastvals[3] : 0)
                 == vstoragelevelyearendnn[lastkeys[1], lastkeys[2], lastkeys[3]]))
         end
 
         sumexps[1] = AffExpr()
-        lastvals[1] = 0.0
+        lastvals = [0.0, 0.0, 0.0]
         lastvalsint[1] = 0
     end
 
@@ -2921,6 +2962,14 @@ order by r.val, s.val, y.val")
 
     if !ismissing(row[:sls])
         lastvals[1] = row[:sls]
+    end
+
+    if !ismissing(row[:msc])
+        lastvals[2] = row[:msc]
+    end
+
+    if !ismissing(row[:rsc_delta])
+        lastvals[3] = row[:rsc_delta]
     end
 
     lastvalsint[1] = ynz
@@ -2933,11 +2982,15 @@ end
 if isassigned(lastkeys, 1)
     push!(ns8_storagelevelyearend, @constraint(jumpmodel,
         (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearendnn[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
-        + sumexps[1] == vstoragelevelyearendnn[lastkeys[1], lastkeys[2], lastkeys[3]]))
+        + lastvals[2] * vnewstoragecapacity[lastkeys[1], lastkeys[2], lastkeys[3]]
+        + lastvals[2] * (lastvals[3] > 0 ? lastvals[3] : 0) + sumexps[1]
+        == vstoragelevelyearendnn[lastkeys[1], lastkeys[2], lastkeys[3]]))
 
     if lastvalsint[1] == 1
         push!(ns8a_storagelevelyearendnetzero, @constraint(jumpmodel,
             (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearendnn[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
+            + lastvals[2] * vnewstoragecapacity[lastkeys[1], lastkeys[2], lastkeys[3]]
+            + lastvals[2] * (lastvals[3] > 0 ? lastvals[3] : 0)
             == vstoragelevelyearendnn[lastkeys[1], lastkeys[2], lastkeys[3]]))
     end
 end
@@ -2950,20 +3003,24 @@ length(ns8a_storagelevelyearendnetzero) > 0 && logmsg("Created constraint NS8a_S
 if transmissionmodeling
     ns8tr_storagelevelyearend::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     ns8atr_storagelevelyearendnetzero::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
-    lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = n, lastkeys[2] = s, lastkeys[3] = y
-    lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = sls
+    lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = s, lastkeys[3] = y, lastkeys[4] = r
+    lastvals = Array{Float64, 1}([0.0, 0.0, 0.0])  # lastvals[1] = sls, lastvals[2] = msc, lastvals[3] = rsc_delta
     lastvalsint = Array{Int64, 1}(undef,1)  # lastvalsint[1] = ynz
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofstoragechargenodal and vrateofstoragedischargenodal sum
 
-    # Note that this query distributes StorageLevelStart according to NodalDistributionStorageCapacity
-    for row in SQLite.DBInterface.execute(db, "select ns.n as n, s.val as s,
+    # Note that this query distributes StorageLevelStart, MinStorageCharge, and ResidualStorageCapacity according to NodalDistributionStorageCapacity
+    for row in SQLite.DBInterface.execute(db, "select ns.r as r, ns.n as n, s.val as s,
     case s.netzerotg2 when 1 then 0 else case s.netzerotg1 when 1 then 0 else s.netzeroyear end end as ynz,
     ns.y as y, ys.l as l, cast(ys.val as real) as ys,
-    cast(se.sls * ns.val as real) as sls
+    cast(se.sls * ns.val as real) as sls, cast(msc.val * ns.val as real) as msc,
+    cast(rsc.delta * ns.val as real) as rsc_delta
     from nodalstorage ns, STORAGE s, YearSplit_def ys
     left join (select sls.r as r, sls.s as s, sls.val * rsc.val as sls
 		from StorageLevelStart_def sls, ResidualStorageCapacity_def rsc
 		where sls.r = rsc.r and sls.s = rsc.s and rsc.y = " * first(syear) * ") se on se.r = ns.r and se.s = ns.s
+    left join MinStorageCharge_def msc on msc.r = ns.r and msc.s = s.val and msc.y = ns.y
+    left join (select r, s, y, val - lag(val) over (partition by r, s order by y) as delta
+		from ResidualStorageCapacity) rsc on rsc.r = ns.r and rsc.s = s.val and rsc.y = ns.y
     where ns.s = s.val
 	and ns.y = ys.y
     order by ns.n, ns.s, ns.y")
@@ -2974,18 +3031,24 @@ if transmissionmodeling
 
         if isassigned(lastkeys, 1) && (n != lastkeys[1] || s != lastkeys[2] || y != lastkeys[3])
             # Create constraint
+            # New endogenous and exogenous storage capacity is assumed to be delivered with minimum charge
+            # If exogenous capacity is retired, any charge is assumed to be transferred to other capacity existing at start of year; or lost if no capacity exists
             push!(ns8tr_storagelevelyearend, @constraint(jumpmodel,
                 (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
-                + sumexps[1] == vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], lastkeys[3]]))
+                + lastvals[2] * vnewstoragecapacity[lastkeys[4], lastkeys[2], lastkeys[3]]
+                + lastvals[2] * (lastvals[3] > 0 ? lastvals[3] : 0) + sumexps[1]
+                == vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], lastkeys[3]]))
 
             if lastvalsint[1] == 1
                 push!(ns8atr_storagelevelyearendnetzero, @constraint(jumpmodel,
                     (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
+                    + lastvals[2] * vnewstoragecapacity[lastkeys[4], lastkeys[2], lastkeys[3]]
+                    + lastvals[2] * (lastvals[3] > 0 ? lastvals[3] : 0)
                     == vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], lastkeys[3]]))
             end
 
             sumexps[1] = AffExpr()
-            lastvals[1] = 0.0
+            lastvals = [0.0, 0.0, 0.0]
             lastvalsint[1] = 0
         end
 
@@ -2995,21 +3058,34 @@ if transmissionmodeling
             lastvals[1] = row[:sls]
         end
 
+        if !ismissing(row[:msc])
+            lastvals[2] = row[:msc]
+        end
+
+        if !ismissing(row[:rsc_delta])
+            lastvals[3] = row[:rsc_delta]
+        end
+
         lastvalsint[1] = ynz
         lastkeys[1] = n
         lastkeys[2] = s
         lastkeys[3] = y
+        lastkeys[4] = row[:r]
     end
 
     # Create last constraint
     if isassigned(lastkeys, 1)
         push!(ns8tr_storagelevelyearend, @constraint(jumpmodel,
             (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
-            + sumexps[1] == vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], lastkeys[3]]))
+            + lastvals[2] * vnewstoragecapacity[lastkeys[4], lastkeys[2], lastkeys[3]]
+            + lastvals[2] * (lastvals[3] > 0 ? lastvals[3] : 0) + sumexps[1]
+            == vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], lastkeys[3]]))
 
         if lastvalsint[1] == 1
             push!(ns8atr_storagelevelyearendnetzero, @constraint(jumpmodel,
                 (lastkeys[3] == first(syear) ? lastvals[1] : vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)])
+                + lastvals[2] * vnewstoragecapacity[lastkeys[4], lastkeys[2], lastkeys[3]]
+                + lastvals[2] * (lastvals[3] > 0 ? lastvals[3] : 0)
                 == vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], lastkeys[3]]))
         end
     end
