@@ -269,7 +269,10 @@ For example, if a technology had an efficiency of 80%, the `InputActivityRatio` 
 
 ## [Minimum storage charge](@id MinStorageCharge)
 
-Minimum fraction of the specified [storage's](@ref storage) capacity that must be charged. NEMO ensures the charge never drops below this level.
+Minimum fraction of a [storage's](@ref storage) capacity that must be charged. NEMO ensures the charge never drops below this level.
+
+!!! note
+    When this parameter is set, NEMO assumes that new storage capacity (endogenous and exogenous) is delivered with the minimum charge.
 
 #### Scenario database
 
