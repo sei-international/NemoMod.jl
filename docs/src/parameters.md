@@ -43,7 +43,7 @@ Maximum emissions allowed in the specified [year](@ref year).
 
 Exogenously specified emissions, assumed to occur regardless of what else is happening in the energy system.
 
-#### Scenario databass
+#### Scenario database
 
 **Table: `AnnualExogenousEmission`**
 
@@ -273,6 +273,9 @@ Minimum fraction of a [storage's](@ref storage) capacity that must be charged. N
 
 !!! note
     When this parameter is set, NEMO assumes that new storage capacity (endogenous and exogenous) is delivered with the minimum charge.
+
+!!! warning
+    If you set a minimum storage charge, make sure the corresponding [storage start level](@ref StorageLevelStart) is at least as large as the minimum. Otherwise your model will be infeasible.
 
 #### Scenario database
 
@@ -624,21 +627,6 @@ Factor relating endogenously determined capacity for a [storage](@ref storage) a
 | `y` | text  | Year |
 | `val` | real  | Hours |
 
-## [Storage level start](@id StorageLevelStart)
-
-Fraction of exogenous [storage](@ref storage) capacity that is charged at the start of the modeling period.
-
-#### Scenario database
-
-**Table: `StorageLevelStart`**
-
-| Name | Type | Description |
-|:--- | :--: |:----------- |
-| `id` | integer | Unique identifier for row |
-| `r` | text  | Region |
-| `s` | text  | Storage |
-| `val` | real  | Fraction (0 to 1) |
-
 ## [Storage maximum charge rate](@id StorageMaxChargeRate)
 
 Maximum charging rate for a [storage](@ref storage).
@@ -674,6 +662,21 @@ Maximum discharging rate for a [storage](@ref storage).
 | `r` | text  | Region |
 | `s` | text  | Storage |
 | `val` | real  | Discharging rate (region's energy [unit](@ref uoms) / year) |
+
+## [Storage start level](@id StorageLevelStart)
+
+Fraction of exogenous [storage](@ref storage) capacity that is charged at the start of the modeling period.
+
+#### Scenario database
+
+**Table: `StorageLevelStart`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `s` | text  | Storage |
+| `val` | real  | Fraction (0 to 1) |
 
 ## [Technology from storage](@id TechnologyFromStorage)
 

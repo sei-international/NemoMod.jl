@@ -12,7 +12,7 @@
     varstosave = "vdemandnn, vnewcapacity, vtotalcapacityannual,
         vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
         vusenn, vtotaldiscountedcost",
-    targetprocs = Array{Int, 1}([1]), restrictvars = false,
+    targetprocs = Array{Int, 1}([1]), restrictvars = true,
     reportzeros = false, continuoustransmission = false, quiet = false)
 
 Runs NEMO for a scenario specified in a SQLite database. Returns a Symbol indicating
@@ -54,7 +54,7 @@ function calculatescenario(
     jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
     varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
     targetprocs::Array{Int, 1} = Array{Int, 1}([1]),
-    restrictvars::Bool = false,
+    restrictvars::Bool = true,
     reportzeros::Bool = false,
     continuoustransmission::Bool = false,
     quiet::Bool = false)
