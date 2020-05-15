@@ -14,7 +14,7 @@
     chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
     # Test with default outputs
-    NemoMod.calculatescenario(dbfile; quiet = false)  # GLPK is default solver
+    NemoMod.calculatescenario(dbfile; restrictvars=false, quiet = false)  # GLPK is default solver
 
     db = SQLite.DB(dbfile)
     testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -45,7 +45,7 @@
     NemoMod.calculatescenario(dbfile; varstosave =
         "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vrateofdemand, vproductionbytechnology, vtotaltechnologyannualactivity, "
         * "vtotaltechnologymodelperiodactivity, vusebytechnology, vmodelperiodcostbyregion, vannualtechnologyemissionpenaltybyemission, "
-        * "vtotaldiscountedcost", quiet = false)
+        * "vtotaldiscountedcost", restrictvars=false, quiet = false)
 
     testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
@@ -102,7 +102,7 @@
 
     # Test with storage net zero constraints
     SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
-    NemoMod.calculatescenario(dbfile)
+    NemoMod.calculatescenario(dbfile; restrictvars=false)
     testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
     @test testqry[1,:y] == "2020"
@@ -142,7 +142,7 @@ end  # "Solving storage_test with GLPK"
         varstosave =
             "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
             * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
-        quiet = false)
+        restrictvars=false, quiet = false)
 
     db = SQLite.DB(dbfile)
     testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
