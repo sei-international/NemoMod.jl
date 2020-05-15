@@ -969,3 +969,7 @@ function db_v3_to_v4(db::SQLite.DB; quiet::Bool = false)
     end
     # END: Wrap database operations in try-catch block to allow rollback on error.
 end  # db_v3_to_v4(db::SQLite.DB; quiet::Bool = false)
+
+function temp_test()
+    true
+end

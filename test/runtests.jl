@@ -9,7 +9,10 @@
         so that tests for Cbc and proprietary solvers are skipped if solvers are not present.
 =#
 
-using NemoMod
+if !@isdefined NemoMod
+    using NemoMod
+end
+
 using Test, SQLite, DataFrames, JuMP
 
 const TOL = 1e-4  # Default tolerance for isapprox() comparisons
