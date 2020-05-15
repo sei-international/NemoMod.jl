@@ -168,33 +168,33 @@ create_other_nemo_indices(db)
 logmsg("Created parameter views and indices.", quiet)
 # END: Create parameter views showing default values and parameter indices.
 
-# BEGIN: Define sets.
+# BEGIN: Define dimensions.
 tempquery = SQLite.DBInterface.execute(db, "select val from YEAR order by val")
-syear::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # YEAR set
+syear::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # YEAR dimension
 tempquery = SQLite.DBInterface.execute(db, "select val from TECHNOLOGY")
-stechnology::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # TECHNOLOGY set
+stechnology::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # TECHNOLOGY dimension
 tempquery = SQLite.DBInterface.execute(db, "select val from TIMESLICE")
-stimeslice::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # TIMESLICE set
+stimeslice::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # TIMESLICE dimension
 tempquery = SQLite.DBInterface.execute(db, "select val from FUEL")
-sfuel::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # FUEL set
+sfuel::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # FUEL dimension
 tempquery = SQLite.DBInterface.execute(db, "select val from EMISSION")
-semission::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # EMISSION set
+semission::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # EMISSION dimension
 tempquery = SQLite.DBInterface.execute(db, "select val from MODE_OF_OPERATION")
-smode_of_operation::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # MODE_OF_OPERATION set
+smode_of_operation::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # MODE_OF_OPERATION dimension
 tempquery = SQLite.DBInterface.execute(db, "select val from REGION")
-sregion::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # REGION set
+sregion::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # REGION dimension
 tempquery = SQLite.DBInterface.execute(db, "select val from STORAGE")
-sstorage::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # STORAGE set
+sstorage::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # STORAGE dimension
 tempquery = SQLite.DBInterface.execute(db, "select name from TSGROUP1")
-stsgroup1::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :name]))  # Time slice group 1 set
+stsgroup1::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :name]))  # Time slice group 1 dimension
 tempquery = SQLite.DBInterface.execute(db, "select name from TSGROUP2")
-stsgroup2::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :name]))  # Time slice group 2 set
+stsgroup2::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :name]))  # Time slice group 2 dimension
 
 if transmissionmodeling
     tempquery = SQLite.DBInterface.execute(db, "select val from NODE")
-    snode::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # Node set
+    snode::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # Node dimension
     tempquery = SQLite.DBInterface.execute(db, "select id from TransmissionLine")
-    stransmission::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :id]))  # Transmission line set
+    stransmission::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :id]))  # Transmission line dimension
 end
 
 tsgroup1dict::Dict{Int, Tuple{String, Float64}} = Dict{Int, Tuple{String, Float64}}(row[:order] => (row[:name], row[:multiplier]) for row in
@@ -210,8 +210,8 @@ ltsgroupdict::Dict{Tuple{Int, Int, Int}, String} = Dict{Tuple{Int, Int, Int}, St
     ltg.tg2 = tg2.name
     and ltg.tg1 = tg1.name"))  # Dictionary of LTsGroup table mapping tuples of (tsgroup1 order, tsgroup2 order, time slice order) to time slice vals
 
-logmsg("Defined sets.", quiet)
-# END: Define sets.
+logmsg("Defined dimensions.", quiet)
+# END: Define dimensions.
 
 # BEGIN: Define model variables.
 modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}} = Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}}()

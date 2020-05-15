@@ -6,6 +6,7 @@ makedocs(
     format = Documenter.HTML(),
     pages = [
         "Introduction" => "index.md"
+        # Quick start
         "Installation" => "installation.md"
         "Model concept" => "model_concept.md"
         "Inputs" => [
@@ -17,12 +18,15 @@ makedocs(
         "Outputs" => [
             "Variables" => "variables.md"
         ]
+        #"Mathematical model"
         "Scenario databases" => "scenario_db.md"
         #"Calculating a scenario" => "scenario_calc.md"
+        #   Julia syntax
         "Configuration files" => "configuration_file.md"
+        #   Performance tips
+        # Advanced topics
+        #   Custom constraints
         #"Function reference" => "functions.md"
-
-        # custom_constraints, configuration_file, time_slicing
     ],
 )
 

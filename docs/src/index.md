@@ -6,7 +6,7 @@ CurrentModule = NemoMod
 
 This documentation explains how to use **NEMO**: the **Next Energy Modeling System for Optimization**.
 
-NEMO is a high-performance, open-source energy system optimization model. It is intended for users who seek substantial optimization capabilities without the limitations of proprietary, fee-based software or the performance bottlenecks of common open-source alternatives. Key features of NEMO include:
+NEMO is a high-performance, open-source energy system optimization modeling tool. It is intended for users who seek substantial optimization capabilities without the limitations of proprietary, fee-based software or the performance bottlenecks of common open-source alternatives. Key features of NEMO include:
 
 - Least-cost optimization of energy supply and demand
 - Support for multiple regions and regional trade
@@ -28,25 +28,4 @@ NEMO is a project of the Energy Modeling Program at the [Stockholm Environment I
 
 ```@raw html
 <a href="https://www.sei.org"><img src="assets/sei_logo.svg" alt="SEI logo" style="display:block; margin: 0 auto"/></a>
-```
-
-```@raw html
-<!---
-
-X - Model concept
-- Inputs
-    X + Dimensions
-    + Parameters
-- Outputs
-    + Variables
-(- Mathematical model)
-X - Scenario databases
-- Solving a scenario
-  + Performance tips
-  + Configuration file
-- Additional information
-  + Time slicing
-  + Custom constraints
-- Julia interface (function documentation)
---->
 ```

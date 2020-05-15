@@ -3,198 +3,243 @@ CurrentModule = NemoMod
 ```
 # [Variables](@id variables)
 
-## [Non-nodal rate of demand](@id vrateofdemandnn)
+Variables are the outputs from calculating a scenario. They show the decisions taken to solve the optimization problem. When you calculate a scenario, you can choose which variables to output (see the `varstosave` argument of [`calculatescenario`](@ref)). NEMO will then save the selected variables in the [scenario database](@ref scenario_db). Each saved variable gets its own table with columns for its [dimensions](@ref dimensions) (labeled with NEMO's standard abbreviations - e.g., `r` for [region](@ref region)), a value column (`val`), and a column indicating the date and time the scenario was solved (`solvedtm`).
 
-Description.
+## [Nodal vs. non-nodal variables](@id nodal_def)
 
-#### Julia code
+Many NEMO outputs have "nodal" and "non-nodal" variants. **Nodal** variables show results for regions, [fuels](@ref fuel), [technologies](@ref technology), [storage](@ref storage), and [years](@ref year) involved in transmission modeling - i.e., for cases where capacity, demand, and supply are simulated in a nodal network. To enable transmission modeling, you must define several dimensions and [parameters](@ref): [nodes](@ref node), [transmission lines](@ref transmissionline), [TransmissionModelingEnabled](@ref TransmissionModelingEnabled), [TransmissionCapacityToActivityUnit](@ref TransmissionCapacityToActivityUnit), [NodalDistributionDemand](@ref NodalDistributionDemand), [NodalDistributionStorageCapacity](@ref NodalDistributionStorageCapacity), and [NodalDistributionTechnologyCapacity](@ref NodalDistributionTechnologyCapacity). **Non-nodal** variables show results for cases where transmission modeling is not enabled.
 
-* Variable in JuMP model: `vrateofdemandnn[r,l,f,y]`
+## Activity
 
-## [Non-nodal demand](@id vdemandnn)
 
-Description.
+## Costs
 
-#### Julia code
+### [Capital investment storage](@id vcapitalinvestmentstorage)
 
-* Variable in JuMP model: `vdemandnn[r,l,f,y]`
-
-## [Non-nodal annual demand](@id vdemandannualnn)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vdemandannualnn[r,f,y]`
-
-## [Non-nodal storage level time slice group 1 start](@id vstorageleveltsgroup1startnn)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vstorageleveltsgroup1startnn[r,s,tg1,y]`
-
-## [Non-nodal storage level time slice group 1 end](@id vstorageleveltsgroup1endnn)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vstorageleveltsgroup1endnn[r,s,tg1,y]`
-
-## [Non-nodal storage level time slice group 2 start](@id vstorageleveltsgroup2startnn)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vstorageleveltsgroup2startnn[r,s,tg1,tg2,y]`
-
-## [Non-nodal storage level time slice group 2 end](@id vstorageleveltsgroup2endnn)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vstorageleveltsgroup2endnn[r,s,tg1,tg2,y]`
-
-## [Non-nodal storage level time slice end](@id vstorageleveltsendnn)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vstorageleveltsendnn[r,s,l,y]`
-
-## [Non-nodal storage level year end](@id vstoragelevelyearendnn)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vstoragelevelyearendnn[r,s,y]`
-
-## [Non-nodal rate of storage charge](@id vrateofstoragechargenn)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateofstoragechargenn[r,s,l,y]`
-
-## [Non-nodal rate of storage discharge](@id vrateofstoragedischargenn)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateofstoragedischargenn[r,s,l,y]`
-
-## [Storage lower limit](@id vstoragelowerlimit)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vstoragelowerlimit[r,s,y]`
-
-## [Storage upper limit](@id vstorageupperlimit)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vstorageupperlimit[r,s,y]`
-
-## [Accumulated new storage capacity](@id vaccumulatednewstoragecapacity)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vaccumulatednewstoragecapacity[r,s,y]`
-
-## [New storage capacity](@id  vnewstoragecapacity)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: ` vnewstoragecapacity[r,s,y]`
-
-## [Capital investment storage](@id vcapitalinvestmentstorage)
-
-Description.
+Undiscounted investment in new endogenously determined [storage](@ref storage) capacity. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
 * Variable in JuMP model: `vcapitalinvestmentstorage[r,s,y]`
 
-## [Discounted capital investment storage](@id vdiscountedcapitalinvestmentstorage)
+### [Discounted capital investment storage](@id vdiscountedcapitalinvestmentstorage)
 
-Description.
+Discounted investment in new endogenously determined [storage](@ref storage) capacity. NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
 * Variable in JuMP model: `vdiscountedcapitalinvestmentstorage[r,s,y]`
 
-## [Salvage value storage](@id vsalvagevaluestorage)
+### [Salvage value storage](@id vsalvagevaluestorage)
 
-Description.
+Residual value of [capital investment in storage](@ref vcapitalinvestmentstorage) remaining at the end of the modeling period. The [DepreciationMethod](@ref DepreciationMethod) parameter determines the approach used to calculate salvage value. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
 * Variable in JuMP model: `vsalvagevaluestorage[r,s,y]`
 
-## [Discounted salvage value storage](@id vdiscountedsalvagevaluestorage)
+### [Discounted salvage value storage](@id vdiscountedsalvagevaluestorage)
 
-Description.
+Discounted residual value of [capital investment in storage](@ref vcapitalinvestmentstorage) remaining at the end of the modeling period. NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
 * Variable in JuMP model: `vdiscountedsalvagevaluestorage[r,s,y]`
 
-## [Total discounted storage cost](@id vtotaldiscountedstoragecost)
+### [Total discounted storage cost](@id vtotaldiscountedstoragecost)
 
-Description.
+Sum of discounted [storage](@ref storage) costs ([`vdiscountedcapitalinvestmentstorage`](@ref vdiscountedcapitalinvestmentstorage) - [`vdiscountedsalvagevaluestorage`](@ref vdiscountedsalvagevaluestorage)). Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 * Variable in JuMP model: `vtotaldiscountedstoragecost[r,s,y]`
 
-## [Number of new technology units](@id vnumberofnewtechnologyunits)
 
-Description.
 
-#### Julia code
+## Demand
 
-* Variable in JuMP model: `vnumberofnewtechnologyunits[r,t,y]`
+### [Non-nodal annual demand](@id vdemandannualnn)
 
-## [New capacity](@id vnewcapacity)
-
-Description.
+[Non-nodal demand](@ref vdemandnn) summed across [time slices](@ref timeslice). Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
-* Variable in JuMP model: `vnewcapacity[r,t,y]`
+* Variable in JuMP model: `vdemandannualnn[r,f,y]`
 
-## [Accumulated new capacity](@id vaccumulatednewcapacity)
+### [Non-nodal demand](@id vdemandnn)
 
-Description.
+Time-sliced [non-nodal](@ref nodal_def) demand (time-sliced demand is defined with [`SpecifiedAnnualDemand`](@ref SpecifiedAnnualDemand) and [`SpecifiedDemandProfile`](@ref SpecifiedDemandProfile)). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vdemandnn[r,l,f,y]`
+
+### [Non-nodal rate of demand](@id vrateofdemandnn)
+
+Rate of time-sliced [non-nodal](@ref nodal_def) demand (time-sliced demand is defined with [`SpecifiedAnnualDemand`](@ref SpecifiedAnnualDemand) and [`SpecifiedDemandProfile`](@ref SpecifiedDemandProfile)). Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateofdemandnn[r,l,f,y]`
+
+
+
+## Emissions
+
+
+
+## Renewable energy target
+
+
+
+## Reserve margin
+
+
+
+## Storage
+
+### [Accumulated new storage capacity](@id vaccumulatednewstoragecapacity)
+
+Total endogenously determined [storage](@ref storage) capacity existing in a [year](@ref year). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vaccumulatednewstoragecapacity[r,s,y]`
+
+### [New storage capacity](@id  vnewstoragecapacity)
+
+New endogenously determined [storage](@ref storage) capacity added in a [year](@ref year). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: ` vnewstoragecapacity[r,s,y]`
+
+### [Non-nodal rate of storage charge](@id vrateofstoragechargenn)
+
+Rate of energy stored in [non-nodal](@ref nodal_def) [storage](@ref storage). Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateofstoragechargenn[r,s,l,y]`
+
+### [Non-nodal rate of storage discharge](@id vrateofstoragedischargenn)
+
+Rate of energy released from [non-nodal](@ref nodal_def) [storage](@ref storage). Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateofstoragedischargenn[r,s,l,y]`
+
+### [Non-nodal storage level time slice end](@id vstorageleveltsendnn)
+
+Energy in [non-nodal](@ref nodal_def) [storage](@ref storage) at the end of a [time slice](@ref timeslice). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vstorageleveltsendnn[r,s,l,y]`
+
+### [Non-nodal storage level time slice group 1 start](@id vstorageleveltsgroup1startnn)
+
+Energy in [non-nodal](@ref nodal_def) [storage](@ref storage) at the start of a [time slice group 1](@ref tsgroup1). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vstorageleveltsgroup1startnn[r,s,tg1,y]`
+
+### [Non-nodal storage level time slice group 1 end](@id vstorageleveltsgroup1endnn)
+
+Energy in [non-nodal](@ref nodal_def) [storage](@ref storage) at the end of a [time slice group 1](@ref tsgroup1). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vstorageleveltsgroup1endnn[r,s,tg1,y]`
+
+### [Non-nodal storage level time slice group 2 start](@id vstorageleveltsgroup2startnn)
+
+Energy in [non-nodal](@ref nodal_def) [storage](@ref storage) at the start of a [time slice group 2](@ref tsgroup2) within a [time slice group 1](@ref tsgroup1). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vstorageleveltsgroup2startnn[r,s,tg1,tg2,y]`
+
+### [Non-nodal storage level time slice group 2 end](@id vstorageleveltsgroup2endnn)
+
+Energy in [non-nodal](@ref nodal_def) [storage](@ref storage) at the end of a [time slice group 2](@ref tsgroup2) within a [time slice group 1](@ref tsgroup1). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vstorageleveltsgroup2endnn[r,s,tg1,tg2,y]`
+
+### [Non-nodal storage level year end](@id vstoragelevelyearendnn)
+
+Energy in [non-nodal](@ref nodal_def) [storage](@ref storage) at the end of a [year](@ref year). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vstoragelevelyearendnn[r,s,y]`
+
+### [Storage lower limit](@id vstoragelowerlimit)
+
+Minimum energy in [storage](@ref storage) (determined by [MinStorageCharge](@ref MinStorageCharge) and storage capacity). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vstoragelowerlimit[r,s,y]`
+
+### [Storage upper limit](@id vstorageupperlimit)
+
+Maximum energy in [storage](@ref storage) (determined by storage capacity). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vstorageupperlimit[r,s,y]`
+
+
+## Technology capacity
+
+### [Accumulated new capacity](@id vaccumulatednewcapacity)
+
+Total endogenously determined [technology](@ref technology) capacity existing in a [year](@ref year). Unit: region's power [unit](@ref uoms).
 
 #### Julia code
 
 * Variable in JuMP model: `vaccumulatednewcapacity[r,t,y]`
 
-## [Total annual capacity](@id vtotalcapacityannual)
+### [New capacity](@id vnewcapacity)
 
-Description.
+New endogenously determined [technology](@ref technology) capacity added in a [year](@ref year). Unit: region's power [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vnewcapacity[r,t,y]`
+
+### [Number of new technology units](@id vnumberofnewtechnologyunits)
+
+Number of increments of new endogenously determined capacity added for a [technology](@ref technology) in a [year](@ref year). The size of each increment is set with the [`CapacityOfOneTechnologyUnit`](@ref CapacityOfOneTechnologyUnit) parameter. No unit.
+
+#### Julia code
+
+* Variable in JuMP model: `vnumberofnewtechnologyunits[r,t,y]`
+
+### [Total annual capacity](@id vtotalcapacityannual)
+
+Total [technology](@ref technology) capacity (endogenous and exogenous) existing in a [year](@ref year). Unit: region's power [unit](@ref uoms).
 
 #### Julia code
 
 * Variable in JuMP model: `vtotalcapacityannual[r,t,y]`
 
-## [rate of activity](@id vrateofactivity)
+
+
+
+
+## Transmission
+
+
+
+
+
+
+### [Rate of activity](@id vrateofactivity)
 
 Description.
 
@@ -202,7 +247,7 @@ Description.
 
 * Variable in JuMP model: `vrateofactivity[r,l,t,m,y]`
 
-## [Rate of total activity](@id vrateoftotalactivity)
+### [Rate of total activity](@id vrateoftotalactivity)
 
 Description.
 
@@ -210,7 +255,7 @@ Description.
 
 * Variable in JuMP model: `vrateoftotalactivity[r,t,l,y]`
 
-## [Total technology annual activity](@id vtotaltechnologyannualactivity)
+### [Total technology annual activity](@id vtotaltechnologyannualactivity)
 
 Description.
 
@@ -218,7 +263,7 @@ Description.
 
 * Variable in JuMP model: `vtotaltechnologyannualactivity[r,t,y]`
 
-## [Total annual technology activity by mode](@id vtotalannualtechnologyactivitybymode)
+### [Total annual technology activity by mode](@id vtotalannualtechnologyactivitybymode)
 
 Description.
 
@@ -226,7 +271,7 @@ Description.
 
 * Variable in JuMP model: `vtotalannualtechnologyactivitybymode[r,t,m,y]`
 
-## [Total technology model period activity](@id vtotaltechnologymodelperiodactivity)
+### [Total technology model period activity](@id vtotaltechnologymodelperiodactivity)
 
 Description.
 
@@ -234,7 +279,7 @@ Description.
 
 * Variable in JuMP model: `vtotaltechnologymodelperiodactivity[r,t]`
 
-## [Non-nodal rate of production by technology by mode](@id vrateofproductionbytechnologybymodenn)
+### [Non-nodal rate of production by technology by mode](@id vrateofproductionbytechnologybymodenn)
 
 Description.
 
@@ -242,7 +287,7 @@ Description.
 
 * Variable in JuMP model: `vrateofproductionbytechnologybymodenn[r,l,t,m,f,y]`
 
-## [Non-nodal rate of production by technology](@id vrateofproductionbytechnologynn)
+### [Non-nodal rate of production by technology](@id vrateofproductionbytechnologynn)
 
 Description.
 
@@ -250,7 +295,7 @@ Description.
 
 * Variable in JuMP model: `vrateofproductionbytechnologynn[r,l,t,f,y]`
 
-## [Production by technology, annual](@id vproductionbytechnologyannual)
+### [Production by technology, annual](@id vproductionbytechnologyannual)
 
 Description.
 
@@ -258,7 +303,7 @@ Description.
 
 * Variable in JuMP model: `vproductionbytechnologyannual[r,t,f,y]`
 
-## [Rate of production](@id vrateofproduction)
+### [Rate of production](@id vrateofproduction)
 
 Description.
 
@@ -266,7 +311,7 @@ Description.
 
 * Variable in JuMP model: `vrateofproduction[r,l,f,y]`
 
-## [Non-nodal rate of production](@id vrateofproductionnn)
+### [Non-nodal rate of production](@id vrateofproductionnn)
 
 Description.
 
@@ -274,7 +319,7 @@ Description.
 
 * Variable in JuMP model: `vrateofproductionnn[r,l,f,y]`
 
-## [Non-nodal production](@id vproductionnn)
+### [Non-nodal production](@id vproductionnn)
 
 Description.
 
@@ -282,7 +327,7 @@ Description.
 
 * Variable in JuMP model: `vproductionnn[r,l,f,y]`
 
-## [Non-nodal rate of use by technology by mode](@id vrateofusebytechnologybymodenn)
+### [Non-nodal rate of use by technology by mode](@id vrateofusebytechnologybymodenn)
 
 Description.
 
@@ -290,7 +335,7 @@ Description.
 
 * Variable in JuMP model: `vrateofusebytechnologybymodenn[r,l,t,m,f,y]`
 
-## [Non-nodal rate of use by technology](@id vrateofusebytechnologynn)
+### [Non-nodal rate of use by technology](@id vrateofusebytechnologynn)
 
 Description.
 
@@ -298,7 +343,7 @@ Description.
 
 * Variable in JuMP model: `vrateofusebytechnologynn[r,l,t,f,y]`
 
-## [Use by technology, annual](@id vusebytechnologyannual)
+### [Use by technology, annual](@id vusebytechnologyannual)
 
 Description.
 
@@ -306,7 +351,7 @@ Description.
 
 * Variable in JuMP model: `vusebytechnologyannual[r,t,f,y]`
 
-## [Rate of use](@id vrateofuse)
+### [Rate of use](@id vrateofuse)
 
 Description.
 
@@ -314,7 +359,7 @@ Description.
 
 * Variable in JuMP model: `vrateofuse[r,l,f,y]`
 
-## [Non-nodal rate of use](@id vrateofusenn)
+### [Non-nodal rate of use](@id vrateofusenn)
 
 Description.
 
@@ -322,7 +367,7 @@ Description.
 
 * Variable in JuMP model: `vrateofusenn[r,l,f,y]`
 
-## [Non-nodal use](@id vusenn)
+### [Non-nodal use](@id vusenn)
 
 Description.
 
@@ -330,7 +375,7 @@ Description.
 
 * Variable in JuMP model: `vusenn[r,l,f,y]`
 
-## [Trade](@id vtrade)
+### [Trade](@id vtrade)
 
 Description.
 
@@ -338,7 +383,7 @@ Description.
 
 * Variable in JuMP model: `vtrade[r,rr,l,f,y]`
 
-## [Annual trade](@id vtradeannual)
+### [Annual trade](@id vtradeannual)
 
 Description.
 
@@ -346,7 +391,7 @@ Description.
 
 * Variable in JuMP model: `vtradeannual[r,rr,f,y]`
 
-## [Non-nodal production, annual](@id vproductionannualnn)
+### [Non-nodal production, annual](@id vproductionannualnn)
 
 Description.
 
@@ -354,7 +399,7 @@ Description.
 
 * Variable in JuMP model: `vproductionannualnn[r,f,y]`
 
-## [Non-nodal use, annual](@id vuseannualnn)
+### [Non-nodal use, annual](@id vuseannualnn)
 
 Description.
 
@@ -362,7 +407,7 @@ Description.
 
 * Variable in JuMP model: `vuseannualnn[r,f,y]`
 
-## [Capital investment](@id vcapitalinvestment)
+### [Capital investment](@id vcapitalinvestment)
 
 Description.
 
@@ -370,7 +415,7 @@ Description.
 
 * Variable in JuMP model: `vcapitalinvestment[r,t,y]`
 
-## [Discounted capital investment](@id vdiscountedcapitalinvestment)
+### [Discounted capital investment](@id vdiscountedcapitalinvestment)
 
 Description.
 
@@ -378,7 +423,7 @@ Description.
 
 * Variable in JuMP model: `vdiscountedcapitalinvestment[r,t,y]`
 
-## [Salvage value](@id vsalvagevalue)
+### [Salvage value](@id vsalvagevalue)
 
 Description.
 
@@ -386,7 +431,7 @@ Description.
 
 * Variable in JuMP model: `vsalvagevalue[r,t,y]`
 
-## [Discounted salvage value](@id vdiscountedsalvagevalue)
+### [Discounted salvage value](@id vdiscountedsalvagevalue)
 
 Description.
 
@@ -394,7 +439,7 @@ Description.
 
 * Variable in JuMP model: `vdiscountedsalvagevalue[r,t,y]`
 
-## [Operating cost](@id voperatingcost)
+### [Operating cost](@id voperatingcost)
 
 Description.
 
@@ -402,7 +447,7 @@ Description.
 
 * Variable in JuMP model: `voperatingcost[r,t,y]`
 
-## [Discounted operating cost](@id vdiscountedoperatingcost)
+### [Discounted operating cost](@id vdiscountedoperatingcost)
 
 Description.
 
@@ -410,7 +455,7 @@ Description.
 
 * Variable in JuMP model: `vdiscountedoperatingcost[r,t,y]`
 
-## [Annual variable operating cost](@id vannualvariableoperatingcost)
+### [Annual variable operating cost](@id vannualvariableoperatingcost)
 
 Description.
 
@@ -418,7 +463,7 @@ Description.
 
 * Variable in JuMP model: `vannualvariableoperatingcost[r,t,y]`
 
-## [Annual fixed operating cost](@id vannualfixedoperatingcost)
+### [Annual fixed operating cost](@id vannualfixedoperatingcost)
 
 Description.
 
@@ -426,7 +471,7 @@ Description.
 
 * Variable in JuMP model: `vannualfixedoperatingcost[r,t,y]`
 
-## [Total discounted cost by technology](@id vtotaldiscountedcostbytechnology)
+### [Total discounted cost by technology](@id vtotaldiscountedcostbytechnology)
 
 Description.
 
@@ -434,7 +479,7 @@ Description.
 
 * Variable in JuMP model: `vtotaldiscountedcostbytechnology[r,t,y]`
 
-## [Total discounted cost](@id vtotaldiscountedcost)
+### [Total discounted cost](@id vtotaldiscountedcost)
 
 Description.
 
@@ -442,7 +487,7 @@ Description.
 
 * Variable in JuMP model: `vtotaldiscountedcost[r,y]`
 
-## [Model period cost by region](@id vmodelperiodcostbyregion)
+### [Model period cost by region](@id vmodelperiodcostbyregion)
 
 Description.
 
@@ -450,7 +495,7 @@ Description.
 
 * Variable in JuMP model: `vmodelperiodcostbyregion[r]`
 
-## [Total capacity in reserve margin](@id vtotalcapacityinreservemargin)
+### [Total capacity in reserve margin](@id vtotalcapacityinreservemargin)
 
 Description.
 
@@ -458,7 +503,7 @@ Description.
 
 * Variable in JuMP model: `vtotalcapacityinreservemargin[r,y]`
 
-## [Demand needing reserve margin](@id vdemandneedingreservemargin)
+### [Demand needing reserve margin](@id vdemandneedingreservemargin)
 
 Description.
 
@@ -466,7 +511,7 @@ Description.
 
 * Variable in JuMP model: `vdemandneedingreservemargin[r,l,y]`
 
-## [Total renewable energy production, annual](@id vtotalreproductionannual)
+### [Total renewable energy production, annual](@id vtotalreproductionannual)
 
 Description.
 
@@ -474,7 +519,7 @@ Description.
 
 * Variable in JuMP model: `vtotalreproductionannual[r,y]`
 
-## [Renewable energy total production of target fuel, annual](@id vretotalproductionoftargetfuelannual)
+### [Renewable energy total production of target fuel, annual](@id vretotalproductionoftargetfuelannual)
 
 Description.
 
@@ -482,7 +527,7 @@ Description.
 
 * Variable in JuMP model: `vretotalproductionoftargetfuelannual[r,y]`
 
-## [Annual technology emission by mode](@id vannualtechnologyemissionbymode)
+### [Annual technology emission by mode](@id vannualtechnologyemissionbymode)
 
 Description.
 
@@ -490,7 +535,7 @@ Description.
 
 * Variable in JuMP model: `vannualtechnologyemissionbymode[r,t,e,m,y]`
 
-## [Annual technology emission](@id vannualtechnologyemission)
+### [Annual technology emission](@id vannualtechnologyemission)
 
 Description.
 
@@ -498,7 +543,7 @@ Description.
 
 * Variable in JuMP model: `vannualtechnologyemission[r,t,e,y]`
 
-## [Annual technology emission penalty by emission](@id vannualtechnologyemissionpenaltybyemission)
+### [Annual technology emission penalty by emission](@id vannualtechnologyemissionpenaltybyemission)
 
 Description.
 
@@ -506,7 +551,7 @@ Description.
 
 * Variable in JuMP model: `vannualtechnologyemissionpenaltybyemission[r,t,e,y]`
 
-## [Annual technology emissions penalty](@id vannualtechnologyemissionspenalty)
+### [Annual technology emissions penalty](@id vannualtechnologyemissionspenalty)
 
 Description.
 
@@ -514,7 +559,7 @@ Description.
 
 * Variable in JuMP model: `vannualtechnologyemissionspenalty[r,t,y]`
 
-## [Discounted technology emission penalty](@id vdiscountedtechnologyemissionspenalty)
+### [Discounted technology emission penalty](@id vdiscountedtechnologyemissionspenalty)
 
 Description.
 
@@ -522,7 +567,7 @@ Description.
 
 * Variable in JuMP model: `vdiscountedtechnologyemissionspenalty[r,t,y]`
 
-## [Annual emissions](@id vannualemissions)
+### [Annual emissions](@id vannualemissions)
 
 Description.
 
@@ -530,7 +575,7 @@ Description.
 
 * Variable in JuMP model: `vannualemissions[r,e,y]`
 
-## [Model period emissions](@id vmodelperiodemissions)
+### [Model period emissions](@id vmodelperiodemissions)
 
 Description.
 
@@ -538,7 +583,7 @@ Description.
 
 * Variable in JuMP model: `vmodelperiodemissions[r,e]`
 
-## [Nodal rate of activity](@id vrateofactivitynodal)
+### [Nodal rate of activity](@id vrateofactivitynodal)
 
 Description.
 
@@ -546,7 +591,7 @@ Description.
 
 * Variable in JuMP model: `vrateofactivitynodal[n,l,t,m,y]`
 
-## [Nodal rate of production by technology](@id vrateofproductionbytechnologynodal)
+### [Nodal rate of production by technology](@id vrateofproductionbytechnologynodal)
 
 Description.
 
@@ -554,7 +599,7 @@ Description.
 
 * Variable in JuMP model: `vrateofproductionbytechnologynodal[n,l,t,f,y]`
 
-## [Nodal rate of use by technology](@id vrateofusebytechnologynodal)
+### [Nodal rate of use by technology](@id vrateofusebytechnologynodal)
 
 Description.
 
@@ -562,7 +607,7 @@ Description.
 
 * Variable in JuMP model: `vrateofusebytechnologynodal[n,l,t,f,y]`
 
-## [Transmission by line](@id vtransmissionbyline)
+### [Transmission by line](@id vtransmissionbyline)
 
 Description.
 
@@ -570,7 +615,7 @@ Description.
 
 * Variable in JuMP model: `vtransmissionbyline[tr,l,f,y]`
 
-## [Nodal rate of total activity](@id vrateoftotalactivitynodal)
+### [Nodal rate of total activity](@id vrateoftotalactivitynodal)
 
 Description.
 
@@ -578,7 +623,7 @@ Description.
 
 * Variable in JuMP model: `vrateoftotalactivitynodal[n,t,l,y]`
 
-## [Nodal rate of production](@id vrateofproductionnodal)
+### [Nodal rate of production](@id vrateofproductionnodal)
 
 Description.
 
@@ -586,7 +631,7 @@ Description.
 
 * Variable in JuMP model: `vrateofproductionnodal[n,l,f,y]`
 
-## [Nodal rate of use](@id vrateofusenodal)
+### [Nodal rate of use](@id vrateofusenodal)
 
 Description.
 
@@ -594,7 +639,7 @@ Description.
 
 * Variable in JuMP model: `vrateofusenodal[n,l,f,y]`
 
-## [Nodal production](@id vproductionnodal)
+### [Nodal production](@id vproductionnodal)
 
 Description.
 
@@ -602,7 +647,7 @@ Description.
 
 * Variable in JuMP model: `vproductionnodal[n,l,f,y]`
 
-## [Nodal production, annual](@id vproductionannualnodal)
+### [Nodal production, annual](@id vproductionannualnodal)
 
 Description.
 
@@ -610,7 +655,7 @@ Description.
 
 * Variable in JuMP model: `vproductionannualnodal[n,f,y]`
 
-## [Nodal use](@id vusenodal)
+### [Nodal use](@id vusenodal)
 
 Description.
 
@@ -618,7 +663,7 @@ Description.
 
 * Variable in JuMP model: `vusenodal[n,l,f,y]`
 
-## [Nodal use, annual](@id vuseannualnodal)
+### [Nodal use, annual](@id vuseannualnodal)
 
 Description.
 
@@ -626,7 +671,7 @@ Description.
 
 * Variable in JuMP model: `vuseannualnodal[n,l,f,y]`
 
-## [Nodal demand](@id vdemandnodal)
+### [Nodal demand](@id vdemandnodal)
 
 Description.
 
@@ -634,7 +679,7 @@ Description.
 
 * Variable in JuMP model: `vdemandnodal[n,l,f,y]`
 
-## [Nodal demand, annual](@id vdemandannualnodal)
+### [Nodal demand, annual](@id vdemandannualnodal)
 
 Description.
 
@@ -642,7 +687,7 @@ Description.
 
 * Variable in JuMP model: `vdemandannualnodal[n,f,y]`
 
-## [Annual transmission](@id vtransmissionannual)
+### [Annual transmission](@id vtransmissionannual)
 
 Description.
 
@@ -650,7 +695,7 @@ Description.
 
 * Variable in JuMP model: `vtransmissionannual[n,f,y]`
 
-## [Transmission built](@id vtransmissionbuilt)
+### [Transmission built](@id vtransmissionbuilt)
 
 Description.
 
@@ -658,7 +703,7 @@ Description.
 
 * Variable in JuMP model: `vtransmissionbuilt[tr,y]`
 
-## [Existing transmission](@id vtransmissionexists)
+### [Existing transmission](@id vtransmissionexists)
 
 Description.
 
@@ -666,7 +711,7 @@ Description.
 
 * Variable in JuMP model: `vtransmissionexists[tr,y]`
 
-## [Voltage angle](@id vvoltageangle)
+### [Voltage angle](@id vvoltageangle)
 
 Description.
 
@@ -674,7 +719,7 @@ Description.
 
 * Variable in JuMP model: `vvoltageangle[n,l,y]`
 
-## [Nodal storage level time slice group 1 start](@id vstorageleveltsgroup1startnodal)
+### [Nodal storage level time slice group 1 start](@id vstorageleveltsgroup1startnodal)
 
 Description.
 
@@ -682,7 +727,7 @@ Description.
 
 * Variable in JuMP model: `vstorageleveltsgroup1startnodal[n,s,tg1,y]`
 
-## [Nodal storage level time slice group 1 end](@id vstorageleveltsgroup1endnodal)
+### [Nodal storage level time slice group 1 end](@id vstorageleveltsgroup1endnodal)
 
 Description.
 
@@ -690,7 +735,7 @@ Description.
 
 * Variable in JuMP model: `vstorageleveltsgroup1endnodal[n,s,tg1,y]`
 
-## [Nodal storage level time slice group 2 start](@id vstorageleveltsgroup2startnodal)
+### [Nodal storage level time slice group 2 start](@id vstorageleveltsgroup2startnodal)
 
 Description.
 
@@ -698,7 +743,7 @@ Description.
 
 * Variable in JuMP model: `vstorageleveltsgroup2startnodal[n,s,tg1,tg2,y]`
 
-## [Nodal storage level time slice group 2 end](@id vstorageleveltsgroup2endnodal)
+### [Nodal storage level time slice group 2 end](@id vstorageleveltsgroup2endnodal)
 
 Description.
 
@@ -706,7 +751,7 @@ Description.
 
 * Variable in JuMP model: `vstorageleveltsgroup2endnodal[n,s,tg1,tg2,y]`
 
-## [Nodal storage level time slice end](@id vstorageleveltsendnodal)
+### [Nodal storage level time slice end](@id vstorageleveltsendnodal)
 
 Description.
 
@@ -714,7 +759,7 @@ Description.
 
 * Variable in JuMP model: `vstorageleveltsendnodal[n,s,l,y]`
 
-## [Nodal rate of storage charge](@id vrateofstoragechargenodal)
+### [Nodal rate of storage charge](@id vrateofstoragechargenodal)
 
 Description.
 
@@ -722,7 +767,7 @@ Description.
 
 * Variable in JuMP model: `vrateofstoragechargenodal[n,s,l,y]`
 
-## [Nodal rate of storage discharge](@id vrateofstoragedischargenodal)
+### [Nodal rate of storage discharge](@id vrateofstoragedischargenodal)
 
 Description.
 
@@ -730,7 +775,7 @@ Description.
 
 * Variable in JuMP model: `vrateofstoragedischargenodal[n,s,l,y]`
 
-## [Nodal storage level year end](@id vstoragelevelyearendnodal)
+### [Nodal storage level year end](@id vstoragelevelyearendnodal)
 
 Description.
 
@@ -738,7 +783,7 @@ Description.
 
 * Variable in JuMP model: `vstoragelevelyearendnodal[n,s,y]`
 
-## [Capital investment transmission](@id vcapitalinvestmenttransmission)
+### [Capital investment transmission](@id vcapitalinvestmenttransmission)
 
 Description.
 
@@ -746,7 +791,7 @@ Description.
 
 * Variable in JuMP model: `vcapitalinvestmenttransmission[tr,y]`
 
-## [Discounted capital investment transmission](@id vdiscountedcapitalinvestmenttransmission)
+### [Discounted capital investment transmission](@id vdiscountedcapitalinvestmenttransmission)
 
 Description.
 
@@ -754,7 +799,7 @@ Description.
 
 * Variable in JuMP model: `vdiscountedcapitalinvestmenttransmission[tr,y]`
 
-## [Salvage value transmission](@id vsalvagevaluetransmission)
+### [Salvage value transmission](@id vsalvagevaluetransmission)
 
 Description.
 
@@ -762,7 +807,7 @@ Description.
 
 * Variable in JuMP model: `vsalvagevaluetransmission[tr,y]`
 
-## [Discounted salvage value transmission](@id vdiscountedsalvagevaluetransmission)
+### [Discounted salvage value transmission](@id vdiscountedsalvagevaluetransmission)
 
 Description.
 
@@ -770,7 +815,7 @@ Description.
 
 * Variable in JuMP model: `vdiscountedsalvagevaluetransmission[tr,y]`
 
-## [Operating cost transmission](@id voperatingcosttransmission)
+### [Operating cost transmission](@id voperatingcosttransmission)
 
 Description.
 
@@ -778,7 +823,7 @@ Description.
 
 * Variable in JuMP model: `voperatingcosttransmission[tr,y]`
 
-## [Discounted operating cost transmission](@id vdiscountedoperatingcosttransmission)
+### [Discounted operating cost transmission](@id vdiscountedoperatingcosttransmission)
 
 Description.
 
@@ -786,7 +831,7 @@ Description.
 
 * Variable in JuMP model: `vdiscountedoperatingcosttransmission[tr,y]`
 
-## [Total discounted transmission cost by region](@id vtotaldiscountedtransmissioncostbyregion)
+### [Total discounted transmission cost by region](@id vtotaldiscountedtransmissioncostbyregion)
 
 Description.
 
@@ -794,7 +839,7 @@ Description.
 
 * Variable in JuMP model: `vtotaldiscountedtransmissioncostbyregion[r,y]`
 
-## [Production by technology](@id vproductionbytechnology)
+### [Production by technology](@id vproductionbytechnology)
 
 Description.
 
@@ -802,7 +847,7 @@ Description.
 
 * Variable in JuMP model: `vproductionbytechnology[r,l,t,f,y]`
 
-## [Use by technology](@id vusebytechnology)
+### [Use by technology](@id vusebytechnology)
 
 Description.
 
