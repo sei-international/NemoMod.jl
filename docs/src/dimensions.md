@@ -208,8 +208,8 @@ Connections between [nodes](@ref node) in a transmission (or transmission and di
 | `n2` | text  | Second node connected to line (`NODE.val`) |
 | `f` | text  | [Fuel](@ref fuel) transported over line (`FUEL.val`) |
 | `maxflow` | real  | Maximum flow supported by line (MW) |
-| `reactance` | real  | Line's reactance (per unit, only relevant for electrical lines when using direct current optimized power flow modeling; see [TransmissionModelingEnabled](@ref TransmissionModelingEnabled)) |
-| `yconstruction` | integer  | Exogenously specified construction year for line (leave null if NEMO should endogenously determine whether to build line) |
+| `reactance` | real  | Line's reactance (per unit assuming a 1 MVA power base, only relevant for electrical lines when using direct current optimized power flow modeling; see [TransmissionModelingEnabled](@ref TransmissionModelingEnabled)) |
+| `yconstruction` | integer  | Exogenously specified construction year for line (leave null if NEMO should endogenously determine whether to build line [i.e., for candidate lines]) |
 | `capitalcost` | real  | Line's capital cost (scenario's cost unit) |
 | `fixedcost` | real  | Line's fixed annual operation and maintenance cost (scenario's cost unit) |
 | `variablecost` | real  | Line's variable operation and maintenance (scenario's cost unit / energy unit) |

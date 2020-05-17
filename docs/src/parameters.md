@@ -194,7 +194,23 @@ Rate used to discount costs in a [region](@ref region).
 | `r` | text  | Region |
 | `val` | real  | Rate (0 to 1) |
 
-## [Emission activity ratio](@id EmissionActivityRatio)
+## [Emission penalty](@id EmissionsPenalty)
+
+Cost of emissions.
+
+#### Scenario database
+
+**Table: `EmissionsPenalty`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `e` | text  | Emission |
+| `y` | text  | Year |
+| `val` | real  | Cost (scenario's cost [unit](@ref uoms) / scenario's emissions unit) |
+
+## [Emissions activity ratio](@id EmissionActivityRatio)
 
 Emission factor for the indicated [technology](@ref technology) and [mode](@ref mode_of_operation).
 
@@ -211,22 +227,6 @@ Emission factor for the indicated [technology](@ref technology) and [mode](@ref 
 | `m` | text  | Mode of operation |
 | `y` | text  | Year |
 | `val` | real  | Factor (scenario's emissions [unit](@ref uoms) / region's energy unit) |
-
-## [Emissions penalty](@id EmissionsPenalty)
-
-Cost of emissions.
-
-#### Scenario database
-
-**Table: `EmissionsPenalty`**
-
-| Name | Type | Description |
-|:--- | :--: |:----------- |
-| `id` | integer | Unique identifier for row |
-| `r` | text  | Region |
-| `e` | text  | Emission |
-| `y` | text  | Year |
-| `val` | real  | Cost (scenario's cost [unit](@ref uoms) / scenario's emissions unit) |
 
 ## [Fixed cost](@id FixedCost)
 
@@ -498,7 +498,7 @@ Fraction of a [technology's](@ref technology) production that counts toward meet
 
 ## [Reserve margin](@id ReserveMargin)
 
-Multiplier that causes NEMO to deploy extra [technology](@ref technology) capacity as a reserve. In each [year](@ref year) and [time slice](@ref timeslice), NEMO ensures that the capacity of [technologies](@ref technology) tagged with [`ReserveMarginTagTechnology`](@ref ReserveMarginTagTechnology) is at least `ReserveMargin` times the capacity used to produce [fuels](@ref fuel) tagged with [`ReserveMarginTagFuel`](@ref ReserveMarginTagFuel). Technology capacity is pro-rated by `ReserveMarginTagTechnology` in these calculations.
+Multiplier that causes NEMO to deploy extra [technology](@ref technology) capacity as a reserve. In each [year](@ref year) and [time slice](@ref timeslice), NEMO ensures that the capacity of [technologies](@ref technology) tagged with [`ReserveMarginTagTechnology`](@ref ReserveMarginTagTechnology) is at least `ReserveMargin` times the rate of production of [fuels](@ref fuel) tagged with [`ReserveMarginTagFuel`](@ref ReserveMarginTagFuel). Technology capacity is pro-rated by `ReserveMarginTagTechnology` in these calculations.
 
 #### Scenario database
 

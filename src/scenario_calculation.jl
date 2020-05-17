@@ -15,39 +15,36 @@
     targetprocs = Array{Int, 1}([1]), restrictvars = true,
     reportzeros = false, continuoustransmission = false, quiet = false)
 
-Runs NEMO for a scenario specified in a SQLite database. Returns a Symbol indicating
-the solve status reported by the solver.
+Calculates a scenario specified in a scenario database. Returns a Symbol indicating
+the solve status reported by the solver (e.g., `:Optimal`).
 
 # Arguments
-- `dbpath::String`: Path to SQLite database.
-- `jumpmodel::JuMP.Model`: JuMP model object specifying MIP solver to be used.
-    Examples: Model(solver = GLPKSolverMIP(presolve=true)), Model(solver = CplexSolver()),
-    Model(solver = CbcSolver(logLevel=1, presolve="on")).
-    Note that solver package must be installed (GLPK and Cbc are installed with NEMO by
-    default).
-- `varstosave::String`: Comma-delimited list of model variables whose results should be
-    saved in the SQLite database.
-- `targetprocs::Array{Int, 1}`: Processes that should be used for parallelized operations
-    within the scenario calculation.
+- `dbpath::String`: Path to the scenario database (must be a SQLite version 3 database).
+- `jumpmodel::JuMP.Model`: [JuMP](https://github.com/JuliaOpt/JuMP.jl) model object
+    specifying the MIP solver to be used.
+    Examples: `Model(solver = GLPKSolverMIP(presolve=true))`, `Model(solver = CplexSolver())`,
+    `Model(solver = CbcSolver(logLevel=1, presolve="on"))`.
+    Note that the solver's Julia package (Julia wrapper) must be installed. See the
+    documentation for solver Julia packages for information on how to configure solver
+    options.
+- `varstosave::String`: Comma-delimited list of output variables whose results should be
+    saved in the scenario database.
+- `targetprocs::Array{Int, 1}`: Identifiers of Julia processes that should be used for
+    parallelized operations within the scenario calculation.
 - `restrictvars::Bool`: Indicates whether NEMO should conduct additional data analysis
-    to limit the set of model variables created. This option avoids creating variables
-    for combinations of subscripts that do not exist in the scenario's data. It is
-    generally only needed for very large models, in which case it can save substantial
-    processing time (in other cases it can add processing time). It is usually used with
-    multiple `targetprocs`.
-- `reportzeros::Bool`: Indicates whether results saved in the SQLite database should include
-    values equal to zero. Specifying `false` can substantially improve the performance
-    of large models.
+    to limit the set of model variables created for the scenario. By default, to improve
+    performance, NEMO selectively creates certain variables to avoid combinations of
+    subscripts that do not exist in the scenario's data. This option increases the
+    stringency of this filtering. It requires more processing time as the model is
+    built, but it can substantially reduce the solve time for large models.
+- `reportzeros::Bool`: Indicates whether results saved in the scenario database should
+    include values equal to zero. Specifying `false` can substantially improve the
+    performance of large models.
 - `continuoustransmission::Bool`: Indicates whether continuous (true) or binary (false)
     variables are used to represent investment decisions for candidate transmission lines. Not
     relevant in scenarios that do not model transmission.
 - `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to
-    STDOUT).
-
-!!! tip
-For small models, performance may be improved by turning off the solver's presolve function. For
-example, `jumpmodel = Model(solver = GLPKSolverMIP(presolve=false))` or
-`jumpmodel = Model(solver = CbcSolver(logLevel=1, presolve="off"))`.
+    `STDOUT`).
 """
 function calculatescenario(
     dbpath::String;
@@ -3988,7 +3985,7 @@ if transmissionmodeling
             sumexps[1] = AffExpr()
         end
 
-        append!(sumexps[1], vdiscountedcapitalinvestmenttransmission[tr,y] + vdiscountedsalvagevaluetransmission[tr,y]
+        append!(sumexps[1], vdiscountedcapitalinvestmenttransmission[tr,y] - vdiscountedsalvagevaluetransmission[tr,y]
             + vdiscountedoperatingcosttransmission[tr,y])
 
         lastkeys[1] = r

@@ -20,9 +20,12 @@ makedocs(
         ]
         #"Mathematical model"
         "Scenario databases" => "scenario_db.md"
-        #"Calculating a scenario" => "scenario_calc.md"
-        #   Julia syntax
-        "Configuration files" => "configuration_file.md"
+        "Calculating a scenario" => [
+            "Julia syntax" => "calculatescenario.md"
+            "Configuration files" => "configuration_file.md"
+            # Performance tips
+        ]
+
         #   Performance tips
         # Advanced topics
         #   Custom constraints

@@ -7,12 +7,283 @@ Variables are the outputs from calculating a scenario. They show the decisions t
 
 ## [Nodal vs. non-nodal variables](@id nodal_def)
 
-Many NEMO outputs have "nodal" and "non-nodal" variants. **Nodal** variables show results for regions, [fuels](@ref fuel), [technologies](@ref technology), [storage](@ref storage), and [years](@ref year) involved in transmission modeling - i.e., for cases where capacity, demand, and supply are simulated in a nodal network. To enable transmission modeling, you must define several dimensions and [parameters](@ref): [nodes](@ref node), [transmission lines](@ref transmissionline), [TransmissionModelingEnabled](@ref TransmissionModelingEnabled), [TransmissionCapacityToActivityUnit](@ref TransmissionCapacityToActivityUnit), [NodalDistributionDemand](@ref NodalDistributionDemand), [NodalDistributionStorageCapacity](@ref NodalDistributionStorageCapacity), and [NodalDistributionTechnologyCapacity](@ref NodalDistributionTechnologyCapacity). **Non-nodal** variables show results for cases where transmission modeling is not enabled.
+Many NEMO outputs have "nodal" and "non-nodal" variants. **Nodal** variables show results for regions, [fuels](@ref fuel), [technologies](@ref technology), [storage](@ref storage), and [years](@ref year) involved in transmission modeling - i.e., for cases where capacity, demand, and supply are simulated in a nodal network. To enable transmission modeling, you must define several dimensions and [parameters](@ref parameters): [nodes](@ref node), [transmission lines](@ref transmissionline), [TransmissionModelingEnabled](@ref TransmissionModelingEnabled), [TransmissionCapacityToActivityUnit](@ref TransmissionCapacityToActivityUnit), [NodalDistributionDemand](@ref NodalDistributionDemand), [NodalDistributionStorageCapacity](@ref NodalDistributionStorageCapacity), and [NodalDistributionTechnologyCapacity](@ref NodalDistributionTechnologyCapacity). **Non-nodal** variables show results for cases where transmission modeling is not enabled.
 
 ## Activity
 
+### [Annual nodal production](@id vproductionannualnodal)
+
+Total annual [nodal](@ref nodal_def) production of a [fuel](@ref fuel), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vproductionannualnodal[n,f,y]`
+
+### [Annual nodal use](@id vuseannualnodal)
+
+Total annual [nodal](@ref nodal_def) use of a [fuel](@ref fuel), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vuseannualnodal[n,l,f,y]`
+
+### [Annual non-nodal production](@id vproductionannualnn)
+
+Total annual [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vproductionannualnn[r,f,y]`
+
+### [Annual non-nodal use](@id vuseannualnn)
+
+Total annual [non-nodal](@ref nodal_def) use of a [fuel](@ref fuel), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vuseannualnn[r,f,y]`
+
+### [Annual production by technology](@id vproductionbytechnologyannual)
+
+Total annual production of a [fuel](@ref fuel) by a [technology](@ref technology), combining [nodal and non-nodal](@ref nodal_def) production. Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vproductionbytechnologyannual[r,t,f,y]`
+
+### [Annual trade](@id vtradeannual)
+
+Annual trade of a [fuel](@ref fuel) from [region](@ref region) `r` to region `rr`. Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vtradeannual[r,rr,f,y]`
+
+### [Annual use by technology](@id vusebytechnologyannual)
+
+Annual use of a [fuel](@ref fuel) by a [technology](@ref technology). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vusebytechnologyannual[r,t,f,y]`
+
+### [Nodal production](@id vproductionnodal)
+
+Total [nodal](@ref nodal_def) production of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vproductionnodal[n,l,f,y]`
+
+### [Nodal rate of activity](@id vrateofactivitynodal)
+
+Amount of a [technology's](@ref technology) capacity in use in a [time slice](@ref timeslice) and [node](@ref nodal_def). NEMO multiplies the rate of activity by [input activity ratios](@ref InputActivityRatio) and [output activity ratios](@ref OutputActivityRatio) to determine [fuel](@ref fuel) use and production, respectively. Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateofactivitynodal[n,l,t,m,y]`
+
+### [Nodal rate of production by technology](@id vrateofproductionbytechnologynodal)
+
+Rate of time-sliced [nodal](@ref nodal_def) production of a [fuel](@ref fuel) by a [technology](@ref technology). Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateofproductionbytechnologynodal[n,l,t,f,y]`
+
+### [Nodal rate of production](@id vrateofproductionnodal)
+
+Rate of total [nodal](@ref nodal_def) production of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateofproductionnodal[n,l,f,y]`
+
+### [Nodal rate of total activity](@id vrateoftotalactivitynodal)
+
+[Nodal rate of activity](@ref vrateofactivitynodal) summed across [modes of operation](@ref mode_of_operation). Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateoftotalactivitynodal[n,t,l,y]`
+
+### [Nodal rate of use by technology](@id vrateofusebytechnologynodal)
+
+Rate of time-sliced [nodal](@ref nodal_def) use of a [fuel](@ref fuel) by a [technology](@ref technology). Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateofusebytechnologynodal[n,l,t,f,y]`
+
+### [Nodal rate of use](@id vrateofusenodal)
+
+Rate of total [nodal](@ref nodal_def) use of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateofusenodal[n,l,f,y]`
+
+### [Nodal use](@id vusenodal)
+
+Total [nodal](@ref nodal_def) use of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vusenodal[n,l,f,y]`
+
+### [Non-nodal production](@id vproductionnn)
+
+Total [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vproductionnn[r,l,f,y]`
+
+### [Non-nodal rate of production by technology by mode](@id vrateofproductionbytechnologybymodenn)
+
+Rate of time-sliced [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel) by a [technology](@ref technology) operating in a [mode](@ref mode_of_operation). Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateofproductionbytechnologybymodenn[r,l,t,m,f,y]`
+
+### [Non-nodal rate of production by technology](@id vrateofproductionbytechnologynn)
+
+Rate of time-sliced [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel) by a [technology](@ref technology). Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateofproductionbytechnologynn[r,l,t,f,y]`
+
+### [Non-nodal rate of production](@id vrateofproductionnn)
+
+Rate of total [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateofproductionnn[r,l,f,y]`
+
+### [Non-nodal rate of use by technology by mode](@id vrateofusebytechnologybymodenn)
+
+Rate of time-sliced [non-nodal](@ref nodal_def) use of a [fuel](@ref fuel) by a [technology](@ref technology) operating in a [mode](@ref mode_of_operation). Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateofusebytechnologybymodenn[r,l,t,m,f,y]`
+
+### [Non-nodal rate of use by technology](@id vrateofusebytechnologynn)
+
+Rate of time-sliced [non-nodal](@ref nodal_def) use of a [fuel](@ref fuel) by a [technology](@ref technology). Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateofusebytechnologynn[r,l,t,f,y]`
+
+### [Non-nodal rate of use](@id vrateofusenn)
+
+Rate of total [non-nodal](@ref nodal_def) use of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateofusenn[r,l,f,y]`
+
+### [Non-nodal use](@id vusenn)
+
+Total [non-nodal](@ref nodal_def) use of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vusenn[r,l,f,y]`
+
+### [Production by technology](@id vproductionbytechnology)
+
+Production of a [fuel](@ref fuel) by a [technology](@ref technology) in a [time slice](@ref timeslice), combining [nodal and non-nodal](@ref nodal_def) production. Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vproductionbytechnology[r,l,t,f,y]`
+
+### [Rate of activity](@id vrateofactivity)
+
+Amount of a [technology's](@ref technology) capacity in use in a [time slice](@ref timeslice) (considering both [nodal and non-nodal](@ref nodal_def) activity). NEMO multiplies the rate of activity by [input activity ratios](@ref InputActivityRatio) and [output activity ratios](@ref OutputActivityRatio) to determine [fuel](@ref fuel) use and production, respectively. Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateofactivity[r,l,t,m,y]`
+
+### [Rate of production](@id vrateofproduction)
+
+Rate of total production of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology) and [nodal and non-nodal](@ref nodal_def) production. Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateofproduction[r,l,f,y]`
+
+### [Rate of total activity](@id vrateoftotalactivity)
+
+[Rate of activity](@ref vrateofactivity) summed across [modes of operation](@ref mode_of_operation). Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateoftotalactivity[r,t,l,y]`
+
+### [Rate of use](@id vrateofuse)
+
+Rate of total use of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology) and [nodal and non-nodal](@ref nodal_def) production. Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateofuse[r,l,f,y]`
+
+### [Total technology annual activity by mode](@id vtotalannualtechnologyactivitybymode)
+
+Nominal energy produced by a [technology](@ref technology) in a [year](@ref year) when operating in the specified [mode](@ref mode_of_operation). Nominal energy is calculated by multiplying dispatched capacity by the length of time it is dispatched. This variable combines nominal energy due to both [nodal and non-nodal](@ref nodal_def) activity. Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vtotalannualtechnologyactivitybymode[r,t,m,y]`
+
+### [Total technology annual activity](@id vtotaltechnologyannualactivity)
+
+Nominal energy produced by a [technology](@ref technology) in a [year](@ref year). Nominal energy is calculated by multiplying dispatched capacity by the length of time it is dispatched. This variable combines nominal energy due to both [nodal and non-nodal](@ref nodal_def) activity. Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vtotaltechnologyannualactivity[r,t,y]`
+
+### [Total technology model period activity](@id vtotaltechnologymodelperiodactivity)
+
+Nominal energy produced by a [technology](@ref technology) during the modeling period (i.e., over all [years](@ref year)). Nominal energy is calculated by multiplying dispatched capacity by the length of time it is dispatched. This variable combines nominal energy due to both [nodal and non-nodal](@ref nodal_def) activity. Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vtotaltechnologymodelperiodactivity[r,t]`
+
+### [Trade](@id vtrade)
+
+Time-sliced trade of a [fuel](@ref fuel) from [region](@ref region) `r` to region `rr`. Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vtrade[r,rr,l,f,y]`
+
+### [Use by technology](@id vusebytechnology)
+
+Use of a [fuel](@ref fuel) by a [technology](@ref technology) in a [time slice](@ref timeslice), combining [nodal and non-nodal](@ref nodal_def) use. Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vusebytechnology[r,l,t,f,y]`
 
 ## Costs
+
+### [Capital investment](@id vcapitalinvestment)
+
+Undiscounted investment in new endogenously determined [technology](@ref technology) capacity. Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vcapitalinvestment[r,t,y]`
 
 ### [Capital investment storage](@id vcapitalinvestmentstorage)
 
@@ -22,6 +293,22 @@ Undiscounted investment in new endogenously determined [storage](@ref storage) c
 
 * Variable in JuMP model: `vcapitalinvestmentstorage[r,s,y]`
 
+### [Capital investment transmission](@id vcapitalinvestmenttransmission)
+
+Undiscounted investment in new endogenously determined [transmission](@ref transmissionline) capacity. Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vcapitalinvestmenttransmission[tr,y]`
+
+### [Discounted capital investment](@id vdiscountedcapitalinvestment)
+
+Discounted investment in new endogenously determined [technology](@ref technology) capacity. NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vdiscountedcapitalinvestment[r,t,y]`
+
 ### [Discounted capital investment storage](@id vdiscountedcapitalinvestmentstorage)
 
 Discounted investment in new endogenously determined [storage](@ref storage) capacity. NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
@@ -30,32 +317,182 @@ Discounted investment in new endogenously determined [storage](@ref storage) cap
 
 * Variable in JuMP model: `vdiscountedcapitalinvestmentstorage[r,s,y]`
 
+### [Discounted capital investment transmission](@id vdiscountedcapitalinvestmenttransmission)
+
+Discounted investment in new endogenously determined [transmission](@ref transmissionline) capacity. NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vdiscountedcapitalinvestmenttransmission[tr,y]`
+
+### [Emission penalty by emission](@id vannualtechnologyemissionpenaltybyemission)
+
+Undiscounted cost of [annual technology emissions](@ref vannualtechnologyemission). Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vannualtechnologyemissionpenaltybyemission[r,t,e,y]`
+
+### [Emission penalty](@id vannualtechnologyemissionspenalty)
+
+Undiscounted total emission costs associated with a [technology](@ref technology) (i.e., summing across [emissions](@ref emission)). Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vannualtechnologyemissionspenalty[r,t,y]`
+
+### [Discounted emission penalty](@id vdiscountedtechnologyemissionspenalty)
+
+Discounted total emission costs associated with a [technology](@ref technology) (i.e., summing across [emissions](@ref emission)). NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vdiscountedtechnologyemissionspenalty[r,t,y]`
+
+### [Model period cost by region](@id vmodelperiodcostbyregion)
+
+Sum of all discounted costs in a [region](@ref region) during the modeling period (i.e., over all [years](@ref year)). Includes [technology](@ref technology), [storage](@ref storage), and [transmission](@ref transmissionline) costs. Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vmodelperiodcostbyregion[r]`
+
+### [Operating cost](@id voperatingcost)
+
+Sum of [fixed](@ref vannualfixedoperatingcost) and [variable](@ref vannualvariableoperatingcost) operation and maintenance costs for a [technology](@ref technology). Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `voperatingcost[r,t,y]`
+
+### [Discounted operating cost](@id vdiscountedoperatingcost)
+
+Discounted [operation and maintenance costs](@ref voperatingcost) for a [technology](@ref technology). NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vdiscountedoperatingcost[r,t,y]`
+
+### [Fixed operating cost](@id vannualfixedoperatingcost)
+
+Fixed operation and maintenance costs for a [technology](@ref technology). Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vannualfixedoperatingcost[r,t,y]`
+
+### [Variable operating cost](@id vannualvariableoperatingcost)
+
+Variable operation and maintenance costs for a [technology](@ref technology). Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vannualvariableoperatingcost[r,t,y]`
+
+### [Operating cost transmission](@id voperatingcosttransmission)
+
+Sum of fixed and variable operation and maintenance costs for a [transmission line](@ref transmissionline). Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `voperatingcosttransmission[tr,y]`
+
+### [Discounted operating cost transmission](@id vdiscountedoperatingcosttransmission)
+
+Discounted [operation and maintenance costs](@ref voperatingcosttransmission) for a [transmission line](@ref transmissionline). NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vdiscountedoperatingcosttransmission[tr,y]`
+
+### [Salvage value](@id vsalvagevalue)
+
+Undiscounted residual value of [capital investment](@ref vcapitalinvestment) remaining at the end of the modeling period. The [DepreciationMethod](@ref DepreciationMethod) parameter determines the approach used to calculate salvage value. Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vsalvagevalue[r,t,y]`
+
 ### [Salvage value storage](@id vsalvagevaluestorage)
 
-Residual value of [capital investment in storage](@ref vcapitalinvestmentstorage) remaining at the end of the modeling period. The [DepreciationMethod](@ref DepreciationMethod) parameter determines the approach used to calculate salvage value. Unit: scenario's cost [unit](@ref uoms).
+Undiscounted residual value of [capital investment storage](@ref vcapitalinvestmentstorage) remaining at the end of the modeling period. The [DepreciationMethod](@ref DepreciationMethod) parameter determines the approach used to calculate salvage value. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
 * Variable in JuMP model: `vsalvagevaluestorage[r,s,y]`
 
+### [Salvage value transmission](@id vsalvagevaluetransmission)
+
+Undiscounted residual value of [capital investment transmission](@ref vcapitalinvestmenttransmission) remaining at the end of the modeling period. The [DepreciationMethod](@ref DepreciationMethod) parameter determines the approach used to calculate salvage value. Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vsalvagevaluetransmission[tr,y]`
+
+### [Discounted salvage value](@id vdiscountedsalvagevalue)
+
+Discounted residual value of [capital investment](@ref vcapitalinvestment) remaining at the end of the modeling period. NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vdiscountedsalvagevalue[r,t,y]`
+
 ### [Discounted salvage value storage](@id vdiscountedsalvagevaluestorage)
 
-Discounted residual value of [capital investment in storage](@ref vcapitalinvestmentstorage) remaining at the end of the modeling period. NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
+Discounted residual value of [capital investment storage](@ref vcapitalinvestmentstorage) remaining at the end of the modeling period. NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
 * Variable in JuMP model: `vdiscountedsalvagevaluestorage[r,s,y]`
 
+### [Discounted salvage value transmission](@id vdiscountedsalvagevaluetransmission)
+
+Discounted residual value of [capital investment transmission](@ref vcapitalinvestmenttransmission) remaining at the end of the modeling period. NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vdiscountedsalvagevaluetransmission[tr,y]`
+
+### [Total discounted cost](@id vtotaldiscountedcost)
+
+Sum of all discounted costs in a [region](@ref region) and [year](@ref year) ([technology](@ref technology), [storage](@ref storage), and [transmission](@ref transmissionline)). Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vtotaldiscountedcost[r,y]`
+
 ### [Total discounted storage cost](@id vtotaldiscountedstoragecost)
 
-Sum of discounted [storage](@ref storage) costs ([`vdiscountedcapitalinvestmentstorage`](@ref vdiscountedcapitalinvestmentstorage) - [`vdiscountedsalvagevaluestorage`](@ref vdiscountedsalvagevaluestorage)). Unit: scenario's cost [unit](@ref uoms).
+Sum of discounted [storage](@ref storage) costs: [`vdiscountedcapitalinvestmentstorage`](@ref vdiscountedcapitalinvestmentstorage) - [`vdiscountedsalvagevaluestorage`](@ref vdiscountedsalvagevaluestorage). Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 * Variable in JuMP model: `vtotaldiscountedstoragecost[r,s,y]`
 
+### [Total discounted technology cost](@id vtotaldiscountedcostbytechnology)
 
+Sum of discounted [technology](@ref technology) costs: [`vdiscountedoperatingcost`](@ref vdiscountedoperatingcost) + [`vdiscountedcapitalinvestment`](@ref vdiscountedcapitalinvestment) + [`vdiscountedtechnologyemissionspenalty`](@ref vdiscountedtechnologyemissionspenalty) - [`vdiscountedsalvagevalue`](@ref vdiscountedsalvagevalue). Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vtotaldiscountedcostbytechnology[r,t,y]`
+
+### [Total discounted transmission cost](@id vtotaldiscountedtransmissioncostbyregion)
+
+Sum of discounted [transmission](@ref transmissionline) costs: [`vdiscountedcapitalinvestmenttransmission`](@ref vdiscountedcapitalinvestmenttransmission) - [`vdiscountedsalvagevaluetransmission`](@ref vdiscountedsalvagevaluetransmission) + [`vdiscountedoperatingcosttransmission`](@ref vdiscountedoperatingcosttransmission). Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vtotaldiscountedtransmissioncostbyregion[r,y]`
 
 ## Demand
+
+### [Nodal annual demand](@id vdemandannualnodal)
+
+[Nodal demand](@ref vdemandnodal) summed across [time slices](@ref timeslice). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vdemandannualnodal[n,f,y]`
 
 ### [Non-nodal annual demand](@id vdemandannualnn)
 
@@ -64,6 +501,14 @@ Sum of discounted [storage](@ref storage) costs ([`vdiscountedcapitalinvestments
 #### Julia code
 
 * Variable in JuMP model: `vdemandannualnn[r,f,y]`
+
+### [Nodal demand](@id vdemandnodal)
+
+Time-sliced [nodal](@ref nodal_def) demand (time-sliced demand is defined with [`SpecifiedAnnualDemand`](@ref SpecifiedAnnualDemand) and [`SpecifiedDemandProfile`](@ref SpecifiedDemandProfile)). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vdemandnodal[n,l,f,y]`
 
 ### [Non-nodal demand](@id vdemandnn)
 
@@ -81,19 +526,75 @@ Rate of time-sliced [non-nodal](@ref nodal_def) demand (time-sliced demand is de
 
 * Variable in JuMP model: `vrateofdemandnn[r,l,f,y]`
 
-
-
 ## Emissions
 
+### [Annual technology emissions by mode](@id vannualtechnologyemissionbymode)
 
+Annual [emissions](@ref emission) produced by a [technology](@ref technology) operating in the specified [mode](@ref mode_of_operation). Unit: scenario's emissions [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vannualtechnologyemissionbymode[r,t,e,m,y]`
+
+### [Annual technology emissions](@id vannualtechnologyemission)
+
+Annual [emissions](@ref emission) produced by a [technology](@ref technology). Unit: scenario's emissions [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vannualtechnologyemission[r,t,e,y]`
+
+### [Annual emissions](@id vannualemissions)
+
+Total emissions in a [year](@ref year). Unit: scenario's emissions [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vannualemissions[r,e,y]`
+
+### [Model period emissions](@id vmodelperiodemissions)
+
+Total emissions during the modeling period (i.e., over all [years](@ref year)). Unit: scenario's emissions [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vmodelperiodemissions[r,e]`
 
 ## Renewable energy target
 
+### [Annual production of fuels considered in renewable target](@id vretotalproductionoftargetfuelannual)
 
+Total production of [fuels](@ref fuel) tagged with [`RETagFuel`](@ref RETagFuel). See [`REMinProductionTarget`](@ref REMinProductionTarget) for details of how this quantity is used in renewable energy target calculations. Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vretotalproductionoftargetfuelannual[r,y]`
+
+### [Annual renewable energy production](@id vtotalreproductionannual)
+
+Total production by [technologies](@ref technology) tagged with [`RETagTechnology`](@ref RETagTechnology), pro-rating each technology's production by its `RETagTechnology`. See [`REMinProductionTarget`](@ref REMinProductionTarget) for details of how this quantity is used in renewable energy target calculations. Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vtotalreproductionannual[r,y]`
 
 ## Reserve margin
 
+### [Demand needing reserve margin](@id vdemandneedingreservemargin)
 
+Total rate of production of [fuels](@ref fuel) tagged with [`ReserveMarginTagFuel`](@ref ReserveMarginTagFuel). This variable is an element in [reserve margin](@ref ReserveMargin) calculations. Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vdemandneedingreservemargin[r,l,y]`
+
+### [Total capacity in reserve margin](@id vtotalcapacityinreservemargin)
+
+Total [technology](@ref technology) capacity (combining all technologies) that counts toward meeting the [region's](@ref region) [reserve margin](@ref ReserveMargin). Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vtotalcapacityinreservemargin[r,y]`
 
 ## Storage
 
@@ -113,6 +614,70 @@ New endogenously determined [storage](@ref storage) capacity added in a [year](@
 
 * Variable in JuMP model: ` vnewstoragecapacity[r,s,y]`
 
+### [Nodal rate of storage charge](@id vrateofstoragechargenodal)
+
+Rate of energy stored in [nodal](@ref nodal_def) [storage](@ref storage). Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateofstoragechargenodal[n,s,l,y]`
+
+### [Nodal rate of storage discharge](@id vrateofstoragedischargenodal)
+
+Rate of energy released from [nodal](@ref nodal_def) [storage](@ref storage). Unit: region's energy [unit](@ref uoms) / year.
+
+#### Julia code
+
+* Variable in JuMP model: `vrateofstoragedischargenodal[n,s,l,y]`
+
+### [Nodal storage level time slice end](@id vstorageleveltsendnodal)
+
+Energy in [nodal](@ref nodal_def) [storage](@ref storage) at the end of the first hour in a [time slice](@ref timeslice). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vstorageleveltsendnodal[n,s,l,y]`
+
+### [Nodal storage level time slice group 1 start](@id vstorageleveltsgroup1startnodal)
+
+Energy in [nodal](@ref nodal_def) [storage](@ref storage) at the start of a [time slice group 1](@ref tsgroup1). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vstorageleveltsgroup1startnodal[n,s,tg1,y]`
+
+### [Nodal storage level time slice group 1 end](@id vstorageleveltsgroup1endnodal)
+
+Energy in [nodal](@ref nodal_def) [storage](@ref storage) at the end of a [time slice group 1](@ref tsgroup1). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vstorageleveltsgroup1endnodal[n,s,tg1,y]`
+
+### [Nodal storage level time slice group 2 start](@id vstorageleveltsgroup2startnodal)
+
+Energy in [nodal](@ref nodal_def) [storage](@ref storage) at the start of a [time slice group 2](@ref tsgroup2) within a [time slice group 1](@ref tsgroup1). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vstorageleveltsgroup2startnodal[n,s,tg1,tg2,y]`
+
+### [Nodal storage level time slice group 2 end](@id vstorageleveltsgroup2endnodal)
+
+Energy in [nodal](@ref nodal_def) [storage](@ref storage) at the end of a [time slice group 2](@ref tsgroup2) within a [time slice group 1](@ref tsgroup1). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vstorageleveltsgroup2endnodal[n,s,tg1,tg2,y]`
+
+### [Nodal storage level year end](@id vstoragelevelyearendnodal)
+
+Energy in [nodal](@ref nodal_def) [storage](@ref storage) at the end of a [year](@ref year). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vstoragelevelyearendnodal[n,s,y]`
+
 ### [Non-nodal rate of storage charge](@id vrateofstoragechargenn)
 
 Rate of energy stored in [non-nodal](@ref nodal_def) [storage](@ref storage). Unit: region's energy [unit](@ref uoms) / year.
@@ -131,7 +696,7 @@ Rate of energy released from [non-nodal](@ref nodal_def) [storage](@ref storage)
 
 ### [Non-nodal storage level time slice end](@id vstorageleveltsendnn)
 
-Energy in [non-nodal](@ref nodal_def) [storage](@ref storage) at the end of a [time slice](@ref timeslice). Unit: region's energy [unit](@ref uoms).
+Energy in [non-nodal](@ref nodal_def) [storage](@ref storage) at the end of the first hour in a [time slice](@ref timeslice). Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -193,7 +758,6 @@ Maximum energy in [storage](@ref storage) (determined by storage capacity). Unit
 
 * Variable in JuMP model: `vstorageupperlimit[r,s,y]`
 
-
 ## Technology capacity
 
 ### [Accumulated new capacity](@id vaccumulatednewcapacity)
@@ -228,468 +792,11 @@ Total [technology](@ref technology) capacity (endogenous and exogenous) existing
 
 * Variable in JuMP model: `vtotalcapacityannual[r,t,y]`
 
-
-
-
-
 ## Transmission
-
-
-
-
-
-
-### [Rate of activity](@id vrateofactivity)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateofactivity[r,l,t,m,y]`
-
-### [Rate of total activity](@id vrateoftotalactivity)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateoftotalactivity[r,t,l,y]`
-
-### [Total technology annual activity](@id vtotaltechnologyannualactivity)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vtotaltechnologyannualactivity[r,t,y]`
-
-### [Total annual technology activity by mode](@id vtotalannualtechnologyactivitybymode)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vtotalannualtechnologyactivitybymode[r,t,m,y]`
-
-### [Total technology model period activity](@id vtotaltechnologymodelperiodactivity)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vtotaltechnologymodelperiodactivity[r,t]`
-
-### [Non-nodal rate of production by technology by mode](@id vrateofproductionbytechnologybymodenn)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateofproductionbytechnologybymodenn[r,l,t,m,f,y]`
-
-### [Non-nodal rate of production by technology](@id vrateofproductionbytechnologynn)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateofproductionbytechnologynn[r,l,t,f,y]`
-
-### [Production by technology, annual](@id vproductionbytechnologyannual)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vproductionbytechnologyannual[r,t,f,y]`
-
-### [Rate of production](@id vrateofproduction)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateofproduction[r,l,f,y]`
-
-### [Non-nodal rate of production](@id vrateofproductionnn)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateofproductionnn[r,l,f,y]`
-
-### [Non-nodal production](@id vproductionnn)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vproductionnn[r,l,f,y]`
-
-### [Non-nodal rate of use by technology by mode](@id vrateofusebytechnologybymodenn)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateofusebytechnologybymodenn[r,l,t,m,f,y]`
-
-### [Non-nodal rate of use by technology](@id vrateofusebytechnologynn)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateofusebytechnologynn[r,l,t,f,y]`
-
-### [Use by technology, annual](@id vusebytechnologyannual)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vusebytechnologyannual[r,t,f,y]`
-
-### [Rate of use](@id vrateofuse)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateofuse[r,l,f,y]`
-
-### [Non-nodal rate of use](@id vrateofusenn)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateofusenn[r,l,f,y]`
-
-### [Non-nodal use](@id vusenn)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vusenn[r,l,f,y]`
-
-### [Trade](@id vtrade)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vtrade[r,rr,l,f,y]`
-
-### [Annual trade](@id vtradeannual)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vtradeannual[r,rr,f,y]`
-
-### [Non-nodal production, annual](@id vproductionannualnn)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vproductionannualnn[r,f,y]`
-
-### [Non-nodal use, annual](@id vuseannualnn)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vuseannualnn[r,f,y]`
-
-### [Capital investment](@id vcapitalinvestment)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vcapitalinvestment[r,t,y]`
-
-### [Discounted capital investment](@id vdiscountedcapitalinvestment)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vdiscountedcapitalinvestment[r,t,y]`
-
-### [Salvage value](@id vsalvagevalue)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vsalvagevalue[r,t,y]`
-
-### [Discounted salvage value](@id vdiscountedsalvagevalue)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vdiscountedsalvagevalue[r,t,y]`
-
-### [Operating cost](@id voperatingcost)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `voperatingcost[r,t,y]`
-
-### [Discounted operating cost](@id vdiscountedoperatingcost)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vdiscountedoperatingcost[r,t,y]`
-
-### [Annual variable operating cost](@id vannualvariableoperatingcost)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vannualvariableoperatingcost[r,t,y]`
-
-### [Annual fixed operating cost](@id vannualfixedoperatingcost)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vannualfixedoperatingcost[r,t,y]`
-
-### [Total discounted cost by technology](@id vtotaldiscountedcostbytechnology)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vtotaldiscountedcostbytechnology[r,t,y]`
-
-### [Total discounted cost](@id vtotaldiscountedcost)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vtotaldiscountedcost[r,y]`
-
-### [Model period cost by region](@id vmodelperiodcostbyregion)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vmodelperiodcostbyregion[r]`
-
-### [Total capacity in reserve margin](@id vtotalcapacityinreservemargin)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vtotalcapacityinreservemargin[r,y]`
-
-### [Demand needing reserve margin](@id vdemandneedingreservemargin)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vdemandneedingreservemargin[r,l,y]`
-
-### [Total renewable energy production, annual](@id vtotalreproductionannual)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vtotalreproductionannual[r,y]`
-
-### [Renewable energy total production of target fuel, annual](@id vretotalproductionoftargetfuelannual)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vretotalproductionoftargetfuelannual[r,y]`
-
-### [Annual technology emission by mode](@id vannualtechnologyemissionbymode)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vannualtechnologyemissionbymode[r,t,e,m,y]`
-
-### [Annual technology emission](@id vannualtechnologyemission)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vannualtechnologyemission[r,t,e,y]`
-
-### [Annual technology emission penalty by emission](@id vannualtechnologyemissionpenaltybyemission)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vannualtechnologyemissionpenaltybyemission[r,t,e,y]`
-
-### [Annual technology emissions penalty](@id vannualtechnologyemissionspenalty)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vannualtechnologyemissionspenalty[r,t,y]`
-
-### [Discounted technology emission penalty](@id vdiscountedtechnologyemissionspenalty)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vdiscountedtechnologyemissionspenalty[r,t,y]`
-
-### [Annual emissions](@id vannualemissions)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vannualemissions[r,e,y]`
-
-### [Model period emissions](@id vmodelperiodemissions)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vmodelperiodemissions[r,e]`
-
-### [Nodal rate of activity](@id vrateofactivitynodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateofactivitynodal[n,l,t,m,y]`
-
-### [Nodal rate of production by technology](@id vrateofproductionbytechnologynodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateofproductionbytechnologynodal[n,l,t,f,y]`
-
-### [Nodal rate of use by technology](@id vrateofusebytechnologynodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateofusebytechnologynodal[n,l,t,f,y]`
-
-### [Transmission by line](@id vtransmissionbyline)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vtransmissionbyline[tr,l,f,y]`
-
-### [Nodal rate of total activity](@id vrateoftotalactivitynodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateoftotalactivitynodal[n,t,l,y]`
-
-### [Nodal rate of production](@id vrateofproductionnodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateofproductionnodal[n,l,f,y]`
-
-### [Nodal rate of use](@id vrateofusenodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateofusenodal[n,l,f,y]`
-
-### [Nodal production](@id vproductionnodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vproductionnodal[n,l,f,y]`
-
-### [Nodal production, annual](@id vproductionannualnodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vproductionannualnodal[n,f,y]`
-
-### [Nodal use](@id vusenodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vusenodal[n,l,f,y]`
-
-### [Nodal use, annual](@id vuseannualnodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vuseannualnodal[n,l,f,y]`
-
-### [Nodal demand](@id vdemandnodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vdemandnodal[n,l,f,y]`
-
-### [Nodal demand, annual](@id vdemandannualnodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vdemandannualnodal[n,f,y]`
 
 ### [Annual transmission](@id vtransmissionannual)
 
-Description.
+Net annual transmission of a [fuel](@ref fuel) from a [node](@ref node). Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -697,15 +804,23 @@ Description.
 
 ### [Transmission built](@id vtransmissionbuilt)
 
-Description.
+Fraction of a candidate [transmission line](@ref transmissionline) built in a [year](@ref year). No unit (ranges between 0 and 1). This variable will have an integral value if you do not select the `continuoustransmission` option when calculating a scenario (see [`calculatescenario`](@ref)).
 
 #### Julia code
 
 * Variable in JuMP model: `vtransmissionbuilt[tr,y]`
 
-### [Existing transmission](@id vtransmissionexists)
+### [Transmission by line](@id vtransmissionbyline)
 
-Description.
+Flow of a [fuel](@ref fuel) through a [transmission line](@ref transmissionline) (from the first [node](@ref node) of the line [`n1`] to the second node of the line [`n2`]). Unit: megawatts.
+
+#### Julia code
+
+* Variable in JuMP model: `vtransmissionbyline[tr,l,f,y]`
+
+### [Transmission exists](@id vtransmissionexists)
+
+Fraction of a [transmission line](@ref transmissionline) existing in a [year](@ref year). No unit (ranges between 0 and 1).
 
 #### Julia code
 
@@ -713,144 +828,8 @@ Description.
 
 ### [Voltage angle](@id vvoltageangle)
 
-Description.
+Voltage angle at a [node](@ref node) in a [time slice](@ref timeslice). NEMO only calculates this variable if you enable direct current optimized power flow modeling (see TransmissionModelingEnabled). Unit: radians.
 
 #### Julia code
 
 * Variable in JuMP model: `vvoltageangle[n,l,y]`
-
-### [Nodal storage level time slice group 1 start](@id vstorageleveltsgroup1startnodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vstorageleveltsgroup1startnodal[n,s,tg1,y]`
-
-### [Nodal storage level time slice group 1 end](@id vstorageleveltsgroup1endnodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vstorageleveltsgroup1endnodal[n,s,tg1,y]`
-
-### [Nodal storage level time slice group 2 start](@id vstorageleveltsgroup2startnodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vstorageleveltsgroup2startnodal[n,s,tg1,tg2,y]`
-
-### [Nodal storage level time slice group 2 end](@id vstorageleveltsgroup2endnodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vstorageleveltsgroup2endnodal[n,s,tg1,tg2,y]`
-
-### [Nodal storage level time slice end](@id vstorageleveltsendnodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vstorageleveltsendnodal[n,s,l,y]`
-
-### [Nodal rate of storage charge](@id vrateofstoragechargenodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateofstoragechargenodal[n,s,l,y]`
-
-### [Nodal rate of storage discharge](@id vrateofstoragedischargenodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vrateofstoragedischargenodal[n,s,l,y]`
-
-### [Nodal storage level year end](@id vstoragelevelyearendnodal)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vstoragelevelyearendnodal[n,s,y]`
-
-### [Capital investment transmission](@id vcapitalinvestmenttransmission)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vcapitalinvestmenttransmission[tr,y]`
-
-### [Discounted capital investment transmission](@id vdiscountedcapitalinvestmenttransmission)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vdiscountedcapitalinvestmenttransmission[tr,y]`
-
-### [Salvage value transmission](@id vsalvagevaluetransmission)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vsalvagevaluetransmission[tr,y]`
-
-### [Discounted salvage value transmission](@id vdiscountedsalvagevaluetransmission)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vdiscountedsalvagevaluetransmission[tr,y]`
-
-### [Operating cost transmission](@id voperatingcosttransmission)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `voperatingcosttransmission[tr,y]`
-
-### [Discounted operating cost transmission](@id vdiscountedoperatingcosttransmission)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vdiscountedoperatingcosttransmission[tr,y]`
-
-### [Total discounted transmission cost by region](@id vtotaldiscountedtransmissioncostbyregion)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vtotaldiscountedtransmissioncostbyregion[r,y]`
-
-### [Production by technology](@id vproductionbytechnology)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vproductionbytechnology[r,l,t,f,y]`
-
-### [Use by technology](@id vusebytechnology)
-
-Description.
-
-#### Julia code
-
-* Variable in JuMP model: `vusebytechnology[r,l,t,f,y]`
