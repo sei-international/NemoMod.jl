@@ -25,8 +25,6 @@ makedocs(
             "Configuration files" => "configuration_file.md"
             "Performance tips" => "performance_tips.md"
         ]
-
-        #   Performance tips
         # Advanced topics
         #   Custom constraints
         #"Function reference" => "functions.md"

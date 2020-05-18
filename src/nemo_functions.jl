@@ -10,7 +10,8 @@
 """
     logmsg(msg::String, suppress=false, dtm=now()::DateTime)
 
-Prints a log message (msg) to STDOUT. The message is suppressed if `suppress == true`.
+Prints a log message (`msg`) to `STDOUT`. The message is suppressed if `suppress == true`. `dtm`
+determines the date and time included in the printed message.
 
 # Examples
 ```jldoctest
@@ -297,12 +298,13 @@ createconstraint(m, "TestConstraint", abc, DataFrames.eachrow(SQLite.query(db, "
     defaultvals::Dict{String, Float64} = Dict{String, Float64}(),
     foreignkeys::Bool = false)
 
-Creates an empty NEMO SQLite database. If specified database already exists, drops and recreates NEMO tables in database.
+Creates an empty NEMO scenario database in SQLite. If the specified database already exists, drops and
+recreates NEMO tables in the database.
 
 # Arguments
-- `path::String`: Full path to database, including database name.
+- `path::String`: Full path to the scenario database, including the file name.
 - `defaultvals::Dict{String, Float64} = Dict{String, Float64}()`: Dictionary of parameter table names and default values for `val` column.
-- `foreignkeys::Bool = false`: Indicates whether to create foreign keys within database.
+- `foreignkeys::Bool = false`: Indicates whether to create foreign keys within the database.
 """
 function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{String, Float64}(),
     foreignkeys::Bool = false)
@@ -569,10 +571,10 @@ end  # createnemodb_leap(path::String)
 """
     setparamdefault(db::SQLite.DB, table::String, val::Float64)
 
-Sets the default value for a NEMO parameter table.
+Sets the default value for a parameter table in a NEMO scenario database.
 
 # Arguments
-- `db::SQLite.DB`: SQLite database containing parameter table.
+- `db::SQLite.DB`: Scenario database containing the parameter table.
 - `table::String`: Table name (case-sensitive).
 - `val::Float64`: Parameter value (must be a floating-point number).
 """
@@ -819,8 +821,8 @@ end  # savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tuple
 """
     dropresulttables(db::SQLite.DB, quiet::Bool = true)
 
-Drops all tables in db whose name begins with "v" or "sqlite_stat" (both case-sensitive).
-    `quiet` parameter determines whether most status messages are suppressed.
+Drops all tables in `db` whose name begins with ""v"" or ""sqlite_stat"" (both case-sensitive).
+    The `quiet` parameter determines whether most status messages are suppressed.
 """
 function dropresulttables(db::SQLite.DB, quiet::Bool = true)
     # BEGIN: Wrap database operations in try-catch block to allow rollback on error.

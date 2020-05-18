@@ -23,4 +23,4 @@ NEMO has several features that account for energy system reliability requirement
 !!! tip
     A good idea when testing reliability scenarios is to define a high-cost, always-available supply [technology](@ref technology) for unmet demand. This technology can be used as a last resort to avoid an infeasible scenario, and it will indicate where and when additional supply is needed.
 
-The creators of NEMO used the [Open Source Energy Modelling System (OSeMOSYS)](http://www.osemosys.org/) as a starting point when developing NEMO. For this reason, a number of variables in the NEMO code share names with OSeMOSYS. NEMO has since grown into a tool with considerably more functionality than OSeMOSYS, but we gratefully acknowledge the foundational work of the OSeMOSYS community.
+The creators of NEMO used the [Open Source Energy Modelling System (OSeMOSYS)](http://www.osemosys.org/) as a starting point when developing NEMO. For this reason, a number of elements in the NEMO code share names with OSeMOSYS. The two tools now differ in substantial ways, but the NEMO team gratefully acknowledges the foundational work of the OSeMOSYS community.

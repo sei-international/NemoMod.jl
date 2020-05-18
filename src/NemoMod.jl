@@ -8,6 +8,7 @@
 =#
 
 module NemoMod
+export calculatescenario, createnemodb, dropdefaultviews, dropresulttables, logmsg, setparamdefault
 
 #= List of module global variables.
     • csdbpath - dbpath argument in last invocation of calculatescenario()
