@@ -158,16 +158,16 @@ end  # "Solving storage_test with GLPK"
     @test testqry[9,:y] == "2028"
     @test testqry[10,:y] == "2029"
 
-    @test isapprox(testqry[1,:val], 9786.566266038; atol=TOL)
-    @test isapprox(testqry[2,:val], 239.49518743249; atol=TOL)
-    @test isapprox(testqry[3,:val], 228.090642412206; atol=TOL)
-    @test isapprox(testqry[4,:val], 217.22918324972; atol=TOL)
-    @test isapprox(testqry[5,:val], 206.884936428305; atol=TOL)
-    @test isapprox(testqry[6,:val], 197.033272788862; atol=TOL)
-    @test isapprox(testqry[7,:val], 187.650735989392; atol=TOL)
-    @test isapprox(testqry[8,:val], 178.714986656564; atol=TOL)
-    @test isapprox(testqry[9,:val], 170.204749196731; atol=TOL)
-    @test isapprox(testqry[10,:val], 162.099761139741; atol=TOL)
+    @test isapprox(testqry[1,:val], 9786.56610437941; atol=TOL)
+    @test isapprox(testqry[2,:val], 239.495268121409; atol=TOL)
+    @test isapprox(testqry[3,:val], 228.090669080493; atol=TOL)
+    @test isapprox(testqry[4,:val], 217.229187314711; atol=TOL)
+    @test isapprox(testqry[5,:val], 206.884940299725; atol=TOL)
+    @test isapprox(testqry[6,:val], 197.033276475929; atol=TOL)
+    @test isapprox(testqry[7,:val], 187.650739500884; atol=TOL)
+    @test isapprox(testqry[8,:val], 178.714990000842; atol=TOL)
+    @test isapprox(testqry[9,:val], 170.204752381754; atol=TOL)
+    @test isapprox(testqry[10,:val], 162.099764173099; atol=TOL)
 
     # Delete test results and re-compact test database
     NemoMod.dropresulttables(db)

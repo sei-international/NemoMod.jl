@@ -31,10 +31,11 @@ If your model isn't calculating as quickly as you'd like, there are several step
 
   In this case, `using Distributed` enables access to the `Distributed` package, `addprocs` initializes three new Julia processes, and `@everywhere using NemoMod` loads the NEMO package on all processes (the default process and the three new ones). The `targetprocs` argument for `calculatescenario` then tells NEMO to run on all four processes. The decision to use four processes is illustrative; in reality, the number of processes should be based on the available hardware. Julia also supports starting and using processes on multiple physical computers - see [Julia's documentation](https://docs.julialang.org/) for more details (search on "distributed").
 
-  The above steps will enable parallelization in NEMO's code. For maximum performance with large models, it is also helpful to use a solver that supports parallelization. 
-
-
+  The above steps will enable parallelization in NEMO's code. For maximum performance with large models, it is also helpful to use a solver that supports parallelization, such as CPLEX, Gurobi, or Cbc.
 
   * **Simplify the scenario.** Substantial performance gains can be realized by reducing the number of [dimensions](@ref dimensions) in a scenario - for example, decreasing the number of [regions](@ref region), [technologies](@ref technology), [time slices](@ref timeslice), [years](@ref year), or [nodes](@ref node). You can also speed up calculations by forgoing nodal transmission modeling. Of course, this approach generally requires trade-offs: a simpler model may not respond as well to the analytic questions you are asking. The goal is to find a reasonable balance between your model's realism and its performance.
+
+  * **Relax the transmission simulation.** If you're simulating transmission, there are some other performance tuning options to consider beyond reducing your model's dimensions. You can change the simulation method with the [`TransmissionModelingEnabled`](@ref TransmissionModelingEnabled) parameter or use this parameter to model transmission only in selected [years](@ref year). The [`calculatescenario`](@ref) function also has an argument that determines whether endogenous 
+
 
   * **Try a different solver.** The open-source solvers delivered with NEMO (GLPK and Cbc) may struggle with sizeable models. If you have access to one of the commercial solvers NEMO supports (currently, CPLEX, Gurobi, and Mosek), it will usually be a better option. If you're choosing between Cbc and GLPK, test both of them to see which performs better for your scenario.

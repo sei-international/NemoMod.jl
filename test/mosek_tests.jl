@@ -169,13 +169,13 @@ if @isdefined Mosek
         @test testqry[9,:y] == "2028"
         @test testqry[10,:y] == "2029"
 
-        @test isapprox(testqry[1,:val], 9786.566268055; atol=TOL)
-        @test isapprox(testqry[2,:val], 239.495185664255; atol=TOL)
+        @test isapprox(testqry[1,:val], 9786.56609769189; atol=TOL)
+        @test isapprox(testqry[2,:val], 239.495174532817; atol=TOL)
         @test isapprox(testqry[3,:val], 228.090642412206; atol=TOL)
         @test isapprox(testqry[4,:val], 217.22918324972; atol=TOL)
-        @test isapprox(testqry[5,:val], 206.884936428305; atol=TOL)
-        @test isapprox(testqry[6,:val], 197.033272788861; atol=TOL)
-        @test isapprox(testqry[7,:val], 187.650735989392; atol=TOL)
+        @test isapprox(testqry[5,:val], 206.88494534077; atol=TOL)
+        @test isapprox(testqry[6,:val], 197.033272788862; atol=TOL)
+        @test isapprox(testqry[7,:val], 187.650797384118; atol=TOL)
         @test isapprox(testqry[8,:val], 178.714986656564; atol=TOL)
         @test isapprox(testqry[9,:val], 170.204749196728; atol=TOL)
         @test isapprox(testqry[10,:val], 162.099761139741; atol=TOL)
