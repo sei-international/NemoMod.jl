@@ -23,7 +23,7 @@ makedocs(
         "Calculating a scenario" => [
             "Julia syntax" => "calculatescenario.md"
             "Configuration files" => "configuration_file.md"
-            # Performance tips
+            "Performance tips" => "performance_tips.md"
         ]
 
         #   Performance tips

@@ -55,6 +55,7 @@ To install NEMO from GitHub, add the NEMO package (named `NemoMod`) within Julia
 
 ```
 julia> ]
+
 pkg> add https://github.com/sei-international/NemoMod.jl
 ```
 
@@ -69,7 +70,7 @@ pkg> add https://github.com/sei-international/NemoMod.jl#84705cc0b56435a1a2e7c2d
 NEMO formulates a mixed-integer linear optimization problem and requires a solver that can handle this class of problems. Optimization operations in NEMO are carried out with version 0.18.6 of the [JuMP](https://github.com/JuliaOpt/JuMP.jl) package. In principle, NEMO is compatible with any mixed-integer linear solver that can be called through JuMP (see [the JuMP documentation](http://www.juliaopt.org/JuMP.jl/v0.18/) for more details). A solver can be specified when calculating a scenario in NEMO by passing a JuMP `Model` object that references the solver to NEMO's `calculatescenario` method. For example:
 
 ```
-julia> calculatescenario("c:/temp/scenario_db.sqlite"; jumpmodel = Model(solver = GLPKSolverMIP(presolve=true)))
+julia> NemoMod.calculatescenario("c:/temp/scenario_db.sqlite"; jumpmodel = Model(solver = GLPKSolverMIP(presolve=true)))
 ```
 
 Note that in order to do this, you must have the corresponding Julia interface (package) for the solver installed on your computer.
@@ -93,6 +94,7 @@ The Julia packages for CPLEX and Gurobi do **not** include the corresponding sol
 
 ```
 julia> using Pkg
+
 julia> Pkg.build("CPLEX")
 ```
 
@@ -100,6 +102,7 @@ or
 
 ```
 julia> using Pkg
+
 julia> Pkg.build("Gurobi")
 ```
 

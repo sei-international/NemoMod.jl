@@ -22,6 +22,7 @@ NEMO comes with a sample configuration file saved at `utils/nemo.ini` in the NEM
 
 ```
 julia> using NemoMod
+
 julia> println(normpath(joinpath(pathof(NemoMod), "..", "..")))
 ```
 

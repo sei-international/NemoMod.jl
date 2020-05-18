@@ -3,8 +3,24 @@ CurrentModule = NemoMod
 ```
 # Julia syntax for calculating a scenario
 
-To calculate a scenario with NEMO, you use the `calculatescenario` function. The only required argument for this function is `dbpath`; NEMO provides a default value for all other arguments.
+To calculate a scenario with NEMO, you use the `calculatescenario` function. The only required argument is `dbpath`; NEMO provides a default value for all other arguments.
 
 ```@docs
 calculatescenario
+```
+
+To access `calculatescenario` within Julia, you must first tell Julia you want to use NEMO. This is done with the `using` command.
+
+```
+julia> using NemoMod
+
+julia> NemoMod.calculatescenario("c:/temp/scenario_db.sqlite")
+```
+
+If you want to provide a value for the `jumpmodel` argument, make sure to include `JuMP` and your solver's Julia package in the `using` command. For example:
+
+```
+julia> using NemoMod, JuMP, CPLEX
+
+julia> NemoMod.calculatescenario("c:/temp/scenario_db.sqlite"; jumpmodel = Model(solver = CplexSolver()), restrictvars = true)
 ```

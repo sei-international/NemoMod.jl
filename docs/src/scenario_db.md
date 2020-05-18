@@ -11,6 +11,7 @@ Scenario databases store inputs and outputs for a NEMO model scenario, including
 
     ```
     julia> using NemoMod
+    
     julia> println(normpath(joinpath(pathof(NemoMod), "..", "..", "test")))
     ```
 
