@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Quick start · NEMO</title><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.11.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.11.1/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../"><img src="../assets/logo.png" alt="NEMO logo"/></a><div class="docs-package-name"><span class="docs-autofit">NEMO</span></div><form class="docs-search" action="../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../">Introduction</a></li><li class="is-active"><a class="tocitem" href>Quick start</a></li><li><a class="tocitem" href="../installation/">Installation</a></li><li><a class="tocitem" href="../model_concept/">Model concept</a></li><li><span class="tocitem">Inputs</span><ul><li><a class="tocitem" href="../dimensions/">Dimensions</a></li><li><a class="tocitem" href="../parameters/">Parameters</a></li><li><a class="tocitem" href="../time_slicing/">Time slicing</a></li><li><a class="tocitem" href="../units/">Units of measure</a></li></ul></li><li><span class="tocitem">Outputs</span><ul><li><a class="tocitem" href="../variables/">Variables</a></li></ul></li><li><a class="tocitem" href="../scenario_db/">Scenario databases</a></li><li><span class="tocitem">Calculating a scenario</span><ul><li><a class="tocitem" href="../calculatescenario/">Julia syntax</a></li><li><a class="tocitem" href="../configuration_file/">Configuration files</a></li><li><a class="tocitem" href="../performance_tips/">Performance tips</a></li></ul></li><li><a class="tocitem" href="../functions/">Function reference</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Quick start</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Quick start</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/sei-international/NGen/blob/master/docs/src/quick_start.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Quick-start-1"><a class="docs-heading-anchor" href="#Quick-start-1">Quick start</a><a class="docs-heading-anchor-permalink" href="#Quick-start-1" title="Permalink"></a></h1><p>NEMO includes a number of features and options, so it&#39;s worth familiarizing yourself with the documentation before starting to work with it. To set up NEMO and run it through a first test, however, you can follow these steps.</p><ol><li><p>Install NEMO using the instructions in <a href="../installation/#installation-1">Installation</a>.</p></li><li><p>Try calculating a test scenario distributed with the tool. This scenario simulates a simple energy system with electricity demand, generation, and storage. Open a Julia prompt and enter the following commands:</p><pre><code class="language-julia">julia&gt; using NemoMod, JuMP, Cbc
+
+julia&gt; dbpath = normpath(joinpath(pathof(NemoMod), &quot;..&quot;, &quot;..&quot;, &quot;test&quot;, &quot;storage_test.sqlite&quot;))
+
+julia&gt; chmod(dbpath, 0o777)
+
+julia&gt; NemoMod.calculatescenario(dbpath; jumpmodel=Model(solver=CbcSolver()))</code></pre><p>The first command activates the Julia packages for NEMO, JuMP (an optimization toolkit that NEMO uses), and Cbc (a solver). The next two commands locate the test scenario&#39;s <a href="../scenario_db/#scenario_db-1">database</a> and ensure this file is writable (so NEMO can save scenario results). The final command calculates the scenario. You should see output like the following:</p><pre><code class="language-none">2020-18-May 16:11:35.568 Started scenario calculation.
+2020-18-May 16:11:35.572 Validated run-time arguments.
+2020-18-May 16:11:35.573 Connected to scenario database. Path = C:\Users\Jason\.julia\packages\NemoMod\Pq841\test\storage_test.sqlite.
+2020-18-May 16:11:35.575 Dropped pre-existing result tables from database.
+2020-18-May 16:11:35.581 Verified that transmission modeling is not enabled.
+2020-18-May 16:11:35.621 Created parameter views and indices.
+2020-18-May 16:11:35.624 Defined dimensions.
+2020-18-May 16:11:35.625 Defined demand variables.
+2020-18-May 16:11:35.628 Defined storage variables.
+2020-18-May 16:11:35.632 Defined capacity variables.
+2020-18-May 16:11:35.799 Defined activity variables.
+2020-18-May 16:11:35.800 Defined costing variables.
+2020-18-May 16:11:35.801 Defined reserve margin variables.
+2020-18-May 16:11:35.805 Defined renewable energy target variables.
+2020-18-May 16:11:35.806 Defined emissions variables.
+2020-18-May 16:11:35.807 Defined combined nodal and non-nodal variables.
+2020-18-May 16:11:35.807 Finished defining model variables.
+2020-18-May 16:11:35.809 Created constraint CAa1_TotalNewCapacity.
+2020-18-May 16:11:35.809 Created constraint CAa2_TotalAnnualCapacity.
+2020-18-May 16:11:35.818 Created constraint CAa3_TotalActivityOfEachTechnology.
+2020-18-May 16:11:35.845 Created constraint CAa4_Constraint_Capacity.
+2020-18-May 16:11:35.949 Created constraint EBa2_RateOfFuelProduction2.
+2020-18-May 16:11:35.959 Created constraint EBa3_RateOfFuelProduction3.
+2020-18-May 16:11:35.962 Created constraint VRateOfProduction1.
+2020-18-May 16:11:35.971 Created constraint EBa5_RateOfFuelUse2.
+2020-18-May 16:11:35.977 Created constraint EBa6_RateOfFuelUse3.
+2020-18-May 16:11:35.982 Created constraint VRateOfUse1.
+2020-18-May 16:11:36.000 Created constraint EBa7_EnergyBalanceEachTS1.
+2020-18-May 16:11:36.001 Created constraint EBa8_EnergyBalanceEachTS2.
+2020-18-May 16:11:36.012 Created constraint EBa9_EnergyBalanceEachTS3.
+2020-18-May 16:11:36.016 Created constraint EBa10_EnergyBalanceEachTS4.
+2020-18-May 16:11:36.036 Created constraint EBa11_EnergyBalanceEachTS5.
+2020-18-May 16:11:36.038 Created constraint EBb0_EnergyBalanceEachYear.
+2020-18-May 16:11:36.040 Created constraint EBb1_EnergyBalanceEachYear.
+2020-18-May 16:11:36.041 Created constraint EBb2_EnergyBalanceEachYear.
+2020-18-May 16:11:36.043 Created constraint EBb3_EnergyBalanceEachYear.
+2020-18-May 16:11:36.048 Created constraint EBb5_EnergyBalanceEachYear.
+2020-18-May 16:11:36.084 Created constraint Acc3_AverageAnnualRateOfActivity.
+2020-18-May 16:11:36.092 Created constraint NS1_RateOfStorageCharge.
+2020-18-May 16:11:36.099 Created constraint NS2_RateOfStorageDischarge.
+2020-18-May 16:11:36.107 Created constraint NS3_StorageLevelTsGroup1Start.
+2020-18-May 16:11:36.108 Created constraint NS4_StorageLevelTsGroup2Start.
+2020-18-May 16:11:36.113 Created constraint NS5_StorageLevelTimesliceEnd.
+2020-18-May 16:11:36.116 Created constraint NS6_StorageLevelTsGroup2End.
+2020-18-May 16:11:36.117 Created constraint NS7_StorageLevelTsGroup1End.
+2020-18-May 16:11:36.127 Created constraint NS8_StorageLevelYearEnd.
+2020-18-May 16:11:36.127 Created constraint SI1_StorageUpperLimit.
+2020-18-May 16:11:36.128 Created constraint SI2_StorageLowerLimit.
+2020-18-May 16:11:36.129 Created constraint SI3_TotalNewStorage.
+2020-18-May 16:11:36.133 Created constraint NS9a_StorageLevelTsLowerLimit.
+2020-18-May 16:11:36.134 Created constraint NS9b_StorageLevelTsUpperLimit.
+2020-18-May 16:11:36.138 Created constraint NS10_StorageChargeLimit.
+2020-18-May 16:11:36.144 Created constraint NS11_StorageDischargeLimit.
+2020-18-May 16:11:36.145 Created constraint NS12a_StorageLevelTsGroup2LowerLimit.
+2020-18-May 16:11:36.146 Created constraint NS12b_StorageLevelTsGroup2UpperLimit.
+2020-18-May 16:11:36.147 Created constraint NS13a_StorageLevelTsGroup1LowerLimit.
+2020-18-May 16:11:36.147 Created constraint NS13b_StorageLevelTsGroup1UpperLimit.
+2020-18-May 16:11:36.148 Created constraint NS18_FullLoadHours.
+2020-18-May 16:11:36.153 Created constraint SI4_UndiscountedCapitalInvestmentStorage.
+2020-18-May 16:11:36.154 Created constraint SI5_DiscountingCapitalInvestmentStorage.
+2020-18-May 16:11:36.156 Created constraint SI8_SalvageValueStorageAtEndOfPeriod3.
+2020-18-May 16:11:36.157 Created constraint SI9_SalvageValueStorageDiscountedToStartYear.
+2020-18-May 16:11:36.157 Created constraint SI10_TotalDiscountedCostByStorage.
+2020-18-May 16:11:36.158 Created constraint CC1_UndiscountedCapitalInvestment.
+2020-18-May 16:11:36.161 Created constraint CC2_DiscountingCapitalInvestment.
+2020-18-May 16:11:36.169 Created constraint SV1_SalvageValueAtEndOfPeriod1.
+2020-18-May 16:11:36.173 Created constraint SV4_SalvageValueDiscountedToStartYear.
+2020-18-May 16:11:36.173 Created constraint OC1_OperatingCostsVariable.
+2020-18-May 16:11:36.174 Created constraint OC2_OperatingCostsFixedAnnual.
+2020-18-May 16:11:36.175 Created constraint OC3_OperatingCostsTotalAnnual.
+2020-18-May 16:11:36.183 Created constraint OC4_DiscountedOperatingCostsTotalAnnual.
+2020-18-May 16:11:36.184 Created constraint TDC1_TotalDiscountedCostByTechnology.
+2020-18-May 16:11:36.184 Created constraint TDC2_TotalDiscountedCost.
+2020-18-May 16:11:36.185 Created constraint TCC1_TotalAnnualMaxCapacityConstraint.
+2020-18-May 16:11:36.185 Created constraint NCC1_TotalAnnualMaxNewCapacityConstraint.
+2020-18-May 16:11:36.186 Created constraint RM1_ReserveMargin_TechnologiesIncluded_In_Activity_Units.
+2020-18-May 16:11:36.191 Created constraint RM2_ReserveMargin_FuelsIncluded.
+2020-18-May 16:11:36.197 Created constraint RM3_ReserveMargin_Constraint.
+2020-18-May 16:11:36.204 Created constraint RE1_FuelProductionByTechnologyAnnual.
+2020-18-May 16:11:36.210 Created constraint FuelUseByTechnologyAnnual.
+2020-18-May 16:11:36.217 Created constraint E5_DiscountedEmissionsPenaltyByTechnology.
+2020-18-May 16:11:36.221 Defined model objective.
+2020-18-May 16:11:43.500 Solved model. Solver status = Optimal.
+2020-18-May 16:11:43.524 Saved results for vdemandnn to database.
+2020-18-May 16:11:43.542 Saved results for vnewcapacity to database.
+2020-18-May 16:11:43.557 Saved results for vtotalcapacityannual to database.
+2020-18-May 16:11:43.575 Saved results for vproductionbytechnologyannual to database.
+2020-18-May 16:11:43.601 Saved results for vproductionnn to database.
+2020-18-May 16:11:43.616 Saved results for vusebytechnologyannual to database.
+2020-18-May 16:11:43.638 Saved results for vusenn to database.
+2020-18-May 16:11:43.652 Saved results for vtotaldiscountedcost to database.
+2020-18-May 16:11:43.654 Finished saving results to database.
+2020-18-May 16:11:43.654 Finished scenario calculation.
+:Optimal</code></pre><p>Selected results are now saved in the database.</p><div class="admonition is-success"><header class="admonition-header">Tip</header><div class="admonition-body"><p>To change which results are saved and set other run-time options, see <a href="../calculatescenario/#scenario_calc-1">Calculating a scenario</a>.</p></div></div></li></ol><p>For a better understanding of what happens in scenario calculations - and guidance on building your own model - look through the rest of the documentation, particularly <a href="../model_concept/#model_concept-1">Model concept</a> and the sections on Inputs and Outputs.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Introduction</a><a class="docs-footer-nextpage" href="../installation/">Installation »</a></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Monday 18 May 2020 20:12">Monday 18 May 2020</span>. Using Julia version 1.4.0.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
