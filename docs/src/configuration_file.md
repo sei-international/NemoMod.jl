@@ -16,11 +16,11 @@ NEMO configuration files are text files written in `ini` syntax. The following r
   + `quiet` - Indicates whether NEMO should suppress low-priority status messages (which are otherwise printed to `STDOUT`). If this option is specified in a configuration file, it overrides the `quiet` argument for [`calculatescenario`](@ref).
 * `includes` block
   + `beforescenariocalc` - Path to a Julia script that should be run before NEMO calculates the scenario. The path should be defined relative to the Julia working directory (e.g., `./my_script.jl`).
-  + `customconstraints` - Path to a Julia script that should be run when NEMO builds constraints for the scenario. The script can be used to add [custom constraints](@ref custom_constraints) to the model. The path should be defined relative to the Julia working directory.
+  + `customconstraints` - Path to a Julia script that should be run when NEMO builds constraints for the scenario. The script can be used to add custom constraints to the model. The path should be defined relative to the Julia working directory.
 
 NEMO comes with a sample configuration file saved at `utils/nemo.ini` in the NEMO package directory. You can find the NEMO package directory in Julia as follows:
 
-```
+```julia
 julia> using NemoMod
 
 julia> println(normpath(joinpath(pathof(NemoMod), "..", "..")))

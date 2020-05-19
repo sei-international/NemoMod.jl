@@ -6,19 +6,20 @@ CurrentModule = NemoMod
 
 This documentation explains how to use **NEMO**: the **Next Energy Modeling System for Optimization**.
 
-NEMO is a high-performance, open-source energy system optimization modeling tool. It is intended for users who seek substantial optimization capabilities without the limitations of proprietary, fee-based software or the performance bottlenecks of common open-source alternatives. Key features of NEMO include:
+NEMO is a high-performance, open-source energy system optimization modeling tool. It is intended for users who seek substantial optimization capabilities without the financial burden of proprietary software or the performance bottlenecks of common open-source alternatives. Key features of NEMO include:
 
 - Least-cost optimization of energy supply and demand
 - Support for multiple regions and regional trade
 - Modeling of energy storage
-- Nodal network simulations and modeling of power flow
-- Modeling of emissions and emission constraints
+- Nodal network simulations and modeling of power and pipeline flow
+- Modeling of emissions and emission constraints (including carbon prices and pollutant externalities)
 - Modeling of renewable energy targets
 - Parallel processing
 - Support for multiple solvers: [GLPK](https://www.gnu.org/software/glpk/), [Cbc](https://projects.coin-or.org/Cbc), [CPLEX](https://www.ibm.com/analytics/cplex-optimizer), [Gurobi](https://www.gurobi.com/), and [Mosek](https://www.mosek.com/)
 - [SQLite](https://www.sqlite.org/) data store
+- Numerous performance tuning options
 
-NEMO can be used as a stand-alone tool but is designed to leverage the [Long-range Energy Alternatives Planning system (LEAP)](https://energycommunity.org/) as a user interface. Many users will find it easiest to exploit NEMO via LEAP.
+NEMO can be used as a stand-alone tool but is designed to leverage the [Low Emissions Analysis Platform (LEAP)](https://energycommunity.org/) as a user interface. Many users will find it easiest to exploit NEMO via LEAP.
 
 For more background on NEMO and its raison d’être, see the README at NEMO's [GitHub homepage](https://github.com/sei-international/NemoMod.jl).
 

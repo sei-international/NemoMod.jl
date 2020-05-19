@@ -6,7 +6,7 @@ makedocs(
     format = Documenter.HTML(),
     pages = [
         "Introduction" => "index.md"
-        # Quick start
+        "Quick start" => "quick_start.md"
         "Installation" => "installation.md"
         "Model concept" => "model_concept.md"
         "Inputs" => [
@@ -27,7 +27,7 @@ makedocs(
         ]
         # Advanced topics
         #   Custom constraints
-        #"Function reference" => "functions.md"
+        "Function reference" => "functions.md"
     ],
 )
 

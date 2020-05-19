@@ -1,7 +1,7 @@
 ```@meta
 CurrentModule = NemoMod
 ```
-# NEMO model concept
+# [NEMO model concept](@id model_concept)
 
 NEMO simulates an energy system through least-cost optimization with perfect foresight. Essentially, this means it seeks to meet energy and power demands over time at the lowest possible cost. The cost minimization is performed simultaneously for all modeled time periods, and all costs are discounted to the beginning of the simulation. Costs can include investment costs, fixed and variable operation and maintenance costs, and emission penalties for different components of the energy system (such as power plants, energy storage facilities, and transmission lines).
 
@@ -10,7 +10,7 @@ NEMO is a deterministic model, but its robust performance makes it practical to 
 !!! tip
     You can create an empty NEMO scenario database with the [`createnemodb`](@ref) function. If you're using NEMO with LEAP, LEAP will create and populate scenario databases for you.
 
-To define [custom constraints](@ref custom_constraints) for a scenario, you write the constraints in Julia code and point to them in a NEMO [configuration file](@ref configuration_file).
+To define custom constraints for a scenario, you write the constraints in Julia code and point to them in a NEMO [configuration file](@ref configuration_file).
 
 NEMO supports simulating energy demand and supply on an annual and sub-annual basis. Sub-annual modeling is structured using time slices and time slice groups, which you can configure in a variety of ways. How these elements work together is discussed in depth in [Time slicing](@ref time_slicing).
 

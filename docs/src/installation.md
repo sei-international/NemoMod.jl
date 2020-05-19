@@ -1,7 +1,7 @@
 ```@meta
 CurrentModule = NemoMod
 ```
-# Installing NEMO
+# [Installing NEMO](@id installation)
 
 NEMO can be installed in two ways: through an installer program and manually via GitHub.
 
@@ -9,7 +9,7 @@ NEMO can be installed in two ways: through an installer program and manually via
 
 The installer program is the easiest way to install NEMO. Here are the steps to follow:
 
-1. Download a copy of the installer to your computer (see [Latest installers](@ref)) and run it.
+1. Download a copy of the installer to your computer and run it. The installer is distributed through the [LEAP website](https://energycommunity.org/download) and is freely available once you register for the site (registration is also free).
 
 2. The installer will step you through the installation process. You'll be prompted to accept the NEMO license (the [Apache License, version 2.0](http://www.apache.org/licenses/LICENSE-2.0)) and asked which components of NEMO you'd like to install.
 
@@ -17,7 +17,7 @@ The installer program is the easiest way to install NEMO. Here are the steps to 
 
    NEMO is built with the [Julia programming language](https://julialang.org/), so the first component is a version of Julia that's compatible with the version of NEMO you're installing. The second component is the NEMO software itself. Both the first and second components are obligatory.
 
-   The third component, which is optional, is a pre-compiled session environment (system image) for Julia that includes support for NEMO. Ordinarily, Julia compiles programs like NEMO at run-time, a feature that significantly impairs performance when a program is started. The NEMO system image avoids this performance penalty by providing NEMO in a pre-compiled form. **It is recommended for all users, especially those who are using NEMO with LEAP.** Note, though, that if the NEMO system image is installed, any customizations you make to the NEMO code won't take affect unless you [restore the default Julia system image](@ref restore_default_sysimage).
+   The third component, which is optional, is a pre-compiled session environment (system image) for Julia that includes support for NEMO. Ordinarily, Julia compiles programs like NEMO at run-time, a feature that impairs performance when a program is started. The NEMO system image avoids this performance penalty by providing NEMO in a pre-compiled form. **It is recommended for all users, especially those who are using NEMO with LEAP.** Note, though, that if the NEMO system image is installed, any customizations you make to the NEMO code won't take affect unless you [restore the default Julia system image](@ref restore_default_sysimage).
 
 3. Select the components to install, and press the Install button. Then follow the prompts to finish the installation (some steps may take a few minutes). The installer will tell you when the installation is complete.
 
@@ -29,6 +29,10 @@ The installer program is the easiest way to install NEMO. Here are the steps to 
 ### Uninstalling NEMO
 
 If you installed NEMO with the installer program, you should be able to reverse the installation using your operating system's normal uninstall function. In Windows, go to Start -> Add or remove programs, and choose to uninstall NEMO.
+
+### Updating NEMO
+
+If you installed with the installer program and want to update to a new version of NEMO, simply run the new installer. It's not necessary to uninstall the old version of NEMO first.
 
 ### Troubleshooting problems with installer program
 
@@ -53,7 +57,7 @@ Once you do this, there will be a performance penalty when starting NEMO, but an
 
 To install NEMO from GitHub, add the NEMO package (named `NemoMod`) within Julia.
 
-```
+```julia
 julia> ]
 
 pkg> add https://github.com/sei-international/NemoMod.jl
@@ -61,15 +65,15 @@ pkg> add https://github.com/sei-international/NemoMod.jl
 
 This will install the latest NEMO code from GitHub (which may include pre-release code). To install a particular version of NEMO, find its commit hash on the [NEMO GitHub releases page](https://github.com/sei-international/NemoMod.jl/releases) and insert it at the end of the add command after a `#` sign. For example, for NEMO 1.0.5:
 
-```
+```julia
 pkg> add https://github.com/sei-international/NemoMod.jl#84705cc0b56435a1a2e7c2d3d0e91afc5b46922d
 ```
 
 ## Solver compatibility
 
-NEMO formulates a mixed-integer linear optimization problem and requires a solver that can handle this class of problems. Optimization operations in NEMO are carried out with version 0.18.6 of the [JuMP](https://github.com/JuliaOpt/JuMP.jl) package. In principle, NEMO is compatible with any mixed-integer linear solver that can be called through JuMP (see [the JuMP documentation](http://www.juliaopt.org/JuMP.jl/v0.18/) for more details). A solver can be specified when calculating a scenario in NEMO by passing a JuMP `Model` object that references the solver to NEMO's `calculatescenario` method. For example:
+NEMO formulates a mixed-integer linear optimization problem and requires a solver that can handle this class of problems. Optimization operations in NEMO are carried out with version 0.18.6 of the [JuMP](https://github.com/JuliaOpt/JuMP.jl) package. In principle, NEMO is compatible with any mixed-integer linear solver that can be called through JuMP (see [the JuMP documentation](http://www.juliaopt.org/JuMP.jl/v0.18/) for more details). A solver can be specified when calculating a scenario in NEMO by passing a JuMP `Model` object that references the solver to NEMO's [`calculatescenario`](@ref) method. For example:
 
-```
+```julia
 julia> NemoMod.calculatescenario("c:/temp/scenario_db.sqlite"; jumpmodel = Model(solver = GLPKSolverMIP(presolve=true)))
 ```
 
@@ -92,7 +96,7 @@ The Mosek Julia package also provides the underlying solver program. In this cas
 
 The Julia packages for CPLEX and Gurobi do **not** include the corresponding solver programs. These must be licensed and set up separately. If CPLEX or Gurobi is installed on your computer when you run the NEMO installer, the installer will link the corresponding Julia package to the solver binaries. Otherwise, you may need to perform this step yourself:
 
-```
+```julia
 julia> using Pkg
 
 julia> Pkg.build("CPLEX")
@@ -100,7 +104,7 @@ julia> Pkg.build("CPLEX")
 
 or
 
-```
+```julia
 julia> using Pkg
 
 julia> Pkg.build("Gurobi")

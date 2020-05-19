@@ -15,7 +15,7 @@ If your model isn't calculating as quickly as you'd like, there are several step
 
   * **Use parallel processing.** NEMO can parallelize certain operations, reducing their run time by spreading the load across multiple processes. To enable parallelization, use Julia's `Distributed` package in conjunction with NEMO. The basic steps are to initialize additional Julia processes, load the NEMO package on those processes, and tell NEMO to use the processes in [`calculatescenario`](@ref) (via the `targetprocs` argument). For example:
 
-  ```
+  ```julia
   julia> using Distributed
 
   julia> addprocs(3)

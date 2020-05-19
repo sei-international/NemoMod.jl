@@ -9,9 +9,9 @@ Scenario databases store inputs and outputs for a NEMO model scenario, including
 !!! tip
     For examples of scenario databases, look in the `test` directory for the NEMO Julia package. You can find this directory as follows.
 
-    ```
+    ```julia
     julia> using NemoMod
-    
+
     julia> println(normpath(joinpath(pathof(NemoMod), "..", "..", "test")))
     ```
 
@@ -32,5 +32,6 @@ NEMO uses [SQLite](https://www.sqlite.org/) version 3 as its database platform. 
 NEMO provides a few functions for working with scenario databases in Julia.
 
 - [`createnemodb`](@ref) - Creates a new, empty scenario database.
-- [`setparamdefault`](@ref) - Sets the default value for a parameter.
+- [`dropdefaultviews`](@ref) - Drops views showing default values for parameters.
 - [`dropresulttables`](@ref) - Drops all tables for calculated variables (i.e., scenario results).
+- [`setparamdefault`](@ref) - Sets the default value for a parameter.
