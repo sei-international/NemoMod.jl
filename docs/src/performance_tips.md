@@ -7,36 +7,36 @@ NEMO is designed to provide robust performance for a wide variety of models and 
 
 If your model isn't calculating as quickly as you'd like, there are several steps to consider.
 
-  * **Only save the output variables you need.** Saving unnecessary variables [variables](@ref variables) increases disk operations and may result in a longer solve time (because additional constraints are needed to calculate the variables).
+1. **Only save the output variables you need.** Saving unnecessary variables [variables](@ref variables) increases disk operations and may result in a longer solve time (because additional constraints are needed to calculate the variables).
 
-  * **Don't save zeros.** If you set the `reportzeros` argument for [`calculatescenario`](@ref) to `false` (the default), NEMO won't take the time to save output variables with a value of zero. You can then assume a zero value for variables that are defined in the scenario but not reported.
+2. **Don't save zeros.** If you set the `reportzeros` argument for [`calculatescenario`](@ref) to `false` (the default), NEMO won't take the time to save output variables with a value of zero. You can then assume a zero value for variables that are defined in the scenario but not reported.
 
-  * **Check `restrictvars`.** The `restrictvars` argument for [`calculatescenario`](@ref) can have a significant impact on performance. This option tells NEMO to make a greater effort to eliminate unnecessary variables from the model it provides to the solver. This filtering process requires a little time, but it can considerably reduce solve time. In general, the trade-off is advisable for large models (you should set `restrictvars` to `true` in these cases) but may not be for very small models (set `restrictvars` to `false` in these cases).
+3. **Check `restrictvars`.** The `restrictvars` argument for [`calculatescenario`](@ref) can have a significant impact on performance. This option tells NEMO to make a greater effort to eliminate unnecessary variables from the model it provides to the solver. This filtering process requires a little time, but it can considerably reduce solve time. In general, the trade-off is advisable for large models (you should set `restrictvars` to `true` in these cases) but may not be for very small models (set `restrictvars` to `false` in these cases).
 
-  * **Use parallel processing.** NEMO can parallelize certain operations, reducing their run time by spreading the load across multiple processes. To enable parallelization, use Julia's `Distributed` package in conjunction with NEMO. The basic steps are to initialize additional Julia processes, load the NEMO package on those processes, and tell NEMO to use the processes in [`calculatescenario`](@ref) (via the `targetprocs` argument). For example:
+4. **Use parallel processing.** NEMO can parallelize certain operations, reducing their run time by spreading the load across multiple processes. To enable parallelization, use Julia's `Distributed` package in conjunction with NEMO. The basic steps are to initialize additional Julia processes, load the NEMO package on those processes, and tell NEMO to use the processes in [`calculatescenario`](@ref) (via the `targetprocs` argument). For example:
 
-  ```julia
-  julia> using Distributed
+   ```julia
+   julia> using Distributed
 
-  julia> addprocs(3)
-  3-element Array{Int64,1}:
-    2
-    3
-    4
+   julia> addprocs(3)
+   3-element Array{Int64,1}:
+      2
+      3
+      4
 
-  julia> @everywhere using NemoMod
+   julia> @everywhere using NemoMod
 
-  julia> NemoMod.calculatescenario("c:/temp/scenario_db.sqlite"; restrictvars=true, targetprocs=[1,2,3,4])
-  ```
+   julia> NemoMod.calculatescenario("c:/temp/scenario_db.sqlite"; restrictvars=true, targetprocs=[1,2,3,4])
+   ```
 
-  In this case, `using Distributed` enables access to the `Distributed` package, `addprocs` initializes three new Julia processes, and `@everywhere using NemoMod` loads the NEMO package on all processes (the default process and the three new ones). The `targetprocs` argument for `calculatescenario` then tells NEMO to run on all four processes. The decision to use four processes is illustrative; in reality, the number of processes should be based on the available hardware. Julia also supports starting and using processes on multiple physical computers - see [Julia's documentation](https://docs.julialang.org/) for more details (search on "distributed").
+   In this case, `using Distributed` enables access to the `Distributed` package, `addprocs` initializes three new Julia processes, and `@everywhere using NemoMod` loads the NEMO package on all processes (the default process and the three new ones). The `targetprocs` argument for `calculatescenario` then tells NEMO to run on all four processes. The decision to use four processes is illustrative; in reality, the number of processes should be based on the available hardware. Julia also supports starting and using processes on multiple physical computers - see [Julia's documentation](https://docs.julialang.org/) for more details (search on "distributed").
 
-  The above steps will enable parallelization in NEMO's code. For maximum performance with large models, it's also helpful to use a solver that supports parallelization, such as CPLEX, Gurobi, or Cbc.
+   The above steps will enable parallelization in NEMO's code. For maximum performance with large models, it's also helpful to use a solver that supports parallelization, such as CPLEX, Gurobi, or Cbc.
 
-  * **Simplify the scenario.** Substantial performance gains can be realized by reducing the number of [dimensions](@ref dimensions) in a scenario - for example, decreasing the number of [regions](@ref region), [technologies](@ref technology), [time slices](@ref timeslice), [years](@ref year), or [nodes](@ref node). You can also speed up calculations by forgoing nodal transmission modeling. Of course, this approach generally requires trade-offs: a simpler model may not respond as well to the analytic questions you are asking. The goal is to find a reasonable balance between your model's realism and its performance.
+5. **Simplify the scenario.** Substantial performance gains can be realized by reducing the number of [dimensions](@ref dimensions) in a scenario - for example, decreasing the number of [regions](@ref region), [technologies](@ref technology), [time slices](@ref timeslice), [years](@ref year), or [nodes](@ref node). You can also speed up calculations by forgoing nodal transmission modeling. Of course, this approach generally requires trade-offs: a simpler model may not respond as well to the analytic questions you are asking. The goal is to find a reasonable balance between your model's realism and its performance.
 
-  * **Relax the transmission simulation.** If you're simulating transmission, there are some other performance tuning options to consider beyond reducing your model's dimensions. You can change the simulation method with the [`TransmissionModelingEnabled`](@ref TransmissionModelingEnabled) parameter or use this parameter to model transmission only in selected [years](@ref year). The [`calculatescenario`](@ref) function also has an argument (`continuoustransmission`) that determines whether NEMO uses binary or continuous variables to represent the construction of candidate [transmission lines](@ref transmissionline). With binary variables (`continuoustransmission = false`) candidate lines may only be built in their entirety, while with continuous variables (`continuoustransmission = true`) partial line construction is allowed. Continuous simulations are generally faster but may not be as realistic.
+6. **Relax the transmission simulation.** If you're simulating transmission, there are some other performance tuning options to consider beyond reducing your model's dimensions. You can change the simulation method with the [`TransmissionModelingEnabled`](@ref TransmissionModelingEnabled) parameter or use this parameter to model transmission only in selected [years](@ref year). The [`calculatescenario`](@ref) function also has an argument (`continuoustransmission`) that determines whether NEMO uses binary or continuous variables to represent the construction of candidate [transmission lines](@ref transmissionline). With binary variables (`continuoustransmission = false`) candidate lines may only be built in their entirety, while with continuous variables (`continuoustransmission = true`) partial line construction is allowed. Continuous simulations are generally faster but may not be as realistic.
 
-  * **Use [`CapacityOfOneTechnologyUnit`](@ref CapacityOfOneTechnologyUnit) selectively.** This parameter sets the minimum increment for endogenously determined capacity additions for a [technology](@ref technology). When it's specified, NEMO uses integer variables to solve for capacity, which increases model solve time. If you don't define `CapacityOfOneTechnologyUnit`, NEMO solves for technology capacity with continuous variables. This approach assumes that any increment of new capacity is permissible (subject to limits on minimum and maximum capacity and capacity investment - see [`TotalAnnualMinCapacity`](@ref TotalAnnualMinCapacity), [`TotalAnnualMaxCapacity`](@ref TotalAnnualMaxCapacity), [`TotalAnnualMinCapacityInvestment`](@ref TotalAnnualMinCapacityInvestment), and [`TotalAnnualMaxCapacityInvestment`](@ref TotalAnnualMaxCapacityInvestment)).
+7. **Use [`CapacityOfOneTechnologyUnit`](@ref CapacityOfOneTechnologyUnit) selectively.** This parameter sets the minimum increment for endogenously determined capacity additions for a [technology](@ref technology). When it's specified, NEMO uses integer variables to solve for capacity, which increases model solve time. If you don't define `CapacityOfOneTechnologyUnit`, NEMO solves for technology capacity with continuous variables. This approach assumes that any increment of new capacity is permissible (subject to limits on minimum and maximum capacity and capacity investment - see [`TotalAnnualMinCapacity`](@ref TotalAnnualMinCapacity), [`TotalAnnualMaxCapacity`](@ref TotalAnnualMaxCapacity), [`TotalAnnualMinCapacityInvestment`](@ref TotalAnnualMinCapacityInvestment), and [`TotalAnnualMaxCapacityInvestment`](@ref TotalAnnualMaxCapacityInvestment)).
 
-  * **Try a different solver.** The open-source solvers delivered with NEMO (GLPK and Cbc) may struggle with sizeable models. If you have access to one of the commercial solvers NEMO supports (currently, CPLEX, Gurobi, and Mosek), it will usually be a better option. If you're choosing between Cbc and GLPK, test both of them to see which performs better for your scenario.
+8. **Try a different solver.** The open-source solvers delivered with NEMO (GLPK and Cbc) may struggle with sizeable models. If you have access to one of the commercial solvers NEMO supports (currently, CPLEX, Gurobi, and Mosek), it will usually be a better option. If you're choosing between Cbc and GLPK, test both of them to see which performs better for your scenario.
