@@ -15,7 +15,7 @@ NEMO is a high performance, open-source energy system optimization modeling tool
 - [SQLite](https://www.sqlite.org/) data store
 - Numerous performance tuning options
 
-NEMO can be used in command line mode or with the [Low Emissions Analysis Platform (LEAP)](https://www.energycommunity.org/)[^1] as a graphical user interface.
+NEMO can be used in command line mode or with the [Low Emissions Analysis Platform](https://www.energycommunity.org/) (LEAP - formerly the Long-range Energy Alternatives Planning system) as a graphical user interface.
 
 Development of NEMO is led by the Energy Modeling Program at the [Stockholm Environment Institute (SEI)](https://www.sei.org/).
 
@@ -36,5 +36,3 @@ The initial versions of NEMO were informed by version 2017_11_08 of the [Open So
 # For more information
 
 The NEMO team includes several SEI staff: [Jason Veysey](https://www.sei.org/people/jason-veysey/), [Eric Kemp-Benedict](https://www.sei.org/people/eric-kemp-benedict/), and [Charlie Heaps](https://www.sei.org/people/charles-heaps/). Please feel free to contact any of us for more information or if you have questions.
-
-[^1]: Formerly the Long-range Energy Alternatives Planning system.
