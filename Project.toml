@@ -20,7 +20,7 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [compat]
 Cbc = "0.6.3"
-ConfParser = "0.1.1"
+ConfParser = "0.1.2"
 DataFrames = "0.20.2"
 GLPK = "0.10.0"
 GLPKMathProgInterface = "0.4.4"
