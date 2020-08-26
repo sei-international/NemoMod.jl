@@ -280,7 +280,7 @@ function keydicts_parallel(df::DataFrames.DataFrame, numdicts::Int, targetprocs:
                     #   referencing keydicts due to differences in how NemoMod is loaded in process 1 (using NemoMod) vs. other processes
                     #   (include "path to NemoMod.jl")
                     # results[p] = remotecall_fetch(NemoMod.keydicts, availprocs[p], df[((p-1) * blockdivrem[1] + 1):((p) * blockdivrem[1] + (p == np ? blockdivrem[2] : 0)),:], numdicts)
-                    results[p] = remotecall_fetch(eval, availprocs[p],
+                    results[p] = remotecall_fetch(Core.eval, availprocs[p], Main,
                         :(NemoMod.keydicts($df[(($p-1) * $blockdivrem[1] + 1):(($p) * $blockdivrem[1] + ($p == $np ? $blockdivrem[2] : 0)),:], $numdicts)))
                 end
             end
