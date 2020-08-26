@@ -12,7 +12,7 @@
     varstosave = "vdemandnn, vnewcapacity, vtotalcapacityannual,
         vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
         vusenn, vtotaldiscountedcost",
-    targetprocs = Array{Int, 1}([1]), restrictvars = true,
+    numprocs::Int = 1, targetprocs = Array{Int, 1}([1]), restrictvars = true,
     reportzeros = false, continuoustransmission = false, quiet = false)
 
 Calculates a scenario specified in a scenario database. Returns a Symbol indicating
@@ -29,6 +29,10 @@ the solve status reported by the solver (e.g., `:Optimal`).
     options.
 - `varstosave::String`: Comma-delimited list of output variables whose results should be
     saved in the scenario database.
+- `numprocs::Int`: Number of Julia processes to use for parallelized operations within the
+    scenario calculation. NEMO selects the first `numprocs` processes in `Distributed.procs()`
+    for these operations. If there are fewer than `numprocs` processes defined, NEMO adds
+    processes on the local host as needed. Ignored if `targetprocs` is specified.
 - `targetprocs::Array{Int, 1}`: Identifiers of Julia processes that should be used for
     parallelized operations within the scenario calculation.
 - `restrictvars::Bool`: Indicates whether NEMO should conduct additional data analysis
@@ -50,12 +54,44 @@ function calculatescenario(
     dbpath::String;
     jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
     varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
-    targetprocs::Array{Int, 1} = Array{Int, 1}([1]),
+    numprocs::Int = 1,
+    targetprocs::Array{Int, 1} = Array{Int, 1}(),
     restrictvars::Bool = true,
     reportzeros::Bool = false,
     continuoustransmission::Bool = false,
     quiet::Bool = false)
-# Lines within calculatescenario() are not indented since the function is so lengthy. To make an otherwise local
+
+    try
+        calculatescenario_main(dbpath; jumpmodel=jumpmodel, varstosave=varstosave, numprocs=numprocs, targetprocs=targetprocs,
+            restrictvars=restrictvars, reportzeros=reportzeros, continuoustransmission=continuoustransmission, quiet=quiet)
+    catch e
+        println("NEMO encountered an error with the following message: " * sprint(showerror, e) * ".")
+        println("To report this issue to SEI, please submit an error report at https://leap.sei.org/support/. Please include in the report a list of steps to reproduce the error and the error message. Press Enter to continue.")
+        readline();
+    end
+end  # calculatescenario()
+
+"""
+    calculatescenario_main(dbpath; jumpmodel = Model(solver = GLPKSolverMIP(presolve=true)),
+    varstosave = "vdemandnn, vnewcapacity, vtotalcapacityannual,
+        vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
+        vusenn, vtotaldiscountedcost",
+    numprocs::Int = 1, targetprocs = Array{Int, 1}([1]), restrictvars = true,
+    reportzeros = false, continuoustransmission = false, quiet = false)
+
+Implements main scenario calculation logic for calculatescenario().
+"""
+function calculatescenario_main(
+    dbpath::String;
+    jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
+    varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
+    numprocs::Int = 1,
+    targetprocs::Array{Int, 1} = Array{Int, 1}(),
+    restrictvars::Bool = true,
+    reportzeros::Bool = false,
+    continuoustransmission::Bool = false,
+    quiet::Bool = false)
+# Lines within calculatescenario_main() are not indented since the function is so lengthy. To make an otherwise local
 # variable visible outside the function, prefix it with global. For JuMP constraint references,
 # create a new global variable and assign to it the constraint reference.
 
@@ -76,11 +112,13 @@ logmsg("Validated run-time arguments.", quiet)
 configfile = getconfig(quiet)  # ConfParse structure for config file if one is found; otherwise nothing
 
 if configfile != nothing
-    local boolargs::Array{Bool,1} = [restrictvars,reportzeros,continuoustransmission,quiet]  # Array of Boolean arguments for calculatescenario();
-        # necessary in order to have a mutable object for getconfigargs! call
+    # Arrays of Boolean and Int arguments for calculatescenario(); necessary in order to have mutable objects for getconfigargs! call
+    local boolargs::Array{Bool,1} = [restrictvars,reportzeros,continuoustransmission,quiet]
+    local intargs::Array{Int,1} = [numprocs]
 
-    getconfigargs!(configfile, varstosavearr, targetprocs, boolargs, quiet)
+    getconfigargs!(configfile, varstosavearr, targetprocs, boolargs, intargs, quiet)
 
+    numprocs = intargs[1]
     restrictvars = boolargs[1]
     reportzeros = boolargs[2]
     continuoustransmission = boolargs[3]
@@ -88,10 +126,44 @@ if configfile != nothing
 end
 # END: Read config file and process calculatescenarioargs.
 
+# BEGIN: Set final value for targetprocs.
+if length(targetprocs) == 0
+    # Use first numprocs processes in procs(), adding processes as needed
+    numprocs > nprocs() && addprocs(numprocs - nprocs())
+    targetprocs = procs()[1:numprocs]
+else
+    # Use valid values in targetprocs (i.e., references to processes that are defined); if no valid values, revert to process 1
+    targetprocs = intersect(procs(), targetprocs)
+
+    if length(targetprocs) == 0
+        targetprocs = [1]
+    end
+end
+# END: Set final value for targetprocs.
+
+# BEGIN: Load NemoMod on parallel processes.
+if targetprocs != [1]
+    local nemomod_path::String = "src/NemoMod.jl"  # Path to main file for NemoMod module
+    local futures::Array{Future, 1} = Array{Future, 1}()  # Array of results from asynchronous loading on parallel processes
+
+    if pathof(NemoMod) != nothing
+        nemomod_path = pathof(NemoMod)
+    end
+
+    for p in targetprocs
+        if p != 1 && !remotecall_fetch(isdefined, p, Main, :NemoMod)
+            push!(futures, remotecall(Base.include, p, Main, nemomod_path))
+        end
+    end
+
+    logmsg("Loading NEMO on parallel processes " * join(targetprocs, ", ") * ".", quiet)
+end
+# END: Load NemoMod on parallel processes.
+
 # BEGIN: Set module global variables that depend on arguments.
 global csdbpath = dbpath
 global csquiet = quiet
-global csjumpmodel = jumpmodel
+#global csjumpmodel = jumpmodel
 
 if configfile != nothing && haskey(configfile, "includes", "customconstraints")
     # Define global variable for jumpmodel
@@ -387,6 +459,11 @@ and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
 and ntc.y = ys.y
 )
 order by r, t, f, y") |> DataFrame
+
+# Ensure NEMO is fully loaded on parallel processes before any calls to keydicts_parallel
+for f in futures
+    fetch(f)
+end
 
 if restrictvars
     if in("vrateofproductionbytechnologybymodenn", varstosavearr)
@@ -4706,4 +4783,4 @@ logmsg("Finished saving results to database.", quiet)
 
 logmsg("Finished scenario calculation.")
 return status
-end  # calculatescenario()
+end  # calculatescenario_main()

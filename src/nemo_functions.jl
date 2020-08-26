@@ -64,6 +64,7 @@ end  # getconfig(quiet::Bool = false)
         varstosavearr::Array{String,1},
         targetprocs::Array{Int,1},
         bools::Array{Bool,1},
+        ints::Array{Int,1},
         quiet::Bool)
 
 Loads run-time arguments for calculatescenario() from a configuration file.
@@ -77,11 +78,13 @@ Loads run-time arguments for calculatescenario() from a configuration file.
 - `bools::Array{Bool,1}`: Array of Boolean arguments for calculatescenario(): restrictvars, reportzeros,
     continuoustransmission, and quiet, in that order. New values in configuration file overwrite values
     in this array.
+- `ints::Array{Int,1}`: Array of `Int` arguments for calculatescenario(): numprocs. New values in
+    configuration file overwrite values in this array.
 - `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to STDOUT).
     This argument is not changed by the function.
 """
 function getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, targetprocs::Array{Int,1},
-    bools::Array{Bool,1}, quiet::Bool)
+    bools::Array{Bool,1}, ints::Array{Int,1}, quiet::Bool)
 
     if haskey(configfile, "calculatescenarioargs", "varstosave")
         try
@@ -97,6 +100,15 @@ function getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, t
             logmsg("Read varstosave argument from configuration file.", quiet)
         catch e
             logmsg("Could not read varstosave argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
+        end
+    end
+
+    if haskey(configfile, "calculatescenarioargs", "numprocs")
+        try
+            ints[1] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "numprocs")))
+            logmsg("Read numprocs argument from configuration file.", quiet)
+        catch e
+            logmsg("Could not read numprocs argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
         end
     end
 
