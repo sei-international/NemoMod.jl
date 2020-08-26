@@ -142,9 +142,10 @@ end
 # END: Set final value for targetprocs.
 
 # BEGIN: Load NemoMod on parallel processes.
+local futures::Array{Future, 1} = Array{Future, 1}()  # Array of results from asynchronous loading on parallel processes
+
 if targetprocs != [1]
     local nemomod_path::String = "src/NemoMod.jl"  # Path to main file for NemoMod module
-    local futures::Array{Future, 1} = Array{Future, 1}()  # Array of results from asynchronous loading on parallel processes
 
     if pathof(NemoMod) != nothing
         nemomod_path = pathof(NemoMod)
