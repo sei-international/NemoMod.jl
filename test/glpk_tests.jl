@@ -41,11 +41,11 @@
     @test isapprox(testqry[9,:val], 104.151999017492; atol=TOL)
     @test isapprox(testqry[10,:val], 99.1923800166593; atol=TOL)
 
-    # Test with optional outputs
+    # Test with optional outputs and numprocs > 1
     NemoMod.calculatescenario(dbfile; varstosave =
         "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vrateofdemand, vproductionbytechnology, vtotaltechnologyannualactivity, "
         * "vtotaltechnologymodelperiodactivity, vusebytechnology, vmodelperiodcostbyregion, vannualtechnologyemissionpenaltybyemission, "
-        * "vtotaldiscountedcost", restrictvars=false, quiet = false)
+        * "vtotaldiscountedcost", numprocs=8, restrictvars=false, quiet = false)
 
     testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 

@@ -50,13 +50,13 @@ if @isdefined CPLEX
         @test isapprox(testqry[9,:val], 104.151990918904; atol=TOL)
         @test isapprox(testqry[10,:val], 99.1923723037184; atol=TOL)
 
-        # Test with optional outputs
+        # Test with optional outputs and numprocs > 1
         NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = CplexSolver()),
             varstosave =
                 "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vrateofdemand, vproductionbytechnology, vtotaltechnologyannualactivity, "
                 * "vtotaltechnologymodelperiodactivity, vusebytechnology, vmodelperiodcostbyregion, vannualtechnologyemissionpenaltybyemission, "
                 * "vtotaldiscountedcost",
-            restrictvars=false, quiet = false)
+            numprocs=8, restrictvars=false, quiet = false)
 
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
