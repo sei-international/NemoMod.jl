@@ -160,7 +160,7 @@ if targetprocs != [1]
 
     for p in targetprocs
         if p != 1 && !remotecall_fetch(isdefined, p, Main, :NemoMod)
-            push!(futures, remotecall(Core.eval, p, Main, :(using NemoMod)))
+            remotecall_fetch(Core.eval, p, Main, :(using NemoMod))
         end
     end
 
