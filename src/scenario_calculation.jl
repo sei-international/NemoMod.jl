@@ -145,7 +145,7 @@ end
 local futures::Array{Future, 1} = Array{Future, 1}()  # Array of results from asynchronous loading on parallel processes
 
 if targetprocs != [1]
-    local nemomod_path::String = "src/NemoMod.jl"  # Path to main file for NemoMod module
+    #=local nemomod_path::String = "src/NemoMod.jl"  # Path to main file for NemoMod module
 
     if pathof(NemoMod) != nothing
         nemomod_path = pathof(NemoMod)
@@ -154,6 +154,13 @@ if targetprocs != [1]
     for p in targetprocs
         if p != 1 && !remotecall_fetch(isdefined, p, Main, :NemoMod)
             push!(futures, remotecall(Base.include, p, Main, nemomod_path))
+        end
+    end
+    =#
+
+    for p in targetprocs
+        if p != 1 && !remotecall_fetch(isdefined, p, Main, :NemoMod)
+            push!(futures, remotecall(Core.eval, p, Main, :(using NemoMod)))
         end
     end
 
