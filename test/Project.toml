@@ -7,6 +7,7 @@ JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 Mosek = "6405355b-0ac2-5fba-af84-adbd65488c0e"
 SQLite = "0aa819cd-b072-5ff4-a722-6bc24af294d9"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [compat]
 Cbc = "0.6.3"
