@@ -142,29 +142,15 @@ end
 # END: Set final value for targetprocs.
 
 # BEGIN: Load NemoMod on parallel processes.
-local futures::Array{Future, 1} = Array{Future, 1}()  # Array of results from asynchronous loading on parallel processes
-
 if targetprocs != [1]
-    #=local nemomod_path::String = "src/NemoMod.jl"  # Path to main file for NemoMod module
-
-    if pathof(NemoMod) != nothing
-        nemomod_path = pathof(NemoMod)
-    end
-
-    for p in targetprocs
-        if p != 1 && !remotecall_fetch(isdefined, p, Main, :NemoMod)
-            push!(futures, remotecall(Base.include, p, Main, nemomod_path))
-        end
-    end
-    =#
-
+    # Load synchronously to avoid race conditions in precompilation
     for p in targetprocs
         if p != 1 && !remotecall_fetch(isdefined, p, Main, :NemoMod)
             remotecall_fetch(Core.eval, p, Main, :(using NemoMod))
         end
     end
 
-    logmsg("Loading NEMO on parallel processes " * join(targetprocs, ", ") * ".", quiet)
+    logmsg("Loaded NEMO on parallel processes " * join(targetprocs, ", ") * ".", quiet)
 end
 # END: Load NemoMod on parallel processes.
 
@@ -468,10 +454,11 @@ and ntc.y = ys.y
 )
 order by r, t, f, y") |> DataFrame
 
-# Ensure NEMO is fully loaded on parallel processes before any calls to keydicts_parallel
+#= Ensure NEMO is fully loaded on parallel processes before any calls to keydicts_parallel
+local futures::Array{Future, 1} = Array{Future, 1}()
 for f in futures
     fetch(f)
-end
+end =#
 
 if restrictvars
     if in("vrateofproductionbytechnologybymodenn", varstosavearr)
