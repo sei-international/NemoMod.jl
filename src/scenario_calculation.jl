@@ -209,7 +209,7 @@ logmsg("Verified that transmission modeling " * (transmissionmodeling ? "is" : "
 # END: Check if transmission modeling is required.
 
 # BEGIN: Execute database queries in parallel.
-querycommands::Dict{String, Tuple{String, String}} = scenario_calc_queries()
+querycommands::Dict{String, Tuple{String, String, String}} = scenario_calc_queries(dbpath)
 queries::Dict{String, Any} = Dict{String, Any}(keys(querycommands) .=> pmap(run_qry, values(querycommands)))
 
 

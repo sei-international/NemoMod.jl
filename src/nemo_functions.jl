@@ -925,35 +925,37 @@ function checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
 end  # checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
 
 """
-    scenario_calc_queries()
+    scenario_calc_queries(dbpath::String)
 
 Returns a `Dict` of query commands used in NEMO's `calculatescenario` function. Each key in the return value is
-    a query name, and each value is a `Tuple` whose first element is the query's SQL command and whose second
-    element is the query's type in `calculatescenario`. Two types are supported: `"query"` for `SQLite.Query`
-    objects and `"dataframe"` for `DataFrames.DataFrame` objects."""
-function scenario_calc_queries()
-    return_val::Dict{String, Tuple{String, String}} = Dict{String, Tuple{String, String}}()  # Return value for this function; map of query names
+    a query name, and each value is a `Tuple` where:
+        - Element 1 = path to database in which to execute query (taken from `dbpath` argument)
+        - Element 2 = query's SQL command
+        - Element 3 = query's type in `calculatescenario`. Two types are supported: `"query"` for `SQLite.Query`
+            objects and `"dataframe"` for `DataFrames.DataFrame` objects."""
+function scenario_calc_queries(dbpath::String)
+    return_val::Dict{String, Tuple{String, String, String}} = Dict{String, Tuple{String, String, String}}()  # Return value for this function; map of query names
     #   tuples of (SQL command, type). Type can be "query" for SQLite.Query or "dataframe" for DataFrames.DataFrame.
 
-    return_val["queryannualactivitylowerlimit"] = ("select r, t, y, cast(val as real) as amn
+    return_val["queryannualactivitylowerlimit"] = (dbpath, "select r, t, y, cast(val as real) as amn
     from TotalTechnologyAnnualActivityLowerLimit_def
     where val > 0", "query")
 
-    return_val["querymodelperiodactivitylowerlimit"] = ("select r, t, cast(val as real) as mmn
+    return_val["querymodelperiodactivitylowerlimit"] = (dbpath, "select r, t, cast(val as real) as mmn
     from TotalTechnologyModelPeriodActivityLowerLimit_def
     where val > 0", "query")
 
-    return_val["technology"] = ("select val, desc from technology", "dataframe")
+    return_val["technology"] = (dbpath, "select val, desc from technology", "dataframe")
 
-    return_val["timeslice"] = ("select val, desc from timeslice", "dataframe")
+    return_val["timeslice"] = (dbpath, "select val, desc from timeslice", "dataframe")
 
     return return_val
 end  # scenario_calc_queries()
 
 function run_qry(qtpl)
-    local result = SQLite.DBInterface.execute(SQLite.DB(csdbpath), qtpl[1])
+    local result = SQLite.DBInterface.execute(SQLite.DB(qtpl[1]), qtpl[2])
 
-    if qtpl[2] == "dataframe"
+    if qtpl[3] == "dataframe"
         result = result |> DataFrame
     end
 
