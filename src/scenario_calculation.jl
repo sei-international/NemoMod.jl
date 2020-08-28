@@ -208,6 +208,14 @@ transmissionmodeling && push!(varstosavearr, "vtransmissionbuilt", "vtransmissio
 logmsg("Verified that transmission modeling " * (transmissionmodeling ? "is" : "is not") * " enabled.", quiet)
 # END: Check if transmission modeling is required.
 
+# BEGIN: Execute database queries in parallel.
+querycommands::Dict{String, Tuple{String, String}} = scenario_calc_queries()
+queries::Dict{String, Any} = Dict{String, Any}(keys(querycommands) .=> pmap(run_qry, values(querycommands)))
+
+
+return queries
+# END: Execute database queries in parallel.
+
 # BEGIN: Create parameter views showing default values and parameter indices.
 # Array of parameter tables needing default views in scenario database
 local paramsneedingdefs::Array{String, 1} = ["OutputActivityRatio", "InputActivityRatio", "ResidualCapacity", "OperationalLife",
@@ -453,12 +461,6 @@ and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
 and ntc.y = ys.y
 )
 order by r, t, f, y") |> DataFrame
-
-#= Ensure NEMO is fully loaded on parallel processes before any calls to keydicts_parallel
-local futures::Array{Future, 1} = Array{Future, 1}()
-for f in futures
-    fetch(f)
-end =#
 
 if restrictvars
     if in("vrateofproductionbytechnologybymodenn", varstosavearr)

@@ -924,6 +924,44 @@ function checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
     return (annual, modelperiod)
 end  # checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
 
+"""
+    scenario_calc_queries()
+
+Returns a `Dict` of query commands used in NEMO's `calculatescenario` function. Each key in the return value is
+    a query name, and each value is a `Tuple` whose first element is the query's SQL command and whose second
+    element is the query's type in `calculatescenario`. Two types are supported: `"query"` for `SQLite.Query`
+    objects and `"dataframe"` for `DataFrames.DataFrame` objects."""
+function scenario_calc_queries()
+    return_val::Dict{String, Tuple{String, String}} = Dict{String, Tuple{String, String}}()  # Return value for this function; map of query names
+    #   tuples of (SQL command, type). Type can be "query" for SQLite.Query or "dataframe" for DataFrames.DataFrame.
+
+    return_val["queryannualactivitylowerlimit"] = ("select r, t, y, cast(val as real) as amn
+    from TotalTechnologyAnnualActivityLowerLimit_def
+    where val > 0", "query")
+
+    return_val["querymodelperiodactivitylowerlimit"] = ("select r, t, cast(val as real) as mmn
+    from TotalTechnologyModelPeriodActivityLowerLimit_def
+    where val > 0", "query")
+
+    return_val["technology"] = ("select val, desc from technology", "dataframe")
+
+    return_val["timeslice"] = ("select val, desc from timeslice", "dataframe")
+
+    return return_val
+end  # scenario_calc_queries()
+
+function run_qry(qtpl)
+    local result = SQLite.DBInterface.execute(SQLite.DB(csdbpath), qtpl[1])
+
+    if qtpl[2] == "dataframe"
+        result = result |> DataFrame
+    end
+
+    return result
+end  # run_qry(query_string)
+
+
+
 # Upgrades NEMO database from version 2 to version 3 by adding TransmissionLine.efficiency.
 function db_v2_to_v3(db::SQLite.DB; quiet::Bool = false)
     # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
