@@ -65,28 +65,6 @@ end  # @testset "Solving a scenario"
         # END: Delete new database file.
     end  # @testset "Create a new NEMO database"
 
-    @testset "Create a new NEMO database with LEAP parameter defaults" begin
-        # Wrap SQLite operations in a function in order to get Julia to release new DB file for deletion
-        function new_nemo_leap_db()
-            db = NemoMod.createnemodb_leap(joinpath(@__DIR__, "new_nemo_leap.sqlite"))
-
-            @test isfile(joinpath(@__DIR__, "new_nemo_leap.sqlite"))
-            # Test that AccumulatedAnnualDemand table exists
-            @test !SQLite.done(SQLite.DBInterface.execute(db, "PRAGMA table_info('AccumulatedAnnualDemand')"))
-            # Look for default value for AccumulatedAnnualDemand parameter
-            @test DataFrame(SQLite.DBInterface.execute(db, "SELECT val FROM DefaultParams WHERE tablename = 'AccumulatedAnnualDemand'"))[1,:val] == 0.0
-        end  # new_nemo_leap_db()
-
-        new_nemo_leap_db()
-        GC.gc()
-
-        # Try up to 20 times to delete file
-        delete_dbfile(joinpath(@__DIR__, "new_nemo_leap.sqlite"), 20)
-
-        @test !isfile(joinpath(@__DIR__, "new_nemo_leap.sqlite"))
-        # END: Delete new database file.
-    end  # @testset "Create a new NEMO database with LEAP parameter defaults"
-
     @testset "Set parameter default" begin
         # Wrap SQLite operations in a function in order to get Julia to release new DB file for deletion
         function param_default_db()
