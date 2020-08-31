@@ -658,13 +658,13 @@ if transmissionmodeling
 
     # Storage
     if restrictvars
-        indexdicts = keydicts_parallel(queries["queries["queryvstoragelevelts"]group1"], 3, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        indexdicts = keydicts_parallel(queries["queryvstorageleveltsgroup1"], 3, targetprocs)  # Array of Dicts used to restrict indices of following variable
         @variable(jumpmodel, vstorageleveltsgroup1startnodal[n=[k[1] for k = keys(indexdicts[1])], s=indexdicts[1][[n]], tg1=indexdicts[2][[n,s]],
             y=indexdicts[3][[n,s,tg1]]] >= 0)
         @variable(jumpmodel, vstorageleveltsgroup1endnodal[n=[k[1] for k = keys(indexdicts[1])], s=indexdicts[1][[n]], tg1=indexdicts[2][[n,s]],
             y=indexdicts[3][[n,s,tg1]]] >= 0)
 
-        indexdicts = keydicts_parallel(queries["queries["queryvstoragelevelts"]group2"], 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        indexdicts = keydicts_parallel(queries["queryvstorageleveltsgroup2"], 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
         @variable(jumpmodel, vstorageleveltsgroup2startnodal[n=[k[1] for k = keys(indexdicts[1])], s=indexdicts[1][[n]], tg1=indexdicts[2][[n,s]],
             tg2=indexdicts[3][[n,s,tg1]], y=indexdicts[4][[n,s,tg1,tg2]]] >= 0)
         @variable(jumpmodel, vstorageleveltsgroup2endnodal[n=[k[1] for k = keys(indexdicts[1])], s=indexdicts[1][[n]], tg1=indexdicts[2][[n,s]],

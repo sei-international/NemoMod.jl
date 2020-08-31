@@ -1145,62 +1145,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
 
         return_val["queryvstoragelevelts"] = (dbpath, "select ns.n as n, ns.s as s, l.val as l, ns.y as y
         from nodalstorage ns, TIMESLICE l", "dataframe")
-
-        return_val[""] = (dbpath, "", "type")
-
-
-
     end
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
-
-    return_val[""] = (dbpath, "", "type")
 
     return return_val
 end  # scenario_calc_queries(dbpath::String)
