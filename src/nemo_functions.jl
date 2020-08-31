@@ -519,68 +519,6 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
 end  # createnemodb(path::String, defaultvals::Dict{String, Float64} = Dict{String, Float64}())
 
 """
-    createnemodb_leap(path::String)
-
-Creates an empty NEMO SQLite database with parameter defaults set to values used in LEAP
-(and no foreign keys). If specified database already exists, drops and recreates NEMO tables
-in database.
-
-# Arguments
-- `path::String`: Full path to database, including database name.
-"""
-function createnemodb_leap(path::String)
-    # BEGIN: Specify default parameter values.
-    defaultvals::Dict{String, Float64} = Dict{String, Float64}()  # Default values to be passed to createnemodb
-
-    defaultvals["VariableCost"] = 0.0
-    defaultvals["TradeRoute"] = 0.0
-    defaultvals["TotalAnnualMinCapacityInvestment"] = 0.0
-    defaultvals["TotalAnnualMinCapacity"] = 0.0
-    defaultvals["TotalAnnualMaxCapacityInvestment"] = 10000000000.0
-    defaultvals["TotalAnnualMaxCapacity"] = 10000000000.0
-    defaultvals["TechnologyToStorage"] = 0.0
-    defaultvals["TechnologyFromStorage"] = 0.0
-    defaultvals["StorageMaxDischargeRate"] = 99.0
-    defaultvals["StorageMaxChargeRate"] = 99.0
-    defaultvals["StorageLevelStart"] = 999.0
-    defaultvals["SpecifiedDemandProfile"] = 0.0
-    defaultvals["SpecifiedAnnualDemand"] = 0.0
-    defaultvals["ResidualStorageCapacity"] = 999.0
-    defaultvals["ResidualCapacity"] = 0.0
-    defaultvals["ReserveMarginTagTechnology"] = 0.0
-    defaultvals["ReserveMarginTagFuel"] = 0.0
-    defaultvals["ReserveMargin"] = 0.0
-    defaultvals["RETagTechnology"] = 0.0
-    defaultvals["RETagFuel"] = 0.0
-    defaultvals["REMinProductionTarget"] = 0.0
-    defaultvals["OutputActivityRatio"] = 0.0
-    defaultvals["OperationalLifeStorage"] = 99.0
-    defaultvals["OperationalLife"] = 1.0
-    defaultvals["ModelPeriodExogenousEmission"] = 0.0
-    defaultvals["ModelPeriodEmissionLimit"] = 1000000000000.0
-    defaultvals["MinStorageCharge"] = 0.0
-    defaultvals["InputActivityRatio"] = 0.0
-    defaultvals["FixedCost"] = 0.0
-    defaultvals["EmissionsPenalty"] = 0.0
-    defaultvals["EmissionActivityRatio"] = 0.0
-    defaultvals["DiscountRate"] = 0.05
-    defaultvals["DepreciationMethod"] = 1.0
-    defaultvals["CapitalCostStorage"] = 0.0
-    defaultvals["CapitalCost"] = 0.0
-    defaultvals["CapacityToActivityUnit"] = 31.536
-    defaultvals["CapacityOfOneTechnologyUnit"] = 0.0
-    defaultvals["CapacityFactor"] = 1.0
-    defaultvals["AvailabilityFactor"] = 1.0
-    defaultvals["AnnualExogenousEmission"] = 0.0
-    defaultvals["AnnualEmissionLimit"] = 10000000000.0
-    defaultvals["AccumulatedAnnualDemand"] = 0.0
-    # END: Specify default parameter values.
-
-    # Call createnemodb()
-    createnemodb(path; defaultvals = defaultvals)
-end  # createnemodb_leap(path::String)
-
-"""
     setparamdefault(db::SQLite.DB, table::String, val::Float64)
 
 Sets the default value for a parameter table in a NEMO scenario database.
@@ -767,6 +705,61 @@ function create_other_nemo_indices(db::SQLite.DB)
 end  # create_other_nemo_indices(db::SQLite.DB)
 
 """
+    create_temp_tables(db::SQLite.DB)
+
+Creates temporary tables needed when NEMO is calculating a scenario. These tables are not created as SQLite temporary tables
+    in order to make them simultaneously visible to multiple Julia processes."""
+function create_temp_tables(db::SQLite.DB)
+    try
+        # BEGIN: SQLite transaction.
+        SQLite.DBInterface.execute(db, "BEGIN")
+
+        SQLite.DBInterface.execute(db, "DROP TABLE IF EXISTS nodalstorage")
+
+        # nodalstorage is used as a filter in nodal and non-nodal storage modeling
+        SQLite.DBInterface.execute(db, "create table nodalstorage as
+        select distinct n.r as r, nsc.n as n, nsc.s as s, nsc.y as y, nsc.val as val
+        from NodalDistributionStorageCapacity_def nsc, node n,
+            NodalDistributionTechnologyCapacity_def ntc, TransmissionModelingEnabled tme,
+            (select r, t, f, m, y from OutputActivityRatio_def
+            where val <> 0
+            union
+            select r, t, f, m, y from InputActivityRatio_def
+            where val <> 0) ar,
+            (select r, t, s, m from TechnologyFromStorage_def where val = 1
+            union
+            select r, t, s, m from TechnologyToStorage_def where val = 1) ts
+        where nsc.val > 0
+        and n.val = nsc.n
+        and ntc.val > 0 and ntc.n = nsc.n and ntc.t = ar.t and ntc.y = nsc.y
+        and tme.r = n.r and tme.f = ar.f and tme.y = nsc.y
+        and ar.r = n.r and ar.y = nsc.y
+        and ts.r = n.r and ts.t = ntc.t and ts.s = nsc.s and ts.m = ar.m")
+
+        SQLite.DBInterface.execute(db, "COMMIT")
+        # END: SQLite transaction.
+    catch
+        # Rollback transaction and rethrow error
+        SQLite.DBInterface.execute(db, "ROLLBACK")
+        rethrow()
+    end
+end  # create_temp_tables(db::SQLite.DB)
+
+"""
+    drop_temp_tables(db::SQLite.DB)
+
+Drops temporary tables created in `create_temp_tables()`."""
+function drop_temp_tables(db::SQLite.DB)
+    # BEGIN: SQLite transaction.
+    SQLite.DBInterface.execute(db, "BEGIN")
+
+    SQLite.DBInterface.execute(db, "DROP TABLE IF EXISTS nodalstorage")
+
+    SQLite.DBInterface.execute(db, "COMMIT")
+    # END: SQLite transaction.
+end  # drop_temp_tables(db::SQLite.DB)
+
+"""
     savevarresults(vars::Array{String,1},
     modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}},
     db::SQLite.DB, solvedtmstr::String, quiet::Bool = false)
@@ -862,26 +855,6 @@ function dropresulttables(db::SQLite.DB, quiet::Bool = true)
 end  # dropresulttables(db::SQLite.DB)
 
 """
-    getvars(varnames::Array{String, 1})
-
-Returns an array of model variables corresponding to the names in `varnames`. Excludes any variables not convertible to
-    `JuMP.JuMPContainer`.
-"""
-function getvars(varnames::Array{String, 1})
-    local returnval::Array{JuMP.JuMPContainer, 1} = Array{JuMP.JuMPContainer, 1}()  # Function's return value
-
-    for v in varnames
-        try
-            push!(returnval, Core.eval(@__MODULE__, Symbol(v)))
-        catch ex
-            throw(ex)
-        end
-    end
-
-    return returnval
-end  # getvars(varnames::Array{String, 1})
-
-"""
     checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
 
 For the scenario specified in `db`, checks whether there are:
@@ -925,15 +898,30 @@ function checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
 end  # checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
 
 """
-    scenario_calc_queries(dbpath::String)
+    scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vproductionbytechnologysaved::Bool,
+        vusebytechnologysaved::Bool)
 
 Returns a `Dict` of query commands used in NEMO's `calculatescenario` function. Each key in the return value is
     a query name, and each value is a `Tuple` where:
-        - Element 1 = path to database in which to execute query (taken from `dbpath` argument)
-        - Element 2 = query's SQL command
+        - Element 1 = path to NEMO scenario database in which to execute query (taken from `dbpath` argument)
+        - Element 2 = query's SQL statement
         - Element 3 = query's type in `calculatescenario`. Two types are supported: `"query"` for `SQLite.Query`
-            objects and `"dataframe"` for `DataFrames.DataFrame` objects."""
-function scenario_calc_queries(dbpath::String)
+            objects and `"dataframe"` for `DataFrames.DataFrame` objects.
+    The function's Boolean arguments restrict the set of returned query commands as noted below.
+
+# Arguments
+- `dbpath::String`: Path to NEMO scenario database in which query commands should be executed.
+- `transmissionmodeling::Bool`: Indicates whether transmission modeling is enabled in `calculatescenario`.
+    Additional query commands are included in results when transmission modeling is enabled.
+- `vproductionbytechnologysaved::Bool`: Indicates whether output variable `vproductionbytechnology`
+    will be saved in `calculatescenario`. Additional query commands are included in results when this argument
+    and `transmissionmodeling` are true.
+- `vusebytechnologysaved::Bool`: Indicates whether output variable `vusebytechnology`
+    will be saved in `calculatescenario`. Additional query commands are included in results when this argument
+    and `transmissionmodeling` are true."""
+function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vproductionbytechnologysaved::Bool,
+    vusebytechnologysaved::Bool)
+
     return_val::Dict{String, Tuple{String, String, String}} = Dict{String, Tuple{String, String, String}}()  # Return value for this function; map of query names
     #   tuples of (SQL command, type). Type can be "query" for SQLite.Query or "dataframe" for DataFrames.DataFrame.
 
@@ -945,14 +933,286 @@ function scenario_calc_queries(dbpath::String)
     from TotalTechnologyModelPeriodActivityLowerLimit_def
     where val > 0", "query")
 
-    return_val["technology"] = (dbpath, "select val, desc from technology", "dataframe")
+    return_val["queryvrateofproductionbytechnologybymodenn"] = (dbpath, "select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y,
+    cast(oar.val as real) as oar
+    from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, OutputActivityRatio_def oar
+    left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
+    where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.m = m.val and oar.y = y.val
+    and oar.val <> 0
+    and ys.y = y.val
+    and tme.id is null
+    order by r.val, ys.l, t.val, f.val, y.val", "dataframe")
 
-    return_val["timeslice"] = (dbpath, "select val, desc from timeslice", "dataframe")
+    return_val["queryvrateofproductionbytechnologynn"] = (dbpath, "select r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
+    from region r, YearSplit_def ys, technology t, fuel f, year y,
+    (select distinct r, t, f, y
+    from OutputActivityRatio_def
+    where val <> 0) oar
+    left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
+    where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val
+    and ys.y = y.val
+    and tme.id is null
+    order by r.val, ys.l, f.val, y.val", "dataframe")
+
+    return_val["queryvproductionbytechnologyannual"] = (dbpath, "select * from (
+    select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l,
+    cast(ys.val as real) as ys
+    from region r, technology t, fuel f, year y, YearSplit_def ys,
+    (select distinct r, t, f, y
+    from OutputActivityRatio_def
+    where val <> 0) oar
+    left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
+    where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val
+    and ys.y = y.val
+    and tme.id is null
+    union all
+    select n.r as r, ntc.t as t, oar.f as f, ntc.y as y, ntc.n as n, ys.l as l,
+    cast(ys.val as real) as ys
+    from NodalDistributionTechnologyCapacity_def ntc, NODE n,
+    TransmissionModelingEnabled tme, YearSplit_def ys,
+    (select distinct r, t, f, y
+    from OutputActivityRatio_def
+    where val <> 0) oar
+    where ntc.val > 0
+    and ntc.n = n.val
+    and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
+    and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
+    and ntc.y = ys.y
+    )
+    order by r, t, f, y", "dataframe")
+
+    return_val["queryvrateofusebytechnologybymodenn"] = (dbpath, "select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y, cast(iar.val as real) as iar
+    from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, InputActivityRatio_def iar
+    left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
+    where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.m = m.val and iar.y = y.val
+    and iar.val <> 0
+    and ys.y = y.val
+    and tme.id is null
+    order by r.val, ys.l, t.val, f.val, y.val", "dataframe")
+
+    return_val["queryvrateofusebytechnologynn"] = (dbpath, "select
+    r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
+    from region r, YearSplit_def ys, technology t, fuel f, year y,
+    (select distinct r, t, f, y from InputActivityRatio_def where val <> 0) iar
+    left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
+    where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
+    and ys.y = y.val
+    and tme.id is null
+    order by r.val, ys.l, f.val, y.val", "dataframe")
+
+    return_val["queryvusebytechnologyannual"] = (dbpath, "select * from (
+    select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l,
+    cast(ys.val as real) as ys
+    from region r, technology t, fuel f, year y, YearSplit_def ys,
+    (select distinct r, t, f, y from InputActivityRatio_def where val <> 0) iar
+    left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
+    where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
+    and ys.y = y.val
+    and tme.id is null
+    union all
+    select n.r as r, ntc.t as t, iar.f as f, ntc.y as y, ntc.n as n, ys.l as l,
+    cast(ys.val as real) as ys
+    from NodalDistributionTechnologyCapacity_def ntc, NODE n,
+    TransmissionModelingEnabled tme, YearSplit_def ys,
+    (select distinct r, t, f, y from InputActivityRatio_def where val <> 0) iar
+    where ntc.val > 0
+    and ntc.n = n.val
+    and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
+    and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
+    and ntc.y = ys.y
+    )
+    order by r, t, f, y", "dataframe")
+
+    if transmissionmodeling
+        return_val["queryvrateofactivitynodal"] = (dbpath, "select ntc.n as n, l.val as l, ntc.t as t, ar.m as m, ntc.y as y
+        from NodalDistributionTechnologyCapacity_def ntc, node n,
+        	TransmissionModelingEnabled tme, TIMESLICE l,
+        (select r, t, f, m, y from OutputActivityRatio_def
+        where val <> 0
+        union
+        select r, t, f, m, y from InputActivityRatio_def
+        where val <> 0) ar
+        where ntc.val > 0
+        and ntc.n = n.val
+        and tme.r = n.r and tme.f = ar.f and tme.y = ntc.y
+        and ar.r = n.r and ar.t = ntc.t and ar.y = ntc.y
+        order by ntc.n, ntc.t, l.val, ntc.y", "dataframe")
+
+        return_val["queryvrateofproductionbytechnologynodal"] = (dbpath, "select ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y,
+        	cast(ys.val as real) as ys
+        from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
+    	TransmissionModelingEnabled tme,
+        (select distinct r, t, f, y
+        from OutputActivityRatio_def
+        where val <> 0) oar
+        where ntc.val > 0
+        and ntc.y = ys.y
+        and ntc.n = n.val
+        and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
+    	and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
+        order by ntc.n, ys.l, oar.f, ntc.y", "dataframe")
+
+        return_val["queryvrateofusebytechnologynodal"] = (dbpath, "select ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y,
+        	cast(ys.val as real) as ys
+        from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
+    	TransmissionModelingEnabled tme,
+        (select distinct r, t, f, y
+        from InputActivityRatio_def
+        where val <> 0) iar
+        where ntc.val > 0
+        and ntc.y = ys.y
+        and ntc.n = n.val
+        and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
+    	and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
+        order by ntc.n, ys.l, iar.f, ntc.y", "dataframe")
+
+        if vproductionbytechnologysaved
+            return_val["queryvproductionbytechnologynodal"] = (dbpath, "select n.r as r, ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y,
+            	cast(ys.val as real) as ys
+            from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
+        	TransmissionModelingEnabled tme,
+            (select distinct r, t, f, y
+            from OutputActivityRatio_def
+            where val <> 0) oar
+            where ntc.val > 0
+            and ntc.y = ys.y
+            and ntc.n = n.val
+            and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
+        	and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
+            order by n.r, ys.l, ntc.t, oar.f, ntc.y", "query")
+
+            return_val["queryvproductionbytechnologyindices_nodalpart"] = (dbpath, "select distinct n.r as r, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y, null as ys
+            from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
+            TransmissionModelingEnabled tme,
+            (select distinct r, t, f, y
+            from OutputActivityRatio_def
+            where val <> 0) oar
+            where ntc.val > 0
+            and ntc.y = ys.y
+            and ntc.n = n.val
+            and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
+            and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y", "dataframe")
+        end
+
+        if vusebytechnologysaved
+            return_val["queryvusebytechnologynodal"] = (dbpath, "select n.r as r, ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y,
+            	cast(ys.val as real) as ys
+            from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
+        	TransmissionModelingEnabled tme,
+            (select distinct r, t, f, y
+            from InputActivityRatio_def
+            where val <> 0) iar
+            where ntc.val > 0
+            and ntc.y = ys.y
+            and ntc.n = n.val
+            and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
+        	and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
+            order by n.r, ys.l, ntc.t, iar.f, ntc.y", "query")
+
+            return_val["queryvusebytechnologyindices_nodalpart"] = (dbpath, "select distinct n.r as r, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y, null as ys
+            from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
+            TransmissionModelingEnabled tme,
+            (select distinct r, t, f, y
+            from InputActivityRatio_def
+            where val <> 0) iar
+            where ntc.val > 0
+            and ntc.y = ys.y
+            and ntc.n = n.val
+            and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
+            and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y", "dataframe")
+        end
+
+        return_val["queryvtransmissionbyline"] = (dbpath, "select tl.id as tr, ys.l as l, tl.f as f, tme1.y as y, tl.n1 as n1, tl.n2 as n2,
+    	tl.reactance as reactance, tme1.type as type, tl.maxflow as maxflow,
+        cast(tl.VariableCost as real) as vc, cast(ys.val as real) as ys,
+        cast(tl.fixedcost as real) as fc, cast(tcta.val as real) as tcta
+        from TransmissionLine tl, NODE n1, NODE n2, TransmissionModelingEnabled tme1,
+        TransmissionModelingEnabled tme2, YearSplit_def ys, TransmissionCapacityToActivityUnit_def tcta
+        where
+        tl.n1 = n1.val and tl.n2 = n2.val
+        and tme1.r = n1.r and tme1.f = tl.f
+        and tme2.r = n2.r and tme2.f = tl.f
+        and tme1.y = tme2.y and tme1.type = tme2.type
+    	and ys.y = tme1.y
+    	and tl.f = tcta.f
+        order by tl.id, tme1.y", "dataframe")
+
+        return_val["queryvstorageleveltsgroup1"] = (dbpath, "select ns.n as n, ns.s as s, tg1.name as tg1, ns.y as y
+        from nodalstorage ns, TSGROUP1 tg1", "dataframe")
+
+        return_val["queryvstorageleveltsgroup2"] = (dbpath, "select ns.n as n, ns.s as s, tg1.name as tg1, tg2.name as tg2, ns.y as y
+        from nodalstorage ns, TSGROUP1 tg1, TSGROUP2 tg2", "dataframe")
+
+        return_val["queryvstoragelevelts"] = (dbpath, "select ns.n as n, ns.s as s, l.val as l, ns.y as y
+        from nodalstorage ns, TIMESLICE l", "dataframe")
+
+        return_val[""] = (dbpath, "", "type")
+
+
+
+    end
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
+
+    return_val[""] = (dbpath, "", "type")
 
     return return_val
-end  # scenario_calc_queries()
+end  # scenario_calc_queries(dbpath::String)
 
-function run_qry(qtpl)
+"""
+    run_qry(qtpl::Tuple{String, String, String})
+
+Runs the SQLite database query specified in `qtpl`. Element 1 in `qtpl` should be the path to the SQLite database,
+    element 2 should be the query's SQL command, and element 3 should be the return type (`"dataframe"` for a
+    `DataFrames.DataFrame` or `"query"` for a `SQLite.Query`). Designed to work with the output of `scenario_calc_queries`
+    in a `pmap` call."""
+function run_qry(qtpl::Tuple{String, String, String})
     local result = SQLite.DBInterface.execute(SQLite.DB(qtpl[1]), qtpl[2])
 
     if qtpl[3] == "dataframe"
@@ -960,9 +1220,7 @@ function run_qry(qtpl)
     end
 
     return result
-end  # run_qry(query_string)
-
-
+end  # run_qry(qtpl::Tuple{String, String, String})
 
 # Upgrades NEMO database from version 2 to version 3 by adding TransmissionLine.efficiency.
 function db_v2_to_v3(db::SQLite.DB; quiet::Bool = false)
@@ -1023,3 +1281,23 @@ function db_v3_to_v4(db::SQLite.DB; quiet::Bool = false)
     end
     # END: Wrap database operations in try-catch block to allow rollback on error.
 end  # db_v3_to_v4(db::SQLite.DB; quiet::Bool = false)
+
+"""
+    getvars(varnames::Array{String, 1})
+
+Returns an array of model variables corresponding to the names in `varnames`. Excludes any variables not convertible to
+    `JuMP.JuMPContainer`.
+"""
+function getvars(varnames::Array{String, 1})
+    local returnval::Array{JuMP.JuMPContainer, 1} = Array{JuMP.JuMPContainer, 1}()  # Function's return value
+
+    for v in varnames
+        try
+            push!(returnval, Core.eval(@__MODULE__, Symbol(v)))
+        catch ex
+            throw(ex)
+        end
+    end
+
+    return returnval
+end  # getvars(varnames::Array{String, 1})

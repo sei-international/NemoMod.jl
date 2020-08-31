@@ -208,14 +208,6 @@ transmissionmodeling && push!(varstosavearr, "vtransmissionbuilt", "vtransmissio
 logmsg("Verified that transmission modeling " * (transmissionmodeling ? "is" : "is not") * " enabled.", quiet)
 # END: Check if transmission modeling is required.
 
-# BEGIN: Execute database queries in parallel.
-querycommands::Dict{String, Tuple{String, String, String}} = scenario_calc_queries(dbpath)
-queries::Dict{String, Any} = Dict{String, Any}(keys(querycommands) .=> pmap(run_qry, values(querycommands)))
-
-
-return queries
-# END: Execute database queries in parallel.
-
 # BEGIN: Create parameter views showing default values and parameter indices.
 # Array of parameter tables needing default views in scenario database
 local paramsneedingdefs::Array{String, 1} = ["OutputActivityRatio", "InputActivityRatio", "ResidualCapacity", "OperationalLife",
@@ -238,6 +230,21 @@ create_other_nemo_indices(db)
 
 logmsg("Created parameter views and indices.", quiet)
 # END: Create parameter views showing default values and parameter indices.
+
+# BEGIN: Create temporary tables.
+# These tables are created as ordinary tables, not SQLite temporary tables, in order to make them simultaneously visible to multiple Julia processes
+create_temp_tables(db)
+logmsg("Created temporary tables.", quiet)
+# END: Create temporary tables.
+
+# BEGIN: Execute database queries in parallel.
+querycommands::Dict{String, Tuple{String, String, String}} = scenario_calc_queries(dbpath, transmissionmodeling,
+    in("vproductionbytechnology", varstosavearr), in("vusebytechnology", varstosavearr))
+queries::Dict{String, Any} = Dict{String, Any}(keys(querycommands) .=> pmap(run_qry, values(querycommands)))
+logmsg("Executed main set of database queries.", quiet)
+
+return queries
+# END: Execute database queries in parallel.
 
 # BEGIN: Define dimensions.
 tempquery = SQLite.DBInterface.execute(db, "select val from YEAR order by val")
@@ -366,21 +373,11 @@ local annualactivitylowerlimits::Bool = true
 local modelperiodactivitylowerlimits::Bool = true
 # Indicates whether constraints for TotalTechnologyModelPeriodActivityLowerLimit should be added to model
 
-queryannualactivitylowerlimit::SQLite.Query = SQLite.DBInterface.execute(db,
-"select r, t, y, cast(val as real) as amn
-from TotalTechnologyAnnualActivityLowerLimit_def
-where val > 0")
-
-if SQLite.done(queryannualactivitylowerlimit)
+if SQLite.done(queries["queryannualactivitylowerlimit"])
     annualactivitylowerlimits = false
 end
 
-querymodelperiodactivitylowerlimit::SQLite.Query = SQLite.DBInterface.execute(db,
-"select r, t, cast(val as real) as mmn
-from TotalTechnologyModelPeriodActivityLowerLimit_def
-where val > 0")
-
-if SQLite.done(querymodelperiodactivitylowerlimit)
+if SQLite.done(queries["querymodelperiodactivitylowerlimit"])
     modelperiodactivitylowerlimits = false
 end
 
@@ -404,76 +401,23 @@ if modelperiodactivityupperlimits || modelperiodactivitylowerlimits || in("vtota
     modelvarindices["vtotaltechnologymodelperiodactivity"] = (vtotaltechnologymodelperiodactivity, ["r", "t"])
 end
 
-queryvrateofproductionbytechnologybymodenn::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
-"select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y,
-cast(oar.val as real) as oar
-from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, OutputActivityRatio_def oar
-left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
-where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.m = m.val and oar.y = y.val
-and oar.val <> 0
-and ys.y = y.val
-and tme.id is null
-order by r.val, ys.l, t.val, f.val, y.val") |> DataFrame
-
-# ys included because it's needed for some later constraints based on this query
-queryvrateofproductionbytechnologynn::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
-"select r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
-from region r, YearSplit_def ys, technology t, fuel f, year y,
-(select distinct r, t, f, y
-from OutputActivityRatio_def
-where val <> 0) oar
-left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
-where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val
-and ys.y = y.val
-and tme.id is null
-order by r.val, ys.l, f.val, y.val") |> DataFrame
-
 if in("vproductionbytechnology", varstosavearr)
     # Overall query showing indices of vproductionbytechnology; nodal contributions will be added later if needed
-    queryvproductionbytechnologyindices::DataFrames.DataFrame = queryvrateofproductionbytechnologynn
+    queryvproductionbytechnologyindices::DataFrames.DataFrame = queries["queryvrateofproductionbytechnologynn"]
 end
-
-# ys included because it's needed for some later constraints based on this query
-queryvproductionbytechnologyannual::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
-"select * from (
-select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l,
-cast(ys.val as real) as ys
-from region r, technology t, fuel f, year y, YearSplit_def ys,
-(select distinct r, t, f, y
-from OutputActivityRatio_def
-where val <> 0) oar
-left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
-where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val
-and ys.y = y.val
-and tme.id is null
-union all
-select n.r as r, ntc.t as t, oar.f as f, ntc.y as y, ntc.n as n, ys.l as l,
-cast(ys.val as real) as ys
-from NodalDistributionTechnologyCapacity_def ntc, NODE n,
-TransmissionModelingEnabled tme, YearSplit_def ys,
-(select distinct r, t, f, y
-from OutputActivityRatio_def
-where val <> 0) oar
-where ntc.val > 0
-and ntc.n = n.val
-and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
-and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
-and ntc.y = ys.y
-)
-order by r, t, f, y") |> DataFrame
 
 if restrictvars
     if in("vrateofproductionbytechnologybymodenn", varstosavearr)
-        indexdicts = keydicts_parallel(queryvrateofproductionbytechnologybymodenn, 5, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        indexdicts = keydicts_parallel(queries["queryvrateofproductionbytechnologybymodenn"], 5, targetprocs)  # Array of Dicts used to restrict indices of following variable
         @variable(jumpmodel, vrateofproductionbytechnologybymodenn[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
             m=indexdicts[3][[r,l,t]], f=indexdicts[4][[r,l,t,m]], y=indexdicts[5][[r,l,t,m,f]]] >= 0)
     end
 
-    indexdicts = keydicts_parallel(queryvrateofproductionbytechnologynn, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
+    indexdicts = keydicts_parallel(queries["queryvrateofproductionbytechnologynn"], 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
     @variable(jumpmodel, vrateofproductionbytechnologynn[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
         f=indexdicts[3][[r,l,t]], y=indexdicts[4][[r,l,t,f]]] >= 0)
 
-    indexdicts = keydicts_parallel(queryvproductionbytechnologyannual, 3, targetprocs)  # Array of Dicts used to restrict indices of vproductionbytechnologyannual
+    indexdicts = keydicts_parallel(queries["queryvproductionbytechnologyannual"], 3, targetprocs)  # Array of Dicts used to restrict indices of vproductionbytechnologyannual
     @variable(jumpmodel, vproductionbytechnologyannual[r=[k[1] for k = keys(indexdicts[1])], t=indexdicts[1][[r]], f=indexdicts[2][[r,t]],
         y=indexdicts[3][[r,t,f]]] >= 0)
 else
@@ -497,69 +441,23 @@ modelvarindices["vrateofproductionnn"] = (vrateofproductionnn, ["r", "l", "f", "
 @variable(jumpmodel, vproductionnn[sregion, stimeslice, sfuel, syear] >= 0)
 modelvarindices["vproductionnn"] = (vproductionnn, ["r","l","f","y"])
 
-queryvrateofusebytechnologybymodenn::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
-"select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y, cast(iar.val as real) as iar
-from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, InputActivityRatio_def iar
-left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
-where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.m = m.val and iar.y = y.val
-and iar.val <> 0
-and ys.y = y.val
-and tme.id is null
-order by r.val, ys.l, t.val, f.val, y.val") |> DataFrame
-
-# ys included because it's needed for some later constraints based on this query
-queryvrateofusebytechnologynn::DataFrames.DataFrame = SQLite.DBInterface.execute(db, "select
-r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
-from region r, YearSplit_def ys, technology t, fuel f, year y,
-(select distinct r, t, f, y from InputActivityRatio_def where val <> 0) iar
-left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
-where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
-and ys.y = y.val
-and tme.id is null
-order by r.val, ys.l, f.val, y.val") |> DataFrame
-
 if in("vusebytechnology", varstosavearr)
     # Overall query showing indices of vusebytechnology; nodal contributions will be added later if needed
-    queryvusebytechnologyindices::DataFrames.DataFrame = queryvrateofusebytechnologynn
+    queryvusebytechnologyindices::DataFrames.DataFrame = queries["queryvrateofusebytechnologynn"]
 end
-
-# ys included because it's needed for some later constraints based on this query
-queryvusebytechnologyannual::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
-"select * from (
-select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l,
-cast(ys.val as real) as ys
-from region r, technology t, fuel f, year y, YearSplit_def ys,
-(select distinct r, t, f, y from InputActivityRatio_def where val <> 0) iar
-left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
-where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
-and ys.y = y.val
-and tme.id is null
-union all
-select n.r as r, ntc.t as t, iar.f as f, ntc.y as y, ntc.n as n, ys.l as l,
-cast(ys.val as real) as ys
-from NodalDistributionTechnologyCapacity_def ntc, NODE n,
-TransmissionModelingEnabled tme, YearSplit_def ys,
-(select distinct r, t, f, y from InputActivityRatio_def where val <> 0) iar
-where ntc.val > 0
-and ntc.n = n.val
-and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
-and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
-and ntc.y = ys.y
-)
-order by r, t, f, y") |> DataFrame
 
 if restrictvars
     if in("vrateofusebytechnologybymodenn", varstosavearr)
-        indexdicts = keydicts_parallel(queryvrateofusebytechnologybymodenn, 5, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        indexdicts = keydicts_parallel(queries["queryvrateofusebytechnologybymodenn"], 5, targetprocs)  # Array of Dicts used to restrict indices of following variable
         @variable(jumpmodel, vrateofusebytechnologybymodenn[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
             m=indexdicts[3][[r,l,t]], f=indexdicts[4][[r,l,t,m]], y=indexdicts[5][[r,l,t,m,f]]] >= 0)
     end
 
-    indexdicts = keydicts_parallel(queryvrateofusebytechnologynn, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
+    indexdicts = keydicts_parallel(queries["queryvrateofusebytechnologynn"], 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
     @variable(jumpmodel, vrateofusebytechnologynn[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
         f=indexdicts[3][[r,l,t]], y=indexdicts[4][[r,l,t,f]]] >= 0)
 
-    indexdicts = keydicts_parallel(queryvusebytechnologyannual, 3, targetprocs)  # Array of Dicts used to restrict indices of vusebytechnologyannual
+    indexdicts = keydicts_parallel(queries["queryvusebytechnologyannual"], 3, targetprocs)  # Array of Dicts used to restrict indices of vusebytechnologyannual
     @variable(jumpmodel, vusebytechnologyannual[r=[k[1] for k = keys(indexdicts[1])], t=indexdicts[1][[r]], f=indexdicts[2][[r,t]],
         y=indexdicts[3][[r,t,f]]] >= 0)
 else
@@ -665,177 +563,32 @@ modelvarindices["vmodelperiodemissions"] = (vmodelperiodemissions, ["r", "e"])
 logmsg("Defined emissions variables.", quiet)
 
 # Transmission
-# Temporary table to avoid having to repeat query several times; used as a filter in nodal and non-nodal storage modeling
-SQLite.DBInterface.execute(db, "create temporary table nodalstorage as
-select distinct n.r as r, nsc.n as n, nsc.s as s, nsc.y as y, nsc.val as val
-from NodalDistributionStorageCapacity_def nsc, node n,
-    NodalDistributionTechnologyCapacity_def ntc, TransmissionModelingEnabled tme,
-    (select r, t, f, m, y from OutputActivityRatio_def
-    where val <> 0
-    union
-    select r, t, f, m, y from InputActivityRatio_def
-    where val <> 0) ar,
-    (select r, t, s, m from TechnologyFromStorage_def where val = 1
-    union
-    select r, t, s, m from TechnologyToStorage_def where val = 1) ts
-where nsc.val > 0
-and n.val = nsc.n
-and ntc.val > 0 and ntc.n = nsc.n and ntc.t = ar.t and ntc.y = nsc.y
-and tme.r = n.r and tme.f = ar.f and tme.y = nsc.y
-and ar.r = n.r and ar.y = nsc.y
-and ts.r = n.r and ts.t = ntc.t and ts.s = nsc.s and ts.m = ar.m")
-
 if transmissionmodeling
-    queryvrateofactivitynodal::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
-    "select ntc.n as n, l.val as l, ntc.t as t, ar.m as m, ntc.y as y
-    from NodalDistributionTechnologyCapacity_def ntc, node n,
-    	TransmissionModelingEnabled tme, TIMESLICE l,
-    (select r, t, f, m, y from OutputActivityRatio_def
-    where val <> 0
-    union
-    select r, t, f, m, y from InputActivityRatio_def
-    where val <> 0) ar
-    where ntc.val > 0
-    and ntc.n = n.val
-    and tme.r = n.r and tme.f = ar.f and tme.y = ntc.y
-    and ar.r = n.r and ar.t = ntc.t and ar.y = ntc.y
-    order by ntc.n, ntc.t, l.val, ntc.y") |> DataFrame
-
-    queryvrateofproductionbytechnologynodal::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
-    "select ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y,
-    	cast(ys.val as real) as ys
-    from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
-	TransmissionModelingEnabled tme,
-    (select distinct r, t, f, y
-    from OutputActivityRatio_def
-    where val <> 0) oar
-    where ntc.val > 0
-    and ntc.y = ys.y
-    and ntc.n = n.val
-    and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
-	and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
-    order by ntc.n, ys.l, oar.f, ntc.y") |> DataFrame
-
     if in("vproductionbytechnology", varstosavearr)
-        queryvproductionbytechnologynodal::SQLite.Query = SQLite.DBInterface.execute(db,
-        "select n.r as r, ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y,
-        	cast(ys.val as real) as ys
-        from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
-    	TransmissionModelingEnabled tme,
-        (select distinct r, t, f, y
-        from OutputActivityRatio_def
-        where val <> 0) oar
-        where ntc.val > 0
-        and ntc.y = ys.y
-        and ntc.n = n.val
-        and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
-    	and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
-        order by n.r, ys.l, ntc.t, oar.f, ntc.y")
-
         queryvproductionbytechnologyindices = vcat(queryvproductionbytechnologyindices,
-        DataFrame(SQLite.DBInterface.execute(db,
-        "select distinct n.r as r, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y, null as ys
-        from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
-        TransmissionModelingEnabled tme,
-        (select distinct r, t, f, y
-        from OutputActivityRatio_def
-        where val <> 0) oar
-        where ntc.val > 0
-        and ntc.y = ys.y
-        and ntc.n = n.val
-        and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
-        and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y")))
+        queries["queryvproductionbytechnologyindices_nodalpart"])
     end
-
-    queryvrateofusebytechnologynodal::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
-    "select ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y,
-    	cast(ys.val as real) as ys
-    from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
-	TransmissionModelingEnabled tme,
-    (select distinct r, t, f, y
-    from InputActivityRatio_def
-    where val <> 0) iar
-    where ntc.val > 0
-    and ntc.y = ys.y
-    and ntc.n = n.val
-    and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
-	and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
-    order by ntc.n, ys.l, iar.f, ntc.y") |> DataFrame
 
     if in("vusebytechnology", varstosavearr)
-        queryvusebytechnologynodal::SQLite.Query = SQLite.DBInterface.execute(db,
-        "select n.r as r, ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y,
-        	cast(ys.val as real) as ys
-        from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
-    	TransmissionModelingEnabled tme,
-        (select distinct r, t, f, y
-        from InputActivityRatio_def
-        where val <> 0) iar
-        where ntc.val > 0
-        and ntc.y = ys.y
-        and ntc.n = n.val
-        and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
-    	and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
-        order by n.r, ys.l, ntc.t, iar.f, ntc.y")
-
         queryvusebytechnologyindices = vcat(queryvusebytechnologyindices,
-        DataFrame(SQLite.DBInterface.execute(db,
-        "select distinct n.r as r, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y, null as ys
-        from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
-        TransmissionModelingEnabled tme,
-        (select distinct r, t, f, y
-        from InputActivityRatio_def
-        where val <> 0) iar
-        where ntc.val > 0
-        and ntc.y = ys.y
-        and ntc.n = n.val
-        and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
-        and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y")))
+        queries["queryvusebytechnologyindices_nodalpart"])
     end
-
-    queryvtransmissionbyline::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
-    "select tl.id as tr, ys.l as l, tl.f as f, tme1.y as y, tl.n1 as n1, tl.n2 as n2,
-	tl.reactance as reactance, tme1.type as type, tl.maxflow as maxflow,
-    cast(tl.VariableCost as real) as vc, cast(ys.val as real) as ys,
-    cast(tl.fixedcost as real) as fc, cast(tcta.val as real) as tcta
-    from TransmissionLine tl, NODE n1, NODE n2, TransmissionModelingEnabled tme1,
-    TransmissionModelingEnabled tme2, YearSplit_def ys, TransmissionCapacityToActivityUnit_def tcta
-    where
-    tl.n1 = n1.val and tl.n2 = n2.val
-    and tme1.r = n1.r and tme1.f = tl.f
-    and tme2.r = n2.r and tme2.f = tl.f
-    and tme1.y = tme2.y and tme1.type = tme2.type
-	and ys.y = tme1.y
-	and tl.f = tcta.f
-    order by tl.id, tme1.y") |> DataFrame
-
-    queryvstorageleveltsgroup1::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
-    "select ns.n as n, ns.s as s, tg1.name as tg1, ns.y as y
-    from nodalstorage ns, TSGROUP1 tg1") |> DataFrame
-
-    queryvstorageleveltsgroup2::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
-    "select ns.n as n, ns.s as s, tg1.name as tg1, tg2.name as tg2, ns.y as y
-    from nodalstorage ns, TSGROUP1 tg1, TSGROUP2 tg2") |> DataFrame
-
-    queryvstoragelevelts::DataFrames.DataFrame = SQLite.DBInterface.execute(db,
-    "select ns.n as n, ns.s as s, l.val as l, ns.y as y
-    from nodalstorage ns, TIMESLICE l") |> DataFrame
 
     # Activity
     if restrictvars
-        indexdicts = keydicts_parallel(queryvrateofactivitynodal, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        indexdicts = keydicts_parallel(queries["queryvrateofactivitynodal"], 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
         @variable(jumpmodel, vrateofactivitynodal[n=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[n]], t=indexdicts[2][[n,l]],
             m=indexdicts[3][[n,l,t]], y=indexdicts[4][[n,l,t,m]]] >= 0)
 
-        indexdicts = keydicts_parallel(queryvrateofproductionbytechnologynodal, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        indexdicts = keydicts_parallel(queries["queryvrateofproductionbytechnologynodal"], 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
         @variable(jumpmodel, vrateofproductionbytechnologynodal[n=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[n]], t=indexdicts[2][[n,l]],
             f=indexdicts[3][[n,l,t]], y=indexdicts[4][[n,l,t,f]]] >= 0)
 
-        indexdicts = keydicts_parallel(queryvrateofusebytechnologynodal, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        indexdicts = keydicts_parallel(queries["queryvrateofusebytechnologynodal"], 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
         @variable(jumpmodel, vrateofusebytechnologynodal[n=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[n]], t=indexdicts[2][[n,l]],
             f=indexdicts[3][[n,l,t]], y=indexdicts[4][[n,l,t,f]]] >= 0)
 
-        indexdicts = keydicts_parallel(queryvtransmissionbyline, 3, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        indexdicts = keydicts_parallel(queries["queryvtransmissionbyline"], 3, targetprocs)  # Array of Dicts used to restrict indices of following variable
         @variable(jumpmodel, vtransmissionbyline[tr=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[tr]], f=indexdicts[2][[tr,l]],
             y=indexdicts[3][[tr,l,f]]])
     else
@@ -905,19 +658,19 @@ if transmissionmodeling
 
     # Storage
     if restrictvars
-        indexdicts = keydicts_parallel(queryvstorageleveltsgroup1, 3, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        indexdicts = keydicts_parallel(queries["queries["queryvstoragelevelts"]group1"], 3, targetprocs)  # Array of Dicts used to restrict indices of following variable
         @variable(jumpmodel, vstorageleveltsgroup1startnodal[n=[k[1] for k = keys(indexdicts[1])], s=indexdicts[1][[n]], tg1=indexdicts[2][[n,s]],
             y=indexdicts[3][[n,s,tg1]]] >= 0)
         @variable(jumpmodel, vstorageleveltsgroup1endnodal[n=[k[1] for k = keys(indexdicts[1])], s=indexdicts[1][[n]], tg1=indexdicts[2][[n,s]],
             y=indexdicts[3][[n,s,tg1]]] >= 0)
 
-        indexdicts = keydicts_parallel(queryvstorageleveltsgroup2, 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        indexdicts = keydicts_parallel(queries["queries["queryvstoragelevelts"]group2"], 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
         @variable(jumpmodel, vstorageleveltsgroup2startnodal[n=[k[1] for k = keys(indexdicts[1])], s=indexdicts[1][[n]], tg1=indexdicts[2][[n,s]],
             tg2=indexdicts[3][[n,s,tg1]], y=indexdicts[4][[n,s,tg1,tg2]]] >= 0)
         @variable(jumpmodel, vstorageleveltsgroup2endnodal[n=[k[1] for k = keys(indexdicts[1])], s=indexdicts[1][[n]], tg1=indexdicts[2][[n,s]],
             tg2=indexdicts[3][[n,s,tg1]], y=indexdicts[4][[n,s,tg1,tg2]]] >= 0)
 
-        indexdicts = keydicts_parallel(queryvstoragelevelts, 3, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        indexdicts = keydicts_parallel(queries["queryvstoragelevelts"], 3, targetprocs)  # Array of Dicts used to restrict indices of following variable
         @variable(jumpmodel, vstorageleveltsendnodal[n=[k[1] for k = keys(indexdicts[1])], s=indexdicts[1][[n]], l=indexdicts[2][[n,s]],
             y=indexdicts[3][[n,s,l]]] >= 0)
         @variable(jumpmodel, vrateofstoragechargenodal[n=[k[1] for k = keys(indexdicts[1])], s=indexdicts[1][[n]], l=indexdicts[2][[n,s]],
@@ -1144,7 +897,7 @@ if transmissionmodeling
     lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = t, lastkeys[3] = l, lastkeys[4] = y
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivitynodal sum
 
-    for row in DataFrames.eachrow(queryvrateofactivitynodal)
+    for row in DataFrames.eachrow(queries["queryvrateofactivitynodal"])
         local n = row[:n]
         local t = row[:t]
         local l = row[:l]
@@ -1297,7 +1050,7 @@ logmsg("Created constraint CAb1_PlannedMaintenance.", quiet)
 if in("vrateofproductionbytechnologybymodenn", varstosavearr)
     eba1_rateoffuelproduction1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(queryvrateofproductionbytechnologybymodenn)
+    for row in DataFrames.eachrow(queries["queryvrateofproductionbytechnologybymodenn"])
         local r = row[:r]
         local l = row[:l]
         local t = row[:t]
@@ -1318,7 +1071,7 @@ lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastke
 sumexps = Array{AffExpr, 1}([AffExpr()])
 # sumexps[1] = vrateofproductionbytechnologybymodenn-equivalent sum
 
-for row in DataFrames.eachrow(queryvrateofproductionbytechnologybymodenn)
+for row in DataFrames.eachrow(queries["queryvrateofproductionbytechnologybymodenn"])
     local r = row[:r]
     local l = row[:l]
     local t = row[:t]
@@ -1408,7 +1161,7 @@ lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastke
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproductionbytechnologynn sum
 
 # First step: define vrateofproductionnn where technologies exist
-for row in DataFrames.eachrow(queryvrateofproductionbytechnologynn)
+for row in DataFrames.eachrow(queries["queryvrateofproductionbytechnologynn"])
     local r = row[:r]
     local l = row[:l]
     local f = row[:f]
@@ -1455,7 +1208,7 @@ if transmissionmodeling
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproductionbytechnologynodal sum
 
     # First step: set vrateofproductionnodal for nodes with technologies
-    for row in DataFrames.eachrow(queryvrateofproductionbytechnologynodal)
+    for row in DataFrames.eachrow(queries["queryvrateofproductionbytechnologynodal"])
         local n = row[:n]
         local l = row[:l]
         local f = row[:f]
@@ -1559,7 +1312,7 @@ length(vrateofproduction1) > 0 && logmsg("Created constraint VRateOfProduction1.
 if in("vrateofusebytechnologybymodenn", varstosavearr)
     eba4_rateoffueluse1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(queryvrateofusebytechnologybymodenn)
+    for row in DataFrames.eachrow(queries["queryvrateofusebytechnologybymodenn"])
         local r = row[:r]
         local l = row[:l]
         local f = row[:f]
@@ -1579,7 +1332,7 @@ eba5_rateoffueluse2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
 sumexps = Array{AffExpr, 1}([AffExpr()]) # sumexps[1] = vrateofusebytechnologybymodenn-equivalent sum
 
-for row in DataFrames.eachrow(queryvrateofusebytechnologybymodenn)
+for row in DataFrames.eachrow(queries["queryvrateofusebytechnologybymodenn"])
     local r = row[:r]
     local l = row[:l]
     local f = row[:f]
@@ -1667,7 +1420,7 @@ eba6_rateoffueluse3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofusebytechnologynn sum
 
-for row in DataFrames.eachrow(queryvrateofusebytechnologynn)
+for row in DataFrames.eachrow(queries["queryvrateofusebytechnologynn"])
     local r = row[:r]
     local l = row[:l]
     local f = row[:f]
@@ -1701,7 +1454,7 @@ if transmissionmodeling
     lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofusebytechnologynodal sum
 
-    for row in DataFrames.eachrow(queryvrateofusebytechnologynodal)
+    for row in DataFrames.eachrow(queries["queryvrateofusebytechnologynodal"])
         local n = row[:n]
         local l = row[:l]
         local f = row[:f]
@@ -2015,7 +1768,7 @@ if transmissionmodeling
     tr4_maxflow::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     tr5_minflow::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(queryvtransmissionbyline)
+    for row in DataFrames.eachrow(queries["queryvtransmissionbyline"])
         local tr = row[:tr]
         local n1 = row[:n1]
         local n2 = row[:n2]
@@ -2322,7 +2075,7 @@ end
 if in("vproductionbytechnology", varstosavearr)
     acc1_fuelproductionbytechnology::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(queryvrateofproductionbytechnologynn)
+    for row in DataFrames.eachrow(queries["queryvrateofproductionbytechnologynn"])
         local r = row[:r]
         local l = row[:l]
         local t = row[:t]
@@ -2336,7 +2089,7 @@ if in("vproductionbytechnology", varstosavearr)
         lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
         sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproductionbytechnologynodal sum
 
-        for row in queryvproductionbytechnologynodal
+        for row in queries["queryvproductionbytechnologynodal"]
             local r = row[:r]
             local l = row[:l]
             local t = row[:t]
@@ -2374,7 +2127,7 @@ end  # in("vproductionbytechnology", varstosavearr)
 if in("vusebytechnology", varstosavearr)
     acc2_fuelusebytechnology::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in DataFrames.eachrow(queryvrateofusebytechnologynn)
+    for row in DataFrames.eachrow(queries["queryvrateofusebytechnologynn"])
         local r = row[:r]
         local l = row[:l]
         local t = row[:t]
@@ -2388,7 +2141,7 @@ if in("vusebytechnology", varstosavearr)
         lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
         sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofusebytechnologynodal sum
 
-        for row in queryvusebytechnologynodal
+        for row in queries["queryvusebytechnologynodal"]
             local r = row[:r]
             local l = row[:l]
             local t = row[:t]
@@ -3960,7 +3713,7 @@ if transmissionmodeling
     lastvals = Array{Float64, 1}(undef,1)  # lastvals[1] = fc
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtransmissionbyline sum
 
-    for row in DataFrames.eachrow(queryvtransmissionbyline)
+    for row in DataFrames.eachrow(queries["queryvtransmissionbyline"])
         local tr = row[:tr]
         local y = row[:y]
         local vc = ismissing(row[:vc]) ? 0.0 : row[:vc]
@@ -4211,7 +3964,7 @@ end
 if annualactivitylowerlimits
     aac3_totalannualtechnologyactivitylowerlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in queryannualactivitylowerlimit
+    for row in queries["queryannualactivitylowerlimit"]
         local r = row[:r]
         local t = row[:t]
         local y = row[:y]
@@ -4255,7 +4008,7 @@ end
 if modelperiodactivitylowerlimits
     tac3_totalmodelhorizontechnologyactivitylowerlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in querymodelperiodactivitylowerlimit
+    for row in queries["querymodelperiodactivitylowerlimit"]
         local r = row[:r]
         local t = row[:t]
 
@@ -4359,7 +4112,7 @@ re1_fuelproductionbytechnologyannual::Array{ConstraintRef, 1} = Array{Constraint
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = f, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vproductionbytechnologynn-equivalent sum
 
-for row in DataFrames.eachrow(queryvproductionbytechnologyannual)
+for row in DataFrames.eachrow(queries["queryvproductionbytechnologyannual"])
     local r = row[:r]
     local t = row[:t]
     local f = row[:f]
@@ -4397,7 +4150,7 @@ fuelusebytechnologyannual::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = f, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vusebytechnologynn-equivalent sum
 
-for row in DataFrames.eachrow(queryvusebytechnologyannual)
+for row in DataFrames.eachrow(queries["queryvusebytechnologyannual"])
     local r = row[:r]
     local t = row[:t]
     local f = row[:f]
@@ -4777,6 +4530,10 @@ logmsg("Solved model. Solver status = " * string(status) * ".", quiet, solvedtm)
 savevarresults(varstosavearr, modelvarindices, db, solvedtmstr, reportzeros, quiet)
 logmsg("Finished saving results to database.", quiet)
 # END: Save results to database.
+
+# Drop temporary tables
+drop_temp_tables(db)
+logmsg("Dropped temporary tables.", quiet)
 
 logmsg("Finished scenario calculation.")
 return status
