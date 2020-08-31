@@ -242,8 +242,6 @@ querycommands::Dict{String, Tuple{String, String, String}} = scenario_calc_queri
     in("vproductionbytechnology", varstosavearr), in("vusebytechnology", varstosavearr))
 queries::Dict{String, Any} = Dict{String, Any}(keys(querycommands) .=> pmap(run_qry, values(querycommands)))
 logmsg("Executed main set of database queries.", quiet)
-
-return queries
 # END: Execute database queries in parallel.
 
 # BEGIN: Define dimensions.
