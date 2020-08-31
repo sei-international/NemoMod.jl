@@ -240,7 +240,7 @@ logmsg("Created temporary tables.", quiet)
 # BEGIN: Execute database queries in parallel.
 querycommands::Dict{String, Tuple{String, String, String}} = scenario_calc_queries(dbpath, transmissionmodeling,
     in("vproductionbytechnology", varstosavearr), in("vusebytechnology", varstosavearr))
-queries::Dict{String, Any} = Dict{String, Any}(keys(querycommands) .=> pmap(run_qry, values(querycommands)))
+queries::Dict{String, Any} = Dict{String, Any}(keys(querycommands) .=> pmap(run_qry, WorkerPool(targetprocs), values(querycommands)))
 logmsg("Executed main set of database queries.", quiet)
 # END: Execute database queries in parallel.
 
