@@ -12,10 +12,10 @@
     varstosave = "vdemandnn, vnewcapacity, vtotalcapacityannual,
         vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
         vusenn, vtotaldiscountedcost",
-    numprocs::Int = 1, targetprocs = Array{Int, 1}([1]), restrictvars = true,
+    numprocs = 1, targetprocs = Array{Int, 1}(), restrictvars = true,
     reportzeros = false, continuoustransmission = false, quiet = false)
 
-Calculates a scenario specified in a scenario database. Returns a Symbol indicating
+Calculates a scenario specified in a scenario database. Returns a `Symbol` indicating
 the solve status reported by the solver (e.g., `:Optimal`).
 
 # Arguments
@@ -29,10 +29,13 @@ the solve status reported by the solver (e.g., `:Optimal`).
     options.
 - `varstosave::String`: Comma-delimited list of output variables whose results should be
     saved in the scenario database.
-- `numprocs::Int`: Number of Julia processes to use for parallelized operations within the
-    scenario calculation. NEMO selects the first `numprocs` processes in `Distributed.procs()`
-    for these operations. If there are fewer than `numprocs` processes defined, NEMO adds
-    processes on the local host as needed. Ignored if `targetprocs` is specified.
+- `numprocs`: Number of Julia processes to use for parallelized operations within the
+    scenario calculation. Should be an integer or `"auto"`, which is interpreted as half
+    the number of logical processors on the executing machine (i.e., half of
+    `Sys.CPU_THREADS`). When this argument is in effect, NEMO selects the first `numprocs`
+    processes in `Distributed.procs()` for parallelized operations. If there are fewer than
+    `numprocs` processes defined, NEMO adds processes on the local host as needed. Ignored
+    if `targetprocs` is specified.
 - `targetprocs::Array{Int, 1}`: Identifiers of Julia processes that should be used for
     parallelized operations within the scenario calculation.
 - `restrictvars::Bool`: Indicates whether NEMO should conduct additional data analysis
@@ -54,7 +57,7 @@ function calculatescenario(
     dbpath::String;
     jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
     varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
-    numprocs::Int = 1,
+    numprocs = 1,
     targetprocs::Array{Int, 1} = Array{Int, 1}(),
     restrictvars::Bool = true,
     reportzeros::Bool = false,
@@ -76,7 +79,7 @@ end  # calculatescenario()
     varstosave = "vdemandnn, vnewcapacity, vtotalcapacityannual,
         vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
         vusenn, vtotaldiscountedcost",
-    numprocs::Int = 1, targetprocs = Array{Int, 1}([1]), restrictvars = true,
+    numprocs = 1, targetprocs = Array{Int, 1}(), restrictvars = true,
     reportzeros = false, continuoustransmission = false, quiet = false)
 
 Implements main scenario calculation logic for calculatescenario().
@@ -85,7 +88,7 @@ function calculatescenario_main(
     dbpath::String;
     jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
     varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
-    numprocs::Int = 1,
+    numprocs = 1,
     targetprocs::Array{Int, 1} = Array{Int, 1}(),
     restrictvars::Bool = true,
     reportzeros::Bool = false,
@@ -128,6 +131,16 @@ end
 
 # BEGIN: Set final value for targetprocs.
 if length(targetprocs) == 0
+    # Handle "auto" option for numprocs
+    if numprocs == "auto"
+        numprocs = div(Sys.CPU_THREADS, 2)
+        logmsg("\"auto\" specified for numprocs argument. Using " * string(numprocs) * " processes for parallelized operations.", quiet)
+    end
+
+    if typeof(numprocs) != Int
+        numprocs = 1
+    end
+
     # Use first numprocs processes in procs(), adding processes as needed
     numprocs > nprocs() && addprocs(numprocs - nprocs())
     targetprocs = procs()[1:numprocs]
@@ -238,10 +251,19 @@ logmsg("Created temporary tables.", quiet)
 # END: Create temporary tables.
 
 # BEGIN: Execute database queries in parallel.
-querycommands::Dict{String, Tuple{String, String, String}} = scenario_calc_queries(dbpath, transmissionmodeling,
+# Parallelization possible for queries instantiated as a DataFrame - this object can be returned from worker processes in a pmap call, while SQLite.Query cannot
+# Since instantiation as a DataFrame is costly, it is used selectively (only where needed for other steps in calculatescenario)
+querycommands::Dict{String, Tuple{String, String}} = scenario_calc_queries(dbpath, transmissionmodeling,
     in("vproductionbytechnology", varstosavearr), in("vusebytechnology", varstosavearr))
-queries::Dict{String, Any} = Dict{String, Any}(keys(querycommands) .=> pmap(run_qry, WorkerPool(targetprocs), values(querycommands)))
-logmsg("Executed main set of database queries.", quiet)
+
+if targetprocs == [1]
+    queries = Dict{String, DataFrame}(keys(querycommands) .=> map(run_qry, values(querycommands)))
+else
+    # Omitting process 1 from WorkerPool improves performance
+    queries = Dict{String, DataFrame}(keys(querycommands) .=> pmap(run_qry, WorkerPool(setdiff(targetprocs, [1])), values(querycommands)))
+end
+
+logmsg("Executed core database queries.", quiet)
 # END: Execute database queries in parallel.
 
 # BEGIN: Define dimensions.
@@ -371,11 +393,19 @@ local annualactivitylowerlimits::Bool = true
 local modelperiodactivitylowerlimits::Bool = true
 # Indicates whether constraints for TotalTechnologyModelPeriodActivityLowerLimit should be added to model
 
-if SQLite.done(queries["queryannualactivitylowerlimit"])
+queryannualactivitylowerlimit::SQLite.Query = SQLite.DBInterface.execute(db, "select r, t, y, cast(val as real) as amn
+    from TotalTechnologyAnnualActivityLowerLimit_def
+    where val > 0")
+
+if SQLite.done(queryannualactivitylowerlimit)
     annualactivitylowerlimits = false
 end
 
-if SQLite.done(queries["querymodelperiodactivitylowerlimit"])
+querymodelperiodactivitylowerlimit::SQLite.Query = SQLite.DBInterface.execute(db, "select r, t, cast(val as real) as mmn
+    from TotalTechnologyModelPeriodActivityLowerLimit_def
+    where val > 0")
+
+if SQLite.done(querymodelperiodactivitylowerlimit)
     modelperiodactivitylowerlimits = false
 end
 
@@ -563,11 +593,39 @@ logmsg("Defined emissions variables.", quiet)
 # Transmission
 if transmissionmodeling
     if in("vproductionbytechnology", varstosavearr)
+        queryvproductionbytechnologynodal::SQLite.Query = SQLite.DBInterface.execute(db, "select n.r as r, ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y,
+            cast(ys.val as real) as ys
+        from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
+        TransmissionModelingEnabled tme,
+        (select distinct r, t, f, y
+        from OutputActivityRatio_def
+        where val <> 0) oar
+        where ntc.val > 0
+        and ntc.y = ys.y
+        and ntc.n = n.val
+        and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
+        and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
+        order by n.r, ys.l, ntc.t, oar.f, ntc.y")
+
         queryvproductionbytechnologyindices = vcat(queryvproductionbytechnologyindices,
         queries["queryvproductionbytechnologyindices_nodalpart"])
     end
 
     if in("vusebytechnology", varstosavearr)
+        queryvusebytechnologynodal::SQLite.Query = SQLite.DBInterface.execute(db, "select n.r as r, ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y,
+            cast(ys.val as real) as ys
+        from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
+        TransmissionModelingEnabled tme,
+        (select distinct r, t, f, y
+        from InputActivityRatio_def
+        where val <> 0) iar
+        where ntc.val > 0
+        and ntc.y = ys.y
+        and ntc.n = n.val
+        and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
+        and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
+        order by n.r, ys.l, ntc.t, iar.f, ntc.y")
+
         queryvusebytechnologyindices = vcat(queryvusebytechnologyindices,
         queries["queryvusebytechnologyindices_nodalpart"])
     end
@@ -754,7 +812,7 @@ local lastvalsint::Array{Int64, 1} = Array{Int64, 1}()  # Array of last integer 
 local sumexps::Array{AffExpr, 1} = Array{AffExpr, 1}()  # Array of sums of variables assembled in constraint query loops
 
 # BEGIN: EQ_SpecifiedDemand.
-queryvrateofdemandnn::SQLite.Query = SQLite.DBInterface.execute(db,"select sdp.r as r, sdp.f as f, sdp.l as l, sdp.y as y,
+queryvrateofdemandnn::SQLite.Query = SQLite.DBInterface.execute(db, "select sdp.r as r, sdp.f as f, sdp.l as l, sdp.y as y,
 cast(sdp.val as real) as specifieddemandprofile, cast(sad.val as real) as specifiedannualdemand,
 cast(ys.val as real) as ys
 from SpecifiedDemandProfile_def sdp, SpecifiedAnnualDemand_def sad, YearSplit_def ys
@@ -2087,7 +2145,7 @@ if in("vproductionbytechnology", varstosavearr)
         lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
         sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproductionbytechnologynodal sum
 
-        for row in queries["queryvproductionbytechnologynodal"]
+        for row in queryvproductionbytechnologynodal
             local r = row[:r]
             local l = row[:l]
             local t = row[:t]
@@ -2139,7 +2197,7 @@ if in("vusebytechnology", varstosavearr)
         lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
         sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofusebytechnologynodal sum
 
-        for row in queries["queryvusebytechnologynodal"]
+        for row in queryvusebytechnologynodal
             local r = row[:r]
             local l = row[:l]
             local t = row[:t]
@@ -3962,7 +4020,7 @@ end
 if annualactivitylowerlimits
     aac3_totalannualtechnologyactivitylowerlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in queries["queryannualactivitylowerlimit"]
+    for row in queryannualactivitylowerlimit
         local r = row[:r]
         local t = row[:t]
         local y = row[:y]
@@ -4006,7 +4064,7 @@ end
 if modelperiodactivitylowerlimits
     tac3_totalmodelhorizontechnologyactivitylowerlimit::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in queries["querymodelperiodactivitylowerlimit"]
+    for row in querymodelperiodactivitylowerlimit
         local r = row[:r]
         local t = row[:t]
 

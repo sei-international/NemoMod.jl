@@ -762,7 +762,7 @@ end  # drop_temp_tables(db::SQLite.DB)
 """
     savevarresults(vars::Array{String,1},
     modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}},
-    db::SQLite.DB, solvedtmstr::String, quiet::Bool = false)
+    db::SQLite.DB, solvedtmstr::String, reportzeros::Bool = false, quiet::Bool = false)
 
 Saves model results to a SQLite database using SQL inserts with transaction batching.
 
@@ -905,8 +905,6 @@ Returns a `Dict` of query commands used in NEMO's `calculatescenario` function. 
     a query name, and each value is a `Tuple` where:
         - Element 1 = path to NEMO scenario database in which to execute query (taken from `dbpath` argument)
         - Element 2 = query's SQL statement
-        - Element 3 = query's type in `calculatescenario`. Two types are supported: `"query"` for `SQLite.Query`
-            objects and `"dataframe"` for `DataFrames.DataFrame` objects.
     The function's Boolean arguments restrict the set of returned query commands as noted below.
 
 # Arguments
@@ -922,16 +920,8 @@ Returns a `Dict` of query commands used in NEMO's `calculatescenario` function. 
 function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vproductionbytechnologysaved::Bool,
     vusebytechnologysaved::Bool)
 
-    return_val::Dict{String, Tuple{String, String, String}} = Dict{String, Tuple{String, String, String}}()  # Return value for this function; map of query names
-    #   tuples of (SQL command, type). Type can be "query" for SQLite.Query or "dataframe" for DataFrames.DataFrame.
-
-    return_val["queryannualactivitylowerlimit"] = (dbpath, "select r, t, y, cast(val as real) as amn
-    from TotalTechnologyAnnualActivityLowerLimit_def
-    where val > 0", "query")
-
-    return_val["querymodelperiodactivitylowerlimit"] = (dbpath, "select r, t, cast(val as real) as mmn
-    from TotalTechnologyModelPeriodActivityLowerLimit_def
-    where val > 0", "query")
+    return_val::Dict{String, Tuple{String, String}} = Dict{String, Tuple{String, String}}()  # Return value for this function; map of query names
+    #   to tuples of (DB path, SQL command)
 
     return_val["queryvrateofproductionbytechnologybymodenn"] = (dbpath, "select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y,
     cast(oar.val as real) as oar
@@ -941,7 +931,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     and oar.val <> 0
     and ys.y = y.val
     and tme.id is null
-    order by r.val, ys.l, t.val, f.val, y.val", "dataframe")
+    order by r.val, ys.l, t.val, f.val, y.val")
 
     return_val["queryvrateofproductionbytechnologynn"] = (dbpath, "select r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
     from region r, YearSplit_def ys, technology t, fuel f, year y,
@@ -952,7 +942,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val
     and ys.y = y.val
     and tme.id is null
-    order by r.val, ys.l, f.val, y.val", "dataframe")
+    order by r.val, ys.l, f.val, y.val")
 
     return_val["queryvproductionbytechnologyannual"] = (dbpath, "select * from (
     select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l,
@@ -979,7 +969,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
     and ntc.y = ys.y
     )
-    order by r, t, f, y", "dataframe")
+    order by r, t, f, y")
 
     return_val["queryvrateofusebytechnologybymodenn"] = (dbpath, "select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y, cast(iar.val as real) as iar
     from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, InputActivityRatio_def iar
@@ -988,7 +978,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     and iar.val <> 0
     and ys.y = y.val
     and tme.id is null
-    order by r.val, ys.l, t.val, f.val, y.val", "dataframe")
+    order by r.val, ys.l, t.val, f.val, y.val")
 
     return_val["queryvrateofusebytechnologynn"] = (dbpath, "select
     r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
@@ -998,7 +988,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
     and ys.y = y.val
     and tme.id is null
-    order by r.val, ys.l, f.val, y.val", "dataframe")
+    order by r.val, ys.l, f.val, y.val")
 
     return_val["queryvusebytechnologyannual"] = (dbpath, "select * from (
     select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l,
@@ -1021,7 +1011,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
     and ntc.y = ys.y
     )
-    order by r, t, f, y", "dataframe")
+    order by r, t, f, y")
 
     if transmissionmodeling
         return_val["queryvrateofactivitynodal"] = (dbpath, "select ntc.n as n, l.val as l, ntc.t as t, ar.m as m, ntc.y as y
@@ -1036,7 +1026,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
         and ntc.n = n.val
         and tme.r = n.r and tme.f = ar.f and tme.y = ntc.y
         and ar.r = n.r and ar.t = ntc.t and ar.y = ntc.y
-        order by ntc.n, ntc.t, l.val, ntc.y", "dataframe")
+        order by ntc.n, ntc.t, l.val, ntc.y")
 
         return_val["queryvrateofproductionbytechnologynodal"] = (dbpath, "select ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y,
         	cast(ys.val as real) as ys
@@ -1050,7 +1040,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
         and ntc.n = n.val
         and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
     	and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
-        order by ntc.n, ys.l, oar.f, ntc.y", "dataframe")
+        order by ntc.n, ys.l, oar.f, ntc.y")
 
         return_val["queryvrateofusebytechnologynodal"] = (dbpath, "select ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y,
         	cast(ys.val as real) as ys
@@ -1064,23 +1054,9 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
         and ntc.n = n.val
         and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
     	and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
-        order by ntc.n, ys.l, iar.f, ntc.y", "dataframe")
+        order by ntc.n, ys.l, iar.f, ntc.y")
 
         if vproductionbytechnologysaved
-            return_val["queryvproductionbytechnologynodal"] = (dbpath, "select n.r as r, ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y,
-            	cast(ys.val as real) as ys
-            from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
-        	TransmissionModelingEnabled tme,
-            (select distinct r, t, f, y
-            from OutputActivityRatio_def
-            where val <> 0) oar
-            where ntc.val > 0
-            and ntc.y = ys.y
-            and ntc.n = n.val
-            and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
-        	and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
-            order by n.r, ys.l, ntc.t, oar.f, ntc.y", "query")
-
             return_val["queryvproductionbytechnologyindices_nodalpart"] = (dbpath, "select distinct n.r as r, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y, null as ys
             from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
             TransmissionModelingEnabled tme,
@@ -1091,24 +1067,10 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
             and ntc.y = ys.y
             and ntc.n = n.val
             and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
-            and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y", "dataframe")
+            and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y")
         end
 
         if vusebytechnologysaved
-            return_val["queryvusebytechnologynodal"] = (dbpath, "select n.r as r, ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y,
-            	cast(ys.val as real) as ys
-            from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
-        	TransmissionModelingEnabled tme,
-            (select distinct r, t, f, y
-            from InputActivityRatio_def
-            where val <> 0) iar
-            where ntc.val > 0
-            and ntc.y = ys.y
-            and ntc.n = n.val
-            and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
-        	and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
-            order by n.r, ys.l, ntc.t, iar.f, ntc.y", "query")
-
             return_val["queryvusebytechnologyindices_nodalpart"] = (dbpath, "select distinct n.r as r, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y, null as ys
             from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
             TransmissionModelingEnabled tme,
@@ -1119,7 +1081,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
             and ntc.y = ys.y
             and ntc.n = n.val
             and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
-            and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y", "dataframe")
+            and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y")
         end
 
         return_val["queryvtransmissionbyline"] = (dbpath, "select tl.id as tr, ys.l as l, tl.f as f, tme1.y as y, tl.n1 as n1, tl.n2 as n2,
@@ -1135,36 +1097,29 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
         and tme1.y = tme2.y and tme1.type = tme2.type
     	and ys.y = tme1.y
     	and tl.f = tcta.f
-        order by tl.id, tme1.y", "dataframe")
+        order by tl.id, tme1.y")
 
         return_val["queryvstorageleveltsgroup1"] = (dbpath, "select ns.n as n, ns.s as s, tg1.name as tg1, ns.y as y
-        from nodalstorage ns, TSGROUP1 tg1", "dataframe")
+        from nodalstorage ns, TSGROUP1 tg1")
 
         return_val["queryvstorageleveltsgroup2"] = (dbpath, "select ns.n as n, ns.s as s, tg1.name as tg1, tg2.name as tg2, ns.y as y
-        from nodalstorage ns, TSGROUP1 tg1, TSGROUP2 tg2", "dataframe")
+        from nodalstorage ns, TSGROUP1 tg1, TSGROUP2 tg2")
 
         return_val["queryvstoragelevelts"] = (dbpath, "select ns.n as n, ns.s as s, l.val as l, ns.y as y
-        from nodalstorage ns, TIMESLICE l", "dataframe")
-    end
+        from nodalstorage ns, TIMESLICE l")
+    end  # transmissionmodeling
 
     return return_val
 end  # scenario_calc_queries(dbpath::String)
 
 """
-    run_qry(qtpl::Tuple{String, String, String})
+    run_qry(qtpl::Tuple{String, String})
 
-Runs the SQLite database query specified in `qtpl`. Element 1 in `qtpl` should be the path to the SQLite database,
-    element 2 should be the query's SQL command, and element 3 should be the return type (`"dataframe"` for a
-    `DataFrames.DataFrame` or `"query"` for a `SQLite.Query`). Designed to work with the output of `scenario_calc_queries`
-    in a `pmap` call."""
-function run_qry(qtpl::Tuple{String, String, String})
-    local result = SQLite.DBInterface.execute(SQLite.DB(qtpl[1]), qtpl[2])
-
-    if qtpl[3] == "dataframe"
-        result = result |> DataFrame
-    end
-
-    return result
+Runs the SQLite database query specified in `qtpl` and returns the result as a DataFrame.
+    Element 1 in `qtpl` should be the path to the SQLite database, and element 2 should be the query's
+    SQL command. Designed to work with the output of `scenario_calc_queries` in a `map` or `pmap` call."""
+function run_qry(qtpl::Tuple{String, String})
+    return SQLite.DBInterface.execute(SQLite.DB(qtpl[1]), qtpl[2]) |> DataFrame
 end  # run_qry(qtpl::Tuple{String, String, String})
 
 # Upgrades NEMO database from version 2 to version 3 by adding TransmissionLine.efficiency.
