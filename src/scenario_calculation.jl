@@ -12,7 +12,7 @@
     varstosave = "vdemandnn, vnewcapacity, vtotalcapacityannual,
         vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
         vusenn, vtotaldiscountedcost",
-    numprocs = 1, targetprocs = Array{Int, 1}(), restrictvars = true,
+    numprocs = "auto", targetprocs = Array{Int, 1}(), restrictvars = true,
     reportzeros = false, continuoustransmission = false, quiet = false)
 
 Calculates a scenario specified in a scenario database. Returns a `Symbol` indicating
@@ -57,7 +57,7 @@ function calculatescenario(
     dbpath::String;
     jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
     varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
-    numprocs = 1,
+    numprocs = "auto",
     targetprocs::Array{Int, 1} = Array{Int, 1}(),
     restrictvars::Bool = true,
     reportzeros::Bool = false,
@@ -79,7 +79,7 @@ end  # calculatescenario()
     varstosave = "vdemandnn, vnewcapacity, vtotalcapacityannual,
         vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
         vusenn, vtotaldiscountedcost",
-    numprocs = 1, targetprocs = Array{Int, 1}(), restrictvars = true,
+    numprocs = "auto", targetprocs = Array{Int, 1}(), restrictvars = true,
     reportzeros = false, continuoustransmission = false, quiet = false)
 
 Implements main scenario calculation logic for calculatescenario().
@@ -88,7 +88,7 @@ function calculatescenario_main(
     dbpath::String;
     jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
     varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
-    numprocs = 1,
+    numprocs = "auto",
     targetprocs::Array{Int, 1} = Array{Int, 1}(),
     restrictvars::Bool = true,
     reportzeros::Bool = false,

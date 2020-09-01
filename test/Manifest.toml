@@ -349,3 +349,9 @@ deps = ["DataAPI", "Random", "Test"]
 git-tree-sha1 = "28807f85197eaad3cbd2330386fac1dcb9e7e11d"
 uuid = "ea10d353-3f73-51f8-a26c-33c1cb351aa5"
 version = "0.6.2"
+
+[[Xpress]]
+deps = ["Compat", "LinQuadOptInterface", "MathProgBase"]
+git-tree-sha1 = "980470c2c7fa4818d0259be56b9a9924e458f21d"
+uuid = "9e70acf3-d6c9-5be6-b5bd-4e2c73e3e054"
+version = "0.9.1"

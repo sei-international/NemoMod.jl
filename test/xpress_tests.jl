@@ -2,28 +2,28 @@
     NEMO: Next-generation Energy Modeling system for Optimization.
     https://github.com/sei-international/NemoMod.jl
 
-    Copyright © 2019: Stockholm Environment Institute U.S.
+    Copyright © 2020: Stockholm Environment Institute U.S.
 
-	File description: Tests of NemoMod package using Cbc solver.
+	File description: Tests of NemoMod package using Xpress solver.
 =#
 
-# Tests will be skipped if Cbc package is not installed.
+# Tests will be skipped if Xpress package is not installed.
 try
-    using Cbc
+    using Xpress
 catch
-    @info "Skipping Cbc tests."
+    @info "Skipping Xpress tests."
     # Continue
 end
 
-if @isdefined Cbc
-    @info "Running Cbc tests."
+if @isdefined Xpress
+    @info "Running Xpress tests."
 
-    @testset "Solving storage_test with Cbc" begin
+    @testset "Solving storage_test with Xpress" begin
         dbfile = joinpath(@__DIR__, "storage_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = CbcSolver(logLevel=1, presolve="on")),
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = solver=Xpress.XpressSolver()),
             numprocs=1, restrictvars=false, quiet = false)
 
         db = SQLite.DB(dbfile)
@@ -40,19 +40,19 @@ if @isdefined Cbc
         @test testqry[9,:y] == "2028"
         @test testqry[10,:y] == "2029"
 
-        @test isapprox(testqry[1,:val], 3845.15711985937; atol=TOL)
-        @test isapprox(testqry[2,:val], 146.552326874185; atol=TOL)
-        @test isapprox(testqry[3,:val], 139.573639845721; atol=TOL)
-        @test isapprox(testqry[4,:val], 132.927276043543; atol=TOL)
-        @test isapprox(testqry[5,:val], 126.597405755756; atol=TOL)
-        @test isapprox(testqry[6,:val], 120.568957862625; atol=TOL)
-        @test isapprox(testqry[7,:val], 114.827578916785; atol=TOL)
-        @test isapprox(testqry[8,:val], 109.359598968367; atol=TOL)
-        @test isapprox(testqry[9,:val], 104.151999017492; atol=TOL)
-        @test isapprox(testqry[10,:val], 99.1923800166593; atol=TOL)
+        @test isapprox(testqry[1,:val], 3845.15703404259; atol=TOL)
+        @test isapprox(testqry[2,:val], 146.55227050539; atol=TOL)
+        @test isapprox(testqry[3,:val], 139.57362837926; atol=TOL)
+        @test isapprox(testqry[4,:val], 132.927266053843; atol=TOL)
+        @test isapprox(testqry[5,:val], 126.597396376304; atol=TOL)
+        @test isapprox(testqry[6,:val], 120.568948487497; atol=TOL)
+        @test isapprox(testqry[7,:val], 114.827569988092; atol=TOL)
+        @test isapprox(testqry[8,:val], 109.35959046485; atol=TOL)
+        @test isapprox(testqry[9,:val], 104.151990918904; atol=TOL)
+        @test isapprox(testqry[10,:val], 99.1923723037184; atol=TOL)
 
         # Test with optional outputs and numprocs > 1
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = CbcSolver(logLevel=1, presolve="on")),
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = solver=Xpress.XpressSolver()),
             varstosave =
                 "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vrateofdemand, vproductionbytechnology, vtotaltechnologyannualactivity, "
                 * "vtotaltechnologymodelperiodactivity, vusebytechnology, vmodelperiodcostbyregion, vannualtechnologyemissionpenaltybyemission, "
@@ -72,19 +72,19 @@ if @isdefined Cbc
         @test testqry[9,:y] == "2028"
         @test testqry[10,:y] == "2029"
 
-        @test isapprox(testqry[1,:val], 3845.15711985937; atol=TOL)
-        @test isapprox(testqry[2,:val], 146.552326874185; atol=TOL)
-        @test isapprox(testqry[3,:val], 139.573639845721; atol=TOL)
-        @test isapprox(testqry[4,:val], 132.927276043543; atol=TOL)
-        @test isapprox(testqry[5,:val], 126.597405755756; atol=TOL)
-        @test isapprox(testqry[6,:val], 120.568957862625; atol=TOL)
-        @test isapprox(testqry[7,:val], 114.827578916785; atol=TOL)
-        @test isapprox(testqry[8,:val], 109.359598968367; atol=TOL)
-        @test isapprox(testqry[9,:val], 104.151999017492; atol=TOL)
-        @test isapprox(testqry[10,:val], 99.1923800166593; atol=TOL)
+        @test isapprox(testqry[1,:val], 3845.15703404259; atol=TOL)
+        @test isapprox(testqry[2,:val], 146.55227050539; atol=TOL)
+        @test isapprox(testqry[3,:val], 139.57362837926; atol=TOL)
+        @test isapprox(testqry[4,:val], 132.927266053843; atol=TOL)
+        @test isapprox(testqry[5,:val], 126.597396376304; atol=TOL)
+        @test isapprox(testqry[6,:val], 120.568948487497; atol=TOL)
+        @test isapprox(testqry[7,:val], 114.827569988092; atol=TOL)
+        @test isapprox(testqry[8,:val], 109.35959046485; atol=TOL)
+        @test isapprox(testqry[9,:val], 104.151990918904; atol=TOL)
+        @test isapprox(testqry[10,:val], 99.1923723037184; atol=TOL)
 
         # Test with restrictvars and numprocs="auto"
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = CbcSolver(logLevel=1, presolve="on")),
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = solver=Xpress.XpressSolver()),
             varstosave = "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vproductionbytechnology, vusebytechnology, "
                 * "vtotaldiscountedcost",
             numprocs="auto", restrictvars = true, quiet = false)
@@ -102,20 +102,20 @@ if @isdefined Cbc
         @test testqry[9,:y] == "2028"
         @test testqry[10,:y] == "2029"
 
-        @test isapprox(testqry[1,:val], 3845.15711985937; atol=TOL)
-        @test isapprox(testqry[2,:val], 146.552326874185; atol=TOL)
-        @test isapprox(testqry[3,:val], 139.573639845721; atol=TOL)
-        @test isapprox(testqry[4,:val], 132.927276043543; atol=TOL)
-        @test isapprox(testqry[5,:val], 126.597405755756; atol=TOL)
-        @test isapprox(testqry[6,:val], 120.568957862625; atol=TOL)
-        @test isapprox(testqry[7,:val], 114.827578916785; atol=TOL)
-        @test isapprox(testqry[8,:val], 109.359598968367; atol=TOL)
-        @test isapprox(testqry[9,:val], 104.151999017492; atol=TOL)
-        @test isapprox(testqry[10,:val], 99.1923800166593; atol=TOL)
+        @test isapprox(testqry[1,:val], 3845.15703404259; atol=TOL)
+        @test isapprox(testqry[2,:val], 146.55227050539; atol=TOL)
+        @test isapprox(testqry[3,:val], 139.57362837926; atol=TOL)
+        @test isapprox(testqry[4,:val], 132.927266053843; atol=TOL)
+        @test isapprox(testqry[5,:val], 126.597396376304; atol=TOL)
+        @test isapprox(testqry[6,:val], 120.568948487497; atol=TOL)
+        @test isapprox(testqry[7,:val], 114.827569988092; atol=TOL)
+        @test isapprox(testqry[8,:val], 109.35959046485; atol=TOL)
+        @test isapprox(testqry[9,:val], 104.151990918904; atol=TOL)
+        @test isapprox(testqry[10,:val], 99.1923723037184; atol=TOL)
 
         # Test with storage net zero constraints and numprocs = default
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = CbcSolver(logLevel=1, presolve="on")), restrictvars=false)
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = Xpress.XpressSolver()), restrictvars=false)
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
@@ -145,13 +145,13 @@ if @isdefined Cbc
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
-    end  # "Solving storage_test with Cbc"
+    end  # "Solving storage_test with Xpress"
 
-    @testset "Solving storage_transmission_test with Cbc" begin
+    @testset "Solving storage_transmission_test with Xpress" begin
         dbfile = joinpath(@__DIR__, "storage_transmission_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = CbcSolver()),
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = Xpress.XpressSolver()),
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
                 * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
@@ -171,19 +171,19 @@ if @isdefined Cbc
         @test testqry[9,:y] == "2028"
         @test testqry[10,:y] == "2029"
 
-        @test isapprox(testqry[1,:val], 9786.56626646728; atol=TOL)
-        @test isapprox(testqry[2,:val], 239.495177887384; atol=TOL)
+        @test isapprox(testqry[1,:val], 9786.5662635601; atol=TOL)
+        @test isapprox(testqry[2,:val], 239.495174532817; atol=TOL)
         @test isapprox(testqry[3,:val], 228.090642412206; atol=TOL)
-        @test isapprox(testqry[4,:val], 217.22918324972; atol=TOL)
-        @test isapprox(testqry[5,:val], 206.884936428305; atol=TOL)
-        @test isapprox(testqry[6,:val], 197.033277545218; atol=TOL)
-        @test isapprox(testqry[7,:val], 187.650736057794; atol=TOL)
+        @test isapprox(testqry[4,:val], 217.229192870532; atol=TOL)
+        @test isapprox(testqry[5,:val], 206.884936494903; atol=TOL)
+        @test isapprox(testqry[6,:val], 197.033275412995; atol=TOL)
+        @test isapprox(testqry[7,:val], 187.650735989392; atol=TOL)
         @test isapprox(testqry[8,:val], 178.714986656564; atol=TOL)
-        @test isapprox(testqry[9,:val], 170.204749287591; atol=TOL)
+        @test isapprox(testqry[9,:val], 170.204749196728; atol=TOL)
         @test isapprox(testqry[10,:val], 162.099761139741; atol=TOL)
 
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
-    end  # "Solving storage_transmission_test with Cbc"
-end  # @isdefined Cbc
+    end  # "Solving storage_transmission_test with Xpress"
+end  # @isdefined Xpress

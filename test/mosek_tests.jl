@@ -22,7 +22,8 @@ if @isdefined Mosek
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = solver=MosekSolver()), restrictvars=false, quiet = false)
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = solver=MosekSolver()),
+            numprocs=1, restrictvars=false, quiet = false)
 
         db = SQLite.DB(dbfile)
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -85,7 +86,7 @@ if @isdefined Mosek
         NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = solver=MosekSolver()),
             varstosave = "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vproductionbytechnology, vusebytechnology, "
                 * "vtotaldiscountedcost",
-            numprocs="auto", restrictvars = true, targetprocs = Array{Int, 1}([1]), quiet = false)
+            numprocs="auto", restrictvars = true, quiet = false)
 
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
@@ -111,7 +112,7 @@ if @isdefined Mosek
         @test isapprox(testqry[9,:val], 104.151990918904; atol=TOL)
         @test isapprox(testqry[10,:val], 99.1923723037184; atol=TOL)
 
-        # Test with storage net zero constraints
+        # Test with storage net zero constraints and numprocs = default
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
         NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = MosekSolver()), restrictvars=false)
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -153,7 +154,7 @@ if @isdefined Mosek
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
                 * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
-            restrictvars=false, quiet = false)
+            numprocs=1, restrictvars=false, quiet = false)
 
         db = SQLite.DB(dbfile)
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame

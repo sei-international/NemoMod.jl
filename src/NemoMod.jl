@@ -39,6 +39,12 @@ catch
     # Just continue
 end
 
+try
+    using Xpress
+catch
+    # Just continue
+end
+
 include("nemo_functions.jl")  # Core NEMO functions
 include("scenario_calculation.jl")  # Functions for calculating a scenario with NEMO
 # END: Access other modules and code files.

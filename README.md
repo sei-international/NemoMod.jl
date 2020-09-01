@@ -11,7 +11,7 @@ NEMO is a high performance, open-source energy system optimization modeling tool
 - Modeling of emissions and emission constraints (including carbon pricing and pollutant externalities)
 - Modeling of renewable energy targets
 - Parallel processing
-- Support for multiple solvers: [GLPK](https://www.gnu.org/software/glpk/), [Cbc](https://projects.coin-or.org/Cbc), [CPLEX](https://www.ibm.com/analytics/cplex-optimizer), [Gurobi](https://www.gurobi.com/), and [Mosek](https://www.mosek.com/)
+- Support for multiple solvers: [GLPK](https://www.gnu.org/software/glpk/), [Cbc](https://projects.coin-or.org/Cbc), [CPLEX](https://www.ibm.com/analytics/cplex-optimizer), [Gurobi](https://www.gurobi.com/), [Mosek](https://www.mosek.com/), and [Xpress](https://www.fico.com/en/products/fico-xpress-optimization)
 - [SQLite](https://www.sqlite.org/) data store
 - Numerous performance tuning options
 

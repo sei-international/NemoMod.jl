@@ -5,7 +5,7 @@
     Copyright © 2019: Stockholm Environment Institute U.S.
 
 	File description: Tests for NemoMod package. Running full suite of tests requires
-        GLPK, Cbc, CPLEX, Gurobi, and Mosek solvers. However, this file is configured
+        GLPK, Cbc, CPLEX, Gurobi, Mosek, and Xpress solvers. However, this file is configured
         so that tests for Cbc and proprietary solvers are skipped if solvers are not present.
 =#
 
@@ -40,6 +40,7 @@ end  # delete_dbfile(path::String)
     include(joinpath(@__DIR__, "cplex_tests.jl"))
     include(joinpath(@__DIR__, "gurobi_tests.jl"))
     include(joinpath(@__DIR__, "mosek_tests.jl"))
+    include(joinpath(@__DIR__, "xpress_tests.jl"))
 end  # @testset "Solving a scenario"
 
 @testset "Other database operations" begin
