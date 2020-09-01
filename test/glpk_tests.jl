@@ -45,7 +45,7 @@
     NemoMod.calculatescenario(dbfile; varstosave =
         "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vrateofdemand, vproductionbytechnology, vtotaltechnologyannualactivity, "
         * "vtotaltechnologymodelperiodactivity, vusebytechnology, vmodelperiodcostbyregion, vannualtechnologyemissionpenaltybyemission, "
-        * "vtotaldiscountedcost", numprocs=8, restrictvars=false, quiet = false)
+        * "vtotaldiscountedcost", numprocs=4, restrictvars=false, quiet = false)
 
     testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
@@ -71,10 +71,11 @@
     @test isapprox(testqry[9,:val], 104.151999017492; atol=TOL)
     @test isapprox(testqry[10,:val], 99.1923800166593; atol=TOL)
 
-    # Test with restrictvars
+    # Test with restrictvars and numprocs="auto"
     NemoMod.calculatescenario(dbfile; varstosave =
         "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vproductionbytechnology, vusebytechnology, "
-        * "vtotaldiscountedcost", restrictvars = true, targetprocs = Array{Int, 1}([1]), quiet = false)
+        * "vtotaldiscountedcost",
+        numprocs="auto", restrictvars = true, targetprocs = Array{Int, 1}([1]), quiet = false)
 
     testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 

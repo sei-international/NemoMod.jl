@@ -55,7 +55,7 @@ if @isdefined Mosek
                 "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vrateofdemand, vproductionbytechnology, vtotaltechnologyannualactivity, "
                 * "vtotaltechnologymodelperiodactivity, vusebytechnology, vmodelperiodcostbyregion, vannualtechnologyemissionpenaltybyemission, "
                 * "vtotaldiscountedcost",
-            numprocs=8, restrictvars=false, quiet = false)
+            numprocs=4, restrictvars=false, quiet = false)
 
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
@@ -81,11 +81,11 @@ if @isdefined Mosek
         @test isapprox(testqry[9,:val], 104.151990918904; atol=TOL)
         @test isapprox(testqry[10,:val], 99.1923723037184; atol=TOL)
 
-        # Test with restrictvars
+        # Test with restrictvars and numprocs="auto"
         NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = solver=MosekSolver()),
             varstosave = "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vproductionbytechnology, vusebytechnology, "
                 * "vtotaldiscountedcost",
-            restrictvars = true, targetprocs = Array{Int, 1}([1]), quiet = false)
+            numprocs="auto", restrictvars = true, targetprocs = Array{Int, 1}([1]), quiet = false)
 
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
