@@ -8,13 +8,13 @@
 =#
 
 # Tests will be skipped if CPLEX package is not installed.
-using CPLEX
-#=try
+try
     using CPLEX
 catch e
+    @info "Error when initializing CPLEX. Error message: " * sprint(showerror, e) * "."
     @info "Skipping CPLEX tests."
     # Continue
-end =#
+end
 
 if @isdefined CPLEX
     @info "Running CPLEX tests."

@@ -10,7 +10,8 @@
 # Tests will be skipped if Mosek package is not installed.
 try
     using Mosek
-catch
+catch e
+    @info "Error when initializing Mosek. Error message: " * sprint(showerror, e) * "."
     @info "Skipping Mosek tests."
 end
 

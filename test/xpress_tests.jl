@@ -10,7 +10,8 @@
 # Tests will be skipped if Xpress package is not installed.
 try
     using Xpress
-catch
+catch e
+    @info "Error when initializing Xpress. Error message: " * sprint(showerror, e) * "."
     @info "Skipping Xpress tests."
     # Continue
 end

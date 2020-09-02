@@ -10,7 +10,8 @@
 # Tests will be skipped if Cbc package is not installed.
 try
     using Cbc
-catch
+catch e
+    @info "Error when initializing Cbc. Error message: " * sprint(showerror, e) * "."
     @info "Skipping Cbc tests."
     # Continue
 end

@@ -10,7 +10,8 @@
 # Tests will be skipped if Gurobi package is not installed.
 try
     using Gurobi
-catch
+catch e
+    @info "Error when initializing Gurobi. Error message: " * sprint(showerror, e) * "."
     @info "Skipping Gurobi tests."
     # Continue
 end
