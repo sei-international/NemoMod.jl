@@ -9,7 +9,7 @@
 
 # Tests will be skipped if CPLEX package is not installed.
 try
-    using CPLEX
+    @everhwhere using CPLEX
 catch e
     @info "Error when initializing CPLEX. Error message: " * sprint(showerror, e) * "."
     @info "Skipping CPLEX tests."
