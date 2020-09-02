@@ -115,13 +115,13 @@ logmsg("Validated run-time arguments.", quiet)
 configfile = getconfig(quiet)  # ConfParse structure for config file if one is found; otherwise nothing
 
 if configfile != nothing
-    # Arrays of Boolean and Int arguments for calculatescenario(); necessary in order to have mutable objects for getconfigargs! call
+    # Arrays of Boolean and Any arguments for calculatescenario(); necessary in order to have mutable objects for getconfigargs! call
     local boolargs::Array{Bool,1} = [restrictvars,reportzeros,continuoustransmission,quiet]
-    local intargs::Array{Int,1} = [numprocs]
+    local anyargs::Array{Any,1} = [numprocs]
 
-    getconfigargs!(configfile, varstosavearr, targetprocs, boolargs, intargs, quiet)
+    getconfigargs!(configfile, varstosavearr, targetprocs, boolargs, anyargs, quiet)
 
-    numprocs = intargs[1]
+    numprocs = anyargs[1]
     restrictvars = boolargs[1]
     reportzeros = boolargs[2]
     continuoustransmission = boolargs[3]
@@ -139,6 +139,7 @@ if length(targetprocs) == 0
 
     if typeof(numprocs) != Int
         numprocs = 1
+        logmsg("numprocs argument not recognized. Using numprocs = 1.", quiet)
     end
 
     # Use first numprocs processes in procs(), adding processes as needed

@@ -64,27 +64,27 @@ end  # getconfig(quiet::Bool = false)
         varstosavearr::Array{String,1},
         targetprocs::Array{Int,1},
         bools::Array{Bool,1},
-        ints::Array{Int,1},
+        anys::Array{Any,1},
         quiet::Bool)
 
-Loads run-time arguments for calculatescenario() from a configuration file.
+Loads run-time arguments for `calculatescenario()` from a configuration file.
 
 # Arguments
 - `configfile::ConfParse`: Configuration file. This argument is not changed by the function.
-- `varstosavearr::Array{String,1}`: Array representation of calculatescenario() varstosave argument.
+- `varstosavearr::Array{String,1}`: Array representation of `calculatescenario()` `varstosave` argument.
     New values in configuration file are added to this array.
-- `targetprocs::Array{Int,1}`: calculatescenario() targetprocs argument. New values in configuration
+- `targetprocs::Array{Int,1}`: `calculatescenario()` `targetprocs` argument. New values in configuration
     file are added to this array.
-- `bools::Array{Bool,1}`: Array of Boolean arguments for calculatescenario(): restrictvars, reportzeros,
-    continuoustransmission, and quiet, in that order. New values in configuration file overwrite values
+- `bools::Array{Bool,1}`: Array of Boolean arguments for `calculatescenario()`: `restrictvars`, `reportzeros`,
+    `continuoustransmission`, and `quiet`, in that order. New values in configuration file overwrite values
     in this array.
-- `ints::Array{Int,1}`: Array of `Int` arguments for calculatescenario(): numprocs. New values in
+- `anys::Array{Any,1}`: Array of `Any` arguments for `calculatescenario()`: `numprocs`. New values in
     configuration file overwrite values in this array.
-- `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to STDOUT).
+- `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to `STDOUT`).
     This argument is not changed by the function.
 """
 function getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, targetprocs::Array{Int,1},
-    bools::Array{Bool,1}, ints::Array{Int,1}, quiet::Bool)
+    bools::Array{Bool,1}, anys::Array{Any,1}, quiet::Bool)
 
     if haskey(configfile, "calculatescenarioargs", "varstosave")
         try
@@ -105,7 +105,14 @@ function getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, t
 
     if haskey(configfile, "calculatescenarioargs", "numprocs")
         try
-            ints[1] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "numprocs")))
+            numprocsconfig = lowercase(retrieve(configfile, "calculatescenarioargs", "numprocs"))
+
+            if numprocsconfig == "auto"
+                anys[1] = numprocsconfig
+            else
+                anys[1] = Meta.parse(numprocsconfig)
+            end
+
             logmsg("Read numprocs argument from configuration file.", quiet)
         catch e
             logmsg("Could not read numprocs argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
