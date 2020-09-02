@@ -21,7 +21,7 @@ using JuMP, SQLite, DataFrames, Distributed, Dates, ConfParser
 using GLPKMathProgInterface, Cbc  # Open-source solvers
 
 # Proprietary solvers - enclosed in try blocks for users who aren't using NEMO installer
-try
+#=try
     using CPLEX
 catch
     # Just continue
@@ -40,12 +40,11 @@ catch
 end
 
 try
-    import Xpress
+    using Xpress
 catch e
     isa(e, InitError) && println("Xpress InitError")
     # Just continue
-end
-
+end =#
 
 include("nemo_functions.jl")  # Core NEMO functions
 include("scenario_calculation.jl")  # Functions for calculating a scenario with NEMO

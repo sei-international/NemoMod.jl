@@ -35,12 +35,12 @@ function delete_dbfile(path::String, max_del_attempts::Int)
 end  # delete_dbfile(path::String)
 
 @testset "Solving a scenario" begin
-    include(joinpath(@__DIR__, "glpk_tests.jl"))
-    include(joinpath(@__DIR__, "cbc_tests.jl"))
+    #include(joinpath(@__DIR__, "glpk_tests.jl"))
+    #include(joinpath(@__DIR__, "cbc_tests.jl"))
     include(joinpath(@__DIR__, "cplex_tests.jl"))
-    include(joinpath(@__DIR__, "gurobi_tests.jl"))
-    include(joinpath(@__DIR__, "mosek_tests.jl"))
-    include(joinpath(@__DIR__, "xpress_tests.jl"))
+    #include(joinpath(@__DIR__, "gurobi_tests.jl"))
+    #include(joinpath(@__DIR__, "mosek_tests.jl"))
+    #include(joinpath(@__DIR__, "xpress_tests.jl"))
 end  # @testset "Solving a scenario"
 
 @testset "Other database operations" begin

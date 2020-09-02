@@ -8,12 +8,13 @@
 =#
 
 # Tests will be skipped if CPLEX package is not installed.
-try
+using CPLEX
+#=try
     using CPLEX
 catch e
     @info "Skipping CPLEX tests."
     # Continue
-end
+end =#
 
 if @isdefined CPLEX
     @info "Running CPLEX tests."
