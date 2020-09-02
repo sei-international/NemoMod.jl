@@ -9,7 +9,11 @@
 
 # Tests will be skipped if CPLEX package is not installed.
 try
-    @everywhere using CPLEX
+    for p in reverse(procs())
+        if !remotecall_fetch(isdefined, p, Main, :CPLEX)
+            remotecall_fetch(Core.eval, p, Main, :(using CPLEX))
+        end
+    end
 catch e
     @info "Error when initializing CPLEX. Error message: " * sprint(showerror, e) * "."
     @info "Skipping CPLEX tests."
