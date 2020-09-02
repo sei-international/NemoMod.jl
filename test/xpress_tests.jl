@@ -9,7 +9,12 @@
 
 # Tests will be skipped if Xpress package is not installed.
 try
-    using Xpress
+    # This approach helps prevent race conditions when multiple Julia processes are instantiated
+    for p in reverse(procs())
+        if !remotecall_fetch(isdefined, p, Main, :Xpress)
+            remotecall_fetch(Core.eval, p, Main, :(using Xpress))
+        end
+    end
 catch e
     @info "Error when initializing Xpress. Error message: " * sprint(showerror, e) * "."
     @info "Skipping Xpress tests."

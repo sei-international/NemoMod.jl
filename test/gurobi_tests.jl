@@ -9,7 +9,12 @@
 
 # Tests will be skipped if Gurobi package is not installed.
 try
-    using Gurobi
+    # This approach helps prevent race conditions when multiple Julia processes are instantiated
+    for p in reverse(procs())
+        if !remotecall_fetch(isdefined, p, Main, :Gurobi)
+            remotecall_fetch(Core.eval, p, Main, :(using Gurobi))
+        end
+    end
 catch e
     @info "Error when initializing Gurobi. Error message: " * sprint(showerror, e) * "."
     @info "Skipping Gurobi tests."

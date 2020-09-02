@@ -9,7 +9,12 @@
 
 # Tests will be skipped if Mosek package is not installed.
 try
-    using Mosek
+    # This approach helps prevent race conditions when multiple Julia processes are instantiated
+    for p in reverse(procs())
+        if !remotecall_fetch(isdefined, p, Main, :Mosek)
+            remotecall_fetch(Core.eval, p, Main, :(using Mosek))
+        end
+    end
 catch e
     @info "Error when initializing Mosek. Error message: " * sprint(showerror, e) * "."
     @info "Skipping Mosek tests."

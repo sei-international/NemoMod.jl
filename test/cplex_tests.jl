@@ -9,6 +9,7 @@
 
 # Tests will be skipped if CPLEX package is not installed.
 try
+    # This approach helps prevent race conditions when multiple Julia processes are instantiated
     for p in reverse(procs())
         if !remotecall_fetch(isdefined, p, Main, :CPLEX)
             remotecall_fetch(Core.eval, p, Main, :(using CPLEX))
