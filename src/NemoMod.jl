@@ -41,7 +41,8 @@ end
 
 try
     using Xpress
-catch
+catch e
+    isa(e, InitError) && println("Xpress InitError")
     # Just continue
 end
 
