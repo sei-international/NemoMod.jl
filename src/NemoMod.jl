@@ -40,7 +40,11 @@ catch
 end
 
 try
+    # Xpress inclusion is firewalled because it throws an InitError if Xpress is not installed
+    original_stderr = stderr
+    err_rd, err_wr = redirect_stderr()
     using Xpress
+    redirect_stderr(original_stderr)
 catch e
     # Just continue
 end
