@@ -39,15 +39,17 @@ catch
     # Just continue
 end
 
+original_stderr = stderr
+err_rd, err_wr = redirect_stderr()
+
 try
     # Xpress inclusion is firewalled because it throws an InitError if Xpress is not installed
-    original_stderr = stderr
-    err_rd, err_wr = redirect_stderr()
     using Xpress
-    redirect_stderr(original_stderr)
 catch e
     # Just continue
 end
+
+redirect_stderr(original_stderr)
 
 include("nemo_functions.jl")  # Core NEMO functions
 include("scenario_calculation.jl")  # Functions for calculating a scenario with NEMO
