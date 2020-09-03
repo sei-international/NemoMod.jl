@@ -133,13 +133,19 @@ end
 if length(targetprocs) == 0
     # Handle "auto" option for numprocs
     if numprocs == "auto"
-        numprocs = div(Sys.CPU_THREADS, 2)
-        logmsg("\"auto\" specified for numprocs argument. Using " * string(numprocs) * " processes for parallelized operations.", quiet)
+        # numprocs = div(Sys.CPU_THREADS, 2)
+        numprocs = 1
+        #logmsg("\"auto\" specified for numprocs argument. Using " * string(numprocs) * " processes for parallelized operations.", quiet)
+        logmsg("\"auto\" specified for numprocs argument. Using numprocs = 1.", quiet)
     end
 
     if typeof(numprocs) != Int
         numprocs = 1
         logmsg("numprocs argument not recognized. Using numprocs = 1.", quiet)
+    end
+
+    if numprocs <= 0
+        numprocs = 1
     end
 
     # Use first numprocs processes in procs(), adding processes as needed
