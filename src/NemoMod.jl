@@ -45,6 +45,7 @@ try
     using Xpress
 catch e
     println("Problem with Xpress")
+    e = nothing
     # Just continue
 end
 
