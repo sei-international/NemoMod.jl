@@ -45,8 +45,12 @@ try
     using Xpress
 catch e
     println("Problem with Xpress")
-    e = nothing
-    # Just continue
+
+    for ex in Base.catch_stack(;include_bt=false)
+        ex = nothing
+    end
+finally
+
 end
 
 include("nemo_functions.jl")  # Core NEMO functions
