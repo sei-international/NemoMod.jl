@@ -41,12 +41,11 @@ catch
     # Just continue
 end
 
-if can_init_xpress()
-    try
-        using Xpress
-    catch e
-        # Just continue
-    end
+try
+    using Xpress
+catch e
+    println("Problem with Xpress")
+    # Just continue
 end
 
 include("nemo_functions.jl")  # Core NEMO functions
