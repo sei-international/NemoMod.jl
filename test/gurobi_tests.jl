@@ -9,12 +9,7 @@
 
 # Tests will be skipped if Gurobi package is not installed.
 try
-    # This approach helps prevent race conditions when multiple Julia processes are instantiated
-    for p in reverse(procs())
-        if !remotecall_fetch(isdefined, p, Main, :Gurobi)
-            remotecall_fetch(Core.eval, p, Main, :(using Gurobi))
-        end
-    end
+    using Gurobi
 catch e
     @info "Error when initializing Gurobi. Error message: " * sprint(showerror, e) * "."
     @info "Skipping Gurobi tests."
@@ -57,13 +52,13 @@ if @isdefined Gurobi
         @test isapprox(testqry[9,:val], 104.151990918904; atol=TOL)
         @test isapprox(testqry[10,:val], 99.1923723037184; atol=TOL)
 
-        # Test with optional outputs and numprocs > 1
+        # Test with optional outputs and numprocs="auto"
         NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = solver=GurobiSolver()),
             varstosave =
                 "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vrateofdemand, vproductionbytechnology, vtotaltechnologyannualactivity, "
                 * "vtotaltechnologymodelperiodactivity, vusebytechnology, vmodelperiodcostbyregion, vannualtechnologyemissionpenaltybyemission, "
                 * "vtotaldiscountedcost",
-            numprocs=4, restrictvars=false, quiet = false)
+            numprocs="auto", restrictvars=false, quiet = false)
 
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
@@ -89,11 +84,11 @@ if @isdefined Gurobi
         @test isapprox(testqry[9,:val], 104.151990918904; atol=TOL)
         @test isapprox(testqry[10,:val], 99.1923723037184; atol=TOL)
 
-        # Test with restrictvars and numprocs="auto"
+        # Test with restrictvars
         NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = solver=GurobiSolver()),
             varstosave = "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vproductionbytechnology, vusebytechnology, "
                 * "vtotaldiscountedcost",
-            numprocs="auto", restrictvars = true, quiet = false)
+            restrictvars = true, quiet = false)
 
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
@@ -161,7 +156,7 @@ if @isdefined Gurobi
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
                 * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
-            numprocs=1, restrictvars=false, quiet = false)
+            restrictvars=false, quiet = false)
 
         db = SQLite.DB(dbfile)
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
