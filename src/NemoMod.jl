@@ -21,6 +21,8 @@ using JuMP, SQLite, DataFrames, Distributed, Dates, ConfParser
 using GLPKMathProgInterface, Cbc  # Open-source solvers
 
 # Proprietary solvers - enclosed in try blocks for users who aren't using NEMO installer
+include("solver_support.jl")  # Functions for working with solvers
+
 try
     using CPLEX
 catch
@@ -39,18 +41,13 @@ catch
     # Just continue
 end
 
-original_stderr = stderr
-err_rd, err_wr = redirect_stderr()
-err_reader = @async read(err_rd, String)
-
-try
-    # Xpress inclusion is firewalled because it throws an InitError if Xpress is not installed
-    using Xpress
-catch e
-    # Just continue
+if can_init_xpress()
+    try
+        using Xpress
+    catch e
+        # Just continue
+    end
 end
-
-redirect_stderr(original_stderr)
 
 include("nemo_functions.jl")  # Core NEMO functions
 include("scenario_calculation.jl")  # Functions for calculating a scenario with NEMO
