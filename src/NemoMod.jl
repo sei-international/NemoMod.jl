@@ -41,6 +41,7 @@ end
 
 original_stderr = stderr
 err_rd, err_wr = redirect_stderr()
+err_reader = @async read(err_rd, String)
 
 try
     # Xpress inclusion is firewalled because it throws an InitError if Xpress is not installed
