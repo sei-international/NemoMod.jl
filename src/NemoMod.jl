@@ -41,16 +41,6 @@ catch
     # Just continue
 end
 
-try
-    using Xpress
-catch e
-    println("Problem with Xpress")
-finally
-    for ex in Base.catch_stack(;include_bt=false)
-        ex = nothing
-    end
-end
-
 include("nemo_functions.jl")  # Core NEMO functions
 include("scenario_calculation.jl")  # Functions for calculating a scenario with NEMO
 # END: Access other modules and code files.
