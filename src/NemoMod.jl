@@ -21,8 +21,6 @@ using JuMP, SQLite, DataFrames, Distributed, Dates, ConfParser
 using GLPKMathProgInterface, Cbc  # Open-source solvers
 
 # Proprietary solvers - enclosed in try blocks for users who aren't using NEMO installer
-include("solver_support.jl")  # Functions for working with solvers
-
 try
     using CPLEX
 catch
