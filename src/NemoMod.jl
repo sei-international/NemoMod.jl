@@ -41,6 +41,8 @@ catch
     # Just continue
 end
 
+# Do not load Xpress since it throws an unrecoverable error when loaded in a package on a machine without an Xpress license
+
 include("nemo_functions.jl")  # Core NEMO functions
 include("scenario_calculation.jl")  # Functions for calculating a scenario with NEMO
 # END: Access other modules and code files.

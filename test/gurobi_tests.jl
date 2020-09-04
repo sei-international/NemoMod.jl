@@ -52,13 +52,13 @@ if @isdefined Gurobi
         @test isapprox(testqry[9,:val], 104.151990918904; atol=TOL)
         @test isapprox(testqry[10,:val], 99.1923723037184; atol=TOL)
 
-        # Test with optional outputs and numprocs="auto"
+        # Test with optional outputs
         NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = solver=GurobiSolver()),
             varstosave =
                 "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vrateofdemand, vproductionbytechnology, vtotaltechnologyannualactivity, "
                 * "vtotaltechnologymodelperiodactivity, vusebytechnology, vmodelperiodcostbyregion, vannualtechnologyemissionpenaltybyemission, "
                 * "vtotaldiscountedcost",
-            numprocs="auto", restrictvars=false, quiet = false)
+            numprocs=1, restrictvars=false, quiet = false)
 
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
@@ -88,7 +88,7 @@ if @isdefined Gurobi
         NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = solver=GurobiSolver()),
             varstosave = "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vproductionbytechnology, vusebytechnology, "
                 * "vtotaldiscountedcost",
-            restrictvars = true, quiet = false)
+            targetprocs=[1], restrictvars = true, quiet = false)
 
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
@@ -114,9 +114,9 @@ if @isdefined Gurobi
         @test isapprox(testqry[9,:val], 104.151990918904; atol=TOL)
         @test isapprox(testqry[10,:val], 99.1923723037184; atol=TOL)
 
-        # Test with storage net zero constraints and numprocs = default
+        # Test with storage net zero constraints
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = GurobiSolver()), restrictvars=false)
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = GurobiSolver()), restrictvars=false, numprocs=1)
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
@@ -156,7 +156,7 @@ if @isdefined Gurobi
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
                 * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
-            restrictvars=false, quiet = false)
+            numprocs=1, restrictvars=false, quiet = false)
 
         db = SQLite.DB(dbfile)
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame

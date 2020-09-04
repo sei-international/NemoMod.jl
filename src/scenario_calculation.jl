@@ -12,7 +12,7 @@
     varstosave = "vdemandnn, vnewcapacity, vtotalcapacityannual,
         vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
         vusenn, vtotaldiscountedcost",
-    numprocs = "auto", targetprocs = Array{Int, 1}(), restrictvars = true,
+    numprocs::Int = 0, targetprocs = Array{Int, 1}(), restrictvars = true,
     reportzeros = false, continuoustransmission = false, quiet = false)
 
 Calculates a scenario specified in a scenario database. Returns a `Symbol` indicating
@@ -30,12 +30,12 @@ the solve status reported by the solver (e.g., `:Optimal`).
 - `varstosave::String`: Comma-delimited list of output variables whose results should be
     saved in the scenario database.
 - `numprocs`: Number of Julia processes to use for parallelized operations within the
-    scenario calculation. Should be an integer or `"auto"`, which is interpreted as half
-    the number of logical processors on the executing machine (i.e., half of
-    `Sys.CPU_THREADS`). When this argument is in effect, NEMO selects the first `numprocs`
-    processes in `Distributed.procs()` for parallelized operations. If there are fewer than
-    `numprocs` processes defined, NEMO adds processes on the local host as needed. Ignored
-    if `targetprocs` is specified.
+    scenario calculation. Ignored if `targetprocs` is specified. Should be a positive integer
+    or 0 for half the number of logical processors on the executing machine (i.e., half
+    of `Sys.CPU_THREADS`). When `numprocs` is in effect, NEMO selects processes for parallel
+    operations from `Distributed.procs()`. Processes are taken in the order they appear in
+    this array. If there are not enough processes defined in `Distributed.procs()`, NEMO adds
+    processes on the local host as needed.
 - `targetprocs::Array{Int, 1}`: Identifiers of Julia processes that should be used for
     parallelized operations within the scenario calculation.
 - `restrictvars::Bool`: Indicates whether NEMO should conduct additional data analysis
@@ -57,7 +57,7 @@ function calculatescenario(
     dbpath::String;
     jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
     varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
-    numprocs = "auto",
+    numprocs::Int = 0,
     targetprocs::Array{Int, 1} = Array{Int, 1}(),
     restrictvars::Bool = true,
     reportzeros::Bool = false,
@@ -79,7 +79,7 @@ end  # calculatescenario()
     varstosave = "vdemandnn, vnewcapacity, vtotalcapacityannual,
         vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
         vusenn, vtotaldiscountedcost",
-    numprocs = "auto", targetprocs = Array{Int, 1}(), restrictvars = true,
+    numprocs::Int = 0, targetprocs = Array{Int, 1}(), restrictvars = true,
     reportzeros = false, continuoustransmission = false, quiet = false)
 
 Implements main scenario calculation logic for calculatescenario().
@@ -88,7 +88,7 @@ function calculatescenario_main(
     dbpath::String;
     jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
     varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
-    numprocs = "auto",
+    numprocs::Int = 0,
     targetprocs::Array{Int, 1} = Array{Int, 1}(),
     restrictvars::Bool = true,
     reportzeros::Bool = false,
@@ -115,13 +115,13 @@ logmsg("Validated run-time arguments.", quiet)
 configfile = getconfig(quiet)  # ConfParse structure for config file if one is found; otherwise nothing
 
 if configfile != nothing
-    # Arrays of Boolean and Any arguments for calculatescenario(); necessary in order to have mutable objects for getconfigargs! call
+    # Arrays of Boolean and Int arguments for calculatescenario(); necessary in order to have mutable objects for getconfigargs! call
     local boolargs::Array{Bool,1} = [restrictvars,reportzeros,continuoustransmission,quiet]
-    local anyargs::Array{Any,1} = [numprocs]
+    local intargs::Array{Int,1} = [numprocs]
 
-    getconfigargs!(configfile, varstosavearr, targetprocs, boolargs, anyargs, quiet)
+    getconfigargs!(configfile, varstosavearr, targetprocs, boolargs, intargs, quiet)
 
-    numprocs = anyargs[1]
+    numprocs = intargs[1]
     restrictvars = boolargs[1]
     reportzeros = boolargs[2]
     continuoustransmission = boolargs[3]
@@ -131,20 +131,13 @@ end
 
 # BEGIN: Set final value for targetprocs.
 if length(targetprocs) == 0
-    # Handle "auto" option for numprocs
-    if numprocs == "auto"
-        # numprocs = div(Sys.CPU_THREADS, 2)
-        numprocs = 1
-        #logmsg("\"auto\" specified for numprocs argument. Using " * string(numprocs) * " processes for parallelized operations.", quiet)
-        logmsg("\"auto\" specified for numprocs argument. Using numprocs = 1.", quiet)
+    # Handle auto option for numprocs
+    if numprocs == 0
+        numprocs = max(div(Sys.CPU_THREADS, 2), 1)
+        logmsg("0 specified for numprocs argument. Using " * string(numprocs) * " processes for parallelized operations.", quiet)
     end
 
-    if typeof(numprocs) != Int
-        numprocs = 1
-        logmsg("numprocs argument not recognized. Using numprocs = 1.", quiet)
-    end
-
-    if numprocs <= 0
+    if numprocs < 0
         numprocs = 1
     end
 
