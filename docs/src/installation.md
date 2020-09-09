@@ -9,7 +9,7 @@ NEMO can be installed in two ways: through an installer program and manually via
 
 The installer program is the easiest way to install NEMO. Here are the steps to follow:
 
-1. Download a copy of the installer to your computer and run it. The installer is distributed through the [LEAP website](https://energycommunity.org/download) and is freely available once you register for the site (registration is also free).
+1. Download a copy of the installer to your computer and run it. The installer is distributed through the [LEAP website](https://leap.sei.org/download) and is freely available once you register for the site (registration is also free).
 
 2. The installer will step you through the installation process. You'll be prompted to accept the NEMO license (the [Apache License, version 2.0](http://www.apache.org/licenses/LICENSE-2.0)) and asked which components of NEMO you'd like to install.
 
@@ -45,7 +45,7 @@ If you install the NEMO system image when running the NEMO installer, you can re
 **Steps in Windows**
 
 * Close any Julia windows or processes.
-* Open the Julia library directory (typically `%LocalAppData%\Programs\Julia\<Julia version>\lib\julia`).
+* Open the Julia library directory (typically `%ALLUSERSPROFILE%\Julia\<Julia version>\lib\julia`).
 * Replace `sys.dll` with `sys.dll.nemo_backup`.
 
 Once you do this, there will be a performance penalty when starting NEMO, but any customizations you make to the NEMO code will take effect.
@@ -79,7 +79,7 @@ julia> NemoMod.calculatescenario("c:/temp/scenario_db.sqlite"; jumpmodel = Model
 
 Note that in order to do this, you must have the corresponding Julia interface (package) for the solver installed on your computer.
 
-NEMO has been tested for compatibility with the following solver packages (which in turn support the listed versions of the corresponding solvers).
+NEMO has been tested for compatibility with the following solver packages (which in turn support the listed versions of the associated solvers).
 
 | Solver | Julia package version | Solver program versions |
 |:--- | :-- |:-- |
@@ -88,12 +88,15 @@ NEMO has been tested for compatibility with the following solver packages (which
 | [GLPK](https://github.com/JuliaOpt/GLPK.jl) / [GLPKMathProgInterface](https://github.com/JuliaOpt/GLPKMathProgInterface.jl) | 0.10.0 / 0.4.4 | 4.64 |
 | [Gurobi](https://github.com/JuliaOpt/Gurobi.jl) | 0.6.0 | 7.0 - 8.1 |
 | [Mosek](https://github.com/JuliaOpt/Mosek.jl) | 0.9.8 | 8.1 |
+| [Xpress](https://github.com/jump-dev/Xpress.jl) | 0.9.1 | 8.4 - 8.9 |
 
 If you install NEMO with the [NEMO installer](@ref installer_program), all compatible solver packages will be installed as well. The packages for the open-source solvers (GLPK and Cbc) come with the underlying solver programs, so you should be able to use these solvers immediately upon installation.
 
 The Mosek Julia package also provides the underlying solver program. In this case, though, you must have a valid Mosek license installed on your computer in order to use the solver. Typically, for a single-computer license (a server license), a license file must be installed at `%USERPROFILE%\mosek\mosek.lic` (Windows) or `$HOME/mosek/mosek.lic` (Linux or MacOS). See the [Mosek documentation](https://www.mosek.com/resources/getting-started/) for more information.
 
-The Julia packages for CPLEX and Gurobi do **not** include the corresponding solver programs. These must be licensed and set up separately. If CPLEX or Gurobi is installed on your computer when you run the NEMO installer, the installer will link the Julia package to the solver binaries. Otherwise, you may need to perform this step yourself:
+The Julia packages for CPLEX, Gurobi, and Xpress do **not** include the corresponding solver programs. These must be licensed and set up separately. If CPLEX, Gurobi, or Xpress is installed on your computer when you run the NEMO installer, the installer will link the Julia package to the solver binaries. Otherwise, you may need to perform this step yourself:
+
+**CPLEX**
 
 ```julia
 julia> using Pkg
@@ -101,12 +104,20 @@ julia> using Pkg
 julia> Pkg.build("CPLEX")
 ```
 
-or
+**Gurobi**
 
 ```julia
 julia> using Pkg
 
 julia> Pkg.build("Gurobi")
+```
+
+**Xpress**
+
+```julia
+julia> using Pkg
+
+julia> Pkg.build("Xpress")
 ```
 
 !!! warning

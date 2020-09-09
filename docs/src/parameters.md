@@ -3,7 +3,7 @@ CurrentModule = NemoMod
 ```
 # [Parameters](@id parameters)
 
-NEMO includes a number of parameters that define data and set the terms of constraints for scenarios. As with model [dimensions](@ref dimensions), parameters are specified in a NEMO scenario database. NEMO reads them from the database and uses them to build constraints at run-time. Generally, NEMO does not create separate Julia variables for parameters.
+NEMO includes a number of parameters that define data and set the terms of constraints for scenarios. As with model [dimensions](@ref dimensions), parameters are specified in a NEMO [scenario database](@ref scenario_db). NEMO reads them from the database and uses them to build constraints at run-time. Generally, NEMO does not create separate Julia variables for parameters.
 
 Most parameters are subscripted by one or more dimensions. Parameter tables in a scenario database refer to dimensions by their abbreviation (`r` for [region](@ref region), `t` for [technology](@ref technology), and so on). The abbreviation serves as the name of the dimension's column, and the column should be populated with unique identifiers for the dimension (`val`, `name`, or `id`, depending on the dimension).
 
@@ -435,6 +435,43 @@ For example, if a technology had an efficiency of 80%, the `InputActivityRatio` 
 | `m` | text  | Mode of operation |
 | `y` | text  | Year |
 | `val` | real  | Factor |
+
+## [Ramp rate](@id RampRate)
+
+Fraction of a [technology's](@ref technology) available capacity that can be brought online or taken offline in a [time slice](@ref timeslice) and [year](@ref year). Ramp rates determine how quickly a technology's utilization can change. NEMO ignores ramp rates of 1.0 (i.e., 100%) since they effectively don't impose a limit.
+
+#### Scenario database
+
+**Table: `RampRate`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `t` | text  | Technology |
+| `y` | text  | Year |
+| `l` | text  | Time slice |
+| `val` | real  | Fraction (0 to 1) |
+
+## [Ramping reset](@id RampingReset)
+
+Indicator that determines which [time slices](@ref timeslice) are exempt from [ramp rate](@ref RampRate) limitations. NEMO can set technology utilization to any level in these time slices. The following values are supported for this parameter:
+
+* 0 - Exempts the first time slice in each [year](@ref year).
+* 1 - Exempts the first time slice in each [time slice group 1](@ref tsgroup1) and year.
+* 2 - Exempts the first time slice in each [time slice group 2](@ref tsgroup2), time slice group 1, and year.
+
+Note that because of the way time slices and groups are configured in NEMO, these values build on one another. For example, the first time slice in each year is exempted in all cases, and the first slice in each group 1 and year is exempted when the value is 2. If you don't specify a value for this parameter, NEMO assumes the value is 2.
+
+#### Scenario database
+
+**Table: `RampingReset`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `val` | integer  | 0, 1, or 2 |
 
 ## [Renewable energy minimum production target](@id REMinProductionTarget)
 

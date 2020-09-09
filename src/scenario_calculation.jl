@@ -29,7 +29,7 @@ the solve status reported by the solver (e.g., `:Optimal`).
     options.
 - `varstosave::String`: Comma-delimited list of output variables whose results should be
     saved in the scenario database.
-- `numprocs`: Number of Julia processes to use for parallelized operations within the
+- `numprocs::Int`: Number of Julia processes to use for parallelized operations within the
     scenario calculation. Ignored if `targetprocs` is specified. Should be a positive integer
     or 0 for half the number of logical processors on the executing machine (i.e., half
     of `Sys.CPU_THREADS`). When `numprocs` is in effect, NEMO selects processes for parallel
