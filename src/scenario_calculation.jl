@@ -184,8 +184,11 @@ logmsg("Connected to scenario database. Path = " * dbpath * ".", quiet)
 # END: Connect to SQLite database.
 
 # BEGIN: Update database if necessary.
-db_v2_to_v3(db; quiet = quiet)
-db_v3_to_v4(db; quiet = quiet)
+dbversion::Int64 = DataFrame(SQLite.DBInterface.execute(db, "select version from version"))[1, :version]
+
+dbversion == 2 && db_v2_to_v3(db; quiet = quiet)
+dbversion < 4 && db_v3_to_v4(db; quiet = quiet)
+dbversion < 5 && db_v4_to_v5(db; quiet = quiet)
 # END: Update database if necessary.
 
 # BEGIN: Perform beforescenariocalc include.
@@ -234,7 +237,7 @@ local paramsneedingdefs::Array{String, 1} = ["OutputActivityRatio", "InputActivi
 "REMinProductionTarget", "EmissionActivityRatio", "EmissionsPenalty", "ModelPeriodExogenousEmission",
 "AnnualExogenousEmission", "AnnualEmissionLimit", "ModelPeriodEmissionLimit", "AccumulatedAnnualDemand", "TotalAnnualMaxCapacityStorage",
 "TotalAnnualMinCapacityStorage", "TotalAnnualMaxCapacityInvestmentStorage", "TotalAnnualMinCapacityInvestmentStorage",
-"TransmissionCapacityToActivityUnit", "StorageFullLoadHours"]
+"TransmissionCapacityToActivityUnit", "StorageFullLoadHours", "RampRate", "RampingReset"]
 
 append!(paramsneedingdefs, ["NodalDistributionDemand", "NodalDistributionTechnologyCapacity", "NodalDistributionStorageCapacity"])
 
@@ -935,6 +938,111 @@ end
 
 length(vrateofactivity1) > 0 && logmsg("Created constraint VRateOfActivity1.", quiet)
 # END: VRateOfActivity1.
+
+# BEGIN: RampRate.
+ramprate::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+for row in SQLite.DBInterface.execute(db, "with ltgs as (select ltg.tg1, tg1.[order] as tg1o, ltg.tg2, tg2.[order] as tg2o, ltg.l, ltg.lorder,
+lag(ltg.l) over (order by tg1.[order], tg2.[order], ltg.lorder) as prior_l
+from LTsGroup ltg, TSGROUP1 tg1, TSGROUP2 tg2
+where ltg.tg1 = tg1.name
+and ltg.tg2 = tg2.name),
+nodal as (select ntc.n as n, n.r as r, ntc.t as t, ar.m as m, ntc.y as y
+from NodalDistributionTechnologyCapacity_def ntc, node n,
+	TransmissionModelingEnabled tme,
+(select r, t, f, m, y from OutputActivityRatio_def
+where val <> 0
+union
+select r, t, f, m, y from InputActivityRatio_def
+where val <> 0) ar
+where ntc.val > 0
+and ntc.n = n.val
+and tme.r = n.r and tme.f = ar.f and tme.y = ntc.y
+and ar.r = n.r and ar.t = ntc.t and ar.y = ntc.y)
+select * from (
+select rr.r, rr.t, rr.y, rr.l, m.val as m, cast(rr.val as real) as rr, ltgs.tg1o, ltgs.tg2o, ltgs.lorder, ltgs.prior_l,
+case rrs.val when 0 then 0 when 1 then 1 when 2 then 2 else 2 end as rrs,
+cast(cf.val as real) as cf, cast(cta.val as real) as cta
+from RampRate_def rr, ltgs, CapacityFactor_def cf, CapacityToActivityUnit_def cta, MODE_OF_OPERATION m
+left join RampingReset_def rrs on rr.r = rrs.r
+left join nodal on rr.r = nodal.r and rr.t = nodal.t and rr.y = nodal.y and nodal.m = m.val
+where rr.l = ltgs.l
+and rr.val <> 1.0
+and rr.r = cf.r and rr.t = cf.t and rr.l = cf.l and rr.y = cf.y
+and rr.r = cta.r and rr.t = cta.t
+and nodal.n is null
+)
+where
+not (tg1o = 1 and tg2o = 1 and lorder = 1)
+and not (rrs >= 1 and tg2o = 1 and lorder = 1)
+and not (rrs = 2 and lorder = 1)")
+    local r = row[:r]
+    local t = row[:t]
+    local l = row[:l]
+    local y = row[:y]
+    local m = row[:m]
+    local prior_l = row[:prior_l]
+
+    push!(ramprate, @constraint(jumpmodel, vrateofactivity[r,l,t,m,y] <= vrateofactivity[r,prior_l,t,m,y]
+        + vtotalcapacityannual[r,t,y] * row[:rr] * row[:cf] * row[:cta]))
+    push!(ramprate, @constraint(jumpmodel, vrateofactivity[r,l,t,m,y] >= vrateofactivity[r,prior_l,t,m,y]
+        - vtotalcapacityannual[r,t,y] * row[:rr] * row[:cf] * row[:cta]))
+end
+
+length(ramprate) > 0 && logmsg("Created constraint RampRate.", quiet)
+# END: RampRate.
+
+# BEGIN: RampRateTr.
+if transmissionmodeling
+    rampratetr::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+    for row in SQLite.DBInterface.execute(db, "with ltgs as (select ltg.tg1, tg1.[order] as tg1o, ltg.tg2, tg2.[order] as tg2o, ltg.l, ltg.lorder,
+    lag(ltg.l) over (order by tg1.[order], tg2.[order], ltg.lorder) as prior_l
+    from LTsGroup ltg, TSGROUP1 tg1, TSGROUP2 tg2
+    where ltg.tg1 = tg1.name
+    and ltg.tg2 = tg2.name)
+    select * from (
+    select rr.r, ntc.n, rr.t, rr.y, rr.l, ar.m, cast(rr.val as real) as rr, ltgs.tg1o, ltgs.tg2o, ltgs.lorder, ltgs.prior_l,
+    case rrs.val when 0 then 0 when 1 then 1 when 2 then 2 else 2 end as rrs,
+    cast(cf.val as real) as cf, cast(cta.val as real) as cta, cast(ntc.val as real) as ntc
+    from RampRate_def rr, ltgs, CapacityFactor_def cf, CapacityToActivityUnit_def cta, NodalDistributionTechnologyCapacity_def ntc,
+    	node n, TransmissionModelingEnabled tme,
+    	(select r, t, f, m, y from OutputActivityRatio_def
+    	where val <> 0
+    	union
+    	select r, t, f, m, y from InputActivityRatio_def
+    	where val <> 0) ar
+    left join RampingReset_def rrs on rr.r = rrs.r
+    where rr.l = ltgs.l
+    and rr.val <> 1.0
+    and rr.r = cf.r and rr.t = cf.t and rr.l = cf.l and rr.y = cf.y
+    and rr.r = cta.r and rr.t = cta.t
+    and ntc.n = n.val
+    and rr.r = n.r and rr.t = ntc.t and rr.y = ntc.y and ntc.val > 0
+    and rr.r = tme.r and tme.f = ar.f and rr.y = tme.y
+    and rr.r = ar.r and rr.t = ar.t and rr.y = ar.y
+    )
+    where
+    not (tg1o = 1 and tg2o = 1 and lorder = 1)
+    and not (rrs >= 1 and tg2o = 1 and lorder = 1)
+    and not (rrs = 2 and lorder = 1)")
+        local r = row[:r]
+        local n = row[:n]
+        local t = row[:t]
+        local l = row[:l]
+        local y = row[:y]
+        local m = row[:m]
+        local prior_l = row[:prior_l]
+
+        push!(rampratetr, @constraint(jumpmodel, vrateofactivitynodal[n,l,t,m,y] <= vrateofactivitynodal[n,prior_l,t,m,y]
+            + vtotalcapacityannual[r,t,y] * row[:ntc] * row[:rr] * row[:cf] * row[:cta]))
+        push!(rampratetr, @constraint(jumpmodel, vrateofactivitynodal[n,l,t,m,y] >= vrateofactivitynodal[n,prior_l,t,m,y]
+            - vtotalcapacityannual[r,t,y] * row[:ntc] * row[:rr] * row[:cf] * row[:cta]))
+    end
+
+    length(rampratetr) > 0 && logmsg("Created constraint RampRateTr.", quiet)
+end
+# END: RampRateTr.
 
 # BEGIN: CAa3_TotalActivityOfEachTechnology.
 caa3_totalactivityofeachtechnology::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
