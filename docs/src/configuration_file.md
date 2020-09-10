@@ -3,7 +3,7 @@ CurrentModule = NemoMod
 ```
 # [Configuration files](@id configuration_file)
 
-When you calculate a scenario with NEMO, you can optionally provide a configuration file that specifies run-time options. The file should be named `nemo.ini` or `nemo.cfg` and should be available in Julia's working directory. To check the working directory in a Julia session, use the  `pwd` function. To change the working directory, use `cd`.
+When you calculate a scenario with NEMO, you can provide a configuration file that specifies run-time options. The file should be named `nemo.ini` or `nemo.cfg` and should be available in Julia's working directory. To check the working directory in a Julia session, use the  `pwd` function. To change the working directory, use `cd`.
 
 NEMO configuration files are text files written in `ini` syntax. The following run-time options can be set in a configuration file.
 

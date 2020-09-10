@@ -27,7 +27,9 @@ makedocs(
         ]
         # Advanced topics
         #   Custom constraints
+        "FAQs" => "faqs.md"
         "Function reference" => "functions.md"
+        "Release notes" => "release_notes.md"
     ],
 )
 

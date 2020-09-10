@@ -24,7 +24,7 @@ The installer program is the easiest way to install NEMO. Here are the steps to 
    ![NEMO installer finished](assets/nemo_installer_finished.png)
 
 !!! note
-    At present, an installer is only available for Windows 10 64-bit. Users on other platforms should refer to [GitHub installation](@ref) below.
+    At present, an installer is only available for Windows 10 64-bit. Users on other platforms should refer to [GitHub installation](@ref github_installation) below.
 
 ### Uninstalling NEMO
 
@@ -53,9 +53,11 @@ Once you do this, there will be a performance penalty when starting NEMO, but an
 !!! tip
     It's a good practice to back up the NEMO system image before overwriting it. That way, you'll be able to restore it if desired.
 
-## GitHub installation
+## [GitHub installation](@id github_installation)
 
-To install NEMO from GitHub, add the NEMO package (named `NemoMod`) within Julia.
+To install NEMO from GitHub, you must first have a working Julia installation on your computer. **The NEMO team has verified NEMO's compatibility with Julia 1.4; other versions of Julia may not work correctly.**
+
+Once Julia is set up, start a Julia session and add the NEMO package (named `NemoMod`):
 
 ```julia
 julia> ]
@@ -69,7 +71,7 @@ This will install the latest NEMO code from GitHub (which may include pre-releas
 pkg> add https://github.com/sei-international/NemoMod.jl#84705cc0b56435a1a2e7c2d3d0e91afc5b46922d
 ```
 
-## Solver compatibility
+## [Solver compatibility](@id solver_compatibility)
 
 NEMO formulates a mixed-integer linear optimization problem and requires a solver that can handle this class of problems. Optimization operations in NEMO are carried out with version 0.18.6 of the [JuMP](https://github.com/JuliaOpt/JuMP.jl) package. In principle, NEMO is compatible with any mixed-integer linear solver that can be called through JuMP (see [the JuMP documentation](http://www.juliaopt.org/JuMP.jl/v0.18/) for more details). A solver can be specified when calculating a scenario in NEMO by passing a JuMP `Model` object that references the solver to NEMO's [`calculatescenario`](@ref) method. For example:
 
