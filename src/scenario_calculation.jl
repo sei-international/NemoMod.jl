@@ -70,7 +70,6 @@ function calculatescenario(
     catch e
         println("NEMO encountered an error with the following message: " * sprint(showerror, e) * ".")
         println("To report this issue to the NEMO team, please submit an error report at https://leap.sei.org/support/. Please include in the report a list of steps to reproduce the error and the error message. Press Enter to continue.")
-        readline();
     end
 end  # calculatescenario()
 

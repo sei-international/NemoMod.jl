@@ -50,7 +50,7 @@ Please report issues at the [LEAP and NEMO support forum](https://leap.sei.org/s
 
 There are several reasons why this error could occur.
 
-  * LEAP crashed while it was calculating a scenario with NEMO. In this case, you can fix the problem by stopping the crashed LEAP process in Window's Task Manager, or you can just reboot Windows.
+  * LEAP crashed while it was calculating a scenario with NEMO. In this case, you can fix the problem by stopping the crashed LEAP process (as well as any running Julia processes) in Window's Task Manager, or you can just reboot Windows.
 
   * You opened a NEMO database for a scenario in LEAP's working directory (using a SQLite client such as DB Browser for SQLite), then tried to recalculate the scenario in LEAP. In this situation, LEAP attempts to overwrite the database but isn't able to. Once you close the database, LEAP should be able to proceed.
 
