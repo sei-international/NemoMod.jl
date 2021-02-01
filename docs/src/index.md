@@ -29,4 +29,8 @@ NEMO is a project of the Energy Modeling Program at the [Stockholm Environment I
 
 ```@raw html
 <a href="https://www.sei.org"><img src="assets/sei_logo.svg" alt="SEI logo" style="display:block; margin: 0 auto"/></a>
+
+<div style="text-align:right">
+    <img src="https://hitcounter.pythonanywhere.com/count/tag.svg?url=https%3A%2F%2Fsei-international.github.io%2FNemoMod.jl%2F" alt="Hits">
+</div>
 ```
