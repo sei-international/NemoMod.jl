@@ -8,7 +8,7 @@
 =#
 
 """
-    calculatescenario(dbpath; jumpmodel = Model(solver = GLPKSolverMIP(presolve=true)),
+    calculatescenario(dbpath; jumpmodel = Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)),
     varstosave = "vdemandnn, vnewcapacity, vtotalcapacityannual,
         vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
         vusenn, vtotaldiscountedcost",
@@ -20,13 +20,12 @@ the solve status reported by the solver (e.g., `:Optimal`).
 
 # Arguments
 - `dbpath::String`: Path to the scenario database (must be a SQLite version 3 database).
-- `jumpmodel::JuMP.Model`: [JuMP](https://github.com/JuliaOpt/JuMP.jl) model object
-    specifying the MIP solver to be used.
-    Examples: `Model(solver = GLPKSolverMIP(presolve=true))`, `Model(solver = CplexSolver())`,
-    `Model(solver = CbcSolver(logLevel=1, presolve="on"))`.
+- `jumpmodel::JuMP.Model`: [JuMP](https://github.com/jump-dev/JuMP.jl) model object
+    specifying the solver to be used.
+    Examples: `Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))`,
+    `Model(CPLEX.Optimizer)`, `Model(optimizer_with_attributes(Cbc.Optimizer, "presolve" => true))`.
     Note that the solver's Julia package (Julia wrapper) must be installed. See the
-    documentation for solver Julia packages for information on how to configure solver
-    options.
+    documentation for JuMP for information on how to set solver options.
 - `varstosave::String`: Comma-delimited list of output variables whose results should be
     saved in the scenario database.
 - `numprocs::Int`: Number of Julia processes to use for parallelized operations within the
@@ -55,7 +54,7 @@ the solve status reported by the solver (e.g., `:Optimal`).
 """
 function calculatescenario(
     dbpath::String;
-    jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
+    jumpmodel::JuMP.Model = Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)),
     varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
     numprocs::Int = 0,
     targetprocs::Array{Int, 1} = Array{Int, 1}(),
@@ -74,7 +73,7 @@ function calculatescenario(
 end  # calculatescenario()
 
 """
-    calculatescenario_main(dbpath; jumpmodel = Model(solver = GLPKSolverMIP(presolve=true)),
+    calculatescenario_main(dbpath; jumpmodel = Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)),
     varstosave = "vdemandnn, vnewcapacity, vtotalcapacityannual,
         vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
         vusenn, vtotaldiscountedcost",
@@ -85,7 +84,7 @@ Implements main scenario calculation logic for calculatescenario().
 """
 function calculatescenario_main(
     dbpath::String;
-    jumpmodel::JuMP.Model = Model(solver = GLPKSolverMIP(presolve=true)),
+    jumpmodel::JuMP.Model = Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)),
     varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
     numprocs::Int = 0,
     targetprocs::Array{Int, 1} = Array{Int, 1}(),
@@ -314,7 +313,7 @@ logmsg("Defined dimensions.", quiet)
 # END: Define dimensions.
 
 # BEGIN: Define model variables.
-modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}} = Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}}()
+modelvarindices::Dict{String, Tuple{AbstractArray,Array{String,1}}} = Dict{String, Tuple{AbstractArray,Array{String,1}}}()
 # Dictionary mapping model variable names to tuples of (variable, [index column names]); must have an entry here in order to save
 #   variable's results back to database
 
@@ -371,8 +370,11 @@ modelvarindices["vtotaldiscountedstoragecost"] = (vtotaldiscountedstoragecost, [
 logmsg("Defined storage variables.", quiet)
 
 # Capacity
-@variable(jumpmodel, vnumberofnewtechnologyunits[sregion, stechnology, syear] >= 0, Int)
-modelvarindices["vnumberofnewtechnologyunits"] = (vnumberofnewtechnologyunits, ["r", "t", "y"])
+if in("vnumberofnewtechnologyunits", varstosavearr) || size(queries["querycaa5_totalnewcapacity"])[1] > 0
+    @variable(jumpmodel, vnumberofnewtechnologyunits[sregion, stechnology, syear] >= 0, Int)
+    modelvarindices["vnumberofnewtechnologyunits"] = (vnumberofnewtechnologyunits, ["r", "t", "y"])
+end
+
 @variable(jumpmodel, vnewcapacity[sregion, stechnology, syear] >= 0)
 modelvarindices["vnewcapacity"] = (vnewcapacity, ["r", "t", "y"])
 @variable(jumpmodel, vaccumulatednewcapacity[sregion, stechnology, syear] >= 0)
@@ -858,7 +860,7 @@ order by r.val, t.val, y.val")
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vnewcapacity[r,t,row[:yy]])
+    add_to_expression!(sumexps[1], vnewcapacity[r,t,row[:yy]])
 
     lastkeys[1] = r
     lastkeys[2] = t
@@ -922,7 +924,7 @@ order by l.val, ntc.t, ar.m, ntc.y, n.r")
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vrateofactivitynodal[row[:n],l,t,m,y])
+    add_to_expression!(sumexps[1], vrateofactivitynodal[row[:n],l,t,m,y])
 
     lastkeys[1] = r
     lastkeys[2] = l
@@ -1072,7 +1074,7 @@ if transmissionmodeling
             sumexps[1] = AffExpr()
         end
 
-        append!(sumexps[1], vrateofactivitynodal[n,l,t,row[:m],y])
+        add_to_expression!(sumexps[1], vrateofactivitynodal[n,l,t,row[:m],y])
 
         lastkeys[1] = n
         lastkeys[2] = t
@@ -1137,19 +1139,20 @@ end
 # END: CAa4Tr_Constraint_Capacity.
 
 # BEGIN: CAa5_TotalNewCapacity.
-caa5_totalnewcapacity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+if size(queries["querycaa5_totalnewcapacity"])[1] > 0
+    caa5_totalnewcapacity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in SQLite.DBInterface.execute(db,"select cot.r as r, cot.t as t, cot.y as y, cast(cot.val as real) as cot
-from CapacityOfOneTechnologyUnit_def cot where cot.val <> 0")
-    local r = row[:r]
-    local t = row[:t]
-    local y = row[:y]
+    for row in DataFrames.eachrow(queries["querycaa5_totalnewcapacity"])
+        local r = row[:r]
+        local t = row[:t]
+        local y = row[:y]
 
-    push!(caa5_totalnewcapacity, @constraint(jumpmodel, row[:cot] * vnumberofnewtechnologyunits[r,t,y]
-        == vnewcapacity[r,t,y]))
+        push!(caa5_totalnewcapacity, @constraint(jumpmodel, row[:cot] * vnumberofnewtechnologyunits[r,t,y]
+            == vnewcapacity[r,t,y]))
+    end
+
+    length(caa5_totalnewcapacity) > 0 && logmsg("Created constraint CAa5_TotalNewCapacity.", quiet)
 end
-
-length(caa5_totalnewcapacity) > 0 && logmsg("Created constraint CAa5_TotalNewCapacity.", quiet)
 # END: CAa5_TotalNewCapacity.
 
 #= BEGIN: CAb1_PlannedMaintenance.
@@ -1191,8 +1194,8 @@ order by r.val, t.val, y.val"))
         sumexps[2] = AffExpr()
     end
 
-    append!(sumexps[1], vrateoftotalactivity[r,t,l,y] * ys)
-    append!(sumexps[2], vtotalcapacityannual[r,t,y] * row[:cf] * ys)
+    add_to_expression!(sumexps[1], vrateoftotalactivity[r,t,l,y] * ys)
+    add_to_expression!(sumexps[2], vtotalcapacityannual[r,t,y] * row[:cf] * ys)
 
     lastkeys[1] = r
     lastkeys[2] = t
@@ -1248,7 +1251,7 @@ for row in DataFrames.eachrow(queries["queryvrateofproductionbytechnologybymoden
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vrateofactivity[r,l,t,row[:m],y] * row[:oar])
+    add_to_expression!(sumexps[1], vrateofactivity[r,l,t,row[:m],y] * row[:oar])
     # Sum is of vrateofproductionbytechnologybymodenn[r,l,t,row[:m],f,y])
 
     lastkeys[1] = r
@@ -1299,7 +1302,7 @@ if transmissionmodeling
             sumexps[1] = AffExpr()
         end
 
-        append!(sumexps[1], vrateofactivitynodal[n,l,t,row[:m],y] * row[:oar])
+        add_to_expression!(sumexps[1], vrateofactivitynodal[n,l,t,row[:m],y] * row[:oar])
 
         lastkeys[1] = n
         lastkeys[2] = l
@@ -1336,7 +1339,7 @@ for row in DataFrames.eachrow(queries["queryvrateofproductionbytechnologynn"])
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vrateofproductionbytechnologynn[r,l,row[:t],f,y])
+    add_to_expression!(sumexps[1], vrateofproductionbytechnologynn[r,l,row[:t],f,y])
 
     lastkeys[1] = r
     lastkeys[2] = l
@@ -1383,7 +1386,7 @@ if transmissionmodeling
             sumexps[1] = AffExpr()
         end
 
-        append!(sumexps[1], vrateofproductionbytechnologynodal[n,l,row[:t],f,y])
+        add_to_expression!(sumexps[1], vrateofproductionbytechnologynodal[n,l,row[:t],f,y])
 
         lastkeys[1] = n
         lastkeys[2] = l
@@ -1449,7 +1452,7 @@ else
         end
 
         if !ismissing(row[:tme]) && !ismissing(row[:n])
-            append!(sumexps[1], vrateofproductionnodal[row[:n],l,f,y])
+            add_to_expression!(sumexps[1], vrateofproductionnodal[row[:n],l,f,y])
         end
 
         lastkeys[1] = r
@@ -1509,7 +1512,7 @@ for row in DataFrames.eachrow(queries["queryvrateofusebytechnologybymodenn"])
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vrateofactivity[r,l,t,row[:m],y] * row[:iar])
+    add_to_expression!(sumexps[1], vrateofactivity[r,l,t,row[:m],y] * row[:iar])
     # Sum is of vrateofusebytechnologybymodenn[r,l,t,row[:m],f,y])
 
     lastkeys[1] = r
@@ -1559,7 +1562,7 @@ if transmissionmodeling
             sumexps[1] = AffExpr()
         end
 
-        append!(sumexps[1], vrateofactivitynodal[n,l,t,row[:m],y] * row[:iar])
+        add_to_expression!(sumexps[1], vrateofactivitynodal[n,l,t,row[:m],y] * row[:iar])
 
         lastkeys[1] = n
         lastkeys[2] = l
@@ -1595,7 +1598,7 @@ for row in DataFrames.eachrow(queries["queryvrateofusebytechnologynn"])
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vrateofusebytechnologynn[r,l,row[:t],f,y])
+    add_to_expression!(sumexps[1], vrateofusebytechnologynn[r,l,row[:t],f,y])
 
     lastkeys[1] = r
     lastkeys[2] = l
@@ -1629,7 +1632,7 @@ if transmissionmodeling
             sumexps[1] = AffExpr()
         end
 
-        append!(sumexps[1], vrateofusebytechnologynodal[n,l,row[:t],f,y])
+        add_to_expression!(sumexps[1], vrateofusebytechnologynodal[n,l,row[:t],f,y])
 
         lastkeys[1] = n
         lastkeys[2] = l
@@ -1673,7 +1676,7 @@ else
         end
 
         if !ismissing(row[:tme]) && !ismissing(row[:n])
-            append!(sumexps[1], vrateofusenodal[row[:n],l,f,y])
+            add_to_expression!(sumexps[1], vrateofusenodal[row[:n],l,f,y])
         end
 
         lastkeys[1] = r
@@ -1825,7 +1828,7 @@ order by r.val, l.val, f.val, y.val")
 
     # Appears that traderoutes must be defined reciprocally - two entries for each pair of regions. Bears testing.
     if !ismissing(row[:rr])
-        append!(sumexps[1], vtrade[r,row[:rr],l,f,y] * row[:trv])
+        add_to_expression!(sumexps[1], vtrade[r,row[:rr],l,f,y] * row[:trv])
     end
 
     lastkeys[1] = r
@@ -1896,7 +1899,7 @@ if transmissionmodeling
         end
 
         if !ismissing(yy)
-            append!(sumexps[1], vtransmissionbuilt[tr,yy])
+            add_to_expression!(sumexps[1], vtransmissionbuilt[tr,yy])
         end
 
         lastkeys[1] = tr
@@ -2051,18 +2054,18 @@ order by n, f, y, l")
 
         if !ismissing(tr)
             if trtype == 1 || trtype == 2 || trtype == 3
-                append!(sumexps[1], vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta])
-                append!(sumexps[2], vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta])
+                add_to_expression!(sumexps[1], vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta])
+                add_to_expression!(sumexps[2], vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta])
             end
         end
 
         if !ismissing(trneg)
             if trtype == 1 || trtype == 2
-                append!(sumexps[1], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta])
-                append!(sumexps[2], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta])
+                add_to_expression!(sumexps[1], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta])
+                add_to_expression!(sumexps[2], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta])
             elseif trtype == 3  # Incorporate efficiency for to node in pipeline flow
-                append!(sumexps[1], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta] * eff)
-                append!(sumexps[2], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta] * eff)
+                add_to_expression!(sumexps[1], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta] * eff)
+                add_to_expression!(sumexps[2], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta] * eff)
             end
         end
 
@@ -2188,7 +2191,7 @@ order by r.val, f.val, y.val")
     end
 
     if !ismissing(row[:rr])
-        append!(sumexps[1], vtradeannual[r,row[:rr],f,y] * row[:trv])
+        add_to_expression!(sumexps[1], vtradeannual[r,row[:rr],f,y] * row[:trv])
     end
 
     if !ismissing(row[:aad])
@@ -2266,7 +2269,7 @@ if in("vproductionbytechnology", varstosavearr)
                 sumexps[1] = AffExpr()
             end
 
-            append!(sumexps[1], vrateofproductionbytechnologynodal[row[:n],l,t,f,y] * row[:ys])
+            add_to_expression!(sumexps[1], vrateofproductionbytechnologynodal[row[:n],l,t,f,y] * row[:ys])
 
             lastkeys[1] = r
             lastkeys[2] = l
@@ -2318,7 +2321,7 @@ if in("vusebytechnology", varstosavearr)
                 sumexps[1] = AffExpr()
             end
 
-            append!(sumexps[1], vrateofusebytechnologynodal[row[:n],l,t,f,y] * row[:ys])
+            add_to_expression!(sumexps[1], vrateofusebytechnologynodal[row[:n],l,t,f,y] * row[:ys])
 
             lastkeys[1] = r
             lastkeys[2] = l
@@ -2359,7 +2362,7 @@ order by r.val, t.val, m.val, y.val")
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vrateofactivity[r,row[:l],t,m,y] * row[:ys])
+    add_to_expression!(sumexps[1], vrateofactivity[r,row[:l],t,m,y] * row[:ys])
 
     lastkeys[1] = r
     lastkeys[2] = t
@@ -2413,7 +2416,7 @@ order by r.val, s.val, l.val, y.val")
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vrateofactivity[r,l,row[:t],row[:m],y])
+    add_to_expression!(sumexps[1], vrateofactivity[r,l,row[:t],row[:m],y])
 
     lastkeys[1] = r
     lastkeys[2] = s
@@ -2463,7 +2466,7 @@ if transmissionmodeling
             sumexps[1] = AffExpr()
         end
 
-        append!(sumexps[1], vrateofactivitynodal[n,l,row[:t],row[:m],y])
+        add_to_expression!(sumexps[1], vrateofactivitynodal[n,l,row[:t],row[:m],y])
 
         lastkeys[1] = n
         lastkeys[2] = s
@@ -2506,7 +2509,7 @@ order by r.val, s.val, l.val, y.val")
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vrateofactivity[r,l,row[:t],row[:m],y])
+    add_to_expression!(sumexps[1], vrateofactivity[r,l,row[:t],row[:m],y])
 
     lastkeys[1] = r
     lastkeys[2] = s
@@ -2556,7 +2559,7 @@ if transmissionmodeling
             sumexps[1] = AffExpr()
         end
 
-        append!(sumexps[1], vrateofactivitynodal[n,l,row[:t],row[:m],y])
+        add_to_expression!(sumexps[1], vrateofactivitynodal[n,l,row[:t],row[:m],y])
 
         lastkeys[1] = n
         lastkeys[2] = s
@@ -2945,7 +2948,7 @@ order by r.val, s.val, y.val")
         lastvalsint[1] = 0
     end
 
-    append!(sumexps[1], (vrateofstoragechargenn[r,s,row[:l],y] - vrateofstoragedischargenn[r,s,row[:l],y]) * row[:ys])
+    add_to_expression!(sumexps[1], (vrateofstoragechargenn[r,s,row[:l],y] - vrateofstoragedischargenn[r,s,row[:l],y]) * row[:ys])
 
     if !ismissing(row[:sls])
         lastvals[1] = row[:sls]
@@ -3039,7 +3042,7 @@ if transmissionmodeling
             lastvalsint[1] = 0
         end
 
-        append!(sumexps[1], (vrateofstoragechargenodal[n,s,row[:l],y] - vrateofstoragedischargenodal[n,s,row[:l],y]) * row[:ys])
+        add_to_expression!(sumexps[1], (vrateofstoragechargenodal[n,s,row[:l],y] - vrateofstoragedischargenodal[n,s,row[:l],y]) * row[:ys])
 
         if !ismissing(row[:sls])
             lastvals[1] = row[:sls]
@@ -3135,7 +3138,7 @@ order by r.val, s.val, y.val")
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vnewstoragecapacity[r,s,row[:yy]])
+    add_to_expression!(sumexps[1], vnewstoragecapacity[r,s,row[:yy]])
 
     lastkeys[1] = r
     lastkeys[2] = s
@@ -3415,7 +3418,7 @@ order by sf.r, sf.s, sf.y")
         lastvals[1] = 0.0
     end
 
-    append!(sumexps[1], vnewcapacity[r,row[:t],y] * row[:cta])
+    add_to_expression!(sumexps[1], vnewcapacity[r,row[:t],y] * row[:cta])
 
     if !ismissing(row[:flh])
         lastvals[1] = row[:flh]
@@ -3827,7 +3830,7 @@ order by r.val, t.val, y.val")
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vtotalannualtechnologyactivitybymode[r,t,row[:m],y] * row[:vc])
+    add_to_expression!(sumexps[1], vtotalannualtechnologyactivitybymode[r,t,row[:m],y] * row[:vc])
 
     lastkeys[1] = r
     lastkeys[2] = t
@@ -3889,7 +3892,7 @@ if transmissionmodeling
             sumexps[1] = AffExpr()
         end
 
-        append!(sumexps[1], vtransmissionbyline[tr,row[:l],row[:f],y] * row[:ys] * row[:tcta] * vc)
+        add_to_expression!(sumexps[1], vtransmissionbyline[tr,row[:l],row[:f],y] * row[:ys] * row[:tcta] * vc)
 
         lastkeys[1] = tr
         lastkeys[2] = y
@@ -3975,7 +3978,7 @@ if transmissionmodeling
             sumexps[1] = AffExpr()
         end
 
-        append!(sumexps[1], vdiscountedcapitalinvestmenttransmission[tr,y] - vdiscountedsalvagevaluetransmission[tr,y]
+        add_to_expression!(sumexps[1], vdiscountedcapitalinvestmenttransmission[tr,y] - vdiscountedsalvagevaluetransmission[tr,y]
             + vdiscountedoperatingcosttransmission[tr,y])
 
         lastkeys[1] = r
@@ -4089,7 +4092,7 @@ if (annualactivityupperlimits || annualactivitylowerlimits || modelperiodactivit
             sumexps[1] = AffExpr()
         end
 
-        append!(sumexps[1], vrateoftotalactivity[r,t,row[:l],y] * row[:ys])
+        add_to_expression!(sumexps[1], vrateoftotalactivity[r,t,row[:l],y] * row[:ys])
 
         lastkeys[1] = r
         lastkeys[2] = t
@@ -4202,7 +4205,7 @@ order by r.val, y.val")
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vtotalcapacityannual[r,row[:t],y] * row[:rmt] * row[:cau])
+    add_to_expression!(sumexps[1], vtotalcapacityannual[r,row[:t],y] * row[:rmt] * row[:cau])
 
     lastkeys[1] = r
     lastkeys[2] = y
@@ -4238,7 +4241,7 @@ order by r.val, l.val, y.val")
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vrateofproduction[r,l,row[:f],y] * row[:rmf])
+    add_to_expression!(sumexps[1], vrateofproduction[r,l,row[:f],y] * row[:rmf])
 
     lastkeys[1] = r
     lastkeys[2] = l
@@ -4289,9 +4292,9 @@ for row in DataFrames.eachrow(queries["queryvproductionbytechnologyannual"])
     end
 
     if ismissing(n)
-        append!(sumexps[1], vrateofproductionbytechnologynn[r,row[:l],t,f,y] * row[:ys])
+        add_to_expression!(sumexps[1], vrateofproductionbytechnologynn[r,row[:l],t,f,y] * row[:ys])
     else
-        append!(sumexps[1], vrateofproductionbytechnologynodal[n,row[:l],t,f,y] * row[:ys])
+        add_to_expression!(sumexps[1], vrateofproductionbytechnologynodal[n,row[:l],t,f,y] * row[:ys])
     end
 
     lastkeys[1] = r
@@ -4327,9 +4330,9 @@ for row in DataFrames.eachrow(queries["queryvusebytechnologyannual"])
     end
 
     if ismissing(n)
-        append!(sumexps[1], vrateofusebytechnologynn[r,row[:l],t,f,y] * row[:ys])
+        add_to_expression!(sumexps[1], vrateofusebytechnologynn[r,row[:l],t,f,y] * row[:ys])
     else
-        append!(sumexps[1], vrateofusebytechnologynodal[n,row[:l],t,f,y] * row[:ys])
+        add_to_expression!(sumexps[1], vrateofusebytechnologynodal[n,row[:l],t,f,y] * row[:ys])
     end
 
     lastkeys[1] = r
@@ -4369,7 +4372,7 @@ order by r.val, y.val")
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vproductionbytechnologyannual[r,row[:t],row[:f],y] * row[:ret])
+    add_to_expression!(sumexps[1], vproductionbytechnologyannual[r,row[:t],row[:f],y] * row[:ret])
 
     lastkeys[1] = r
     lastkeys[2] = y
@@ -4405,7 +4408,7 @@ order by r.val, y.val")
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vrateofproduction[r,row[:l],row[:f],y] * row[:ys] * row[:rtf])
+    add_to_expression!(sumexps[1], vrateofproduction[r,row[:l],row[:f],y] * row[:ys] * row[:rtf])
 
     lastkeys[1] = r
     lastkeys[2] = y
@@ -4489,7 +4492,7 @@ for row in queryvannualtechnologyemissionbymode
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], row[:ear] * vtotalannualtechnologyactivitybymode[r,t,row[:m],y])
+    add_to_expression!(sumexps[1], row[:ear] * vtotalannualtechnologyactivitybymode[r,t,row[:m],y])
 
     lastkeys[1] = r
     lastkeys[2] = t
@@ -4550,7 +4553,7 @@ for row in queryvannualtechnologyemissionpenaltybyemission
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vannualtechnologyemission[r,t,row[:e],y] * row[:ep])
+    add_to_expression!(sumexps[1], vannualtechnologyemission[r,t,row[:e],y] * row[:ep])
 
     lastkeys[1] = r
     lastkeys[2] = t
@@ -4600,7 +4603,7 @@ order by r, e, y")
         sumexps[1] = AffExpr()
     end
 
-    append!(sumexps[1], vannualtechnologyemission[r,row[:t],e,y])
+    add_to_expression!(sumexps[1], vannualtechnologyemission[r,row[:t],e,y])
 
     lastkeys[1] = r
     lastkeys[2] = e
@@ -4684,14 +4687,19 @@ logmsg("Defined model objective.", quiet)
 # END: Define model objective.
 
 # Solve model
-status::Symbol = solve(jumpmodel)
+optimize!(jumpmodel)
+status = termination_status(jumpmodel)  # MathOptInterface.TerminationStatusCode
 solvedtm::DateTime = now()  # Date/time of last solve operation
 solvedtmstr::String = Dates.format(solvedtm, "yyyy-mm-dd HH:MM:SS.sss")  # solvedtm as a formatted string
 logmsg("Solved model. Solver status = " * string(status) * ".", quiet, solvedtm)
 
 # BEGIN: Save results to database.
-savevarresults(varstosavearr, modelvarindices, db, solvedtmstr, reportzeros, quiet)
-logmsg("Finished saving results to database.", quiet)
+if Int(status) == 1 && has_values(jumpmodel)  # 1 = Optimal
+    savevarresults(varstosavearr, modelvarindices, db, solvedtmstr, reportzeros, quiet)
+    logmsg("Finished saving results to database.", quiet)
+else
+    logmsg("Solver did not find an optimal solution for model. No results will be saved to database.")
+end
 # END: Save results to database.
 
 # Drop temporary tables

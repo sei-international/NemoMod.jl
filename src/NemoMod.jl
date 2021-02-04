@@ -18,7 +18,7 @@ export calculatescenario, createnemodb, dropdefaultviews, dropresulttables, logm
 
 # BEGIN: Access other modules and code files.
 using JuMP, SQLite, DataFrames, Distributed, Dates, ConfParser
-using GLPKMathProgInterface, Cbc  # Open-source solvers
+using GLPK, Cbc  # Open-source solvers
 
 # Proprietary solvers - enclosed in try blocks for users who aren't using NEMO installer
 try
