@@ -1003,9 +1003,12 @@ Multiplier to convert 1 megawatt-year to a [region's](@ref region) energy [unit]
 
 Indicator of whether transmission modeling is enabled for a [region](@ref region), [fuel](@ref fuel), and [year](@ref year). The `type` field specifies the approach to simulating energy flow:
 
-* 1 - Direct current optimized power flow (classical formulation).[^1]
-* 2 - Direct current optimized power flow with a disjunctive relaxation.[^2] This formulation produces equivalent results to type 1 but is compatible with a wider range of solvers.
-* 3 - Pipeline flow. This approach treats [transmission lines](@ref transmissionline) as pipelines whose flow is governed only by their maximum flow and efficiency.
+* 1 - Direct current optimized power flow (DCOPF) (classical formulation).[^1]
+* 2 - DCOPF with a disjunctive relaxation.[^2]
+* 3 - Pipeline flow. This approach treats [transmission lines](@ref transmissionline) as pipelines whose flow is limited only by their maximum flow and efficiency.
+
+!!! note
+    If you choose type 1, NEMO will add a quadratic term to the optimization problem for your scenario. This will make the scenario incompatible with linear programming (LP)-only solvers such as GLPK and Cbc. To use DCOPF with an LP-only solver, choose type 2. This type produces equivalent results to type 1 but implements DCOPF with linear constraints.
 
 !!! note
     At present, NEMO does not endogenously simulate line losses for types 1 and 2.

@@ -33,9 +33,7 @@ makedocs(
     ],
 )
 
-deploydocs(
-    repo = "github.com/sei-international/NemoMod.jl.git",
-)
+deploydocs(repo = "github.com/sei-international/NemoMod.jl.git")
 
 # Documenter can also automatically deploy documentation to gh-pages.
 # See "Hosting Documentation" and deploydocs() in the Documenter manual

@@ -25,7 +25,7 @@ the termination status reported by the solver (e.g., `OPTIMAL::TerminationStatus
     Examples: `Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))`,
     `Model(CPLEX.Optimizer)`, `Model(optimizer_with_attributes(Cbc.Optimizer, "presolve" => true))`.
     Note that the solver's Julia package (Julia wrapper) must be installed. See the
-    documentation for JuMP for information on how to set solver options.
+    documentation for JuMP for information on how to specify a solver and set solver options.
 - `varstosave::String`: Comma-delimited list of output variables whose results should be
     saved in the scenario database.
 - `numprocs::Int`: Number of Julia processes to use for parallelized operations within the

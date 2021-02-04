@@ -55,7 +55,7 @@ Once you do this, there will be a performance penalty when starting NEMO, but an
 
 ## [GitHub installation](@id github_installation)
 
-To install NEMO from GitHub, you must first have a working Julia installation on your computer. **The NEMO team has verified NEMO's compatibility with Julia 1.4; other versions of Julia may not work correctly.**
+To install NEMO from GitHub, you must first have a working Julia installation on your computer. **The NEMO team has verified NEMO's compatibility with Julia 1.5; other versions of Julia may not work correctly.**
 
 Once Julia is set up, start a Julia session and add the NEMO package (named `NemoMod`):
 
@@ -72,11 +72,21 @@ pkg> add https://github.com/sei-international/NemoMod.jl#84705cc0b56435a1a2e7c2d
 ```
 
 ## [Solver compatibility](@id solver_compatibility)
+When you [calculate a scenario](@ref scenario_calc) in NEMO, the tool formulates an optimization problem that must be solved by a compatible solver. In general, this process yields a conventional linear programming (LP) problem, but certain run-time options can change the problem type.
 
-NEMO formulates a mixed-integer linear optimization problem and requires a solver that can handle this class of problems. Optimization operations in NEMO are carried out with version 0.18.6 of the [JuMP](https://github.com/JuliaOpt/JuMP.jl) package. In principle, NEMO is compatible with any mixed-integer linear solver that can be called through JuMP (see [the JuMP documentation](http://www.juliaopt.org/JuMP.jl/v0.18/) for more details). A solver can be specified when calculating a scenario in NEMO by passing a JuMP `Model` object that references the solver to NEMO's [`calculatescenario`](@ref) method. For example:
+!!! note
+
+    NEMO generates an LP optimization problem when calculating a scenario unless you do one of the following:
+    * Set the [capacity of one technology unit](@ref CapacityOfOneTechnologyUnit) parameter (creates a mixed-integer linear programming [MILP] problem)
+    * Set the `continuoustransmission` argument for [`calculatescenario`](@ref) to `false` (creates an MILP problem)
+    * Run a direct current optimized power flow simulation by choosing 1 as the `type` for the [transmission modeling enabled](@ref TransmissionModelingEnabled) parameter (creates a problem with a quadratic term)
+
+Optimization operations in NEMO are carried out with version 0.21.6 of the [JuMP](https://github.com/JuliaOpt/JuMP.jl) package. In principle, NEMO is compatible with any solver that can be called through JuMP, but you must ensure the selected solver can handle the problem you're presenting (LP/MILP/quadratic). For a list of solvers that work with JuMP, see [the JuMP documentation](https://jump.dev/JuMP.jl/v0.21.6/installation/#Supported-solvers).
+
+A solver can be specified when calculating a scenario in NEMO by passing a JuMP `Model` object that references the solver to NEMO's [`calculatescenario`](@ref) method. For example:
 
 ```julia
-julia> NemoMod.calculatescenario("c:/temp/scenario_db.sqlite"; jumpmodel = Model(solver = GLPKSolverMIP(presolve=true)))
+julia> NemoMod.calculatescenario("c:/temp/scenario_db.sqlite"; jumpmodel = Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)))
 ```
 
 Note that in order to do this, you must have the corresponding Julia interface (package) for the solver installed on your computer.
@@ -85,14 +95,17 @@ NEMO has been tested for compatibility with the following solver packages (which
 
 | Solver | Julia package version | Solver program versions |
 |:--- | :-- |:-- |
-| [Cbc](https://github.com/JuliaOpt/Cbc.jl) | 0.6.3 | 2.9.9 |
-| [CPLEX](https://github.com/JuliaOpt/CPLEX.jl) | 0.5.1 | 12.8 - 12.9 |
-| [GLPK](https://github.com/JuliaOpt/GLPK.jl) / [GLPKMathProgInterface](https://github.com/JuliaOpt/GLPKMathProgInterface.jl) | 0.10.0 / 0.4.4 | 4.64 |
-| [Gurobi](https://github.com/JuliaOpt/Gurobi.jl) | 0.6.0 | 7.0 - 8.1 |
-| [Mosek](https://github.com/JuliaOpt/Mosek.jl) | 0.9.8 | 8.1 |
-| [Xpress](https://github.com/jump-dev/Xpress.jl) | 0.9.1 | 8.4 - 8.9 |
+| [Cbc](https://github.com/jump-dev/Cbc.jl) | 0.7.1 | 2.10.3 |
+| [CPLEX](https://github.com/jump-dev/CPLEX.jl) | 0.7.6 | 12.10 - 20.1 |
+| [GLPK](https://github.com/jump-dev/GLPK.jl) | 0.14.6 | 4.64 |
+| [Gurobi](https://github.com/jump-dev/Gurobi.jl) | 0.9.7 | 9.0 - 9.1 |
+| [Mosek](https://github.com/jump-dev/MosekTools.jl) | 0.9.4 | 9.2.36 |
+| [Xpress](https://github.com/jump-dev/Xpress.jl) | 0.12.2 | 8.4 - 8.9 |
 
-If you install NEMO with the [NEMO installer](@ref installer_program), all compatible solver packages will be installed as well. The packages for the open-source solvers (GLPK and Cbc) come with the underlying solver programs, so you should be able to use these solvers immediately upon installation.
+!!! tip
+    Older versions of NEMO may be compatible with older versions of these solvers. For example, [NEMO 1.2](https://github.com/sei-international/NemoMod.jl/releases/tag/v1.2) is compatible with CPLEX 12.8 - 12.9 and Gurobi 7 - 8.
+
+If you install NEMO with the [NEMO installer](@ref installer_program), all of the preceding solver packages will be installed as well. The packages for the open-source solvers (GLPK and Cbc) come with the underlying solver programs, so you should be able to use these solvers immediately upon installation.
 
 The Mosek Julia package also provides the underlying solver program. In this case, though, you must have a valid Mosek license installed on your computer in order to use the solver. Typically, for a single-computer license (a server license), a license file must be installed at `%USERPROFILE%\mosek\mosek.lic` (Windows) or `$HOME/mosek/mosek.lic` (Linux or MacOS). See the [Mosek documentation](https://www.mosek.com/resources/getting-started/) for more information.
 
