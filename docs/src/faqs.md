@@ -15,9 +15,13 @@ With GitHub installation, NEMO will be slower to start than if installed with th
 
 If you're running the installer on Windows, **make sure you're using a licensed copy of Windows 10 64-bit**. The installer may not work on other versions of Windows, including Windows 7. If you've verified your operating system but are still encountering an error, click the "Show details" button in the installer and record the error message. You can then report the issue at the [LEAP and NEMO support forum](https://leap.sei.org/support/). When you do, please note which operating system and operating-system display language you're using.
 
+#### Is there a silent mode for the [NEMO installer program](@ref installer_program)?
+
+Yes, you can run the installer in silent mode with a `/S` switch.
+
 #### Why won't my solver work with NEMO?
 
-The first thing to do in case of problems with a solver is to check [whether NEMO supports the solver](@ref solver_compatibility). The NEMO team generally doesn't help to troubleshoot unsupported solvers. Note in particular that **right now, the highest version of CPLEX that's compatible with NEMO is 12.9, and the highest version of Gurobi that's compatible with NEMO is 8.1.**
+The first thing to do in case of problems with a solver is to check [whether NEMO supports the solver](@ref solver_compatibility). The NEMO team generally doesn't help to troubleshoot unsupported solvers. Note in particular that **right now, NEMO is only compatible with versions 12.8 and 12.9 of CPLEX and versions 7.0-8.1 of Gurobi.**
 
 You should also make sure your solver is properly licensed. Proprietary solvers including CPLEX, Gurobi, Mosek, and Xpress require a license that must be obtained from their provider.
 

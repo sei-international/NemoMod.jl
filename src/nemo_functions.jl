@@ -766,35 +766,37 @@ end  # drop_temp_tables(db::SQLite.DB)
 
 """
     savevarresults(vars::Array{String,1},
-    modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}},
+    modelvarindices::Dict{String, Tuple{AbstractArray,Array{String,1}}},
     db::SQLite.DB, solvedtmstr::String, reportzeros::Bool = false, quiet::Bool = false)
 
 Saves model results to a SQLite database using SQL inserts with transaction batching.
 
 # Arguments
 - `vars::Array{String,1}`: Names of model variables for which results will be retrieved and saved to database.
-- `modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}}`: Dictionary mapping model variable names
+- `modelvarindices::Dict{String, Tuple{AbstractArray,Array{String,1}}}`: Dictionary mapping model variable names
     to tuples of (variable, [index column names]).
 - `db::SQLite.DB`: SQLite database.
 - `solvedtmstr::String`: String to write into solvedtm field in result tables.
 - `reportzeros::Bool`: Indicates whether values equal to 0 should be saved.
 - `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to STDOUT).
 """
-function savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String,
+function savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{AbstractArray,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String,
     reportzeros::Bool = false, quiet::Bool = false)
     for vname in intersect(vars, keys(modelvarindices))
-        local v = modelvarindices[vname][1]  # Model variable corresponding to vname
-        local gvv = JuMP.getvalue(v)  # Value of v in model solution
+        local v = modelvarindices[vname][1]  # Model variable corresponding to vname (technically, a variable container in JuMP)
+        local gvv = value.(v)  # Value of v in model solution
         local indices::Array{Tuple}  # Array of tuples of index values for v
         local vals::Array{Float64}  # Array of model results for v
 
         # Populate indices and vals
-        if v isa JuMP.JuMPArray
-            indices = collect(Base.product(gvv.indexsets...))  # Ellipsis splices indexsets into its values for passing to product()
-            vals = gvv.innerArray
-        elseif v isa JuMP.JuMPDict
-            indices = collect(keys(gvv.tupledict))
-            vals = collect(values(gvv.tupledict))
+        if v isa JuMP.Containers.DenseAxisArray
+            # In this case, indices and vals are parallel multidimensional arrays
+            indices = collect(Base.product(gvv.axes...))  # Ellipsis splats axes into its values for passing to product()
+            vals = gvv.data
+        elseif v isa JuMP.Containers.SparseAxisArray
+            # In this case, indices and vals are vectors
+            indices = collect(keys(gvv.data))
+            vals = collect(values(gvv.data))
         end
 
         # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
@@ -808,7 +810,7 @@ function savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tup
             SQLite.DBInterface.execute(db, "create table '" * vname * "' ('" * join(modelvarindices[vname][2], "' text, '") * "' text, 'val' real, 'solvedtm' text)")
 
             # Insert data from gvv
-            for i = 1:length(vals)
+            for i in eachindex(indices)
                 if reportzeros || vals[i] != 0.0
                     SQLite.DBInterface.execute(db, "insert into " * vname * " values('" * join(indices[i], "', '") * "', '" * string(vals[i]) * "', '" * solvedtmstr * "')")
                 end
@@ -826,7 +828,7 @@ function savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tup
         end
         # END: Wrap database operations in try-catch block to allow rollback on error.
     end
-end  # savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{JuMP.JuMPContainer,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String)
+end  # savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{AbstractArray,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String)
 
 """
     dropresulttables(db::SQLite.DB, quiet::Bool = true)
@@ -1017,6 +1019,9 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     and ntc.y = ys.y
     )
     order by r, t, f, y")
+
+    return_val["querycaa5_totalnewcapacity"] = (dbpath, "select cot.r as r, cot.t as t, cot.y as y, cast(cot.val as real) as cot
+    from CapacityOfOneTechnologyUnit_def cot where cot.val <> 0")
 
     if transmissionmodeling
         return_val["queryvrateofactivitynodal"] = (dbpath, "select ntc.n as n, l.val as l, ntc.t as t, ar.m as m, ntc.y as y
@@ -1222,23 +1227,3 @@ function db_v4_to_v5(db::SQLite.DB; quiet::Bool = false)
     end
     # END: Wrap database operations in try-catch block to allow rollback on error.
 end  # db_v4_to_v5(db::SQLite.DB; quiet::Bool = false)
-
-"""
-    getvars(varnames::Array{String, 1})
-
-Returns an array of model variables corresponding to the names in `varnames`. Excludes any variables not convertible to
-    `JuMP.JuMPContainer`.
-"""
-function getvars(varnames::Array{String, 1})
-    local returnval::Array{JuMP.JuMPContainer, 1} = Array{JuMP.JuMPContainer, 1}()  # Function's return value
-
-    for v in varnames
-        try
-            push!(returnval, Core.eval(@__MODULE__, Symbol(v)))
-        catch ex
-            throw(ex)
-        end
-    end
-
-    return returnval
-end  # getvars(varnames::Array{String, 1})

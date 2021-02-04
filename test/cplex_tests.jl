@@ -24,7 +24,7 @@ if @isdefined CPLEX
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = CplexSolver()),
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(CPLEX.Optimizer),
             numprocs=1, restrictvars=false, quiet = false)
 
         db = SQLite.DB(dbfile)
@@ -53,7 +53,7 @@ if @isdefined CPLEX
         @test isapprox(testqry[10,:val], 99.1923723037184; atol=TOL)
 
         # Test with optional outputs
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = CplexSolver()),
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(CPLEX.Optimizer),
             varstosave =
                 "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vrateofdemand, vproductionbytechnology, vtotaltechnologyannualactivity, "
                 * "vtotaltechnologymodelperiodactivity, vusebytechnology, vmodelperiodcostbyregion, vannualtechnologyemissionpenaltybyemission, "
@@ -85,7 +85,7 @@ if @isdefined CPLEX
         @test isapprox(testqry[10,:val], 99.1923723037184; atol=TOL)
 
         # Test with restrictvars
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = CplexSolver()),
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(CPLEX.Optimizer),
             varstosave = "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vproductionbytechnology, vusebytechnology, "
                 * "vtotaldiscountedcost",
             targetprocs=[1], restrictvars = true, quiet = false)
@@ -116,7 +116,7 @@ if @isdefined CPLEX
 
         # Test with storage net zero constraints
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(solver = CplexSolver()), restrictvars=false, numprocs=1)
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(CPLEX.Optimizer), restrictvars=false, numprocs=1)
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
@@ -152,7 +152,7 @@ if @isdefined CPLEX
         dbfile = joinpath(@__DIR__, "storage_transmission_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = CplexSolver()),
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(CPLEX.Optimizer),
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
                 * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
@@ -172,16 +172,16 @@ if @isdefined CPLEX
         @test testqry[9,:y] == "2028"
         @test testqry[10,:y] == "2029"
 
-        @test isapprox(testqry[1,:val], 9786.56626590342; atol=TOL)
-        @test isapprox(testqry[2,:val], 239.49505815089; atol=TOL)
-        @test isapprox(testqry[3,:val], 228.090643919804; atol=TOL)
-        @test isapprox(testqry[4,:val], 217.22918324972; atol=TOL)
-        @test isapprox(testqry[5,:val], 206.884936428305; atol=TOL)
-        @test isapprox(testqry[6,:val], 197.033266073497; atol=TOL)
-        @test isapprox(testqry[7,:val], 187.650735989392; atol=TOL)
-        @test isapprox(testqry[8,:val], 178.714986656564; atol=TOL)
-        @test isapprox(testqry[9,:val], 170.204749196728; atol=TOL)
-        @test isapprox(testqry[10,:val], 162.099761240069; atol=TOL)
+        @test isapprox(testqry[1,:val], 9786.56626042587; atol=TOL)
+        @test isapprox(testqry[2,:val], 239.495064739257; atol=TOL)
+        @test isapprox(testqry[3,:val], 228.090641826873; atol=TOL)
+        @test isapprox(testqry[4,:val], 217.229273833058; atol=TOL)
+        @test isapprox(testqry[5,:val], 206.884786725342; atol=TOL)
+        @test isapprox(testqry[6,:val], 197.033272788862; atol=TOL)
+        @test isapprox(testqry[7,:val], 187.650830607229; atol=TOL)
+        @test isapprox(testqry[8,:val], 178.714951753762; atol=TOL)
+        @test isapprox(testqry[9,:val], 170.204748803116; atol=TOL)
+        @test isapprox(testqry[10,:val], 162.099761418328; atol=TOL)
 
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
@@ -192,7 +192,7 @@ if @isdefined CPLEX
         dbfile = joinpath(@__DIR__, "ramp_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(solver = CplexSolver()),
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(CPLEX.Optimizer),
             numprocs=1, quiet = false)
 
         db = SQLite.DB(dbfile)
