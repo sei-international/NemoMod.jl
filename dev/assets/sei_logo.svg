@@ -1,0 +1,313 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="295.99805"
+   height="92.516251"
+   viewBox="0 0 295.99805 92.516248"
+   version="1.1"
+   id="svg3839"
+   sodipodi:docname="sei_logo.svg"
+   inkscape:export-filename="C:\Users\Jason\Dropbox\Research\Next Gen Modeling\Julia\NemoMod\docs\src\assets\sei_logo.png"
+   inkscape:export-xdpi="96"
+   inkscape:export-ydpi="96"
+   inkscape:version="0.92.4 (5da689c313, 2019-01-14)">
+  <metadata
+     id="metadata3843">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title>logo</dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <sodipodi:namedview
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1"
+     objecttolerance="10"
+     gridtolerance="10"
+     guidetolerance="10"
+     inkscape:pageopacity="0"
+     inkscape:pageshadow="2"
+     inkscape:window-width="2560"
+     inkscape:window-height="1377"
+     id="namedview3841"
+     showgrid="false"
+     inkscape:zoom="1"
+     inkscape:cx="-45.09669"
+     inkscape:cy="46.258115"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg3839"
+     fit-margin-top="0"
+     fit-margin-left="0"
+     fit-margin-right="0"
+     fit-margin-bottom="0" />
+  <defs
+     id="defs3813">
+    <style
+       id="style3779">
+            .cls-1 {
+            fill: url(#linear-gradient);
+            }
+
+            .cls-2 {
+            fill: url(#linear-gradient-2);
+            }
+
+            .cls-3 {
+            mask: url(#mask);
+            }
+
+            .cls-4 {
+            fill: #00d29a;
+            }
+
+            .cls-5 {
+            mask: url(#mask-2);
+            }
+
+            .cls-6 {
+            fill: url(#sei_green_gradient);
+            }
+
+            .cls-7 {
+            fill: url(#linear-gradient-3);
+            }
+
+            .cls-8 {
+            filter: url(#luminosity-noclip-2);
+            }
+
+            .cls-9 {
+            filter: url(#luminosity-noclip);
+            }
+        </style>
+    <linearGradient
+       id="linear-gradient"
+       x1="-361.78"
+       y1="449.54001"
+       x2="-359.42001"
+       y2="449.54001"
+       gradientTransform="matrix(-33.96,0,0,33.96,-12208.2,-15144.32)"
+       gradientUnits="userSpaceOnUse">
+      <stop
+         offset="0"
+         stop-color="#fff"
+         id="stop3781" />
+      <stop
+         offset="1"
+         id="stop3783" />
+    </linearGradient>
+    <linearGradient
+       id="linear-gradient-2"
+       x1="-352.97"
+       y1="432.79001"
+       x2="-350.60999"
+       y2="432.79001"
+       gradientTransform="matrix(0,-58.03,-58.03,0,25193.52,-20258.9)"
+       xlink:href="#linear-gradient" />
+    <filter
+       id="luminosity-noclip"
+       x="-78.629997"
+       y="-49.720001"
+       width="313.26001"
+       height="346.14999"
+       filterUnits="userSpaceOnUse"
+       style="color-interpolation-filters:sRGB">
+      <feFlood
+         flood-color="#fff"
+         result="bg"
+         id="feFlood3787" />
+      <feBlend
+         in="SourceGraphic"
+         in2="bg"
+         id="feBlend3789"
+         mode="normal" />
+    </filter>
+    <mask
+       id="mask"
+       x="-78.63"
+       y="-49.72"
+       width="313.26"
+       height="346.15"
+       maskUnits="userSpaceOnUse">
+      <g
+         class="cls-9"
+         id="g3794"
+         style="filter:url(#luminosity-noclip)">
+        <rect
+           class="cls-1"
+           x="-64.480003"
+           y="8.1800003"
+           width="284.97"
+           height="230.35001"
+           transform="rotate(-70.2,78.002889,123.35288)"
+           id="rect3792"
+           style="fill:url(#linear-gradient)" />
+      </g>
+    </mask>
+    <filter
+       id="luminosity-noclip-2"
+       x="-123.32"
+       y="-77.980003"
+       width="402.63"
+       height="402.66"
+       filterUnits="userSpaceOnUse"
+       style="color-interpolation-filters:sRGB">
+      <feFlood
+         flood-color="#fff"
+         result="bg"
+         id="feFlood3797" />
+      <feBlend
+         in="SourceGraphic"
+         in2="bg"
+         id="feBlend3799"
+         mode="normal" />
+    </filter>
+    <mask
+       id="mask-2"
+       x="-123.32"
+       y="-77.98"
+       width="402.63"
+       height="402.66"
+       maskUnits="userSpaceOnUse">
+      <g
+         class="cls-8"
+         id="g3804"
+         style="filter:url(#luminosity-noclip-2)">
+        <rect
+           class="cls-2"
+           x="-63.98"
+           y="-19.41"
+           width="283.95001"
+           height="285.51999"
+           transform="rotate(-44.3,78.002069,123.36006)"
+           id="rect3802"
+           style="fill:url(#linear-gradient-2)" />
+      </g>
+    </mask>
+    <linearGradient
+       id="sei_green_gradient"
+       data-name="sei green gradient"
+       x1="57.349998"
+       y1="91.669998"
+       x2="189.75999"
+       y2="157.63"
+       gradientUnits="userSpaceOnUse">
+      <stop
+         offset="0"
+         stop-color="#00d29a"
+         stop-opacity="0"
+         id="stop3807" />
+      <stop
+         offset="1"
+         stop-color="#00d29a"
+         id="stop3809" />
+    </linearGradient>
+    <linearGradient
+       id="linear-gradient-3"
+       x1="28.639999"
+       y1="192.28"
+       x2="27.49"
+       y2="92.07"
+       xlink:href="#sei_green_gradient" />
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#sei_green_gradient"
+       id="linearGradient3845"
+       gradientUnits="userSpaceOnUse"
+       x1="57.349998"
+       y1="91.669998"
+       x2="189.75999"
+       y2="157.63" />
+  </defs>
+  <title
+     id="title3815">logo</title>
+  <g
+     id="Layer_2"
+     data-name="Layer 2"
+     transform="scale(0.375)"
+     inkscape:export-xdpi="96"
+     inkscape:export-ydpi="96">
+    <g
+       id="Layer_1-2"
+       data-name="Layer 1">
+      <g
+         id="g3831">
+        <g
+           class="cls-3"
+           mask="url(#mask)"
+           id="g3819">
+          <path
+             class="cls-4"
+             d="M 0,93.43 Z"
+             id="path3817"
+             inkscape:connector-curvature="0"
+             style="fill:#00d29a" />
+        </g>
+        <g
+           id="g3829">
+          <path
+             class="cls-4"
+             d="M 57.16,128.16 A 157.07,157.07 0 0 1 155.34,93.43 H 0 Z"
+             id="path3821"
+             inkscape:connector-curvature="0"
+             style="fill:#00d29a" />
+          <path
+             class="cls-4"
+             d="m 73.2,79 h 51.18 a 1.06,1.06 0 0 0 1.06,-1 V 64.71 a 1.06,1.06 0 0 0 -1.06,-1 H 91.29 a 1.06,1.06 0 0 1 -1.06,-1 V 47.84 a 1.06,1.06 0 0 1 1.06,-1.05 h 24.4 a 1.06,1.06 0 0 0 1.06,-1 V 33.07 a 1.06,1.06 0 0 0 -1.06,-1 H 91.29 A 1.06,1.06 0 0 1 90.23,31 V 17.52 a 1.06,1.06 0 0 1 1.06,-1.05 h 33.09 a 1.06,1.06 0 0 0 1.06,-1 V 2.36 a 1.06,1.06 0 0 0 -1.06,-1 H 73.2 a 1.06,1.06 0 0 0 -1.07,1 V 77.9 A 1.06,1.06 0 0 0 73.2,79 Z"
+             id="path3823"
+             inkscape:connector-curvature="0"
+             style="fill:#00d29a" />
+          <path
+             class="cls-4"
+             d="m 10.41,73.89 c 5.95,4.17 14,6.37 23.35,6.37 8.63,0 16.37,-2.3 21.82,-6.48 a 21.9,21.9 0 0 0 8.74,-18 C 64.32,44.33 57.58,37.2 43.7,34 l -16,-3.68 c -5.29,-1.13 -8,-3.78 -8,-7.87 0,-5.2 4.63,-8.57 11.79,-8.57 7.63,0 11.41,3.69 13.29,7.32 a 1.05,1.05 0 0 0 0.94,0.56 h 16.13 a 1.05,1.05 0 0 0 1,-1.32 25.83,25.83 0 0 0 -9,-13.61 C 48.27,2.35 40.47,0 31.36,0 22.82,0 15.15,2.42 9.74,6.81 a 22.26,22.26 0 0 0 -8.4,17.83 c 0,11.21 6.52,18.08 19.93,21 L 37,48.92 c 4.66,1.06 9,2.77 9,8.14 0,5.6 -5,9.23 -12.6,9.23 -6.84,0 -11.76,-2.71 -14,-7.67 a 1.05,1.05 0 0 0 -1,-0.6 H 1.07 a 1.05,1.05 0 0 0 -1,1.33 26.59,26.59 0 0 0 10.34,14.54 z"
+             id="path3825"
+             inkscape:connector-curvature="0"
+             style="fill:#00d29a" />
+          <path
+             class="cls-4"
+             d="m 154.43,1.31 h -16.37 a 1.05,1.05 0 0 0 -1.06,1 V 77.9 a 1.05,1.05 0 0 0 1.06,1 h 16.37 a 1.06,1.06 0 0 0 1.06,-1 V 2.36 a 1.06,1.06 0 0 0 -1.06,-1.05 z"
+             id="path3827"
+             inkscape:connector-curvature="0"
+             style="fill:#00d29a" />
+        </g>
+      </g>
+      <path
+         class="cls-6"
+         d="m 156,93.43 h -0.72 c -19.79,-0.35 -40.73,4.18 -59.13,11.71 a 157.77,157.77 0 0 0 -39,23 l 98.84,60 z"
+         id="path3833"
+         style="fill:url(#linearGradient3845)"
+         inkscape:connector-curvature="0" />
+      <path
+         class="cls-7"
+         d="m 0,93.43 v 153.28 h 0.05 c 0,-47.78 22.25,-90.44 57.12,-118.56 z"
+         id="path3835"
+         style="fill:url(#linear-gradient-3)"
+         inkscape:connector-curvature="0" />
+    </g>
+  </g>
+  <text
+     xml:space="preserve"
+     style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:20px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000000;fill-opacity:1;stroke:none;stroke-width:0.75"
+     x="78"
+     y="37.016251"
+     id="text3849"><tspan
+       sodipodi:role="line"
+       id="tspan3847"
+       x="78"
+       y="37.016251"
+       style="font-style:italic;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:20px;font-family:Calibri;-inkscape-font-specification:'Calibri, Italic';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-feature-settings:normal;text-align:start;writing-mode:lr-tb;text-anchor:start;fill:#4d4d4d;stroke-width:0.75">Bridging science and policy</tspan></text>
+</svg>
