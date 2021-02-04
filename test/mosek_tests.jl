@@ -7,9 +7,9 @@
 	File description: Tests of NemoMod package using Mosek solver.
 =#
 
-# Tests will be skipped if Mosek package is not installed.
+# Tests will be skipped if MosekTools package is not installed.
 try
-    using Mosek
+    using MosekTools
 catch e
     @info "Error when initializing Mosek. Error message: " * sprint(showerror, e) * "."
     @info "Skipping Mosek tests."

@@ -143,7 +143,7 @@ end  # "Solving storage_test with GLPK"
         varstosave =
             "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
             * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
-        numprocs=1, restrictvars=false, quiet = false)
+        numprocs=1, restrictvars=true, quiet = false)
 
     db = SQLite.DB(dbfile)
     testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame

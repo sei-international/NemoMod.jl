@@ -172,16 +172,16 @@ if @isdefined CPLEX
         @test testqry[9,:y] == "2028"
         @test testqry[10,:y] == "2029"
 
-        @test isapprox(testqry[1,:val], 9786.56626590342; atol=TOL)
-        @test isapprox(testqry[2,:val], 239.49505815089; atol=TOL)
-        @test isapprox(testqry[3,:val], 228.090643919804; atol=TOL)
-        @test isapprox(testqry[4,:val], 217.22918324972; atol=TOL)
-        @test isapprox(testqry[5,:val], 206.884936428305; atol=TOL)
-        @test isapprox(testqry[6,:val], 197.033266073497; atol=TOL)
-        @test isapprox(testqry[7,:val], 187.650735989392; atol=TOL)
-        @test isapprox(testqry[8,:val], 178.714986656564; atol=TOL)
-        @test isapprox(testqry[9,:val], 170.204749196728; atol=TOL)
-        @test isapprox(testqry[10,:val], 162.099761240069; atol=TOL)
+        @test isapprox(testqry[1,:val], 9786.56626042587; atol=TOL)
+        @test isapprox(testqry[2,:val], 239.495064739257; atol=TOL)
+        @test isapprox(testqry[3,:val], 228.090641826873; atol=TOL)
+        @test isapprox(testqry[4,:val], 217.229273833058; atol=TOL)
+        @test isapprox(testqry[5,:val], 206.884786725342; atol=TOL)
+        @test isapprox(testqry[6,:val], 197.033272788862; atol=TOL)
+        @test isapprox(testqry[7,:val], 187.650830607229; atol=TOL)
+        @test isapprox(testqry[8,:val], 178.714951753762; atol=TOL)
+        @test isapprox(testqry[9,:val], 170.204748803116; atol=TOL)
+        @test isapprox(testqry[10,:val], 162.099761418328; atol=TOL)
 
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
