@@ -15,8 +15,8 @@
     numprocs::Int = 0, targetprocs = Array{Int, 1}(), restrictvars = true,
     reportzeros = false, continuoustransmission = false, quiet = false)
 
-Calculates a scenario specified in a scenario database. Returns a `Symbol` indicating
-the solve status reported by the solver (e.g., `:Optimal`).
+Calculates a scenario specified in a scenario database. Returns a `MathOptInterface.TerminationStatusCode` indicating
+the termination status reported by the solver (e.g., `OPTIMAL::TerminationStatusCode = 1`).
 
 # Arguments
 - `dbpath::String`: Path to the scenario database (must be a SQLite version 3 database).
