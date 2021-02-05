@@ -2,6 +2,9 @@
 
 # NEMO: Next Energy Modeling system for Optimization
 
+[![](https://img.shields.io/badge/docs-stable-blue.svg)](https://sei-international.github.io/NemoMod.jl/stable)
+[![](https://img.shields.io/badge/docs-dev-blue.svg)](https://sei-international.github.io/NemoMod.jl/dev)
+
 NEMO is a high performance, open-source energy system optimization modeling tool developed in [Julia](https://julialang.org/).  It is intended for users who seek substantial optimization capabilities without the financial burden of proprietary software or the performance bottlenecks of common open-source alternatives. Key features of NEMO include:
 
 - Least-cost optimization of energy supply and demand
