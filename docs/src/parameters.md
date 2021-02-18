@@ -321,7 +321,7 @@ Exogenously specified emissions, counted toward the [model period emission limit
 
 ## [Nodal distribution demand](@id NodalDistributionDemand)
 
-Fraction of exogenously specified demand for a [fuel](@ref fuel) assigned to a [node](@ref node). If in a given [year](@ref year) transmission modeling is enabled for a fuel (see [`TransmissionModelingEnabled`](@ref TransmissionModelingEnabled)), and the fuel has exogenous demands, the sum of `NodalDistributionDemand` across nodes should be 1.
+For the specified [node](@ref node) and the [region](@ref region) containing it, fraction of the region's exogenously defined demand for the specified [fuel](@ref fuel) that is assigned to the node. If in a given [year](@ref year) transmission modeling is enabled for a fuel and region (see [`TransmissionModelingEnabled`](@ref TransmissionModelingEnabled)), and the fuel has exogenous demands in the region, the sum of `NodalDistributionDemand` across the nodes in the region should be 1.
 
 #### Scenario database
 
@@ -337,7 +337,7 @@ Fraction of exogenously specified demand for a [fuel](@ref fuel) assigned to a [
 
 ## [Nodal distribution storage capacity](@id NodalDistributionStorageCapacity)
 
-Fraction of the specified [storage's](@ref storage) capacity assigned to the specified [node](@ref node). If `NodalDistributionStorageCapacity` is defined for a storage in a [year](@ref year), the sum of the parameter across nodes should be 1 for the year.
+For the specified [node](@ref node) and the [region](@ref region) containing it, fraction of the specified [storage's](@ref storage) capacity in the region that is assigned to the node.
 
 #### Scenario database
 
@@ -353,7 +353,7 @@ Fraction of the specified [storage's](@ref storage) capacity assigned to the spe
 
 ## [Nodal distribution technology capacity](@id NodalDistributionTechnologyCapacity)
 
-Fraction of the specified [technology's](@ref technology) capacity assigned to the specified [node](@ref node). If `NodalDistributionTechnologyCapacity` is defined for a technology in a [year](@ref year), the sum of the parameter across nodes should be 1 for the year.
+For the specified [node](@ref node) and the [region](@ref region) containing it, fraction of the specified [technology's](@ref technology) capacity in the region that is assigned to the node.
 
 #### Scenario database
 
