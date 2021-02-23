@@ -22,5 +22,5 @@ If you want to provide a value for the `jumpmodel` argument, make sure to includ
 ```julia
 julia> using NemoMod, JuMP, CPLEX
 
-julia> NemoMod.calculatescenario("c:/temp/scenario_db.sqlite"; jumpmodel = Model(CPLES.Optimizer), restrictvars = true)
+julia> NemoMod.calculatescenario("c:/temp/scenario_db.sqlite"; jumpmodel = Model(CPLEX.Optimizer), forcemip = true)
 ```

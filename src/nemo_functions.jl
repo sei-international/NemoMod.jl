@@ -76,11 +76,11 @@ Loads run-time arguments for `calculatescenario()` from a configuration file.
 - `targetprocs::Array{Int,1}`: `calculatescenario()` `targetprocs` argument. New values in configuration
     file are added to this array.
 - `bools::Array{Bool,1}`: Array of Boolean arguments for `calculatescenario()`: `restrictvars`, `reportzeros`,
-    `continuoustransmission`, and `quiet`, in that order. New values in configuration file overwrite values
+    `continuoustransmission`, `forcemip`, and `quiet`, in that order. New values in configuration file overwrite values
     in this array.
 - `ints::Array{Int,1}`: Array of `Int` arguments for `calculatescenario()`: `numprocs`. New values in
     configuration file overwrite values in this array.
-- `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to `STDOUT`).
+- `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to `STDOUT`).
     This argument is not changed by the function.
 """
 function getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, targetprocs::Array{Int,1},
@@ -156,15 +156,87 @@ function getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, t
         end
     end
 
+    if haskey(configfile, "calculatescenarioargs", "forcemip")
+        try
+            bools[4] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "forcemip")))
+            logmsg("Read forcemip argument from configuration file.", quiet)
+        catch e
+            logmsg("Could not read forcemip argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
+        end
+    end
+
     if haskey(configfile, "calculatescenarioargs", "quiet")
         try
-            bools[4] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "quiet")))
+            bools[5] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "quiet")))
             logmsg("Read quiet argument from configuration file. Value in configuration file will be used from this point forward.", quiet)
         catch e
             logmsg("Could not read quiet argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
         end
     end
 end  # getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, targetprocs::Array{Int,1}, bools::Array{Bool,1}, quiet::Bool)
+
+"""
+    setsolverparamsfromcfg(configfile::ConfParse, jumpmodel::JuMP.Model, quiet::Bool)
+
+Sets solver parameters specified in a configuration file. Reports which parameters were and were not successfully set.
+
+# Arguments
+- `configfile::ConfParse`: Configuration file. Solver parameters should be in "parameters" key within "solver" block,
+    specified as follows: parameter1=value1, parameter2=value2, ...
+- `jumpmodel::JuMP.Model`: JuMP model in which solver parameters will be set.
+- `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to `STDOUT`).
+"""
+function setsolverparamsfromcfg(configfile::ConfParse, jumpmodel::JuMP.Model, quiet::Bool)
+    if haskey(configfile, "solver", "parameters")
+        local retrieved_params = retrieve(configfile, "solver", "parameters")  # May be a string (if there's one parameter-value pair) or an array of strings (if there are more than one, comma-delimited parameter-value pairs)
+        local params_set::String = ""  # List of parameters that were successfully set; used in status message
+
+        # Add singleton parameters to an array to facilitate processing
+        if typeof(retrieved_params) == String
+            retrieved_params = [retrieved_params]
+        end
+
+        # BEGIN: Process each parameter-value pair in retrieved_params.
+        for e in retrieved_params
+            local split_p::Array{String,1} = [strip(pp) for pp = split(e, "="; keepempty=false)]  # Current parameter specification split on =; split_p[1] = parameter name, split_p[2] = parameter value
+
+            if length(split_p) != 2
+                logmsg("Could not set solver parameter specified in configuration file as " * e * ". Continuing with NEMO.", quiet)
+                continue
+            end
+
+            local val  # Parsed value for current parameter
+
+            # Int, float, and Boolean values - order is important since an integer value will parse to a float
+            for t in [Int, Float64, Bool]
+                val = tryparse(t, split_p[2])
+
+                if val != nothing
+                    break
+                end
+            end
+
+            if val == nothing
+                # String value
+                val = split_p[2]
+            end
+
+            # Call set_optimizer_attribute for parameter and value
+            try
+                set_optimizer_attribute(jumpmodel, split_p[1], val)
+                params_set *= split_p[1] * ", "
+            catch
+                logmsg("Could not set solver parameter specified in configuration file as " * e * ". Continuing with NEMO.", quiet)
+            end
+        end
+        # END: Process each parameter-value pair in retrieved_params.
+
+        # Report parameters that were set
+        if length(params_set) != 0
+            logmsg("Set following solver parameters using values in configuration file: " * params_set[1:prevind(params_set, lastindex(params_set), 2)] * ".", quiet)
+        end
+    end  # haskey(configfile, "solver", "parameters")
+end  # setsolverparamsfromcfg(configfile::ConfParse, jumpmodel::JuMP.Model, quiet::Bool)
 
 """
     translatesetabb(a::String)

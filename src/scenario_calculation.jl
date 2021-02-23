@@ -13,7 +13,8 @@
         vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
         vusenn, vtotaldiscountedcost",
     numprocs::Int = 0, targetprocs = Array{Int, 1}(), restrictvars = true,
-    reportzeros = false, continuoustransmission = false, quiet = false)
+    reportzeros = false, continuoustransmission = false, forcemip = false,
+    quiet = false)
 
 Calculates a scenario specified in a scenario database. Returns a `MathOptInterface.TerminationStatusCode` indicating
 the termination status reported by the solver (e.g., `OPTIMAL::TerminationStatusCode = 1`).
@@ -34,9 +35,11 @@ the termination status reported by the solver (e.g., `OPTIMAL::TerminationStatus
     of `Sys.CPU_THREADS`). When `numprocs` is in effect, NEMO selects processes for parallel
     operations from `Distributed.procs()`. Processes are taken in the order they appear in
     this array. If there are not enough processes defined in `Distributed.procs()`, NEMO adds
-    processes on the local host as needed.
+    processes on the local host as needed. Note that solvers may use a different number of
+    parallel processes than NEMO depending on their design and parameters.
 - `targetprocs::Array{Int, 1}`: Identifiers of Julia processes that should be used for
-    parallelized operations within the scenario calculation.
+    parallelized operations within the scenario calculation. Note that solvers may use a different
+    number of parallel processes than NEMO depending on their design and parameters.
 - `restrictvars::Bool`: Indicates whether NEMO should conduct additional data analysis
     to limit the set of model variables created for the scenario. By default, to improve
     performance, NEMO selectively creates certain variables to avoid combinations of
@@ -46,9 +49,13 @@ the termination status reported by the solver (e.g., `OPTIMAL::TerminationStatus
 - `reportzeros::Bool`: Indicates whether results saved in the scenario database should
     include values equal to zero. Specifying `false` can substantially improve the
     performance of large models.
-- `continuoustransmission::Bool`: Indicates whether continuous (true) or binary (false)
+- `continuoustransmission::Bool`: Indicates whether continuous (`true`) or binary (`false`)
     variables are used to represent investment decisions for candidate transmission lines. Not
     relevant in scenarios that do not model transmission.
+- `forcemip::Bool`: Forces NEMO to formulate the optimization problem for the scenario as a
+    mixed-integer problem. This can improve performance with some solvers (e.g., CPLEX). If this
+    option is set to `false`, the input parameters for the scenario (i.e., in the scenario
+    database) determine whether the optimization problem is mixed-integer.
 - `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to
     `STDOUT`).
 """
@@ -61,14 +68,15 @@ function calculatescenario(
     restrictvars::Bool = true,
     reportzeros::Bool = false,
     continuoustransmission::Bool = false,
+    forcemip::Bool = false,
     quiet::Bool = false)
 
     try
         calculatescenario_main(dbpath; jumpmodel=jumpmodel, varstosave=varstosave, numprocs=numprocs, targetprocs=targetprocs,
-            restrictvars=restrictvars, reportzeros=reportzeros, continuoustransmission=continuoustransmission, quiet=quiet)
+            restrictvars=restrictvars, reportzeros=reportzeros, continuoustransmission=continuoustransmission, forcemip=forcemip, quiet=quiet)
     catch e
         println("NEMO encountered an error with the following message: " * sprint(showerror, e) * ".")
-        println("To report this issue to the NEMO team, please submit an error report at https://leap.sei.org/support/. Please include in the report a list of steps to reproduce the error and the error message. Press Enter to continue.")
+        println("To report this issue to the NEMO team, please submit an error report at https://leap.sei.org/support/. Please include in the report a list of steps to reproduce the error and the error message.")
     end
 end  # calculatescenario()
 
@@ -78,7 +86,7 @@ end  # calculatescenario()
         vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
         vusenn, vtotaldiscountedcost",
     numprocs::Int = 0, targetprocs = Array{Int, 1}(), restrictvars = true,
-    reportzeros = false, continuoustransmission = false, quiet = false)
+    reportzeros = false, continuoustransmission = false, forcemip = false, quiet = false)
 
 Implements main scenario calculation logic for calculatescenario().
 """
@@ -91,6 +99,7 @@ function calculatescenario_main(
     restrictvars::Bool = true,
     reportzeros::Bool = false,
     continuoustransmission::Bool = false,
+    forcemip = false,
     quiet::Bool = false)
 # Lines within calculatescenario_main() are not indented since the function is so lengthy. To make an otherwise local
 # variable visible outside the function, prefix it with global. For JuMP constraint references,
@@ -109,12 +118,12 @@ local varstosavearr = String.(split(replace(varstosave, " " => ""), ","; keepemp
 logmsg("Validated run-time arguments.", quiet)
 # END: Validate arguments.
 
-# BEGIN: Read config file and process calculatescenarioargs.
+# BEGIN: Read config file and process calculatescenarioargs and solver blocks.
 configfile = getconfig(quiet)  # ConfParse structure for config file if one is found; otherwise nothing
 
 if configfile != nothing
     # Arrays of Boolean and Int arguments for calculatescenario(); necessary in order to have mutable objects for getconfigargs! call
-    local boolargs::Array{Bool,1} = [restrictvars,reportzeros,continuoustransmission,quiet]
+    local boolargs::Array{Bool,1} = [restrictvars,reportzeros,continuoustransmission,forcemip,quiet]
     local intargs::Array{Int,1} = [numprocs]
 
     getconfigargs!(configfile, varstosavearr, targetprocs, boolargs, intargs, quiet)
@@ -123,9 +132,12 @@ if configfile != nothing
     restrictvars = boolargs[1]
     reportzeros = boolargs[2]
     continuoustransmission = boolargs[3]
-    quiet = boolargs[4]
+    forcemip = boolargs[4]
+    quiet = boolargs[5]
+
+    setsolverparamsfromcfg(configfile, jumpmodel, quiet)
 end
-# END: Read config file and process calculatescenarioargs.
+# END: Read config file and process calculatescenarioargs and solver blocks.
 
 # BEGIN: Set final value for targetprocs.
 if length(targetprocs) == 0
@@ -370,7 +382,8 @@ modelvarindices["vtotaldiscountedstoragecost"] = (vtotaldiscountedstoragecost, [
 logmsg("Defined storage variables.", quiet)
 
 # Capacity
-if in("vnumberofnewtechnologyunits", varstosavearr) || size(queries["querycaa5_totalnewcapacity"])[1] > 0
+# If forcemip is in effect, create an integer variable here
+if in("vnumberofnewtechnologyunits", varstosavearr) || size(queries["querycaa5_totalnewcapacity"])[1] > 0 || forcemip
     @variable(jumpmodel, vnumberofnewtechnologyunits[sregion, stechnology, syear] >= 0, Int)
     modelvarindices["vnumberofnewtechnologyunits"] = (vnumberofnewtechnologyunits, ["r", "t", "y"])
 end
