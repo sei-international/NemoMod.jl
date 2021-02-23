@@ -5,6 +5,12 @@ CurrentModule = NemoMod
 
 This page highlights key changes in NEMO since its initial public release. For a full history of NEMO releases, including the code for each version, see the [Releases page on NEMO's GitHub site](https://github.com/sei-international/NemoMod.jl/releases).
 
+## Version 1.3.1
+
+  * **Solver parameters in NEMO configuration files:** Added support for setting solver parameters via a NEMO configuration file. Users can activate this feature by assigning a comma-delimited list of parameter name-value pairs to the `parameters` key in a configuration file's `solver` block. The pairs should be in this form: parameter1=value1, parameter2=value2, .... See the documentation for [configuration files](@ref configuration_file) for more information.
+
+  * **Forcing mixed-integer optimization problems:** Added an option that forces NEMO to formulate a mixed-integer optimization problem when calculating a scenario. This can improve performance with some solvers. The option can be invoked as an argument passed to `calculatescenario` (`forcemip`) or in a NEMO configuration file (`forcemip` key in `calculatescenarioargs` block). See the documentation for [`calculatescenario`](@ref scenario_calc) and [configuration files](@ref configuration_file) for more information.
+
 ## Version 1.3
 
   * **Julia and JuMP upgrade:** Updated NEMO to run on Julia 1.5.3 and JuMP 0.21.6. The new version of JuMP includes support for the most recent versions of key solvers, among them Cbc (2.10), CPLEX (12.10 and 20.1), and Gurobi (9.0 and 9.1). Note that this version of JuMP also uses a new solver abstraction layer, [`MathOptInterface`](https://github.com/jump-dev/MathOptInterface.jl), which changes how solvers are referenced when creating a JuMP model. See the documentation for [`calculatescenario`](@ref scenario_calc) for more information and examples.
