@@ -15,7 +15,7 @@ catch e
     @info "Skipping Mosek tests."
 end
 
-if @isdefined Mosek
+if @isdefined MosekTools
     @info "Testing scenario solution with Mosek."
 
     @testset "Solving storage_test with Mosek" begin
@@ -223,4 +223,4 @@ if @isdefined Mosek
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
     end  # "Solving ramp_test with Mosek"
-end  # @isdefined Mosek
+end  # @isdefined MosekTools

@@ -1178,7 +1178,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
         and tme2.r = n2.r and tme2.f = tl.f
         and tme1.y = tme2.y and tme1.type = tme2.type
     	and ys.y = tme1.y
-    	and tl.f = tcta.f
+    	and tcta.r = n1.r and tl.f = tcta.f
         order by tl.id, tme1.y")
 
         return_val["queryvstorageleveltsgroup1"] = (dbpath, "select ns.n as n, ns.s as s, tg1.name as tg1, ns.y as y

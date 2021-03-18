@@ -2017,7 +2017,7 @@ if transmissionmodeling
 	TransmissionCapacityToActivityUnit_def tcta
 	where ys.y = y.val
     and tme.r = n.r and tme.f = f.val and tme.y = y.val
-	and tcta.f = f.val
+	and tcta.r = n.r and tcta.f = f.val
 	and not exists (select 1 from TransmissionLine tl, NODE n2, TransmissionModelingEnabled tme2
 	where
 	n.val = tl.n1 and f.val = tl.f
@@ -2036,7 +2036,7 @@ select n.val as n, ys.l as l, f.val as f, y.val as y,
 	TransmissionLine tl, NODE n2, TransmissionModelingEnabled tme2, TransmissionCapacityToActivityUnit_def tcta
 	where ys.y = y.val
     and tme.r = n.r and tme.f = f.val and tme.y = y.val
-	and tcta.f = f.val
+	and tcta.r = n.r and tcta.f = f.val
 	and n.val = tl.n1 and f.val = tl.f
 	and tl.n2 = n2.val
 	and n2.r = tme2.r and tl.f = tme2.f and y.val = tme2.y and tme.type = tme2.type
@@ -2049,7 +2049,7 @@ select n.val as n, ys.l as l, f.val as f, y.val as y,
 	TransmissionLine tl, NODE n2, TransmissionModelingEnabled tme2, TransmissionCapacityToActivityUnit_def tcta
 	where ys.y = y.val
     and tme.r = n.r and tme.f = f.val and tme.y = y.val
-	and tcta.f = f.val
+	and tcta.r = n.r and tcta.f = f.val
 	and n.val = tl.n2 and f.val = tl.f
 	and tl.n1 = n2.val
 	and n2.r = tme2.r and tl.f = tme2.f and y.val = tme2.y and tme.type = tme2.type
@@ -3918,6 +3918,7 @@ if transmissionmodeling
             sumexps[1] = AffExpr()
         end
 
+        # Note: if a transmission line crosses regional boundaries, variable costs are based on energy leaving from region (associated with n1)
         add_to_expression!(sumexps[1], vtransmissionbyline[tr,row[:l],row[:f],y] * row[:ys] * row[:tcta] * vc)
 
         lastkeys[1] = tr
