@@ -53,7 +53,7 @@ end  # @testset "Solving a scenario"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Write output file for optimization problem
-        NemoMod.writescenariomodel(dbfile; numprocs=1, restrictvars=false, quiet = false, writefilename = optprobfile)
+        NemoMod.writescenariomodel(dbfile; numprocs=1, restrictvars=true, quiet = false, writefilename = optprobfile)
 
         # Clean up scenario database
         db = SQLite.DB(dbfile)
