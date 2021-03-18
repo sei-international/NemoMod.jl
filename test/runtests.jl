@@ -1,5 +1,5 @@
 #=
-    NEMO: Next-generation Energy Modeling system for Optimization.
+    NEMO: Next Energy Modeling system for Optimization.
     https://github.com/sei-international/NemoMod.jl
 
     Copyright © 2019: Stockholm Environment Institute U.S.
@@ -17,9 +17,9 @@ using Test, SQLite, DataFrames, JuMP, Distributed
 
 const TOL = 1e-4  # Default tolerance for isapprox() comparisons
 
-"""Helper function for deleting a SQLite database file after Julia has been told to release it (e.g.,
+"""Helper function for deleting a file after Julia has been told to release it (e.g.,
     with finalize(db); db = nothing; GC.gc())."""
-function delete_dbfile(path::String, max_del_attempts::Int)
+function delete_file(path::String, max_del_attempts::Int)
     del_attempts::Int = 0  # Number of deletions that have been attempted
 
     while isfile(path) && del_attempts < max_del_attempts
@@ -32,7 +32,7 @@ function delete_dbfile(path::String, max_del_attempts::Int)
             sleep(0.5)
         end
     end
-end  # delete_dbfile(path::String)
+end  # delete_file(path::String)
 
 @testset "Solving a scenario" begin
     include(joinpath(@__DIR__, "glpk_tests.jl"))
@@ -42,6 +42,34 @@ end  # delete_dbfile(path::String)
     include(joinpath(@__DIR__, "mosek_tests.jl"))
     include(joinpath(@__DIR__, "xpress_tests.jl"))
 end  # @testset "Solving a scenario"
+
+@testset "Writing optimization problem for a scenario" begin
+    optprobfile = joinpath(@__DIR__, "storage_test_prob.gz")
+
+    # Wrap file creation operation in a function to ensure Julia releases output file for deletion
+    function write_opt_prob()
+        dbfile = joinpath(@__DIR__, "storage_test.sqlite")
+        chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
+
+        # Write output file for optimization problem
+        NemoMod.writescenariomodel(dbfile; numprocs=1, restrictvars=false, quiet = false, writefilename = optprobfile)
+
+        # Clean up scenario database
+        db = SQLite.DB(dbfile)
+        NemoMod.dropresulttables(db)
+        testqry = SQLite.DBInterface.execute(db, "VACUUM")
+
+        @test isfile(optprobfile)
+    end  # write_opt_prob()
+
+    write_opt_prob()
+    GC.gc()
+
+    # Try up to 20 times to delete file
+    delete_file(optprobfile, 20)
+
+    @test !isfile(optprobfile)
+end  # @testset "Writing optimization problem for a scenario"
 
 @testset "Other database operations" begin
     @info "Running tests of other database operations."
@@ -60,10 +88,9 @@ end  # @testset "Solving a scenario"
         GC.gc()
 
         # Try up to 20 times to delete file
-        delete_dbfile(joinpath(@__DIR__, "new_nemo.sqlite"), 20)
+        delete_file(joinpath(@__DIR__, "new_nemo.sqlite"), 20)
 
         @test !isfile(joinpath(@__DIR__, "new_nemo.sqlite"))
-        # END: Delete new database file.
     end  # @testset "Create a new NEMO database"
 
     @testset "Set parameter default" begin
@@ -81,9 +108,8 @@ end  # @testset "Solving a scenario"
         GC.gc()
 
         # Try up to 20 times to delete file
-        delete_dbfile(joinpath(@__DIR__, "param_default.sqlite"), 20)
+        delete_file(joinpath(@__DIR__, "param_default.sqlite"), 20)
 
         @test !isfile(joinpath(@__DIR__, "param_default.sqlite"))
-        # END: Delete new database file.
     end  # @testset "Set parameter default"
 end  # @testset "Other database operations"

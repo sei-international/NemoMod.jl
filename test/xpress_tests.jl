@@ -1,5 +1,5 @@
 #=
-    NEMO: Next-generation Energy Modeling system for Optimization.
+    NEMO: Next Energy Modeling system for Optimization.
     https://github.com/sei-international/NemoMod.jl
 
     Copyright © 2020: Stockholm Environment Institute U.S.

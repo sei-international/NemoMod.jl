@@ -1,5 +1,5 @@
 #=
-    NEMO: Next-generation Energy Modeling system for Optimization.
+    NEMO: Next Energy Modeling system for Optimization.
     https://github.com/sei-international/NemoMod.jl
 
     Copyright © 2018: Stockholm Environment Institute U.S.
@@ -8,13 +8,14 @@
 =#
 
 """
-    calculatescenario(dbpath; jumpmodel = Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)),
-    varstosave = "vdemandnn, vnewcapacity, vtotalcapacityannual,
-        vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
-        vusenn, vtotaldiscountedcost",
-    numprocs::Int = 0, targetprocs = Array{Int, 1}(), restrictvars = true,
-    reportzeros = false, continuoustransmission = false, forcemip = false,
-    quiet = false)
+    calculatescenario(dbpath::String; jumpmodel::JuMP.Model = Model(Cbc.Optimizer),
+        varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual,
+            vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
+            vusenn, vtotaldiscountedcost",
+        numprocs::Int = 0, targetprocs::Array{Int, 1} = Array{Int, 1}(),
+        restrictvars::Bool = true, reportzeros::Bool = false, continuoustransmission::Bool = false,
+        forcemip::Bool = false, quiet::Bool = false
+    )
 
 Calculates a scenario specified in a scenario database. Returns a `MathOptInterface.TerminationStatusCode` indicating
 the termination status reported by the solver (e.g., `OPTIMAL::TerminationStatusCode = 1`).
@@ -24,13 +25,13 @@ the termination status reported by the solver (e.g., `OPTIMAL::TerminationStatus
 - `jumpmodel::JuMP.Model`: [JuMP](https://github.com/jump-dev/JuMP.jl) model object
     specifying the solver to be used.
     Examples: `Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))`,
-    `Model(CPLEX.Optimizer)`, `Model(optimizer_with_attributes(Cbc.Optimizer, "presolve" => true))`.
+    `Model(CPLEX.Optimizer)`, `Model(optimizer_with_attributes(Gurobi.Optimizer, "NumericFocus" => 1))`.
     Note that the solver's Julia package (Julia wrapper) must be installed. See the
     documentation for JuMP for information on how to specify a solver and set solver options.
 - `varstosave::String`: Comma-delimited list of output variables whose results should be
-    saved in the scenario database.
-- `numprocs::Int`: Number of Julia processes to use for parallelized operations within the
-    scenario calculation. Ignored if `targetprocs` is specified. Should be a positive integer
+    saved in the scenario database when the scenario is calculated.
+- `numprocs::Int`: Number of Julia processes to use for parallelized operations within this
+    function. Ignored if `targetprocs` is specified. Should be a positive integer
     or 0 for half the number of logical processors on the executing machine (i.e., half
     of `Sys.CPU_THREADS`). When `numprocs` is in effect, NEMO selects processes for parallel
     operations from `Distributed.procs()`. Processes are taken in the order they appear in
@@ -38,7 +39,7 @@ the termination status reported by the solver (e.g., `OPTIMAL::TerminationStatus
     processes on the local host as needed. Note that solvers may use a different number of
     parallel processes than NEMO depending on their design and parameters.
 - `targetprocs::Array{Int, 1}`: Identifiers of Julia processes that should be used for
-    parallelized operations within the scenario calculation. Note that solvers may use a different
+    parallelized operations within this function. Note that solvers may use a different
     number of parallel processes than NEMO depending on their design and parameters.
 - `restrictvars::Bool`: Indicates whether NEMO should conduct additional data analysis
     to limit the set of model variables created for the scenario. By default, to improve
@@ -61,7 +62,7 @@ the termination status reported by the solver (e.g., `OPTIMAL::TerminationStatus
 """
 function calculatescenario(
     dbpath::String;
-    jumpmodel::JuMP.Model = Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)),
+    jumpmodel::JuMP.Model = Model(Cbc.Optimizer),
     varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
     numprocs::Int = 0,
     targetprocs::Array{Int, 1} = Array{Int, 1}(),
@@ -72,7 +73,7 @@ function calculatescenario(
     quiet::Bool = false)
 
     try
-        calculatescenario_main(dbpath; jumpmodel=jumpmodel, varstosave=varstosave, numprocs=numprocs, targetprocs=targetprocs,
+        modelscenario(dbpath; jumpmodel=jumpmodel, varstosave=varstosave, numprocs=numprocs, targetprocs=targetprocs,
             restrictvars=restrictvars, reportzeros=reportzeros, continuoustransmission=continuoustransmission, forcemip=forcemip, quiet=quiet)
     catch e
         println("NEMO encountered an error with the following message: " * sprint(showerror, e) * ".")
@@ -81,18 +82,22 @@ function calculatescenario(
 end  # calculatescenario()
 
 """
-    calculatescenario_main(dbpath; jumpmodel = Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)),
-    varstosave = "vdemandnn, vnewcapacity, vtotalcapacityannual,
-        vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
-        vusenn, vtotaldiscountedcost",
-    numprocs::Int = 0, targetprocs = Array{Int, 1}(), restrictvars = true,
-    reportzeros = false, continuoustransmission = false, forcemip = false, quiet = false)
+    modelscenario(dbpath::String; jumpmodel::JuMP.Model = Model(Cbc.Optimizer),
+        varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual,
+            vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
+            vusenn, vtotaldiscountedcost",
+        numprocs::Int = 0, targetprocs::Array{Int, 1} = Array{Int, 1}(),
+        restrictvars::Bool = true, reportzeros::Bool = false, continuoustransmission::Bool = false,
+        forcemip::Bool = false, quiet::Bool = false,
+        writemodel::Bool = false, writefilename::String = "",
+        writefileformat::MathOptInterface.FileFormats.FORMAT_MPS
+    )
 
-Implements main scenario calculation logic for calculatescenario().
+Implements scenario modeling logic for calculatescenario() and writescenariomodel().
 """
-function calculatescenario_main(
+function modelscenario(
     dbpath::String;
-    jumpmodel::JuMP.Model = Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)),
+    jumpmodel::JuMP.Model = Model(Cbc.Optimizer),
     varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
     numprocs::Int = 0,
     targetprocs::Array{Int, 1} = Array{Int, 1}(),
@@ -100,12 +105,16 @@ function calculatescenario_main(
     reportzeros::Bool = false,
     continuoustransmission::Bool = false,
     forcemip = false,
-    quiet::Bool = false)
-# Lines within calculatescenario_main() are not indented since the function is so lengthy. To make an otherwise local
+    quiet::Bool = false,
+    writemodel::Bool = false,
+    writefilename::String = "",
+    writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS
+    )
+# Lines within modelscenario() are not indented since the function is so lengthy. To make an otherwise local
 # variable visible outside the function, prefix it with global. For JuMP constraint references,
 # create a new global variable and assign to it the constraint reference.
 
-logmsg("Started scenario calculation.")
+logmsg("Started modeling scenario.")
 
 # BEGIN: Validate arguments.
 if !isfile(dbpath)
@@ -114,6 +123,10 @@ end
 
 # Convert varstosave into an array of strings with no empty values
 local varstosavearr = String.(split(replace(varstosave, " " => ""), ","; keepempty = false))
+
+if writemodel && length(writefilename) == 0
+    error("writefilename argument must be specified if writemodel is true.")
+end
 
 logmsg("Validated run-time arguments.", quiet)
 # END: Validate arguments.
@@ -265,7 +278,7 @@ logmsg("Created temporary tables.", quiet)
 
 # BEGIN: Execute database queries in parallel.
 # Parallelization possible for queries instantiated as a DataFrame - this object can be returned from worker processes in a pmap call, while SQLite.Query cannot
-# Since instantiation as a DataFrame is costly, it is used selectively (only where needed for other steps in calculatescenario)
+# Since instantiation as a DataFrame is costly, it is used selectively (only where needed for other steps in modelscenario)
 querycommands::Dict{String, Tuple{String, String}} = scenario_calc_queries(dbpath, transmissionmodeling,
     in("vproductionbytechnology", varstosavearr), in("vusebytechnology", varstosavearr))
 
@@ -4699,26 +4712,35 @@ end
 logmsg("Defined model objective.", quiet)
 # END: Define model objective.
 
-# Solve model
-optimize!(jumpmodel)
-status = termination_status(jumpmodel)  # MathOptInterface.TerminationStatusCode
-solvedtm::DateTime = now()  # Date/time of last solve operation
-solvedtmstr::String = Dates.format(solvedtm, "yyyy-mm-dd HH:MM:SS.sss")  # solvedtm as a formatted string
-logmsg("Solved model. Solver status = " * string(status) * ".", quiet, solvedtm)
+# BEGIN: Calculate or write model.
+local returnval  # Value returned by this function
 
-# BEGIN: Save results to database.
-if Int(status) == 1 && has_values(jumpmodel)  # 1 = Optimal
-    savevarresults(varstosavearr, modelvarindices, db, solvedtmstr, reportzeros, quiet)
-    logmsg("Finished saving results to database.", quiet)
+if writemodel
+    JuMP.write_to_file(jumpmodel, writefilename; format=writefileformat)
+    returnval = writefilename
+    logmsg("Wrote model to " * writefilename * ".")
 else
-    logmsg("Solver did not find an optimal solution for model. No results will be saved to database.")
+    # Calculate model
+    optimize!(jumpmodel)
+    returnval = termination_status(jumpmodel)  # MathOptInterface.TerminationStatusCode
+    solvedtm::DateTime = now()  # Date/time of last solve operation
+    solvedtmstr::String = Dates.format(solvedtm, "yyyy-mm-dd HH:MM:SS.sss")  # solvedtm as a formatted string
+    logmsg("Solved model. Solver status = " * string(returnval) * ".", quiet, solvedtm)
+
+    # BEGIN: Save results to database.
+    if Int(returnval) == 1 && has_values(jumpmodel)  # 1 = Optimal
+        savevarresults(varstosavearr, modelvarindices, db, solvedtmstr, reportzeros, quiet)
+        logmsg("Finished saving results to database.", quiet)
+    else
+        logmsg("Solver did not find an optimal solution for model. No results will be saved to database.")
+    end
+    # END: Save results to database.
 end
-# END: Save results to database.
 
 # Drop temporary tables
 drop_temp_tables(db)
 logmsg("Dropped temporary tables.", quiet)
 
-logmsg("Finished scenario calculation.")
-return status
-end  # calculatescenario_main()
+logmsg("Finished modeling scenario.")
+return returnval
+end  # modelscenario()

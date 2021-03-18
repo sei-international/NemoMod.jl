@@ -4,7 +4,7 @@ CurrentModule = NemoMod
 
 ![NEMO logo](assets/nemo_logo_small.png)
 
-This documentation explains how to use **NEMO**: the **Next Energy Modeling System for Optimization**.
+This documentation explains how to use **NEMO**: the **Next Energy Modeling system for Optimization**.
 
 NEMO is a high-performance, open-source energy system optimization modeling tool. It is intended for users who seek substantial optimization capabilities without the financial burden of proprietary software or the performance bottlenecks of common open-source alternatives. Key features of NEMO include:
 
@@ -25,7 +25,7 @@ For more background on NEMO and its raison d'être, see the README at NEMO's [Gi
 
 # NEMO team
 
-NEMO is a project of the Energy Modeling Program at the [Stockholm Environment Institute](https://www.sei.org/) (SEI). Key contributors include [Jason Veysey](https://www.sei.org/people/jason-veysey/), [Eric Kemp-Benedict](https://www.sei.org/people/eric-kemp-benedict/), [Taylor Binnington](https://acadiacenter.org/people/taylor-binnington/), and [Charlie Heaps](https://www.sei.org/people/charles-heaps/). The project was started through an SEI Seed & Innovation grant funded by the [Swedish International Development Cooperation Agency](https://www.sida.se/English/) (Sida).
+NEMO is a project of the Energy Modeling Program at the [Stockholm Environment Institute](https://www.sei.org/) (SEI). Key contributors include [Jason Veysey](https://www.sei.org/people/jason-veysey/), [Eric Kemp-Benedict](https://www.sei.org/people/eric-kemp-benedict/), [Taylor Binnington](https://www.sei.org/people/taylor-binnington/), and [Charlie Heaps](https://www.sei.org/people/charles-heaps/). The project was started through an SEI Seed & Innovation grant funded by the [Swedish International Development Cooperation Agency](https://www.sida.se/English/) (Sida).
 
 ```@raw html
 <a href="https://www.sei.org"><img src="assets/sei_logo.svg" alt="SEI logo" style="display:block; margin: 0 auto"/></a>

@@ -1,5 +1,5 @@
 #=
-    NEMO: Next-generation Energy Modeling system for Optimization.
+    NEMO: Next Energy Modeling system for Optimization.
     https://github.com/sei-international/NemoMod.jl
 
     Copyright © 2018: Stockholm Environment Institute U.S.
@@ -1299,3 +1299,52 @@ function db_v4_to_v5(db::SQLite.DB; quiet::Bool = false)
     end
     # END: Wrap database operations in try-catch block to allow rollback on error.
 end  # db_v4_to_v5(db::SQLite.DB; quiet::Bool = false)
+
+"""
+    writescenariomodel(dbpath::String;
+        varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual,
+            vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
+            vusenn, vtotaldiscountedcost",
+        numprocs::Int = 0, targetprocs::Array{Int, 1} = Array{Int, 1}(),
+        restrictvars::Bool = true, continuoustransmission::Bool = false,
+        forcemip::Bool = false, quiet::Bool = false,
+        writefilename::String = "nemomodel.bz2",
+        writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS
+    )
+
+Writes a file representing the optimization problem for a NEMO scenario. Returns the name of the file.
+All arguments except `writefilename` and `writefileformat` function as in
+[`calculatescenario`](@ref). `writefilename` and `writefileformat` are described below.
+
+# Arguments
+
+- `writefilename::String`: Name of the output file. If a path is not included in the name,
+    the file is written to the Julia working directory. If the name ends in `.gz`, the file
+    is compressed with Gzip. If the name ends in `.bz2`, the file is compressed with BZip2.
+- `writefileformat::MathOptInterface.FileFormats.FileFormat`: Data format used in the output
+    file. Common formats include `MathOptInterface.FileFormats.FORMAT_MPS` (MPS format) and
+    `MathOptInterface.FileFormats.FORMAT_LP` (LP format). See the documentation for
+    [`MathOptInterface`](https://github.com/jump-dev/MathOptInterface.jl) for additional options.
+"""
+function writescenariomodel(
+    dbpath::String;
+    varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
+    numprocs::Int = 0,
+    targetprocs::Array{Int, 1} = Array{Int, 1}(),
+    restrictvars::Bool = true,
+    continuoustransmission::Bool = false,
+    forcemip = false,
+    quiet::Bool = false,
+    writefilename::String = "nemomodel.bz2",
+    writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS
+    )
+
+    try
+        modelscenario(dbpath; varstosave=varstosave, numprocs=numprocs, targetprocs=targetprocs, restrictvars=restrictvars,
+            continuoustransmission=continuoustransmission, forcemip=forcemip, quiet=quiet, writemodel=true,
+            writefilename=writefilename, writefileformat=writefileformat)
+    catch e
+        println("NEMO encountered an error with the following message: " * sprint(showerror, e) * ".")
+        println("To report this issue to the NEMO team, please submit an error report at https://leap.sei.org/support/. Please include in the report a list of steps to reproduce the error and the error message.")
+    end
+end  # writescenariomodel

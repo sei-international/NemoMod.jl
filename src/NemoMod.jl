@@ -1,5 +1,5 @@
 #=
-    NEMO: Next-generation Energy Modeling system for Optimization.
+    NEMO: Next Energy Modeling system for Optimization.
     https://github.com/sei-international/NemoMod.jl
 
     Copyright © 2018: Stockholm Environment Institute U.S.
@@ -17,7 +17,7 @@ export calculatescenario, createnemodb, dropdefaultviews, dropresulttables, logm
 =#
 
 # BEGIN: Access other modules and code files.
-using JuMP, SQLite, DataFrames, Distributed, Dates, ConfParser
+using JuMP, SQLite, DataFrames, Distributed, Dates, ConfParser, MathOptInterface
 using GLPK, Cbc  # Open-source solvers
 
 # Proprietary solvers - enclosed in try blocks for users who aren't using NEMO installer
