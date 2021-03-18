@@ -17,7 +17,7 @@ catch e
 end
 
 if @isdefined CPLEX
-    @info "Running CPLEX tests."
+    @info "Testing scenario solution with CPLEX."
 
     @testset "Solving storage_test with CPLEX" begin
         dbfile = joinpath(@__DIR__, "storage_test.sqlite")

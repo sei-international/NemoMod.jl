@@ -4704,7 +4704,6 @@ if configfile != nothing && haskey(configfile, "includes", "customconstraints")
     end
 end
 # END: Perform customconstraints include.
-
 # END: Define model constraints.
 
 # BEGIN: Define model objective.

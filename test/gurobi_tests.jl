@@ -17,7 +17,7 @@ catch e
 end
 
 if @isdefined Gurobi
-    @info "Running Gurobi tests."
+    @info "Testing scenario solution with Gurobi."
 
     @testset "Solving storage_test with Gurobi" begin
         dbfile = joinpath(@__DIR__, "storage_test.sqlite")

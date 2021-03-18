@@ -35,8 +35,8 @@ function delete_file(path::String, max_del_attempts::Int)
 end  # delete_file(path::String)
 
 @testset "Solving a scenario" begin
-    include(joinpath(@__DIR__, "glpk_tests.jl"))
     include(joinpath(@__DIR__, "cbc_tests.jl"))
+    include(joinpath(@__DIR__, "glpk_tests.jl"))
     include(joinpath(@__DIR__, "cplex_tests.jl"))
     include(joinpath(@__DIR__, "gurobi_tests.jl"))
     include(joinpath(@__DIR__, "mosek_tests.jl"))
@@ -44,6 +44,7 @@ end  # delete_file(path::String)
 end  # @testset "Solving a scenario"
 
 @testset "Writing optimization problem for a scenario" begin
+    @info "Testing function to write optimization problem for a scenario."
     optprobfile = joinpath(@__DIR__, "storage_test_prob.gz")
 
     # Wrap file creation operation in a function to ensure Julia releases output file for deletion
@@ -72,7 +73,7 @@ end  # @testset "Solving a scenario"
 end  # @testset "Writing optimization problem for a scenario"
 
 @testset "Other database operations" begin
-    @info "Running tests of other database operations."
+    @info "Testing other database operations."
 
     @testset "Create a new NEMO database" begin
         # Wrap SQLite operations in a function in order to get Julia to release new DB file for deletion

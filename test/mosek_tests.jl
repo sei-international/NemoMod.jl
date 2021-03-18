@@ -16,7 +16,7 @@ catch e
 end
 
 if @isdefined Mosek
-    @info "Running Mosek tests."
+    @info "Testing scenario solution with Mosek."
 
     @testset "Solving storage_test with Mosek" begin
         dbfile = joinpath(@__DIR__, "storage_test.sqlite")

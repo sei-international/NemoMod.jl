@@ -17,7 +17,7 @@ catch e
 end
 
 if @isdefined Xpress
-    @info "Running Xpress tests."
+    @info "Testing scenario solution with Xpress."
 
     @testset "Solving storage_test with Xpress" begin
         dbfile = joinpath(@__DIR__, "storage_test.sqlite")

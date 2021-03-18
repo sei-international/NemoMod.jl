@@ -17,15 +17,14 @@ catch e
 end
 
 if @isdefined Cbc
-    @info "Running Cbc tests."
+    @info "Testing scenario solution with Cbc."
 
     @testset "Solving storage_test with Cbc" begin
         dbfile = joinpath(@__DIR__, "storage_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(optimizer_with_attributes(Cbc.Optimizer, "presolve" => "on", "logLevel" => 1)),
-            numprocs=1, restrictvars=false, quiet = false)
+        NemoMod.calculatescenario(dbfile; numprocs=1, restrictvars=false, quiet = false)  # Cbc is NEMO's default solver
 
         db = SQLite.DB(dbfile)
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
