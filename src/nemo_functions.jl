@@ -1002,6 +1002,29 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     return_val::Dict{String, Tuple{String, String}} = Dict{String, Tuple{String, String}}()  # Return value for this function; map of query names
     #   to tuples of (DB path, SQL command)
 
+    return_val["queryvrateofactivityvar"] = (dbpath, "with ar as (select r, t, m, y from OutputActivityRatio_def
+    where val <> 0
+    union
+    select r, t, m, y from InputActivityRatio_def
+    where val <> 0)
+    select r.val as r, l.val as l, t.val as t, m.val as m, y.val as y
+    from REGION r, TIMESLICE l, TECHNOLOGY t, MODE_OF_OPERATION m, YEAR y, ar
+    where ar.r = r.val and ar.t = t.val and ar.m = m.val and ar.y = y.val
+    order by r.val, t.val, l.val, y.val")
+
+    return_val["queryvtrade"] = (dbpath, "select r.val as r, rr.val as rr, l.val as l, f.val as f, y.val as y
+    from region r, region rr, TIMESLICE l, FUEL f, year y, TradeRoute_def tr
+    WHERE
+    r.val = tr.r and rr.val = tr.rr and f.val = tr.f and y.val = tr.y
+    and tr.r <> tr.rr and tr.val = 1
+    order by r.val, rr.val, f.val, y.val")
+
+    return_val["queryvtradeannual"] = (dbpath, "select r.val as r, rr.val as rr, f.val as f, y.val as y
+    from region r, region rr, FUEL f, year y, TradeRoute_def tr
+    WHERE
+    r.val = tr.r and rr.val = tr.rr and f.val = tr.f and y.val = tr.y
+    and tr.r <> tr.rr and tr.val = 1")
+
     return_val["queryvrateofproductionbytechnologybymodenn"] = (dbpath, "select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y,
     cast(oar.val as real) as oar
     from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, OutputActivityRatio_def oar

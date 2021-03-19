@@ -253,6 +253,9 @@ Factor multiplied by dispatched capacity to determine the use (input) of the spe
 
 For example, if a technology had an efficiency of 80%, the `InputActivityRatio` for inputs would be 1.25, and the `OutputActivityRatio` for outputs would be 1.0.
 
+!!! note
+    NEMO will not simulate activity for a [region](@ref region), technology, [mode of operation](@ref mode_of_operation), and [year](@ref year) unless you define a corresponding non-zero `OutputActivityRatio` or `InputActivityRatio`. In other words, activity is only simulated when it produces or consumes a fuel.
+
 #### Scenario database
 
 **Table: `InputActivityRatio`**
@@ -421,6 +424,9 @@ Factor multiplied by dispatched capacity to determine the production (output) of
 2. Set the `OutputActivityRatio` for output fuels to 1.
 
 For example, if a technology had an efficiency of 80%, the `InputActivityRatio` for inputs would be 1.25, and the `OutputActivityRatio` for outputs would be 1.0.
+
+!!! note
+    NEMO will not simulate activity for a [region](@ref region), technology, [mode of operation](@ref mode_of_operation), and [year](@ref year) unless you define a corresponding non-zero `OutputActivityRatio` or `InputActivityRatio`. In other words, activity is only simulated when it produces or consumes a fuel.
 
 #### Scenario database
 
@@ -963,7 +969,7 @@ Maximum nominal energy produced by a [technology](@ref technology) over the mode
 
 ## [Trade route](@id TradeRoute)
 
-Indicator of whether [region](@ref region) `r` can trade a [fuel](@ref fuel) to region `rr`.
+Indicator of whether [region](@ref region) `r` can trade a [fuel](@ref fuel) with region `rr`.
 
 #### Scenario database
 
@@ -979,7 +985,7 @@ Indicator of whether [region](@ref region) `r` can trade a [fuel](@ref fuel) to 
 | `val` | real  | Indicator (0 for no, 1 for yes) |
 
 !!! note
-    To enable trade between two regions, you must put two rows in `TradeRoute` with a `val` of 1: one with the first region as `r` and the second region as `rr`, and one with the first region as `rr` and the second region as `r`.
+    To enable trade between two regions, only one row in `TradeRoute` is needed. Either region can be assigned to `r`, and the second region should be assigned to `rr`. Be sure to set `val` to 1.
 
 !!! tip
     It is not necessary to populate zeros in `TradeRoute` for cases where trade is disallowed. NEMO assumes trade is not allowed unless a route is explicitly defined in the table.

@@ -439,8 +439,16 @@ if SQLite.done(querymodelperiodactivitylowerlimit)
     modelperiodactivitylowerlimits = false
 end
 
-@variable(jumpmodel, vrateofactivity[sregion, stimeslice, stechnology, smode_of_operation, syear] >= 0)
+if restrictvars
+    indexdicts = keydicts_parallel(queries["queryvrateofactivityvar"], 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
+    @variable(jumpmodel, vrateofactivity[r=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[r]], t=indexdicts[2][[r,l]],
+        m=indexdicts[3][[r,l,t]], y=indexdicts[4][[r,l,t,m]]] >= 0)
+else
+    @variable(jumpmodel, vrateofactivity[sregion, stimeslice, stechnology, smode_of_operation, syear] >= 0)
+end
+
 modelvarindices["vrateofactivity"] = (vrateofactivity, ["r", "l", "t", "m", "y"])
+
 @variable(jumpmodel, vrateoftotalactivity[sregion, stechnology, stimeslice, syear] >= 0)
 modelvarindices["vrateoftotalactivity"] = (vrateoftotalactivity, ["r", "t", "l", "y"])
 
@@ -530,7 +538,6 @@ if in("vrateofusebytechnologybymodenn", varstosavearr)
 end
 
 modelvarindices["vrateofusebytechnologynn"] = (vrateofusebytechnologynn, ["r","l","t","f","y"])
-
 modelvarindices["vusebytechnologyannual"] = (vusebytechnologyannual, ["r","t","f","y"])
 
 @variable(jumpmodel, vrateofuse[sregion, stimeslice, sfuel, syear] >= 0)
@@ -540,10 +547,22 @@ modelvarindices["vrateofusenn"] = (vrateofusenn, ["r", "l", "f", "y"])
 @variable(jumpmodel, vusenn[sregion, stimeslice, sfuel, syear] >= 0)
 modelvarindices["vusenn"] = (vusenn, ["r", "l", "f", "y"])
 
-@variable(jumpmodel, vtrade[sregion, sregion, stimeslice, sfuel, syear])
+if restrictvars
+    indexdicts = keydicts_parallel(queries["queryvtrade"], 4, targetprocs)  # Array of Dicts used to restrict indices of following variable
+    @variable(jumpmodel, vtrade[r=[k[1] for k = keys(indexdicts[1])], rr=indexdicts[1][[r]], l=indexdicts[2][[r,rr]],
+        f=indexdicts[3][[r,rr,l]], y=indexdicts[4][[r,rr,l,f]]] >= 0)
+
+    indexdicts = keydicts_parallel(queries["queryvtradeannual"], 3, targetprocs)  # Array of Dicts used to restrict indices of following variable
+    @variable(jumpmodel, vtradeannual[r=[k[1] for k = keys(indexdicts[1])], rr=indexdicts[1][[r]], f=indexdicts[2][[r,rr]],
+        y=indexdicts[3][[r,rr,f]]])
+else
+    @variable(jumpmodel, vtrade[sregion, sregion, stimeslice, sfuel, syear] >= 0)
+    @variable(jumpmodel, vtradeannual[sregion, sregion, sfuel, syear])
+end
+
 modelvarindices["vtrade"] = (vtrade, ["r", "rr", "l", "f", "y"])
-@variable(jumpmodel, vtradeannual[sregion, sregion, sfuel, syear])
 modelvarindices["vtradeannual"] = (vtradeannual, ["r", "rr", "f", "y"])
+
 @variable(jumpmodel, vproductionannualnn[sregion, sfuel, syear] >= 0)
 modelvarindices["vproductionannualnn"] = (vproductionannualnn, ["r", "f", "y"])
 @variable(jumpmodel, vuseannualnn[sregion, sfuel, syear] >= 0)
@@ -969,19 +988,19 @@ length(vrateofactivity1) > 0 && logmsg("Created constraint VRateOfActivity1.", q
 # BEGIN: RampRate.
 ramprate::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in SQLite.DBInterface.execute(db, "with ltgs as (select ltg.tg1, tg1.[order] as tg1o, ltg.tg2, tg2.[order] as tg2o, ltg.l, ltg.lorder,
+for row in SQLite.DBInterface.execute(db, "with ar as (select r, t, f, m, y from OutputActivityRatio_def
+where val <> 0
+union
+select r, t, f, m, y from InputActivityRatio_def
+where val <> 0),
+ltgs as (select ltg.tg1, tg1.[order] as tg1o, ltg.tg2, tg2.[order] as tg2o, ltg.l, ltg.lorder,
 lag(ltg.l) over (order by tg1.[order], tg2.[order], ltg.lorder) as prior_l
 from LTsGroup ltg, TSGROUP1 tg1, TSGROUP2 tg2
 where ltg.tg1 = tg1.name
 and ltg.tg2 = tg2.name),
 nodal as (select ntc.n as n, n.r as r, ntc.t as t, ar.m as m, ntc.y as y
 from NodalDistributionTechnologyCapacity_def ntc, node n,
-	TransmissionModelingEnabled tme,
-(select r, t, f, m, y from OutputActivityRatio_def
-where val <> 0
-union
-select r, t, f, m, y from InputActivityRatio_def
-where val <> 0) ar
+	TransmissionModelingEnabled tme, ar
 where ntc.val > 0
 and ntc.n = n.val
 and tme.r = n.r and tme.f = ar.f and tme.y = ntc.y
@@ -998,6 +1017,7 @@ and rr.val <> 1.0
 and rr.r = cf.r and rr.t = cf.t and rr.l = cf.l and rr.y = cf.y
 and rr.r = cta.r and rr.t = cta.t
 and nodal.n is null
+and exists (select 1 from ar where ar.r = rr.r and ar.t = rr.t and ar.m = m.val and ar.y = rr.y)
 )
 where
 not (tg1o = 1 and tg2o = 1 and lorder = 1)
@@ -1073,10 +1093,32 @@ end
 
 # BEGIN: CAa3_TotalActivityOfEachTechnology.
 caa3_totalactivityofeachtechnology::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = l, lastkeys[4] = y
+sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivity sum
 
-for (r, t, l, y) in Base.product(sregion, stechnology, stimeslice, syear)
-    push!(caa3_totalactivityofeachtechnology, @constraint(jumpmodel, sum([vrateofactivity[r,l,t,m,y] for m = smode_of_operation])
-        == vrateoftotalactivity[r,t,l,y]))
+for row in DataFrames.eachrow(queries["queryvrateofactivityvar"])
+    local r = row[:r]
+    local t = row[:t]
+    local l = row[:l]
+    local y = row[:y]
+
+    if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2] || l != lastkeys[3] || y != lastkeys[4])
+        # Create constraint
+        push!(caa3_totalactivityofeachtechnology, @constraint(jumpmodel, sumexps[1] == vrateoftotalactivity[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
+        sumexps[1] = AffExpr()
+    end
+
+    add_to_expression!(sumexps[1], vrateofactivity[r,l,t,row[:m],y])
+
+    lastkeys[1] = r
+    lastkeys[2] = t
+    lastkeys[3] = l
+    lastkeys[4] = y
+end
+
+# Create last constraint
+if isassigned(lastkeys, 1)
+    push!(caa3_totalactivityofeachtechnology, @constraint(jumpmodel, sumexps[1] == vrateoftotalactivity[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
 end
 
 length(caa3_totalactivityofeachtechnology) > 0 && logmsg("Created constraint CAa3_TotalActivityOfEachTechnology.", quiet)
@@ -1817,6 +1859,7 @@ if transmissionmodeling
 end
 # END: EBa9Tr_EnergyBalanceEachTS3.
 
+#= Deprecated in NEMO 1.4
 # BEGIN: EBa10_EnergyBalanceEachTS4.
 eba10_energybalanceeachts4::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
@@ -1825,18 +1868,17 @@ for (r, rr, l, f, y) in Base.product(sregion, sregion, stimeslice, sfuel, syear)
 end
 
 length(eba10_energybalanceeachts4) > 0 && logmsg("Created constraint EBa10_EnergyBalanceEachTS4.", quiet)
-# END: EBa10_EnergyBalanceEachTS4.
+# END: EBa10_EnergyBalanceEachTS4. =#
 
 # BEGIN: EBa11_EnergyBalanceEachTS5.
 eba11_energybalanceeachts5::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
-sumexps = Array{AffExpr, 1}([AffExpr()])
-# sumexps[1] = vtrade sum
+sumexps = Array{AffExpr, 1}([AffExpr()]) # sumexps[1] = vtrade sum
 
-for row in SQLite.DBInterface.execute(db, "select r.val as r, l.val as l, f.val as f, y.val as y, tr.rr as rr,
+for row in SQLite.DBInterface.execute(db, "select r.val as r, l.val as l, f.val as f, y.val as y, tr.r as tr_r, tr.rr as tr_rr,
     cast(tr.val as real) as trv
 from region r, timeslice l, fuel f, year y
-left join traderoute_def tr on tr.r = r.val and tr.f = f.val and tr.y = y.val
+left join traderoute_def tr on (tr.r = r.val or tr.rr = r.val) and tr.f = f.val and tr.y = y.val and tr.r <> tr.rr and tr.val = 1
 left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
 where tme.id is null
 order by r.val, l.val, f.val, y.val")
@@ -1852,9 +1894,14 @@ order by r.val, l.val, f.val, y.val")
         sumexps[1] = AffExpr()
     end
 
-    # Appears that traderoutes must be defined reciprocally - two entries for each pair of regions. Bears testing.
-    if !ismissing(row[:rr])
-        add_to_expression!(sumexps[1], vtrade[r,row[:rr],l,f,y] * row[:trv])
+    # To enable trade between regions, one row in TradeRoute with value = 1.0 should be specified
+    # Query results limited to rows with value = 1.0
+    if !ismissing(row[:trv])
+        if row[:tr_r] == r
+            add_to_expression!(sumexps[1], vtrade[r,row[:tr_rr],l,f,y])
+        else
+            add_to_expression!(sumexps[1], -vtrade[row[:tr_r],r,l,f,y])
+        end
     end
 
     lastkeys[1] = r
@@ -2181,9 +2228,32 @@ end
 
 # BEGIN: EBb3_EnergyBalanceEachYear.
 ebb3_energybalanceeachyear::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = rr, lastkeys[3] = f, lastkeys[4] = y
+sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtrade sum
 
-for (r, rr, f, y) in Base.product(sregion, sregion, sfuel, syear)
-    push!(ebb3_energybalanceeachyear, @constraint(jumpmodel, sum([vtrade[r,rr,l,f,y] for l = stimeslice]) == vtradeannual[r,rr,f,y]))
+for row in DataFrames.eachrow(queries["queryvtrade"])
+    local r = row[:r]
+    local rr = row[:rr]
+    local f = row[:f]
+    local y = row[:y]
+
+    if isassigned(lastkeys, 1) && (r != lastkeys[1] || rr != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
+        # Create constraint
+        push!(ebb3_energybalanceeachyear, @constraint(jumpmodel, sumexps[1] == vtradeannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
+        sumexps[1] = AffExpr()
+    end
+
+    add_to_expression!(sumexps[1], vtrade[r,rr,row[:l],f,y])
+
+    lastkeys[1] = r
+    lastkeys[2] = rr
+    lastkeys[3] = f
+    lastkeys[4] = y
+end
+
+# Create last constraint
+if isassigned(lastkeys, 1)
+    push!(ebb3_energybalanceeachyear, @constraint(jumpmodel, sumexps[1] == vtradeannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
 end
 
 length(ebb3_energybalanceeachyear) > 0 && logmsg("Created constraint EBb3_EnergyBalanceEachYear.", quiet)
@@ -2196,9 +2266,9 @@ lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = aad
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtradeannual sum
 
 for row in SQLite.DBInterface.execute(db, "select r.val as r, f.val as f, y.val as y, cast(aad.val as real) as aad,
-    tr.rr as rr, cast(tr.val as real) as trv
+    tr.r as tr_r, tr.rr as tr_rr, cast(tr.val as real) as trv
 from region r, fuel f, year y
-left join traderoute_def tr on tr.r = r.val and tr.f = f.val and tr.y = y.val
+left join traderoute_def tr on (tr.r = r.val or tr.rr = r.val) and tr.f = f.val and tr.y = y.val and tr.r <> tr.rr and tr.val = 1
 left join AccumulatedAnnualDemand_def aad on aad.r = r.val and aad.f = f.val and aad.y = y.val
 left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
 where tme.id is null
@@ -2216,8 +2286,14 @@ order by r.val, f.val, y.val")
         lastvals[1] = 0.0
     end
 
-    if !ismissing(row[:rr])
-        add_to_expression!(sumexps[1], vtradeannual[r,row[:rr],f,y] * row[:trv])
+    # To enable trade between regions, one row in TradeRoute with value = 1.0 should be specified
+    # Query results limited to rows with value = 1.0
+    if !ismissing(row[:trv])
+        if row[:tr_r] == r
+            add_to_expression!(sumexps[1], vtradeannual[r,row[:tr_rr],f,y])
+        else
+            add_to_expression!(sumexps[1], -vtradeannual[row[:tr_r],r,f,y])
+        end
     end
 
     if !ismissing(row[:aad])
@@ -2372,9 +2448,15 @@ acc3_averageannualrateofactivity::Array{ConstraintRef, 1} = Array{ConstraintRef,
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = m, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivity sum
 
-for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, m.val as m, y.val as y, ys.l as l, cast(ys.val as real) as ys
+for row in SQLite.DBInterface.execute(db, "with ar as (select r, t, f, m, y from OutputActivityRatio_def
+where val <> 0
+union
+select r, t, f, m, y from InputActivityRatio_def
+where val <> 0)
+select r.val as r, t.val as t, m.val as m, y.val as y, ys.l as l, cast(ys.val as real) as ys
 from region r, technology t, mode_of_operation m, year y, YearSplit_def ys
 where ys.y = y.val
+and exists (select 1 from ar where ar.r = r.val and ar.t = t.val and ar.m = m.val and ar.y = y.val)
 order by r.val, t.val, m.val, y.val")
     local r = row[:r]
     local t = row[:t]
@@ -2423,12 +2505,18 @@ ns1_rateofstoragecharge::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = s, lastkeys[3] = l, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivity sum
 
-for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, l.val as l, y.val as y, tts.m as m, tts.t as t
-from region r, storage s, TIMESLICE l, year y, TechnologyToStorage_def tts
+for row in SQLite.DBInterface.execute(db, "with ar as (select r, t, m, y from OutputActivityRatio_def
+where val <> 0
+union
+select r, t, m, y from InputActivityRatio_def
+where val <> 0)
+select r.val as r, s.val as s, l.val as l, y.val as y, tts.m as m, tts.t as t
+from region r, storage s, TIMESLICE l, year y, TechnologyToStorage_def tts, ar
 left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
 where
 tts.r = r.val and tts.s = s.val and tts.val = 1
 and ns.r is null
+and ar.r = r.val and ar.t = tts.t and ar.m = tts.m and ar.y = y.val
 order by r.val, s.val, l.val, y.val")
     local r = row[:r]
     local s = row[:s]
@@ -2516,12 +2604,18 @@ ns2_rateofstoragedischarge::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = s, lastkeys[3] = l, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofactivity sum
 
-for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, l.val as l, y.val as y, tfs.m as m, tfs.t as t
-from region r, storage s, TIMESLICE l, year y, TechnologyFromStorage_def tfs
+for row in SQLite.DBInterface.execute(db, "with ar as (select r, t, m, y from OutputActivityRatio_def
+where val <> 0
+union
+select r, t, m, y from InputActivityRatio_def
+where val <> 0)
+select r.val as r, s.val as s, l.val as l, y.val as y, tfs.m as m, tfs.t as t
+from region r, storage s, TIMESLICE l, year y, TechnologyFromStorage_def tfs, ar
 left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
 where
 tfs.r = r.val and tfs.s = s.val and tfs.val = 1
 and ns.r is null
+and ar.r = r.val and ar.t = tfs.t and ar.m = tfs.m and ar.y = y.val
 order by r.val, s.val, l.val, y.val")
     local r = row[:r]
     local s = row[:s]
