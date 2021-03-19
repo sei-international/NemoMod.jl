@@ -72,16 +72,16 @@ if @isdefined MosekTools
         @test testqry[9,:y] == "2028"
         @test testqry[10,:y] == "2029"
 
-        @test isapprox(testqry[1,:val], 3845.15703404259; atol=TOL)
-        @test isapprox(testqry[2,:val], 146.55227050539; atol=TOL)
-        @test isapprox(testqry[3,:val], 139.57362837926; atol=TOL)
-        @test isapprox(testqry[4,:val], 132.927266053843; atol=TOL)
-        @test isapprox(testqry[5,:val], 126.597396376304; atol=TOL)
-        @test isapprox(testqry[6,:val], 120.568948487497; atol=TOL)
-        @test isapprox(testqry[7,:val], 114.827569988092; atol=TOL)
-        @test isapprox(testqry[8,:val], 109.35959046485; atol=TOL)
-        @test isapprox(testqry[9,:val], 104.151990918904; atol=TOL)
-        @test isapprox(testqry[10,:val], 99.1923723037184; atol=TOL)
+        @test isapprox(testqry[1,:val], 3845.15702798338; atol=TOL)
+        @test isapprox(testqry[2,:val], 146.552320420142; atol=TOL)
+        @test isapprox(testqry[3,:val], 139.573628995129; atol=TOL)
+        @test isapprox(testqry[4,:val], 132.927265707472; atol=TOL)
+        @test isapprox(testqry[5,:val], 126.595295756463; atol=TOL)
+        @test isapprox(testqry[6,:val], 120.566948339488; atol=TOL)
+        @test isapprox(testqry[7,:val], 114.825665085227; atol=TOL)
+        @test isapprox(testqry[8,:val], 109.357776271645; atol=TOL)
+        @test isapprox(testqry[9,:val], 104.150263115852; atol=TOL)
+        @test isapprox(testqry[10,:val], 99.1907267770024; atol=TOL)
 
         # Test with restrictvars
         NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(Mosek.Optimizer),
@@ -102,16 +102,16 @@ if @isdefined MosekTools
         @test testqry[9,:y] == "2028"
         @test testqry[10,:y] == "2029"
 
-        @test isapprox(testqry[1,:val], 3845.15703404259; atol=TOL)
-        @test isapprox(testqry[2,:val], 146.55227050539; atol=TOL)
-        @test isapprox(testqry[3,:val], 139.57362837926; atol=TOL)
-        @test isapprox(testqry[4,:val], 132.927266053843; atol=TOL)
-        @test isapprox(testqry[5,:val], 126.597396376304; atol=TOL)
-        @test isapprox(testqry[6,:val], 120.568948487497; atol=TOL)
-        @test isapprox(testqry[7,:val], 114.827569988092; atol=TOL)
-        @test isapprox(testqry[8,:val], 109.35959046485; atol=TOL)
-        @test isapprox(testqry[9,:val], 104.151990918904; atol=TOL)
-        @test isapprox(testqry[10,:val], 99.1923723037184; atol=TOL)
+        @test isapprox(testqry[1,:val], 3845.15702798338; atol=TOL)
+        @test isapprox(testqry[2,:val], 146.552320420142; atol=TOL)
+        @test isapprox(testqry[3,:val], 139.573628995129; atol=TOL)
+        @test isapprox(testqry[4,:val], 132.927265707472; atol=TOL)
+        @test isapprox(testqry[5,:val], 126.595295756463; atol=TOL)
+        @test isapprox(testqry[6,:val], 120.566948339488; atol=TOL)
+        @test isapprox(testqry[7,:val], 114.825665085227; atol=TOL)
+        @test isapprox(testqry[8,:val], 109.357776271645; atol=TOL)
+        @test isapprox(testqry[9,:val], 104.150263115852; atol=TOL)
+        @test isapprox(testqry[10,:val], 99.1907267770024; atol=TOL)
 
         # Test with storage net zero constraints
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
@@ -129,16 +129,16 @@ if @isdefined MosekTools
         @test testqry[9,:y] == "2028"
         @test testqry[10,:y] == "2029"
 
-        @test isapprox(testqry[1,:val], 3840.94023817782; atol=TOL)
-        @test isapprox(testqry[2,:val], 459.29493842479; atol=TOL)
-        @test isapprox(testqry[3,:val], 437.423750880753; atol=TOL)
-        @test isapprox(testqry[4,:val], 416.59404845786; atol=TOL)
-        @test isapprox(testqry[5,:val], 396.756236626533; atol=TOL)
-        @test isapprox(testqry[6,:val], 377.86308250146; atol=TOL)
-        @test isapprox(testqry[7,:val], 359.8696023823438; atol=TOL)
-        @test isapprox(testqry[8,:val], 342.73295464985; atol=TOL)
-        @test isapprox(testqry[9,:val], 326.412337761762; atol=TOL)
-        @test isapprox(testqry[10,:val], 310.86889310644; atol=TOL)
+        @test isapprox(testqry[1,:val], 3840.94023817774; atol=TOL)
+        @test isapprox(testqry[2,:val], 459.292614204884; atol=TOL)
+        @test isapprox(testqry[3,:val], 437.421537337638; atol=TOL)
+        @test isapprox(testqry[4,:val], 416.59194032216; atol=TOL)
+        @test isapprox(testqry[5,:val], 396.754228877952; atol=TOL)
+        @test isapprox(testqry[6,:val], 377.861170359965; atol=TOL)
+        @test isapprox(testqry[7,:val], 359.867781295205; atol=TOL)
+        @test isapprox(testqry[8,:val], 342.731220281158; atol=TOL)
+        @test isapprox(testqry[9,:val], 326.410685982046; atol=TOL)
+        @test isapprox(testqry[10,:val], 310.8673199829; atol=TOL)
 
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 0")
 
@@ -217,7 +217,7 @@ if @isdefined MosekTools
         @test isapprox(testqry[7,:val], 1258.35713682873; atol=TOL)
         @test isapprox(testqry[8,:val], 1198.43536840832; atol=TOL)
         @test isapprox(testqry[9,:val], 1141.36701753173; atol=TOL)
-        @test isapprox(testqry[10,:val], 1084.83029580609; atol=TOL)
+        @test isapprox(testqry[10,:val], 1084.83534558417; atol=TOL)
 
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
