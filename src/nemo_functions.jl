@@ -61,6 +61,7 @@ end  # getconfig(quiet::Bool = false)
 
 """
     getconfigargs!(configfile::ConfParse,
+        calcyears::Array{Int,1},
         varstosavearr::Array{String,1},
         targetprocs::Array{Int,1},
         bools::Array{Bool,1},
@@ -71,20 +72,46 @@ Loads run-time arguments for `calculatescenario()` from a configuration file.
 
 # Arguments
 - `configfile::ConfParse`: Configuration file. This argument is not changed by the function.
+- `calcyears::Array{Int,1}`: `calculatescenario()` `calcyears` argument. Values specified
+    in the configuration file for `[calculatescenarioargs]/calcyears` (including an empty or null value)
+    replace what is in this array.
 - `varstosavearr::Array{String,1}`: Array representation of `calculatescenario()` `varstosave` argument.
-    New values in configuration file are added to this array.
-- `targetprocs::Array{Int,1}`: `calculatescenario()` `targetprocs` argument. New values in configuration
-    file are added to this array.
+    Values specified in the configuration file for `[calculatescenarioargs]/varstosave` are added to this array.
+- `targetprocs::Array{Int,1}`: `calculatescenario()` `targetprocs` argument. Values specified in the
+    configuration file for `[calculatescenarioargs]/targetprocs` are added to this array.
 - `bools::Array{Bool,1}`: Array of Boolean arguments for `calculatescenario()`: `restrictvars`, `reportzeros`,
-    `continuoustransmission`, `forcemip`, and `quiet`, in that order. New values in configuration file overwrite values
-    in this array.
-- `ints::Array{Int,1}`: Array of `Int` arguments for `calculatescenario()`: `numprocs`. New values in
-    configuration file overwrite values in this array.
+    `continuoustransmission`, `forcemip`, and `quiet`, in that order. Values specified in the configuration file
+    for `[calculatescenarioargs]/restrictvars`, `[calculatescenarioargs]/reportzeros`,
+    `[calculatescenarioargs]/continuoustransmission`, `[calculatescenarioargs]/forcemip`, and `[calculatescenarioargs]/quiet`
+    overwrite what is in this array (provided the values can be parsed as `Bool`).
+- `ints::Array{Int,1}`: Array of `Int` arguments for `calculatescenario()`: `numprocs`. Values specified in the
+    configuration file for `[calculatescenarioargs]/numprocs` overwrite what is in this array (provided
+    the values can be parsed as `Int`).
 - `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to `STDOUT`).
     This argument is not changed by the function.
 """
-function getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, targetprocs::Array{Int,1},
-    bools::Array{Bool,1}, ints::Array{Int,1}, quiet::Bool)
+function getconfigargs!(configfile::ConfParse, calcyears::Array{Int,1}, varstosavearr::Array{String,1},
+    targetprocs::Array{Int,1}, bools::Array{Bool,1}, ints::Array{Int,1}, quiet::Bool)
+
+    if haskey(configfile, "calculatescenarioargs", "calcyears")
+        try
+            calcyearsconfig = retrieve(configfile, "calculatescenarioargs", "calcyears")
+            calcyearsconfigarr::Array{Int,1} = Array{Int,1}()  # calcyearsconfig converted to an Int array
+
+            if typeof(calcyearsconfig) == String
+                calcyearsconfigarr = [Meta.parse(calcyearsconfig)]
+            else
+                # calcyearsconfig should be an array of strings
+                calcyearsconfigarr = [Meta.parse(v) for v in calcyearsconfig]
+            end
+
+            # This separate operation is necessary in order to modify calcyears
+            empty!(calcyears)
+            append!(calcyears, calcyearsconfigarr)
+        catch e
+            logmsg("Could not read calcyears argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
+        end
+    end
 
     if haskey(configfile, "calculatescenarioargs", "varstosave")
         try
@@ -181,8 +208,8 @@ end  # getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, tar
 Sets solver parameters specified in a configuration file. Reports which parameters were and were not successfully set.
 
 # Arguments
-- `configfile::ConfParse`: Configuration file. Solver parameters should be in "parameters" key within "solver" block,
-    specified as follows: parameter1=value1, parameter2=value2, ...
+- `configfile::ConfParse`: Configuration file. Solver parameters should be in `parameters` key within `solver` block,
+    specified as follows: `parameter1=value1`, `parameter2=value2`, ...
 - `jumpmodel::JuMP.Model`: JuMP model in which solver parameters will be set.
 - `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to `STDOUT`).
 """
@@ -934,33 +961,37 @@ function dropresulttables(db::SQLite.DB, quiet::Bool = true)
 end  # dropresulttables(db::SQLite.DB)
 
 """
-    checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
+    checkactivityupperlimits(db::SQLite.DB, tolerance::Float64, restrictyears::Bool, inyears::String)
 
 For the scenario specified in `db`, checks whether there are:
     1) Any TotalTechnologyAnnualActivityUpperLimit values that are <= tolerance times the maximum
         annual demand
     2) Any TotalTechnologyModelPeriodActivityUpperLimit values that are <= tolerance times the maximum
         annual demand times the number of years in the scenario
+If `restrictyears` is true, the maximum annual demand and the TotalTechnologyAnnualActivityUpperLimit values
+are selected from the years in `inyears`. `inyears` should be a comma-delimited list of years in
+parentheses, with a space at the beginning and end of the string.
+
 Returns a `Tuple` of Booleans whose first value is the result of the first check, and whose second
     value is the result of the second.
 """
-function checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
+function checkactivityupperlimits(db::SQLite.DB, tolerance::Float64, restrictyears::Bool, inyears::String)
     local annual::Bool = true  # Return value indicating whether there are any TotalTechnologyAnnualActivityUpperLimit
-        # values that are <= tolerance x maximum annual demand in scenario
+        # values that are <= tolerance x maximum annual demand
     local modelperiod::Bool = true  # Return value indicating whether there are any TotalTechnologyModelPeriodActivityUpperLimit
         # values that are <= tolerance x maximum annual demand x # of years in scenario
     local qry::DataFrame  # Working query
-    local maxdemand::Float64  # Maximum annual demand in scenario
+    local maxdemand::Float64  # Maximum annual demand
 
     qry = SQLite.DBInterface.execute(db, "select max(mv) as mv from
-    (select max(val) as mv from AccumulatedAnnualDemand_def
+    (select max(val) as mv from AccumulatedAnnualDemand_def $(restrictyears ? "where y in" * inyears : "")
     union
-    select max(val) as mv from SpecifiedAnnualDemand_def)") |> DataFrame
+    select max(val) as mv from SpecifiedAnnualDemand_def $(restrictyears ? "where y in" * inyears : ""))") |> DataFrame
 
     maxdemand = qry[!,1][1]
 
     qry = SQLite.DBInterface.execute(db, "select tau.val from TotalTechnologyAnnualActivityUpperLimit_def tau
-        where tau.val / :v1 <= :v2", [maxdemand, tolerance]) |> DataFrame
+        where tau.val / :v1 <= :v2 $(restrictyears ? "and y in" * inyears : "")", [maxdemand, tolerance]) |> DataFrame
 
     if size(qry)[1] == 0
         annual = false
@@ -974,39 +1005,42 @@ function checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
     end
 
     return (annual, modelperiod)
-end  # checkactivityupperlimits(db::SQLite.DB, tolerance::Float64)
+end  # checkactivityupperlimits(db::SQLite.DB, tolerance::Float64, restrictyears::Bool, inyears::String)
 
 """
     scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vproductionbytechnologysaved::Bool,
-        vusebytechnologysaved::Bool)
+        vusebytechnologysaved::Bool, restrictyears::Bool, inyears::String)
 
-Returns a `Dict` of query commands used in NEMO's `calculatescenario` function. Each key in the return value is
+Returns a `Dict` of query commands used in NEMO's `modelscenario` function. Each key in the return value is
     a query name, and each value is a `Tuple` where:
         - Element 1 = path to NEMO scenario database in which to execute query (taken from `dbpath` argument)
         - Element 2 = query's SQL statement
-    The function's Boolean arguments restrict the set of returned query commands as noted below.
+    The function's arguments other than `dbpath` delimit the set of returned query commands as noted below.
 
 # Arguments
 - `dbpath::String`: Path to NEMO scenario database in which query commands should be executed.
-- `transmissionmodeling::Bool`: Indicates whether transmission modeling is enabled in `calculatescenario`.
+- `transmissionmodeling::Bool`: Indicates whether transmission modeling is enabled in `modelscenario`.
     Additional query commands are included in results when transmission modeling is enabled.
 - `vproductionbytechnologysaved::Bool`: Indicates whether output variable `vproductionbytechnology`
-    will be saved in `calculatescenario`. Additional query commands are included in results when this argument
-    and `transmissionmodeling` are true.
+    will be saved in `modelscenario`. Additional query commands are included in results when this argument
+    and `transmissionmodeling` are `true`.
 - `vusebytechnologysaved::Bool`: Indicates whether output variable `vusebytechnology`
-    will be saved in `calculatescenario`. Additional query commands are included in results when this argument
-    and `transmissionmodeling` are true."""
+    will be saved in `modelscenario`. Additional query commands are included in results when this argument
+    and `transmissionmodeling` are `true`.
+- `restrictyears::Bool`: Indicates whether `modelscenario` is running for selected years only.
+- `inyears::String`: SQL IN clause predicate for years selected for `modelscenario`. When `restrictvars`
+    is `true`, this argument is used to include filtering by year in query commands."""
 function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vproductionbytechnologysaved::Bool,
-    vusebytechnologysaved::Bool)
+    vusebytechnologysaved::Bool, restrictyears::Bool, inyears::String)
 
     return_val::Dict{String, Tuple{String, String}} = Dict{String, Tuple{String, String}}()  # Return value for this function; map of query names
     #   to tuples of (DB path, SQL command)
 
     return_val["queryvrateofactivityvar"] = (dbpath, "with ar as (select r, t, m, y from OutputActivityRatio_def
-    where val <> 0
+    where val <> 0 $(restrictyears ? "and y in" * inyears : "")
     union
     select r, t, m, y from InputActivityRatio_def
-    where val <> 0)
+    where val <> 0 $(restrictyears ? "and y in" * inyears : ""))
     select r.val as r, l.val as l, t.val as t, m.val as m, y.val as y
     from REGION r, TIMESLICE l, TECHNOLOGY t, MODE_OF_OPERATION m, YEAR y, ar
     where ar.r = r.val and ar.t = t.val and ar.m = m.val and ar.y = y.val
@@ -1016,14 +1050,14 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     from region r, region rr, TIMESLICE l, FUEL f, year y, TradeRoute_def tr
     WHERE
     r.val = tr.r and rr.val = tr.rr and f.val = tr.f and y.val = tr.y
-    and tr.r <> tr.rr and tr.val = 1
+    and tr.r <> tr.rr and tr.val = 1 $(restrictyears ? "and tr.y in" * inyears : "")
     order by r.val, rr.val, f.val, y.val")
 
     return_val["queryvtradeannual"] = (dbpath, "select r.val as r, rr.val as rr, f.val as f, y.val as y
     from region r, region rr, FUEL f, year y, TradeRoute_def tr
     WHERE
     r.val = tr.r and rr.val = tr.rr and f.val = tr.f and y.val = tr.y
-    and tr.r <> tr.rr and tr.val = 1")
+    and tr.r <> tr.rr and tr.val = 1 $(restrictyears ? "and tr.y in" * inyears : "")")
 
     return_val["queryvrateofproductionbytechnologybymodenn"] = (dbpath, "select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y,
     cast(oar.val as real) as oar
@@ -1033,13 +1067,14 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     and oar.val <> 0
     and ys.y = y.val
     and tme.id is null
+    $(restrictyears ? "and y.val in" * inyears : "")
     order by r.val, ys.l, t.val, f.val, y.val")
 
     return_val["queryvrateofproductionbytechnologynn"] = (dbpath, "select r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
     from region r, YearSplit_def ys, technology t, fuel f, year y,
     (select distinct r, t, f, y
     from OutputActivityRatio_def
-    where val <> 0) oar
+    where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar
     left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
     where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val
     and ys.y = y.val
@@ -1052,7 +1087,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     from region r, technology t, fuel f, year y, YearSplit_def ys,
     (select distinct r, t, f, y
     from OutputActivityRatio_def
-    where val <> 0) oar
+    where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar
     left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
     where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val
     and ys.y = y.val
@@ -1064,7 +1099,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     TransmissionModelingEnabled tme, YearSplit_def ys,
     (select distinct r, t, f, y
     from OutputActivityRatio_def
-    where val <> 0) oar
+    where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar
     where ntc.val > 0
     and ntc.n = n.val
     and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
@@ -1080,12 +1115,13 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     and iar.val <> 0
     and ys.y = y.val
     and tme.id is null
+    $(restrictyears ? "and y.val in" * inyears : "")
     order by r.val, ys.l, t.val, f.val, y.val")
 
     return_val["queryvrateofusebytechnologynn"] = (dbpath, "select
     r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
     from region r, YearSplit_def ys, technology t, fuel f, year y,
-    (select distinct r, t, f, y from InputActivityRatio_def where val <> 0) iar
+    (select distinct r, t, f, y from InputActivityRatio_def where val <> 0 $(restrictyears ? "and y in" * inyears : "")) iar
     left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
     where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
     and ys.y = y.val
@@ -1096,7 +1132,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l,
     cast(ys.val as real) as ys
     from region r, technology t, fuel f, year y, YearSplit_def ys,
-    (select distinct r, t, f, y from InputActivityRatio_def where val <> 0) iar
+    (select distinct r, t, f, y from InputActivityRatio_def where val <> 0 $(restrictyears ? "and y in" * inyears : "")) iar
     left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
     where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
     and ys.y = y.val
@@ -1106,7 +1142,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     cast(ys.val as real) as ys
     from NodalDistributionTechnologyCapacity_def ntc, NODE n,
     TransmissionModelingEnabled tme, YearSplit_def ys,
-    (select distinct r, t, f, y from InputActivityRatio_def where val <> 0) iar
+    (select distinct r, t, f, y from InputActivityRatio_def where val <> 0 $(restrictyears ? "and y in" * inyears : "")) iar
     where ntc.val > 0
     and ntc.n = n.val
     and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
@@ -1116,17 +1152,17 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     order by r, t, f, y")
 
     return_val["querycaa5_totalnewcapacity"] = (dbpath, "select cot.r as r, cot.t as t, cot.y as y, cast(cot.val as real) as cot
-    from CapacityOfOneTechnologyUnit_def cot where cot.val <> 0")
+    from CapacityOfOneTechnologyUnit_def cot where cot.val <> 0 $(restrictyears ? "and cot.y in" * inyears : "")")
 
     if transmissionmodeling
         return_val["queryvrateofactivitynodal"] = (dbpath, "select ntc.n as n, l.val as l, ntc.t as t, ar.m as m, ntc.y as y
         from NodalDistributionTechnologyCapacity_def ntc, node n,
         	TransmissionModelingEnabled tme, TIMESLICE l,
         (select r, t, f, m, y from OutputActivityRatio_def
-        where val <> 0
+        where val <> 0 $(restrictyears ? "and y in" * inyears : "")
         union
         select r, t, f, m, y from InputActivityRatio_def
-        where val <> 0) ar
+        where val <> 0 $(restrictyears ? "and y in" * inyears : "")) ar
         where ntc.val > 0
         and ntc.n = n.val
         and tme.r = n.r and tme.f = ar.f and tme.y = ntc.y
@@ -1139,7 +1175,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     	TransmissionModelingEnabled tme,
         (select distinct r, t, f, y
         from OutputActivityRatio_def
-        where val <> 0) oar
+        where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar
         where ntc.val > 0
         and ntc.y = ys.y
         and ntc.n = n.val
@@ -1153,7 +1189,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     	TransmissionModelingEnabled tme,
         (select distinct r, t, f, y
         from InputActivityRatio_def
-        where val <> 0) iar
+        where val <> 0 $(restrictyears ? "and y in" * inyears : "")) iar
         where ntc.val > 0
         and ntc.y = ys.y
         and ntc.n = n.val
@@ -1167,7 +1203,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
             TransmissionModelingEnabled tme,
             (select distinct r, t, f, y
             from OutputActivityRatio_def
-            where val <> 0) oar
+            where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar
             where ntc.val > 0
             and ntc.y = ys.y
             and ntc.n = n.val
@@ -1181,7 +1217,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
             TransmissionModelingEnabled tme,
             (select distinct r, t, f, y
             from InputActivityRatio_def
-            where val <> 0) iar
+            where val <> 0 $(restrictyears ? "and y in" * inyears : "")) iar
             where ntc.val > 0
             and ntc.y = ys.y
             and ntc.n = n.val
@@ -1200,22 +1236,22 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
         and tme1.r = n1.r and tme1.f = tl.f
         and tme2.r = n2.r and tme2.f = tl.f
         and tme1.y = tme2.y and tme1.type = tme2.type
-    	and ys.y = tme1.y
+    	and ys.y = tme1.y $(restrictyears ? "and ys.y in" * inyears : "")
     	and tcta.r = n1.r and tl.f = tcta.f
         order by tl.id, tme1.y")
 
         return_val["queryvstorageleveltsgroup1"] = (dbpath, "select ns.n as n, ns.s as s, tg1.name as tg1, ns.y as y
-        from nodalstorage ns, TSGROUP1 tg1")
+        from nodalstorage ns, TSGROUP1 tg1 $(restrictyears ? "where ns.y in" * inyears : "")")
 
         return_val["queryvstorageleveltsgroup2"] = (dbpath, "select ns.n as n, ns.s as s, tg1.name as tg1, tg2.name as tg2, ns.y as y
-        from nodalstorage ns, TSGROUP1 tg1, TSGROUP2 tg2")
+        from nodalstorage ns, TSGROUP1 tg1, TSGROUP2 tg2 $(restrictyears ? "where ns.y in" * inyears : "")")
 
         return_val["queryvstoragelevelts"] = (dbpath, "select ns.n as n, ns.s as s, l.val as l, ns.y as y
-        from nodalstorage ns, TIMESLICE l")
+        from nodalstorage ns, TIMESLICE l $(restrictyears ? "where ns.y in" * inyears : "")")
     end  # transmissionmodeling
 
     return return_val
-end  # scenario_calc_queries(dbpath::String)
+end  # scenario_calc_queries()
 
 """
     run_qry(qtpl::Tuple{String, String})
@@ -1351,6 +1387,7 @@ All arguments except `writefilename` and `writefileformat` function as in
 """
 function writescenariomodel(
     dbpath::String;
+    calcyears::Array{Int, 1} = Array{Int, 1}(),
     varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
     numprocs::Int = 0,
     targetprocs::Array{Int, 1} = Array{Int, 1}(),
@@ -1363,7 +1400,7 @@ function writescenariomodel(
     )
 
     try
-        modelscenario(dbpath; varstosave=varstosave, numprocs=numprocs, targetprocs=targetprocs, restrictvars=restrictvars,
+        modelscenario(dbpath; calcyears=calcyears, varstosave=varstosave, numprocs=numprocs, targetprocs=targetprocs, restrictvars=restrictvars,
             continuoustransmission=continuoustransmission, forcemip=forcemip, quiet=quiet, writemodel=true,
             writefilename=writefilename, writefileformat=writefileformat)
     catch e
