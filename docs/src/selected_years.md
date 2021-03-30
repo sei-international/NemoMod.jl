@@ -3,7 +3,7 @@ CurrentModule = NemoMod
 ```
 # [Calculating selected years](@id selected_years)
 
-You can run a scenario calculation in NEMO for certain [years](@ref year) only by using the `calcyears` argument for [`calculatescenario`](@ref scenario_calc) (or [`writescenariomodel`](@ref)). When you specify a value for `calcyears`, NEMO restricts the scenario's optimization problem to the years you select (provided they are defined in the [scenario's database](@ref scenario_db)). The problem's objective is to minimize discounted costs in those years. If you don't supply a value for `calcyears`, all years in the scenario database are included in the calculation.
+You can run a scenario calculation in NEMO for certain [years](@ref year) only by using the `calcyears` argument for [`calculatescenario`](@ref scenario_calc).[^1] You can also set this argument in a [NEMO configuration file](@ref configuration_file). When you specify a value for `calcyears`, NEMO restricts the scenario's optimization problem to the years you select (provided they are defined in the [scenario's database](@ref scenario_db)). The problem's objective is to minimize discounted costs in those years. If you don't supply a value for `calcyears`, all years in the scenario database are included in the calculation.
 
 Calculating selected years offers a way quickly to generate results from large, complex models. While the results may not be identical to what you would get if you calculated all years, NEMO takes several steps to ensure they are a reasonable approximation. Specifically, when `calcyears` is invoked, NEMO:
 
@@ -33,3 +33,5 @@ NEMO also makes a few other changes when you turn on `calcyears`:
 * Model period technology activity and emission limits ([`TotalTechnologyModelPeriodActivityUpperLimit`](@ref TotalTechnologyModelPeriodActivityUpperLimit), [`TotalTechnologyModelPeriodActivityLowerLimit`](@ref TotalTechnologyModelPeriodActivityLowerLimit), and [`ModelPeriodEmissionLimit`](@ref ModelPeriodEmissionLimit)) are not enforced. NEMO warns you if your scenario database includes these parameters.
 
 * The output variables [`vmodelperiodcostbyregion`](@ref vmodelperiodcostbyregion), [`vmodelperiodemissions`](@ref vmodelperiodemissions), and [`vtotaltechnologymodelperiodactivity`](@ref vtotaltechnologymodelperiodactivity) include results for modeled years only.
+
+[^1]: `calcyears` also applies to [`writescenariomodel`](@ref).

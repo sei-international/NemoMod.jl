@@ -8,6 +8,7 @@ When you calculate a scenario with NEMO, you can provide a configuration file th
 NEMO configuration files are text files written in `ini` syntax. The following run-time options can be set in a configuration file.
 
 * `calculatescenarioargs` block
+  + `calcyears` - Comma-delimited list of [`years`](@ref year) to include in the scenario calculation. If this option is specified in a configuration file, it overrides the `calcyears` argument for [`calculatescenario`](@ref).
   + `varstosave` - Comma-delimited list of output [variables](@ref variables) (Julia variable names) to save to the [scenario database](@ref scenario_db). NEMO adds values specified in a configuration file to those requested in the `varstosave` argument for [`calculatescenario`](@ref).
   + `numprocs` - Number of Julia processes to use for parallelized operations (a positive integer or 0 for half the number of logical processors on the executing machine). If this option is specified in a configuration file, it overrides the `numprocs` argument for [`calculatescenario`](@ref).
   + `targetprocs` - Comma-delimited list of identifiers of Julia processes that NEMO should use in parallelized operations. NEMO adds values specified in a configuration file to those requested in the `targetprocs` argument for [`calculatescenario`](@ref).
