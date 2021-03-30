@@ -294,7 +294,7 @@ Minimum fraction of a [storage's](@ref storage) capacity that must be charged. N
 
 ## [Model period emission limit](@id ModelPeriodEmissionLimit)
 
-Maximum emissions allowed in the modeling period (i.e., over all [years](@ref year)).
+Maximum emissions allowed in the modeling period (i.e., over all [years](@ref year)). This parameter is not used when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details.
 
 #### Scenario database
 
@@ -708,7 +708,7 @@ Maximum discharging rate for a [storage](@ref storage).
 
 ## [Storage start level](@id StorageLevelStart)
 
-Fraction of exogenous [storage](@ref storage) capacity that is charged at the start of the modeling period.
+Fraction of exogenous [storage](@ref storage) capacity that is charged at the start of the first modeled [year](@ref year).
 
 #### Scenario database
 
@@ -795,7 +795,7 @@ Maximum capacity for a [technology](@ref technology) in a [year](@ref year) (inc
 
 ## [Total annual maximum capacity investment](@id TotalAnnualMaxCapacityInvestment)
 
-Maximum addition of endogenously determined capacity for a [technology](@ref technology) in a [year](@ref year). Only specify this parameter if you want to enforce a particular limit.
+Maximum addition of endogenously determined capacity for a [technology](@ref technology) in a [year](@ref year). Only specify this parameter if you want to enforce a particular limit. This parameter is scaled up to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details.
 
 #### Scenario database
 
@@ -827,7 +827,7 @@ Maximum capacity for a [storage](@ref storage) in a [year](@ref year) (including
 
 ## [Total annual maximum capacity investment storage](@id TotalAnnualMaxCapacityInvestmentStorage)
 
-Maximum addition of endogenously determined capacity for a [storage](@ref storage) in a [year](@ref year). Only specify this parameter if you want to enforce a particular limit.
+Maximum addition of endogenously determined capacity for a [storage](@ref storage) in a [year](@ref year). Only specify this parameter if you want to enforce a particular limit. This parameter is scaled up to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details.
 
 #### Scenario database
 
@@ -859,7 +859,7 @@ Minimum capacity for a [technology](@ref technology) in a [year](@ref year) (inc
 
 ## [Total annual minimum capacity investment](@id TotalAnnualMinCapacityInvestment)
 
-Minimum addition of endogenously determined capacity for a [technology](@ref technology) in a [year](@ref year). Only specify this parameter if you want to enforce a particular limit (other than 0, which NEMO assumes by default).
+Minimum addition of endogenously determined capacity for a [technology](@ref technology) in a [year](@ref year). Only specify this parameter if you want to enforce a particular limit (other than 0, which NEMO assumes by default). This parameter is scaled up to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details.
 
 #### Scenario database
 
@@ -875,7 +875,7 @@ Minimum addition of endogenously determined capacity for a [technology](@ref tec
 
 ## [Total annual minimum capacity storage](@id TotalAnnualMinCapacityStorage)
 
-Minimum capacity for a [storage](@ref storage) in a [year](@ref year) (including both exogenous and endogenous capacity). Only specify this parameter if you want to enforce a particular limit (other than 0, which NEMO assumes by default).
+Minimum capacity for a [storage](@ref storage) in a [year](@ref year) (including both exogenous and endogenous capacity). Only specify this parameter if you want to enforce a particular limit (other than 0, which NEMO assumes by default). This parameter is scaled up to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details.
 
 #### Scenario database
 
@@ -939,7 +939,7 @@ Maximum nominal energy produced by a [technology](@ref technology) in a [year](@
 
 ## [Total technology model period activity lower limit](@id TotalTechnologyModelPeriodActivityLowerLimit)
 
-Minimum nominal energy produced by a [technology](@ref technology) over the modeling period (i.e., all [years](@ref year)). Nominal energy is calculated by multiplying dispatched capacity by the length of time it is dispatched. Only specify this parameter if you want to enforce a particular limit (other than 0, which NEMO assumes by default).
+Minimum nominal energy produced by a [technology](@ref technology) over the modeling period (i.e., all [years](@ref year)). Nominal energy is calculated by multiplying dispatched capacity by the length of time it is dispatched. Only specify this parameter if you want to enforce a particular limit (other than 0, which NEMO assumes by default). This parameter is not used when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details.
 
 #### Scenario database
 
@@ -954,7 +954,7 @@ Minimum nominal energy produced by a [technology](@ref technology) over the mode
 
 ## [Total technology model period activity upper limit](@id TotalTechnologyModelPeriodActivityUpperLimit)
 
-Maximum nominal energy produced by a [technology](@ref technology) over the modeling period (i.e., all [years](@ref year)). Nominal energy is calculated by multiplying dispatched capacity by the length of time it is dispatched. Only specify this parameter if you want to enforce a particular limit.
+Maximum nominal energy produced by a [technology](@ref technology) over the modeling period (i.e., all [years](@ref year)). Nominal energy is calculated by multiplying dispatched capacity by the length of time it is dispatched. Only specify this parameter if you want to enforce a particular limit. This parameter is not used when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details.
 
 #### Scenario database
 
