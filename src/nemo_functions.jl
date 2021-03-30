@@ -108,6 +108,7 @@ function getconfigargs!(configfile::ConfParse, calcyears::Array{Int,1}, varstosa
             # This separate operation is necessary in order to modify calcyears
             empty!(calcyears)
             append!(calcyears, calcyearsconfigarr)
+            logmsg("Read calcyears argument from configuration file.", quiet)
         catch e
             logmsg("Could not read calcyears argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
         end
