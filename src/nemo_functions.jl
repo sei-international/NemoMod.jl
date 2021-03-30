@@ -1361,6 +1361,7 @@ end  # db_v4_to_v5(db::SQLite.DB; quiet::Bool = false)
 
 """
     writescenariomodel(dbpath::String;
+        calcyears::Array{Int, 1} = Array{Int, 1}(),
         varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual,
             vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
             vusenn, vtotaldiscountedcost",

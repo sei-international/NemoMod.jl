@@ -22,8 +22,8 @@ makedocs(
         "Scenario databases" => "scenario_db.md"
         "Calculating a scenario" => [
             "Julia syntax" => "calculatescenario.md"
+            "Calculating selected years" => "selected_years.md"
             "Configuration files" => "configuration_file.md"
-            "Calculating selected years" => "selected_year.md"
             "Performance tips" => "performance_tips.md"
         ]
         # Advanced topics

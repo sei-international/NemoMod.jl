@@ -253,7 +253,7 @@ Nominal energy produced by a [technology](@ref technology) in a [year](@ref year
 
 ### [Total technology model period activity](@id vtotaltechnologymodelperiodactivity)
 
-Nominal energy produced by a [technology](@ref technology) during the modeling period (i.e., over all [years](@ref year)). Nominal energy is calculated by multiplying dispatched capacity by the length of time it is dispatched. This variable combines nominal energy due to both [nodal and non-nodal](@ref nodal_def) activity. Unit: region's energy [unit](@ref uoms).
+Nominal energy produced by a [technology](@ref technology) during all modeled [years](@ref year). Nominal energy is calculated by multiplying dispatched capacity by the length of time it is dispatched. This variable combines nominal energy due to both [nodal and non-nodal](@ref nodal_def) activity. Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -303,7 +303,7 @@ Undiscounted investment in new endogenously determined [transmission](@ref trans
 
 ### [Discounted capital investment](@id vdiscountedcapitalinvestment)
 
-Discounted investment in new endogenously determined [technology](@ref technology) capacity. NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
+Discounted investment in new endogenously determined [technology](@ref technology) capacity. NEMO discounts to the first [year](@ref year) in the scenario's database using the [region's](@ref region) [discount rate](@ref DiscountRate). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -311,7 +311,7 @@ Discounted investment in new endogenously determined [technology](@ref technolog
 
 ### [Discounted capital investment storage](@id vdiscountedcapitalinvestmentstorage)
 
-Discounted investment in new endogenously determined [storage](@ref storage) capacity. NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
+Discounted investment in new endogenously determined [storage](@ref storage) capacity. NEMO discounts to the first [year](@ref year) in the scenario's database using the [region's](@ref region) [discount rate](@ref DiscountRate). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -319,7 +319,7 @@ Discounted investment in new endogenously determined [storage](@ref storage) cap
 
 ### [Discounted capital investment transmission](@id vdiscountedcapitalinvestmenttransmission)
 
-Discounted investment in new endogenously determined [transmission](@ref transmissionline) capacity. NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
+Discounted investment in new endogenously determined [transmission](@ref transmissionline) capacity. NEMO discounts to the first [year](@ref year) in the scenario's database using the [region's](@ref region) [discount rate](@ref DiscountRate). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -343,7 +343,7 @@ Undiscounted total emission costs associated with a [technology](@ref technology
 
 ### [Discounted emission penalty](@id vdiscountedtechnologyemissionspenalty)
 
-Discounted total emission costs associated with a [technology](@ref technology) (i.e., summing across [emissions](@ref emission)). NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
+Discounted total emission costs associated with a [technology](@ref technology) (i.e., summing across [emissions](@ref emission)). NEMO discounts to the first [year](@ref year) in the scenario's database using the [region's](@ref region) [discount rate](@ref DiscountRate). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -351,7 +351,7 @@ Discounted total emission costs associated with a [technology](@ref technology) 
 
 ### [Model period cost by region](@id vmodelperiodcostbyregion)
 
-Sum of all discounted costs in a [region](@ref region) during the modeling period (i.e., over all [years](@ref year)). Includes [technology](@ref technology), [storage](@ref storage), and [transmission](@ref transmissionline) costs. Unit: scenario's cost [unit](@ref uoms).
+Sum of all discounted costs in a [region](@ref region) during the modeled [years](@ref year). Includes [technology](@ref technology), [storage](@ref storage), and [transmission](@ref transmissionline) costs. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -367,7 +367,7 @@ Sum of [fixed](@ref vannualfixedoperatingcost) and [variable](@ref vannualvariab
 
 ### [Discounted operating cost](@id vdiscountedoperatingcost)
 
-Discounted [operation and maintenance costs](@ref voperatingcost) for a [technology](@ref technology). NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
+Discounted [operation and maintenance costs](@ref voperatingcost) for a [technology](@ref technology). NEMO discounts to the first [year](@ref year) in the scenario's database using the [region's](@ref region) [discount rate](@ref DiscountRate). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -399,7 +399,7 @@ Sum of fixed and variable operation and maintenance costs for a [transmission li
 
 ### [Discounted operating cost transmission](@id vdiscountedoperatingcosttransmission)
 
-Discounted [operation and maintenance costs](@ref voperatingcosttransmission) for a [transmission line](@ref transmissionline). NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
+Discounted [operation and maintenance costs](@ref voperatingcosttransmission) for a [transmission line](@ref transmissionline). NEMO discounts to the first [year](@ref year) in the scenario's database using the [region's](@ref region) [discount rate](@ref DiscountRate). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -431,7 +431,7 @@ Undiscounted residual value of [capital investment transmission](@ref vcapitalin
 
 ### [Discounted salvage value](@id vdiscountedsalvagevalue)
 
-Discounted residual value of [capital investment](@ref vcapitalinvestment) remaining at the end of the modeling period. NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
+Discounted residual value of [capital investment](@ref vcapitalinvestment) remaining at the end of the modeling period. NEMO discounts to the first [year](@ref year) in the scenario's database using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -439,7 +439,7 @@ Discounted residual value of [capital investment](@ref vcapitalinvestment) remai
 
 ### [Discounted salvage value storage](@id vdiscountedsalvagevaluestorage)
 
-Discounted residual value of [capital investment storage](@ref vcapitalinvestmentstorage) remaining at the end of the modeling period. NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
+Discounted residual value of [capital investment storage](@ref vcapitalinvestmentstorage) remaining at the end of the modeling period. NEMO discounts to the first [year](@ref year) in the scenario's database using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -447,7 +447,7 @@ Discounted residual value of [capital investment storage](@ref vcapitalinvestmen
 
 ### [Discounted salvage value transmission](@id vdiscountedsalvagevaluetransmission)
 
-Discounted residual value of [capital investment transmission](@ref vcapitalinvestmenttransmission) remaining at the end of the modeling period. NEMO discounts to the first modeled [year](@ref year) using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
+Discounted residual value of [capital investment transmission](@ref vcapitalinvestmenttransmission) remaining at the end of the modeling period. NEMO discounts to the first [year](@ref year) in the scenario's database using the [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -455,7 +455,7 @@ Discounted residual value of [capital investment transmission](@ref vcapitalinve
 
 ### [Total discounted cost](@id vtotaldiscountedcost)
 
-Sum of all discounted costs in a [region](@ref region) and [year](@ref year) ([technology](@ref technology), [storage](@ref storage), and [transmission](@ref transmissionline)). Unit: scenario's cost [unit](@ref uoms).
+Sum of all discounted costs in a [region](@ref region) and [year](@ref year) ([technology](@ref technology), [storage](@ref storage), and [transmission](@ref transmissionline)). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -463,14 +463,14 @@ Sum of all discounted costs in a [region](@ref region) and [year](@ref year) ([t
 
 ### [Total discounted storage cost](@id vtotaldiscountedstoragecost)
 
-Sum of discounted [storage](@ref storage) costs: [`vdiscountedcapitalinvestmentstorage`](@ref vdiscountedcapitalinvestmentstorage) - [`vdiscountedsalvagevaluestorage`](@ref vdiscountedsalvagevaluestorage). Unit: scenario's cost [unit](@ref uoms).
+Sum of discounted [storage](@ref storage) costs: [`vdiscountedcapitalinvestmentstorage`](@ref vdiscountedcapitalinvestmentstorage) - [`vdiscountedsalvagevaluestorage`](@ref vdiscountedsalvagevaluestorage). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 * Variable in JuMP model: `vtotaldiscountedstoragecost[r,s,y]`
 
 ### [Total discounted technology cost](@id vtotaldiscountedcostbytechnology)
 
-Sum of discounted [technology](@ref technology) costs: [`vdiscountedoperatingcost`](@ref vdiscountedoperatingcost) + [`vdiscountedcapitalinvestment`](@ref vdiscountedcapitalinvestment) + [`vdiscountedtechnologyemissionspenalty`](@ref vdiscountedtechnologyemissionspenalty) - [`vdiscountedsalvagevalue`](@ref vdiscountedsalvagevalue). Unit: scenario's cost [unit](@ref uoms).
+Sum of discounted [technology](@ref technology) costs: [`vdiscountedoperatingcost`](@ref vdiscountedoperatingcost) + [`vdiscountedcapitalinvestment`](@ref vdiscountedcapitalinvestment) + [`vdiscountedtechnologyemissionspenalty`](@ref vdiscountedtechnologyemissionspenalty) - [`vdiscountedsalvagevalue`](@ref vdiscountedsalvagevalue). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -478,7 +478,7 @@ Sum of discounted [technology](@ref technology) costs: [`vdiscountedoperatingcos
 
 ### [Total discounted transmission cost](@id vtotaldiscountedtransmissioncostbyregion)
 
-Sum of discounted [transmission](@ref transmissionline) costs: [`vdiscountedcapitalinvestmenttransmission`](@ref vdiscountedcapitalinvestmenttransmission) - [`vdiscountedsalvagevaluetransmission`](@ref vdiscountedsalvagevaluetransmission) + [`vdiscountedoperatingcosttransmission`](@ref vdiscountedoperatingcosttransmission). Unit: scenario's cost [unit](@ref uoms).
+Sum of discounted [transmission](@ref transmissionline) costs: [`vdiscountedcapitalinvestmenttransmission`](@ref vdiscountedcapitalinvestmenttransmission) - [`vdiscountedsalvagevaluetransmission`](@ref vdiscountedsalvagevaluetransmission) + [`vdiscountedoperatingcosttransmission`](@ref vdiscountedoperatingcosttransmission). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -546,7 +546,7 @@ Annual [emissions](@ref emission) produced by a [technology](@ref technology). U
 
 ### [Annual emissions](@id vannualemissions)
 
-Total emissions in a [year](@ref year). Unit: scenario's emissions [unit](@ref uoms).
+Total emissions in a [year](@ref year). Includes any exogenously specified emissions ([`AnnualExogenousEmission`](@ref AnnualExogenousEmission) parameter). Unit: scenario's emissions [unit](@ref uoms).
 
 #### Julia code
 
@@ -554,7 +554,7 @@ Total emissions in a [year](@ref year). Unit: scenario's emissions [unit](@ref u
 
 ### [Model period emissions](@id vmodelperiodemissions)
 
-Total emissions during the modeling period (i.e., over all [years](@ref year)). Unit: scenario's emissions [unit](@ref uoms).
+Total emissions during all modeled [years](@ref year). Includes any exogenously specified emissions ([`AnnualExogenousEmission`](@ref AnnualExogenousEmission) and [`ModelPeriodExogenousEmission`](@ref ModelPeriodExogenousEmission) parameters). Unit: scenario's emissions [unit](@ref uoms).
 
 #### Julia code
 
@@ -796,11 +796,19 @@ Total [technology](@ref technology) capacity (endogenous and exogenous) existing
 
 ### [Annual transmission](@id vtransmissionannual)
 
-Net annual transmission of a [fuel](@ref fuel) from a [node](@ref node). Unit: region's energy [unit](@ref uoms).
+Net annual transmission of a [fuel](@ref fuel) from a [node](@ref node). Unit: energy [unit](@ref uoms) for [region](@ref region) containing node.
 
 #### Julia code
 
 * Variable in JuMP model: `vtransmissionannual[n,f,y]`
+
+### [Annual transmission by line](@id vtransmissionbylineannual)
+
+Net annual transmission of a [fuel](@ref fuel) through a [transmission line](@ref transmissionline) (i.e., from the line's first [node](@ref node) [`n1`] to its second node [`n2`]). Unit: energy [unit](@ref uoms) for [region](@ref region) containing `n1`.
+
+#### Julia code
+
+* Variable in JuMP model: `vtransmissionbylineannual[tr,f,y]`
 
 ### [Transmission built](@id vtransmissionbuilt)
 
@@ -812,7 +820,7 @@ Fraction of a candidate [transmission line](@ref transmissionline) built in a [y
 
 ### [Transmission by line](@id vtransmissionbyline)
 
-Flow of a [fuel](@ref fuel) through a [transmission line](@ref transmissionline) (from the first [node](@ref node) of the line [`n1`] to the second node of the line [`n2`]). Unit: megawatts.
+Flow of a [fuel](@ref fuel) through a [transmission line](@ref transmissionline) (i.e., from the line's first [node](@ref node) [`n1`] to its second node [`n2`]) in a [time slice](@ref timeslice). Unit: megawatts.
 
 #### Julia code
 
@@ -828,7 +836,7 @@ Fraction of a [transmission line](@ref transmissionline) existing in a [year](@r
 
 ### [Voltage angle](@id vvoltageangle)
 
-Voltage angle at a [node](@ref node) in a [time slice](@ref timeslice). NEMO only calculates this variable if you enable direct current optimized power flow modeling (see TransmissionModelingEnabled). Unit: radians.
+Voltage angle at a [node](@ref node) in a [time slice](@ref timeslice). NEMO only calculates this variable if you enable direct current optimized power flow modeling (see [`TransmissionModelingEnabled`](@ref TransmissionModelingEnabled)). Unit: radians.
 
 #### Julia code
 

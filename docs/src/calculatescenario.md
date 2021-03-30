@@ -3,7 +3,7 @@ CurrentModule = NemoMod
 ```
 # [Julia syntax for calculating a scenario](@id scenario_calc)
 
-To calculate a scenario with NEMO, you use the `calculatescenario` function. The only required argument is `dbpath`; NEMO provides a default value for all other arguments.
+To calculate a scenario with NEMO, use the `calculatescenario` function. The only required argument is `dbpath`; NEMO provides a default value for all other arguments.
 
 ```@docs
 calculatescenario
