@@ -313,6 +313,8 @@ tempquery = SQLite.DBInterface.execute(db, "select val from YEAR $(restrictyears
 syear::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # YEAR dimension
 tempquery = SQLite.DBInterface.execute(db, "select min(val) from year")
 firstscenarioyear::Int64 = parse(Int, DataFrame(tempquery)[1,1])  # First year in YEAR table, even if not selected in calcyears
+tempquery = SQLite.DBInterface.execute(db, "select max(val) from year")
+lastscenarioyear::Int64 = parse(Int, DataFrame(tempquery)[1,1])  # Last year in YEAR table, even if not selected in calcyears
 tempquery = SQLite.DBInterface.execute(db, "select val from TECHNOLOGY")
 stechnology::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # TECHNOLOGY dimension
 tempquery = SQLite.DBInterface.execute(db, "select val from TIMESLICE")
@@ -3753,12 +3755,12 @@ length(si5_discountingcapitalinvestmentstorage) > 0 && logmsg("Created constrain
 # BEGIN: SI6_SalvageValueStorageAtEndOfPeriod1.
 si6_salvagevaluestorageatendofperiod1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-# Salvage values are figured as of last modeled year
+# Salvage values are figured as of last scenario year
 for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y
 from region r, storage s, year y, OperationalLifeStorage_def ols
 where ols.r = r.val and ols.s = s.val
 $(restrictyears ? "and y.val in" * inyears : "")
-and y.val + ols.val - 1 <= " * last(syear))
+and y.val + ols.val - 1 <= " * string(lastscenarioyear))
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
@@ -3772,13 +3774,13 @@ length(si6_salvagevaluestorageatendofperiod1) > 0 && logmsg("Created constraint 
 # BEGIN: SI7_SalvageValueStorageAtEndOfPeriod2.
 si7_salvagevaluestorageatendofperiod2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-# Salvage values are figured as of last modeled year
+# Salvage values are figured as of last scenario year
 for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols
 from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStorage_def ols, DiscountRate_def dr
 where dm.r = r.val and dm.val = 1
 $(restrictyears ? "and y.val in" * inyears : "")
 and ols.r = r.val and ols.s = s.val
-and y.val + ols.val - 1 > " * last(syear) *
+and y.val + ols.val - 1 > " * string(lastscenarioyear) *
 " and dr.r = r.val and dr.val = 0
 union
 select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols
@@ -3786,12 +3788,12 @@ from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStor
 where dm.r = r.val and dm.val = 2
 $(restrictyears ? "and y.val in" * inyears : "")
 and ols.r = r.val and ols.s = s.val
-and y.val + ols.val - 1 > " * last(syear))
+and y.val + ols.val - 1 > " * string(lastscenarioyear))
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
 
-    push!(si7_salvagevaluestorageatendofperiod2, @constraint(jumpmodel, vcapitalinvestmentstorage[r,s,y] * (1 - (Meta.parse(last(syear)) - Meta.parse(y) + 1) / row[:ols]) == vsalvagevaluestorage[r,s,y]))
+    push!(si7_salvagevaluestorageatendofperiod2, @constraint(jumpmodel, vcapitalinvestmentstorage[r,s,y] * (1 - (lastscenarioyear - Meta.parse(y) + 1) / row[:ols]) == vsalvagevaluestorage[r,s,y]))
 end
 
 length(si7_salvagevaluestorageatendofperiod2) > 0 && logmsg("Created constraint SI7_SalvageValueStorageAtEndOfPeriod2.", quiet)
@@ -3800,20 +3802,20 @@ length(si7_salvagevaluestorageatendofperiod2) > 0 && logmsg("Created constraint 
 # BEGIN: SI8_SalvageValueStorageAtEndOfPeriod3.
 si8_salvagevaluestorageatendofperiod3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-# Salvage values are figured as of last modeled year
+# Salvage values are figured as of last scenario year
 for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr, cast(ols.val as real) as ols
 from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStorage_def ols, DiscountRate_def dr
 where dm.r = r.val and dm.val = 1
 and ols.r = r.val and ols.s = s.val
 $(restrictyears ? "and y.val in" * inyears : "")
-and y.val + ols.val - 1 > " * last(syear) *
+and y.val + ols.val - 1 > " * string(lastscenarioyear) *
 " and dr.r = r.val and dr.val > 0")
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
     local dr = row[:dr]
 
-    push!(si8_salvagevaluestorageatendofperiod3, @constraint(jumpmodel, vcapitalinvestmentstorage[r,s,y] * (1 - (((1 + dr)^(Meta.parse(last(syear)) - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ols]) - 1))) == vsalvagevaluestorage[r,s,y]))
+    push!(si8_salvagevaluestorageatendofperiod3, @constraint(jumpmodel, vcapitalinvestmentstorage[r,s,y] * (1 - (((1 + dr)^(lastscenarioyear - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ols]) - 1))) == vsalvagevaluestorage[r,s,y]))
 end
 
 length(si8_salvagevaluestorageatendofperiod3) > 0 && logmsg("Created constraint SI8_SalvageValueStorageAtEndOfPeriod3.", quiet)
@@ -3829,7 +3831,7 @@ where dr.r = r.val $(restrictyears ? "and y.val in" * inyears : "")")
     local s = row[:s]
     local y = row[:y]
 
-    push!(si9_salvagevaluestoragediscountedtostartyear, @constraint(jumpmodel, vsalvagevaluestorage[r,s,y] / ((1 + row[:dr])^(Meta.parse(last(syear)) - firstscenarioyear + 1)) == vdiscountedsalvagevaluestorage[r,s,y]))
+    push!(si9_salvagevaluestoragediscountedtostartyear, @constraint(jumpmodel, vsalvagevaluestorage[r,s,y] / ((1 + row[:dr])^(lastscenarioyear - firstscenarioyear + 1)) == vdiscountedsalvagevaluestorage[r,s,y]))
 end
 
 length(si9_salvagevaluestoragediscountedtostartyear) > 0 && logmsg("Created constraint SI9_SalvageValueStorageDiscountedToStartYear.", quiet)
@@ -3940,7 +3942,7 @@ end
 # BEGIN: SV1_SalvageValueAtEndOfPeriod1.
 # DepreciationMethod 1 (if discount rate > 0): base salvage value on % of discounted value remaining at end of modeling period.
 # DepreciationMethod 2 (or dm 1 if discount rate = 0): base salvage value on % of operational life remaining at end of modeling period.
-# Salvage values are figured as of last modeled year
+# Salvage values are figured as of last scenario year
 sv1_salvagevalueatendofperiod1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc, cast(dr.val as real) as dr,
@@ -3949,7 +3951,7 @@ from region r, technology t, year y, DepreciationMethod_def dm, OperationalLife_
 CapitalCost_def cc
 where dm.r = r.val and dm.val = 1
 and ol.r = r.val and ol.t = t.val
-and y.val + ol.val - 1 > " * last(syear) *
+and y.val + ol.val - 1 > " * string(lastscenarioyear) *
 " and dr.r = r.val and dr.val > 0
 and cc.r = r.val and cc.t = t.val and cc.y = y.val
 $(restrictyears ? "and y.val in" * inyears : "")")
@@ -3959,7 +3961,7 @@ $(restrictyears ? "and y.val in" * inyears : "")")
     local dr = row[:dr]
 
     push!(sv1_salvagevalueatendofperiod1, @constraint(jumpmodel, vsalvagevalue[r,t,y] ==
-        row[:cc] * vnewcapacity[r,t,y] * (1 - (((1 + dr)^(Meta.parse(last(syear)) - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ol]) - 1)))))
+        row[:cc] * vnewcapacity[r,t,y] * (1 - (((1 + dr)^(lastscenarioyear - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ol]) - 1)))))
 end
 
 length(sv1_salvagevalueatendofperiod1) > 0 && logmsg("Created constraint SV1_SalvageValueAtEndOfPeriod1.", quiet)
@@ -3976,14 +3978,14 @@ if transmissionmodeling
 	and tl.n1 = n.val
 	and dm.r = n.r
 	and dr.r = n.r
-	and y.val + tl.operationallife - 1 > " * last(syear) *
+	and y.val + tl.operationallife - 1 > " * string(lastscenarioyear) *
 	" and (dm.val = 1 and dr.val > 0) $(restrictyears ? "and y.val in" * inyears : "")")
         local tr = row[:tr]
         local y = row[:y]
         local dr = row[:dr]
 
         push!(sv1tr_salvagevalueatendofperiod1, @constraint(jumpmodel, vsalvagevaluetransmission[tr,y] ==
-            row[:cc] * vtransmissionbuilt[tr,y] * (1 - (((1 + dr)^(Meta.parse(last(syear)) - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ol]) - 1)))))
+            row[:cc] * vtransmissionbuilt[tr,y] * (1 - (((1 + dr)^(lastscenarioyear - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ol]) - 1)))))
     end
 
     length(sv1tr_salvagevalueatendofperiod1) > 0 && logmsg("Created constraint SV1Tr_SalvageValueAtEndOfPeriod1.", quiet)
@@ -3999,7 +4001,7 @@ CapitalCost_def cc
 where dm.r = r.val and dm.val = 1
 $(restrictyears ? "and y.val in" * inyears : "")
 and ol.r = r.val and ol.t = t.val
-and y.val + ol.val - 1 > " * last(syear) *
+and y.val + ol.val - 1 > " * string(lastscenarioyear) *
 " and dr.r = r.val and dr.val = 0
 and cc.r = r.val and cc.t = t.val and cc.y = y.val
 union
@@ -4009,14 +4011,14 @@ CapitalCost_def cc
 where dm.r = r.val and dm.val = 2
 $(restrictyears ? "and y.val in" * inyears : "")
 and ol.r = r.val and ol.t = t.val
-and y.val + ol.val - 1 > " * last(syear) *
+and y.val + ol.val - 1 > " * string(lastscenarioyear) *
 " and cc.r = r.val and cc.t = t.val and cc.y = y.val")
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
 
     push!(sv2_salvagevalueatendofperiod2, @constraint(jumpmodel, vsalvagevalue[r,t,y] ==
-        row[:cc] * vnewcapacity[r,t,y] * (1 - (Meta.parse(last(syear)) - Meta.parse(y) + 1) / row[:ol])))
+        row[:cc] * vnewcapacity[r,t,y] * (1 - (lastscenarioyear - Meta.parse(y) + 1) / row[:ol])))
 end
 
 length(sv2_salvagevalueatendofperiod2) > 0 && logmsg("Created constraint SV2_SalvageValueAtEndOfPeriod2.", quiet)
@@ -4034,13 +4036,13 @@ if transmissionmodeling
 	and dm.r = n.r
 	and dr.r = n.r
     $(restrictyears ? "and y.val in" * inyears : "")
-	and y.val + tl.operationallife - 1 > " * last(syear) *
+	and y.val + tl.operationallife - 1 > " * string(lastscenarioyear) *
 	" and ((dm.val = 1 and dr.val = 0) or (dm.val = 2))")
         local tr = row[:tr]
         local y = row[:y]
 
         push!(sv2tr_salvagevalueatendofperiod2, @constraint(jumpmodel, vsalvagevaluetransmission[tr,y] ==
-            row[:cc] * vtransmissionbuilt[tr,y] * (1 - (Meta.parse(last(syear)) - Meta.parse(y) + 1) / row[:ol])))
+            row[:cc] * vtransmissionbuilt[tr,y] * (1 - (lastscenarioyear - Meta.parse(y) + 1) / row[:ol])))
     end
 
     length(sv2tr_salvagevalueatendofperiod2) > 0 && logmsg("Created constraint SV2Tr_SalvageValueAtEndOfPeriod2.", quiet)
@@ -4054,7 +4056,7 @@ for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val 
 from region r, technology t, year y, OperationalLife_def ol
 where ol.r = r.val and ol.t = t.val
 $(restrictyears ? "and y.val in" * inyears : "")
-and y.val + ol.val - 1 <= " * last(syear))
+and y.val + ol.val - 1 <= " * string(lastscenarioyear))
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -4073,7 +4075,7 @@ if transmissionmodeling
 	from TransmissionLine tl, YEAR y
     where tl.CapitalCost is not null
     $(restrictyears ? "and y.val in" * inyears : "")
-	and y.val + tl.operationallife - 1 <= " * last(syear))
+	and y.val + tl.operationallife - 1 <= " * string(lastscenarioyear))
         local tr = row[:tr]
         local y = row[:y]
 
@@ -4095,7 +4097,7 @@ for row in queryrtydr
     local y = row[:y]
 
     push!(sv4_salvagevaluediscountedtostartyear, @constraint(jumpmodel, vdiscountedsalvagevalue[r,t,y] ==
-        vsalvagevalue[r,t,y] / ((1 + row[:dr])^(1 + Meta.parse(last(syear)) - firstscenarioyear))))
+        vsalvagevalue[r,t,y] / ((1 + row[:dr])^(1 + lastscenarioyear - firstscenarioyear))))
 end
 
 length(sv4_salvagevaluediscountedtostartyear) > 0 && logmsg("Created constraint SV4_SalvageValueDiscountedToStartYear.", quiet)
@@ -4112,7 +4114,7 @@ if transmissionmodeling
         local y = row[:y]
 
         push!(sv4tr_salvagevaluediscountedtostartyear, @constraint(jumpmodel, vdiscountedsalvagevaluetransmission[tr,y] ==
-            vsalvagevaluetransmission[tr,y] / ((1 + row[:dr])^(1 + Meta.parse(last(syear)) - firstscenarioyear))))
+            vsalvagevaluetransmission[tr,y] / ((1 + row[:dr])^(1 + lastscenarioyear - firstscenarioyear))))
     end
 
     length(sv4tr_salvagevaluediscountedtostartyear) > 0 && logmsg("Created constraint SV4Tr_SalvageValueDiscountedToStartYear.", quiet)
