@@ -1,0 +1,37 @@
+```@meta
+CurrentModule = NemoMod
+```
+# [Calculating selected years](@id selected_years)
+
+You can run a scenario calculation in NEMO for certain [years](@ref year) only by using the `calcyears` argument for [`calculatescenario`](@ref scenario_calc).[^1] You can also set this argument in a [NEMO configuration file](@ref configuration_file). When you specify a value for `calcyears`, NEMO restricts the scenario's optimization problem to the years you select (provided they are defined in the [scenario's database](@ref scenario_db)). The problem's objective is to minimize discounted costs in those years. If you don't supply a value for `calcyears`, all years in the scenario database are included in the calculation.
+
+Calculating selected years offers a way quickly to generate results from large, complex models. While the results may not be identical to what you would get if you calculated all years, NEMO takes several steps to ensure they are a reasonable approximation. Specifically, when `calcyears` is invoked, NEMO:
+
+* Calculates discounted investment costs for [technologies](@ref technology) and [storage](@ref storage) by distributing the costs over modeled (selected) and non-modeled years. Each modeled year is taken as the endpoint of an interval that starts after the prior modeled year (or at the beginning of the first year in the scenario database [**the first scenario year**], if there is no prior modeled year). For discounting purposes, investment costs incurred in a modeled year are assumed to be spread equally over the year's interval. NEMO's output [variables](@ref variables) for discounted technology and storage investment costs ([`vdiscountedcapitalinvestment`](@ref vdiscountedcapitalinvestment) and [`vdiscountedcapitalinvestmentstorage`](@ref vdiscountedcapitalinvestmentstorage)) reflect this adjustment.
+
+* Calculates discounted [transmission](@ref transmissionline) investment costs in the same way as discounted technology/storage investment costs if the `continuoustransmission` argument for `calculatescenario` is `true`. In this case, the output variable [`vdiscountedcapitalinvestmenttransmission`](@ref vdiscountedcapitalinvestmenttransmission) includes the adjustment.
+
+* Estimates discounted operation and maintenance costs for technologies in non-modeled years. Fixed costs are estimated by assuming that capacity evolves in a linear fashion between modeled years (or, if a modeled year's interval begins with the first scenario year, that there is a linear change from the [residual capacity](@ref ResidualCapacity) in that year to the capacity in the modeled year). Variable costs are computed by assuming activity changes in a linear fashion between modeled years (or, if a modeled year's interval begins with the first scenario year, that the activity in the modeled year recurs in other years in the interval). The output variable [`vdiscountedoperatingcost`](@ref vdiscountedoperatingcost) includes these adjustments.
+
+* Similarly estimates discounted transmission operation and maintenance costs in non-modeled years. For exogenously specified lines (where `yconstruction` is defined), fixed costs in non-modeled years depend on whether the line exists in those years. For candidate lines NEMO may build endogenously (`yconstruction` is not provided), fixed costs are calculated by assuming that the fraction built of each line evolves linearly between modeled years (the fraction built at the start of the first scenario year is 0). This assumption for candidate lines only applies when `continuoustransmission` is `true`. Variable costs in non-modeled years are estimated by assuming transmission activity changes in a linear fashion between modeled years (or, if a modeled year's interval begins with the first scenario year, that the activity in the modeled year also holds in other years in the interval). These adjustments are included in the output variable [`vdiscountedoperatingcosttransmission`](@ref vdiscountedoperatingcosttransmission).
+
+* Estimates discounted technology emission penalties in non-modeled years. The penalties are computed by assuming that penalty amounts evolve linearly between modeled years (or, if a modeled year's interval begins with the first scenario year, that the penalty in the modeled year recurs in other years in the interval). The output variable [`vdiscountedtechnologyemissionspenalty`](@ref vdiscountedtechnologyemissionspenalty) includes this adjustment.
+
+All of these adjustments are also incorporated in NEMO's output variables that sum discounted costs: [`vtotaldiscountedcostbytechnology`](@ref vtotaldiscountedcostbytechnology), [`vtotaldiscountedstoragecost`](@ref vtotaldiscountedstoragecost), [`vtotaldiscountedtransmissioncostbyregion`](@ref vtotaldiscountedtransmissioncostbyregion), and [`vtotaldiscountedcost`](@ref vtotaldiscountedcost). Note that salvage values for storage, transmission, and technologies are still based on asset value remaining in the last year in the scenario database (**the last scenario year**), so using `calcyears` does not alter how they are calculated. Whether or not `calcyears` is invoked, NEMO discounts all costs to the first scenario year.
+
+NEMO also makes a few other changes when you turn on `calcyears`:
+
+* Annual capacity addition limits for technologies ([`TotalAnnualMaxCapacityInvestment`](@ref TotalAnnualMaxCapacityInvestment) and [`TotalAnnualMinCapacityInvestment`](@ref TotalAnnualMinCapacityInvestment)) and storage ([`TotalAnnualMaxCapacityInvestmentStorage`](@ref TotalAnnualMaxCapacityInvestmentStorage) and [`TotalAnnualMinCapacityInvestmentStorage`](@ref TotalAnnualMinCapacityInvestmentStorage)) are scaled up by multiplying them by the number of years in each modeled year's interval.
+
+!!! tip
+    If you calculate selected years, capacity additions in a modeled year are best construed as additions during the interval corresponding to the year. As noted above, each modeled year's interval begins with the year following the prior modeled year (or the first scenario year, if there is no prior modeled year) and ends with the modeled year. For example, if the first scenario year is 2020 and you calculate 2020, 2030, and 2040, the intervals are as follows: 2020, 2021-2030, and 2031-2040.
+
+* Energy in storage is not transferred between non-contiguous modeled years (i.e., if there is a gap between modeled years). This restriction applies even if none of the net zero attributes of storage (`netzeroyear`, `netzerotg1`, and `netzerotg2`) is enabled.
+
+* The [`StorageLevelStart`](@ref StorageLevelStart) parameter is interpreted as the fraction of exogenous storage capacity that is charged at the start of the first modeled year.
+
+* Model period technology activity and emission limits ([`TotalTechnologyModelPeriodActivityUpperLimit`](@ref TotalTechnologyModelPeriodActivityUpperLimit), [`TotalTechnologyModelPeriodActivityLowerLimit`](@ref TotalTechnologyModelPeriodActivityLowerLimit), and [`ModelPeriodEmissionLimit`](@ref ModelPeriodEmissionLimit)) are not enforced. NEMO warns you if your scenario database includes these parameters.
+
+* The output variables [`vmodelperiodcostbyregion`](@ref vmodelperiodcostbyregion), [`vmodelperiodemissions`](@ref vmodelperiodemissions), and [`vtotaltechnologymodelperiodactivity`](@ref vtotaltechnologymodelperiodactivity) include results for modeled years only.
+
+[^1]: `calcyears` also applies to [`writescenariomodel`](@ref).
