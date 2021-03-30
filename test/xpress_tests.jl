@@ -143,6 +143,17 @@ if @isdefined Xpress
 
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 0")
 
+        # Test with calcyears
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Xpress.Optimizer), restrictvars=true,
+            numprocs=1, calcyears=[2020,2029])
+        testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+
+        @test testqry[1,:y] == "2020"
+        @test testqry[2,:y] == "2029"
+
+        @test isapprox(testqry[1,:val], 3840.94023817782; atol=TOL)
+        @test isapprox(testqry[2,:val], 3427.81584479179; atol=TOL)
+
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
