@@ -228,6 +228,7 @@ dbversion::Int64 = DataFrame(SQLite.DBInterface.execute(db, "select version from
 dbversion == 2 && db_v2_to_v3(db; quiet = quiet)
 dbversion < 4 && db_v3_to_v4(db; quiet = quiet)
 dbversion < 5 && db_v4_to_v5(db; quiet = quiet)
+dbversion < 6 && db_v5_to_v6(db; quiet = quiet)
 # END: Update database if necessary.
 
 # BEGIN: Perform beforescenariocalc include.
@@ -257,10 +258,6 @@ if length(transmissionmodelingtypes) > 0
     transmissionmodeling = true
 end
 
-# Temporary - save transmission variables if transmission modeling is enabled
-transmissionmodeling && push!(varstosavearr, "vtransmissionbuilt", "vtransmissionexists", "vtransmissionbyline",
-    "vtransmissionannual")
-
 logmsg("Verified that transmission modeling " * (transmissionmodeling ? "is" : "is not") * " enabled.", quiet)
 # END: Check if transmission modeling is required.
 
@@ -278,7 +275,8 @@ local paramsneedingdefs::Array{String, 1} = ["OutputActivityRatio", "InputActivi
 "AnnualExogenousEmission", "AnnualEmissionLimit", "ModelPeriodEmissionLimit", "AccumulatedAnnualDemand", "TotalAnnualMaxCapacityStorage",
 "TotalAnnualMinCapacityStorage", "TotalAnnualMaxCapacityInvestmentStorage", "TotalAnnualMinCapacityInvestmentStorage",
 "TransmissionCapacityToActivityUnit", "StorageFullLoadHours", "RampRate", "RampingReset", "NodalDistributionDemand",
-"NodalDistributionTechnologyCapacity", "NodalDistributionStorageCapacity"]
+"NodalDistributionTechnologyCapacity", "NodalDistributionStorageCapacity", "MinimumUtilization", "DiscountRateTechnology",
+"DiscountRateStorage"]
 
 createviewwithdefaults(db, paramsneedingdefs)
 create_other_nemo_indices(db)
@@ -3733,9 +3731,12 @@ si5_discountingcapitalinvestmentstorage::Array{ConstraintRef, 1} = Array{Constra
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = sum of discounted costs over interval ending in y
 
 # When modeling selected years, discounted costs assume linear investment over each year's interval
-for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr
-from region r, storage s, year y, DiscountRate_def dr
-where dr.r = r.val $(restrictyears ? "and y.val in" * inyears : "")")
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y,
+case when drs.val is not null then cast(drs.val as real) else cast(dr.val as real) end as dr
+from region r, storage s, year y
+left join DiscountRate_def dr on dr.r = r.val
+left join DiscountRateStorage_def drs on drs.r = r.val and drs.s = s.val
+where (drs.val is not null or dr.val is not null) $(restrictyears ? "and y.val in" * inyears : "")")
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
@@ -3775,13 +3776,18 @@ length(si6_salvagevaluestorageatendofperiod1) > 0 && logmsg("Created constraint 
 si7_salvagevaluestorageatendofperiod2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 # Salvage values are figured as of last scenario year
-for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols
-from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStorage_def ols, DiscountRate_def dr
+for row in SQLite.DBInterface.execute(db, "select r, s, y, ols from
+(select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols,
+case when drs.val is not null then drs.val else dr.val end as dr
+from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStorage_def ols
+left join DiscountRate_def dr on dr.r = r.val
+left join DiscountRateStorage_def drs on drs.r = r.val and drs.s = s.val
 where dm.r = r.val and dm.val = 1
 $(restrictyears ? "and y.val in" * inyears : "")
 and ols.r = r.val and ols.s = s.val
 and y.val + ols.val - 1 > " * string(lastscenarioyear) *
-" and dr.r = r.val and dr.val = 0
+" and (drs.val is not null or dr.val is not null))
+where dr = 0
 union
 select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols
 from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStorage_def ols
@@ -3803,13 +3809,19 @@ length(si7_salvagevaluestorageatendofperiod2) > 0 && logmsg("Created constraint 
 si8_salvagevaluestorageatendofperiod3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 # Salvage values are figured as of last scenario year
-for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr, cast(ols.val as real) as ols
-from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStorage_def ols, DiscountRate_def dr
+for row in SQLite.DBInterface.execute(db, "select r, s, y, dr, ols from
+(select r.val as r, s.val as s, y.val as y,
+case when drs.val is not null then cast(drs.val as real) else cast(dr.val as real) end as dr,
+cast(ols.val as real) as ols
+from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStorage_def ols
+left join DiscountRate_def dr on dr.r = r.val
+left join DiscountRateStorage_def drs on drs.r = r.val and drs.s = s.val
 where dm.r = r.val and dm.val = 1
 and ols.r = r.val and ols.s = s.val
 $(restrictyears ? "and y.val in" * inyears : "")
 and y.val + ols.val - 1 > " * string(lastscenarioyear) *
-" and dr.r = r.val and dr.val > 0")
+" and (drs.val is not null or dr.val is not null))
+where dr > 0")
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
@@ -3824,9 +3836,13 @@ length(si8_salvagevaluestorageatendofperiod3) > 0 && logmsg("Created constraint 
 # BEGIN: SI9_SalvageValueStorageDiscountedToStartYear.
 si9_salvagevaluestoragediscountedtostartyear::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr
-from region r, storage s, year y, DiscountRate_def dr
-where dr.r = r.val $(restrictyears ? "and y.val in" * inyears : "")")
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y,
+case when drs.val is not null then cast(drs.val as real) else cast(dr.val as real) end as dr
+from region r, storage s, year y
+left join DiscountRate_def dr on dr.r = r.val
+left join DiscountRateStorage_def drs on drs.r = r.val and drs.s = s.val
+where (drs.val is not null or dr.val is not null)
+$(restrictyears ? "and y.val in" * inyears : "")")
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
@@ -3881,9 +3897,13 @@ end
 # END: CC1Tr_UndiscountedCapitalInvestment.
 
 # BEGIN: CC2_DiscountingCapitalInvestment.
-queryrtydr::SQLite.Query = SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, cast(dr.val as real) as dr
-from region r, technology t, year y, DiscountRate_def dr
-where dr.r = r.val $(restrictyears ? "and y.val in" * inyears : "")")
+queryrtydr::SQLite.Query = SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y,
+case when drt.val is not null then cast(drt.val as real) else cast(dr.val as real) end as dr
+from region r, technology t, year y
+left join DiscountRate_def dr on dr.r = r.val
+left join DiscountRateTechnology_def drt on drt.r = r.val and drt.t = t.val
+where (drt.val is not null or dr.val is not null)
+$(restrictyears ? "and y.val in" * inyears : "")")
 
 cc2_discountingcapitalinvestment::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = sum of discounted costs over interval ending in y
@@ -3909,10 +3929,13 @@ length(cc2_discountingcapitalinvestment) > 0 && logmsg("Created constraint CC2_D
 # BEGIN: CC2Tr_DiscountingCapitalInvestment.
 if transmissionmodeling
     # Note: if a transmission line crosses regional boundaries, costs are assigned to from region (associated with n1)
-    querytrydr::SQLite.Query = SQLite.DBInterface.execute(db, "select tl.id as tr, y.val as y, cast(dr.val as real) as dr
-	from TransmissionLine tl, NODE n, YEAR y, DiscountRate_def dr
+    querytrydr::SQLite.Query = SQLite.DBInterface.execute(db, "select tl.id as tr, y.val as y,
+    case when tl.discountrate is not null then cast(tl.discountrate as real) else cast(dr.val as real) end as dr
+	from TransmissionLine tl, NODE n, YEAR y
+	left join DiscountRate_def dr on n.r = dr.r
     where tl.n1 = n.val
-	and n.r = dr.r $(restrictyears ? "and y.val in" * inyears : "")")
+	$(restrictyears ? "and y.val in" * inyears : "")
+	and (tl.discountrate is not null or dr.val is not null)")
 
     cc2tr_discountingcapitalinvestment::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = sum of discounted costs over interval ending in y
@@ -3945,16 +3968,20 @@ end
 # Salvage values are figured as of last scenario year
 sv1_salvagevalueatendofperiod1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc, cast(dr.val as real) as dr,
+for row in SQLite.DBInterface.execute(db, "select r, t, y, cc, dr, ol from
+(select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc,
+case when drt.val is not null then cast(drt.val as real) else cast(dr.val as real) end as dr,
 cast(ol.val as real) as ol
-from region r, technology t, year y, DepreciationMethod_def dm, OperationalLife_def ol, DiscountRate_def dr,
-CapitalCost_def cc
+from region r, technology t, year y, DepreciationMethod_def dm, OperationalLife_def ol, CapitalCost_def cc
+left join DiscountRate_def dr on dr.r = r.val
+left join DiscountRateTechnology_def drt on drt.r = r.val and drt.t = t.val
 where dm.r = r.val and dm.val = 1
 and ol.r = r.val and ol.t = t.val
 and y.val + ol.val - 1 > " * string(lastscenarioyear) *
-" and dr.r = r.val and dr.val > 0
-and cc.r = r.val and cc.t = t.val and cc.y = y.val
-$(restrictyears ? "and y.val in" * inyears : "")")
+" and cc.r = r.val and cc.t = t.val and cc.y = y.val
+$(restrictyears ? "and y.val in" * inyears : "")
+and (drt.val is not null or dr.val is not null))
+where dr > 0")
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -3971,15 +3998,19 @@ length(sv1_salvagevalueatendofperiod1) > 0 && logmsg("Created constraint SV1_Sal
 if transmissionmodeling
     sv1tr_salvagevalueatendofperiod1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in SQLite.DBInterface.execute(db, "select tl.id as tr, y.val as y, cast(tl.CapitalCost as real) as cc,
-	cast(tl.operationallife as real) as ol, cast(dr.val as real) as dr
-	from TransmissionLine tl, NODE n, YEAR y, DepreciationMethod_def dm, DiscountRate_def dr
+    for row in SQLite.DBInterface.execute(db, "select tr, y, cc, ol, dr from
+	(select tl.id as tr, y.val as y, cast(tl.CapitalCost as real) as cc,
+	cast(tl.operationallife as real) as ol,
+	case when tl.discountrate is not null then cast(tl.discountrate as real) else cast(dr.val as real) end as dr
+	from TransmissionLine tl, NODE n, YEAR y, DepreciationMethod_def dm
+	left join DiscountRate_def dr on n.r = dr.r
     where tl.CapitalCost is not null
 	and tl.n1 = n.val
-	and dm.r = n.r
-	and dr.r = n.r
+	and dm.r = n.r and dm.val = 1
 	and y.val + tl.operationallife - 1 > " * string(lastscenarioyear) *
-	" and (dm.val = 1 and dr.val > 0) $(restrictyears ? "and y.val in" * inyears : "")")
+	" $(restrictyears ? "and y.val in" * inyears : "")
+	and (tl.discountrate is not null or dr.val is not null))
+	where dr > 0")
         local tr = row[:tr]
         local y = row[:y]
         local dr = row[:dr]
@@ -3995,15 +4026,19 @@ end
 # BEGIN: SV2_SalvageValueAtEndOfPeriod2.
 sv2_salvagevalueatendofperiod2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc, cast(ol.val as real) as ol
-from region r, technology t, year y, DepreciationMethod_def dm, OperationalLife_def ol, DiscountRate_def dr,
-CapitalCost_def cc
+for row in SQLite.DBInterface.execute(db, "select r, t, y, cc, ol from
+(select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc, cast(ol.val as real) as ol,
+case when drt.val is not null then drt.val else dr.val end as dr
+from region r, technology t, year y, DepreciationMethod_def dm, OperationalLife_def ol, CapitalCost_def cc
+left join DiscountRate_def dr on dr.r = r.val
+left join DiscountRateTechnology_def drt on drt.r = r.val and drt.t = t.val
 where dm.r = r.val and dm.val = 1
 $(restrictyears ? "and y.val in" * inyears : "")
 and ol.r = r.val and ol.t = t.val
 and y.val + ol.val - 1 > " * string(lastscenarioyear) *
-" and dr.r = r.val and dr.val = 0
-and cc.r = r.val and cc.t = t.val and cc.y = y.val
+" and cc.r = r.val and cc.t = t.val and cc.y = y.val
+and (drt.val is not null or dr.val is not null))
+where dr = 0
 union
 select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc, cast(ol.val as real) as ol
 from region r, technology t, year y, DepreciationMethod_def dm, OperationalLife_def ol,
@@ -4028,16 +4063,19 @@ length(sv2_salvagevalueatendofperiod2) > 0 && logmsg("Created constraint SV2_Sal
 if transmissionmodeling
     sv2tr_salvagevalueatendofperiod2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in SQLite.DBInterface.execute(db, "select tl.id as tr, y.val as y, cast(tl.CapitalCost as real) as cc,
-	cast(tl.operationallife as real) as ol
-	from TransmissionLine tl, NODE n, YEAR y, DepreciationMethod_def dm, DiscountRate_def dr
+    for row in SQLite.DBInterface.execute(db, "select tr, y, cc, ol from
+	(select tl.id as tr, y.val as y, cast(tl.CapitalCost as real) as cc,
+	cast(tl.operationallife as real) as ol, dm.val as dm,
+	case when tl.discountrate is not null then tl.discountrate else dr.val end as dr
+	from TransmissionLine tl, NODE n, YEAR y, DepreciationMethod_def dm
+	left join DiscountRate_def dr on n.r = dr.r
     where tl.CapitalCost is not null
 	and tl.n1 = n.val
 	and dm.r = n.r
-	and dr.r = n.r
     $(restrictyears ? "and y.val in" * inyears : "")
 	and y.val + tl.operationallife - 1 > " * string(lastscenarioyear) *
-	" and ((dm.val = 1 and dr.val = 0) or (dm.val = 2))")
+	" and (tl.discountrate is not null or dr.val is not null))
+	where ((dm = 1 and dr = 0) or (dm = 2))")
         local tr = row[:tr]
         local y = row[:y]
 
@@ -4224,16 +4262,19 @@ lastvals = Array{Float64, 1}(undef,3)  # lastvals[1] = dr, lastvals[2] = fsy_rtc
 lastvalsint = Array{Int64, 1}(undef,2)  # lastvalsint[1] = yint, lastvalsint[2] = nyears
 
 for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, vc.m as m, y.prev_y,
-cast(dr.val as real) as dr, cast(rtc.val as real) as fsy_rtc, cast(fc.val as real) as fc,
+case when drt.val is not null then cast(drt.val as real) else cast(dr.val as real) end as dr,
+cast(rtc.val as real) as fsy_rtc, cast(fc.val as real) as fc,
 cast(vc.val as real) as vc
-from region r, TECHNOLOGY t, DiscountRate_def dr,
+from region r, TECHNOLOGY t,
 	(select y.val, lag(y.val) over (order by y.val) as prev_y from year y
         $(restrictyears ? "where y.val in" * inyears : "")
 	) as y
+left join DiscountRate_def dr on dr.r = r.val
+left join DiscountRateTechnology_def drt on drt.r = r.val and drt.t = t.val
 left join ResidualCapacity_def rtc on rtc.r = r.val and rtc.t = t.val and rtc.y = $firstscenarioyear
 left join FixedCost_def fc on fc.r = r.val and fc.t = t.val and fc.y = y.val
 left join VariableCost_def vc on vc.r = r.val and vc.t = t.val and vc.y = y.val and vc.val <> 0
-WHERE r.val = dr.r
+WHERE (drt.val is not null or dr.val is not null)
 order by r.val, t.val, y.val")
     local r = row[:r]
     local t = row[:t]
@@ -4337,13 +4378,13 @@ if transmissionmodeling
 
     for row in SQLite.DBInterface.execute(db, "select tl.id as tr, tl.f as f, tme1.y as y, y.prev_y,
         cast(tl.VariableCost as real) as vc, cast(tl.fixedcost as real) as fc, tl.yconstruction, tl.operationallife as ol,
-		cast(dr.val as real) as dr
+		case when tl.discountrate is not null then cast(tl.discountrate as real) else cast(dr.val as real) end as dr
         from TransmissionLine tl, NODE n1, NODE n2, TransmissionModelingEnabled tme1,
         TransmissionModelingEnabled tme2, TransmissionCapacityToActivityUnit_def tcta,
-		DiscountRate_def dr,
 		(select y.val, lag(y.val) over (order by y.val) as prev_y from year y
 			$(restrictyears ? "where y.val in" * inyears : "")
 		) as y
+		left join DiscountRate_def dr on n1.r = dr.r
         where
         tl.n1 = n1.val and tl.n2 = n2.val
         and tme1.r = n1.r and tme1.f = tl.f
@@ -4351,8 +4392,8 @@ if transmissionmodeling
         and tme1.y = tme2.y and tme1.type = tme2.type
     	and exists (select 1 from YearSplit_def ys where ys.y = tme1.y)
     	and tcta.r = n1.r and tl.f = tcta.f
-		and dr.r = n1.r
-		and tme1.y = y.val")
+		and tme1.y = y.val
+		and (tl.discountrate is not null or dr.val is not null)")
 
         local tr = row[:tr]
         local f = row[:f]
