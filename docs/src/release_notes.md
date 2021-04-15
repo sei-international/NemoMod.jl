@@ -5,6 +5,12 @@ CurrentModule = NemoMod
 
 This page highlights key changes in NEMO since its initial public release. For a full history of NEMO releases, including the code for each version, see the [Releases page on NEMO's GitHub site](https://github.com/sei-international/NemoMod.jl/releases).
 
+## Version 1.5
+
+  * **Technology, storage, and transmission-specific discount rates:** Revised NEMO so users can specify a different discount rate for each technology and region, storage and region, and transmission line. Technology and storage-specific rates are set with the new [DiscountRateTechnology](@ref DiscountRateTechnology) and [DiscountRateStorage](@ref DiscountRateStorage) parameters. Rates for transmission lines are defined as part of the [transmission line dimension](@ref transmissionline). The [DiscountRate](@ref DiscountRate) parameter continues to provide the default discount rate for each region.
+
+  * **Other performance improvements:** Streamlined logic for scenario database upgrades.
+
 ## Version 1.4
 
   * **Writing NEMO models:** Added a function to write an output file representing the NEMO optimization problem for a scenario ([`writescenariomodel`](@ref)). This function supports common solver file formats including MPS and LP and can compress its output with Gzip or BZip2. Results from the function can be used as an input to solver performance tuning programs, such as Gurobi's [parameter tuning tool](https://www.gurobi.com/documentation/9.1/refman/parameter_tuning_tool.html) and CPLEX's [tuning tool](https://www.ibm.com/support/knowledgecenter/SSSA5P_20.1.0/ilog.odms.cplex.help/CPLEX/UsrMan/topics/progr_consid/tuning/01_tune_title_synopsis.html).

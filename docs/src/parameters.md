@@ -166,7 +166,7 @@ Default value for the parameter identified by `tablename`.
 
 Method for calculating the salvage value of [technology](@ref technology), [storage](@ref storage), and [transmission line](@ref transmissionline) capacity existing at the end of the modeling period.
 
-* 1: Sinking fund depreciation (assuming the [`DiscountRate`](@ref DiscountRate) is not 0; if it is, straight line depreciation is used instead)
+* 1: Sinking fund depreciation (assuming the applicable discount rate is not 0; if it is, straight line depreciation is used instead)
 
 * 2: Straight line depreciation
 
@@ -182,7 +182,7 @@ Method for calculating the salvage value of [technology](@ref technology), [stor
 
 ## [Discount rate](@id DiscountRate)
 
-Rate used to discount costs in a [region](@ref region).
+Default rate used to discount costs in a [region](@ref region). This parameter is supplanted by any [technology](@ref DiscountRateTechnology), [storage](@ref DiscountRateStorage), and [transmission line](@ref transmissionline)-specific discount rates you define.
 
 #### Scenario database
 
@@ -192,6 +192,36 @@ Rate used to discount costs in a [region](@ref region).
 |:--- | :--: |:----------- |
 | `id` | integer | Unique identifier for row |
 | `r` | text  | Region |
+| `val` | real  | Rate (0 to 1) |
+
+## [Discount rate storage](@id DiscountRateStorage)
+
+Rate used to discount costs for a [storage](@ref storage) in a [region](@ref region). If you do not specify this parameter, NEMO discounts the storage's costs using the region's [default discount rate](@ref DiscountRate).
+
+#### Scenario database
+
+**Table: `DiscountRateStorage`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `s` | text  | Storage |
+| `val` | real  | Rate (0 to 1) |
+
+## [Discount rate technology](@id DiscountRateTechnology)
+
+Rate used to discount costs for a [technology](@ref technology) in a [region](@ref region). If you do not specify this parameter, NEMO discounts the technology's costs using the region's [default discount rate](@ref DiscountRate).
+
+#### Scenario database
+
+**Table: `DiscountRateTechnology`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `t` | text  | Technology |
 | `val` | real  | Rate (0 to 1) |
 
 ## [Emission penalty](@id EmissionsPenalty)

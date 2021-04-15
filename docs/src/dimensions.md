@@ -71,7 +71,7 @@ Locations in a transmission (or transmission and distribution) network. Networks
 |:--- | :--: |:----------- |
 | `val` | text | Unique identifier for node |
 | `desc` | text  | Description of node |
-| `r` | text  | Region in which node is located (`REGION.val`) |
+| `r` | text  | [Region](@ref region) in which node is located (`REGION.val`) |
 
 #### Julia code
 
@@ -215,6 +215,7 @@ Connections between [nodes](@ref node) in a transmission (or transmission and di
 | `variablecost` | real  | Line's variable operation and maintenance (scenario's cost unit / energy unit) |
 | `operationallife` | integer  | Line's operational lifetime (years, used to retire both exogenously and endogenously built lines) |
 | `efficiency` | real  | Efficiency of transmission over line (%, only used for pipeline flow modeling; see [TransmissionModelingEnabled](@ref TransmissionModelingEnabled)) |
+| `discountrate` | real  | Discount rate NEMO should use when discounting line's costs (0 to 1; if not specified, NEMO uses [default discount rate](@ref DiscountRate) for [region](@ref region) containing `n1`) |
 
 #### Julia code
 
@@ -223,7 +224,7 @@ Connections between [nodes](@ref node) in a transmission (or transmission and di
 
 ## [Year](@id year)
 
-Years covered by scenario. Years must be integral and consecutive. **Abbreviation: `y`.**
+Years covered by scenario. Years must be integral. **Abbreviation: `y`.**
 
 #### Scenario database
 
