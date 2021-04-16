@@ -20,6 +20,7 @@ if @isdefined MosekTools
 
     @testset "Solving storage_test with Mosek" begin
         dbfile = joinpath(@__DIR__, "storage_test.sqlite")
+        #dbfile = "c:/temp/storage_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
@@ -153,6 +154,15 @@ if @isdefined MosekTools
         @test isapprox(testqry[1,:val], 3840.93779774689; atol=TOL)
         @test isapprox(testqry[2,:val], 3427.79849864389; atol=TOL)
 
+        # Test MinimumUtilization
+        SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.5 from TIMESLICE")
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), numprocs=1, varstosave="vproductionbytechnologyannual")
+        testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
+
+        @test isapprox(testqry[1,:val], 15.768; atol=TOL)
+
+        SQLite.DBInterface.execute(db, "delete from MinimumUtilization")
+
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
@@ -160,6 +170,7 @@ if @isdefined MosekTools
 
     @testset "Solving storage_transmission_test with Mosek" begin
         dbfile = joinpath(@__DIR__, "storage_transmission_test.sqlite")
+        #dbfile = "c:/temp/storage_transmission_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(Mosek.Optimizer),
@@ -193,6 +204,15 @@ if @isdefined MosekTools
         @test isapprox(testqry[9,:val], 170.204749196728; atol=TOL)
         @test isapprox(testqry[10,:val], 162.099761139741; atol=TOL)
 
+        # Test MinimumUtilization
+        SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.2 from TIMESLICE")
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), numprocs=1, varstosave="vproductionbytechnologyannual", calcyears=[2020,2025,2029])
+        testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
+
+        @test isapprox(testqry[1,:val], 16.3149963697108; atol=TOL)
+
+        SQLite.DBInterface.execute(db, "delete from MinimumUtilization")
+
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
@@ -200,6 +220,7 @@ if @isdefined MosekTools
 
     @testset "Solving ramp_test with Mosek" begin
         dbfile = joinpath(@__DIR__, "ramp_test.sqlite")
+        #dbfile = "c:/temp/ramp_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(Mosek.Optimizer),

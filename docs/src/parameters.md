@@ -322,6 +322,26 @@ Minimum fraction of a [storage's](@ref storage) capacity that must be charged. N
 | `y` | text  | Year |
 | `val` | real  | Fraction (0 to 1) |
 
+## [Minimum utilization](@id MinimumUtilization)
+
+Minimum fraction of a [technology's](@ref technology) available capacity that must be utilized (dispatched) in a [region](@ref region), [time slice](@ref timeslice), and [year](@ref year). NEMO calculates available capacity by multiplying installed capacity by the applicable [capacity factor](@ref CapacityFactor) parameter. If the technology is involved in nodal transmission modeling, the minimum utilization rule applies equally to all [nodes](@ref node) in the region.
+
+!!! tip
+    It is not necessary to specify 0 for this parameter. NEMO assumes the minimum utilization is 0 if the parameter is not set.
+
+#### Scenario database
+
+**Table: `MinimumUtilization`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `t` | text  | Technology |
+| `l` | text  | Time slice |
+| `y` | text  | Year |
+| `val` | real  | Fraction (0 to 1) |
+
 ## [Model period emission limit](@id ModelPeriodEmissionLimit)
 
 Maximum emissions allowed in the modeling period (i.e., over all [years](@ref year)). This parameter is not used when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details.

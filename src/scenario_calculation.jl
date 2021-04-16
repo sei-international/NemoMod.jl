@@ -1202,12 +1202,14 @@ if transmissionmodeling
 end
 # END: CAa3Tr_TotalActivityOfEachTechnology.
 
-# BEGIN: CAa4_Constraint_Capacity.
+# BEGIN: CAa4_Constraint_Capacity and MinimumTechnologyUtilization.
 caa4_constraint_capacity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+minimum_technology_utilization::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 for row in SQLite.DBInterface.execute(db,"select r.val as r, l.val as l, t.val as t, y.val as y,
-    cast(cf.val as real) as cf, cast(cta.val as real) as cta
+    cast(cf.val as real) as cf, cast(cta.val as real) as cta, cast(mu.val as real) as mu
 from REGION r, TIMESLICE l, TECHNOLOGY t, YEAR y, CapacityFactor_def cf, CapacityToActivityUnit_def cta
+left join MinimumUtilization_def mu on mu.r = r.val and mu.t = t.val and mu.l = l.val and mu.y = y.val
 where cf.r = r.val and cf.t = t.val and cf.l = l.val and cf.y = y.val
 and cta.r = r.val and cta.t = t.val
 $(restrictyears ? "and y.val in" * inyears : "")")
@@ -1218,20 +1220,26 @@ $(restrictyears ? "and y.val in" * inyears : "")")
 
     push!(caa4_constraint_capacity, @constraint(jumpmodel, vrateoftotalactivity[r,t,l,y]
         <= vtotalcapacityannual[r,t,y] * row[:cf] * row[:cta]))
+
+    !ismissing(row[:mu]) && push!(minimum_technology_utilization, @constraint(jumpmodel, vrateoftotalactivity[r,t,l,y]
+        >= vtotalcapacityannual[r,t,y] * row[:cf] * row[:cta] * row[:mu]))
 end
 
 length(caa4_constraint_capacity) > 0 && logmsg("Created constraint CAa4_Constraint_Capacity.", quiet)
-# END: CAa4_Constraint_Capacity.
+length(minimum_technology_utilization) > 0 && logmsg("Created constraint MinimumTechnologyUtilization.", quiet)
+# END: CAa4_Constraint_Capacity and MinimumTechnologyUtilization.
 
-# BEGIN: CAa4Tr_Constraint_Capacity.
+# BEGIN: CAa4Tr_Constraint_Capacity and MinimumTechnologyUtilizationTr.
 if transmissionmodeling
     caa4tr_constraint_capacity::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    minimum_technology_utilization_tr::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for row in SQLite.DBInterface.execute(db,"select ntc.n as n, ntc.t as t, l.val as l, ntc.y as y, n.r as r,
     	cast(ntc.val as real) as ntc, cast(cf.val as real) as cf,
-    	cast(cta.val as real) as cta
+    	cast(cta.val as real) as cta, cast(mu.val as real) as mu
     from NodalDistributionTechnologyCapacity_def ntc, TIMESLICE l, NODE n,
     CapacityFactor_def cf, CapacityToActivityUnit_def cta
+    left join MinimumUtilization_def mu on mu.r = n.r and mu.t = ntc.t and mu.l = l.val and mu.y = ntc.y
     where ntc.val > 0 $(restrictyears ? "and ntc.y in" * inyears : "")
     and ntc.n = n.val
     and cf.r = n.r and cf.t = ntc.t and cf.l = l.val and cf.y = ntc.y
@@ -1244,11 +1252,15 @@ if transmissionmodeling
 
         push!(caa4tr_constraint_capacity, @constraint(jumpmodel, vrateoftotalactivitynodal[n,t,l,y]
             <= vtotalcapacityannual[r,t,y] * row[:ntc] * row[:cf] * row[:cta]))
+
+        !ismissing(row[:mu]) && push!(minimum_technology_utilization_tr, @constraint(jumpmodel, vrateoftotalactivitynodal[n,t,l,y]
+            >= vtotalcapacityannual[r,t,y] * row[:ntc] * row[:cf] * row[:cta] * row[:mu]))
     end
 
     length(caa4tr_constraint_capacity) > 0 && logmsg("Created constraint CAa4Tr_Constraint_Capacity.", quiet)
+    length(minimum_technology_utilization_tr) > 0 && logmsg("Created constraint MinimumTechnologyUtilizationTr.", quiet)
 end
-# END: CAa4Tr_Constraint_Capacity.
+# END: CAa4Tr_Constraint_Capacity and MinimumTechnologyUtilizationTr.
 
 # BEGIN: CAa5_TotalNewCapacity.
 if size(queries["querycaa5_totalnewcapacity"])[1] > 0

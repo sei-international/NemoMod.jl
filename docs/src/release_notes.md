@@ -9,6 +9,8 @@ This page highlights key changes in NEMO since its initial public release. For a
 
   * **Technology, storage, and transmission-specific discount rates:** Revised NEMO so users can specify a different discount rate for each technology and region, storage and region, and transmission line. Technology and storage-specific rates are set with the new [DiscountRateTechnology](@ref DiscountRateTechnology) and [DiscountRateStorage](@ref DiscountRateStorage) parameters. Rates for transmission lines are defined as part of the [transmission line dimension](@ref transmissionline). The [DiscountRate](@ref DiscountRate) parameter continues to provide the default discount rate for each region.
 
+  * **Minimum utilization:** Added a parameter - [MinimumUtilization](@ref MinimumUtilization) - that enforces minimum utilization rates for technology capacity.
+
   * **Other performance improvements:** Streamlined logic for scenario database upgrades.
 
 ## Version 1.4
