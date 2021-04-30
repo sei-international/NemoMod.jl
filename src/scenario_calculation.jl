@@ -229,6 +229,7 @@ dbversion == 2 && db_v2_to_v3(db; quiet = quiet)
 dbversion < 4 && db_v3_to_v4(db; quiet = quiet)
 dbversion < 5 && db_v4_to_v5(db; quiet = quiet)
 dbversion < 6 && db_v5_to_v6(db; quiet = quiet)
+dbversion < 7 && db_v6_to_v7(db; quiet = quiet)
 # END: Update database if necessary.
 
 # BEGIN: Perform beforescenariocalc include.
@@ -275,8 +276,8 @@ local paramsneedingdefs::Array{String, 1} = ["OutputActivityRatio", "InputActivi
 "AnnualExogenousEmission", "AnnualEmissionLimit", "ModelPeriodEmissionLimit", "AccumulatedAnnualDemand", "TotalAnnualMaxCapacityStorage",
 "TotalAnnualMinCapacityStorage", "TotalAnnualMaxCapacityInvestmentStorage", "TotalAnnualMinCapacityInvestmentStorage",
 "TransmissionCapacityToActivityUnit", "StorageFullLoadHours", "RampRate", "RampingReset", "NodalDistributionDemand",
-"NodalDistributionTechnologyCapacity", "NodalDistributionStorageCapacity", "MinimumUtilization", "DiscountRateTechnology",
-"DiscountRateStorage"]
+"NodalDistributionTechnologyCapacity", "NodalDistributionStorageCapacity", "MinimumUtilization", "InterestRateTechnology",
+"InterestRateStorage"]
 
 createviewwithdefaults(db, paramsneedingdefs)
 create_other_nemo_indices(db)
@@ -398,6 +399,7 @@ logmsg("Defined demand variables.", quiet)
 @variable(jumpmodel, vstorageupperlimit[sregion, sstorage, syear] >= 0)
 @variable(jumpmodel, vaccumulatednewstoragecapacity[sregion, sstorage, syear] >= 0)
 @variable(jumpmodel, vnewstoragecapacity[sregion, sstorage, syear] >= 0)
+@variable(jumpmodel, vfinancecoststorage[sregion, sstorage, syear] >= 0)
 @variable(jumpmodel, vcapitalinvestmentstorage[sregion, sstorage, syear] >= 0)
 @variable(jumpmodel, vdiscountedcapitalinvestmentstorage[sregion, sstorage, syear] >= 0)
 @variable(jumpmodel, vsalvagevaluestorage[sregion, sstorage, syear] >= 0)
@@ -416,6 +418,7 @@ modelvarindices["vstoragelowerlimit"] = (vstoragelowerlimit, ["r", "s", "y"])
 modelvarindices["vstorageupperlimit"] = (vstorageupperlimit, ["r", "s", "y"])
 modelvarindices["vaccumulatednewstoragecapacity"] = (vaccumulatednewstoragecapacity, ["r", "s", "y"])
 modelvarindices["vnewstoragecapacity"] = (vnewstoragecapacity, ["r", "s", "y"])
+modelvarindices["vfinancecoststorage"] = (vfinancecoststorage, ["r", "s", "y"])
 modelvarindices["vcapitalinvestmentstorage"] = (vcapitalinvestmentstorage, ["r", "s", "y"])
 modelvarindices["vdiscountedcapitalinvestmentstorage"] = (vdiscountedcapitalinvestmentstorage, ["r", "s", "y"])
 modelvarindices["vsalvagevaluestorage"] = (vsalvagevaluestorage, ["r", "s", "y"])
@@ -608,6 +611,8 @@ modelvarindices["vuseannualnn"] = (vuseannualnn, ["r", "f", "y"])
 logmsg("Defined activity variables.", quiet)
 
 # Costing
+@variable(jumpmodel, vfinancecost[sregion, stechnology, syear] >= 0)
+modelvarindices["vfinancecost"] = (vfinancecost, ["r", "t", "y"])
 @variable(jumpmodel, vcapitalinvestment[sregion, stechnology, syear] >= 0)
 modelvarindices["vcapitalinvestment"] = (vcapitalinvestment, ["r", "t", "y"])
 @variable(jumpmodel, vdiscountedcapitalinvestment[sregion, stechnology, syear] >= 0)
@@ -624,13 +629,13 @@ modelvarindices["vdiscountedoperatingcost"] = (vdiscountedoperatingcost, ["r", "
 modelvarindices["vannualvariableoperatingcost"] = (vannualvariableoperatingcost, ["r", "t", "y"])
 @variable(jumpmodel, vannualfixedoperatingcost[sregion, stechnology, syear] >= 0)
 modelvarindices["vannualfixedoperatingcost"] = (vannualfixedoperatingcost, ["r", "t", "y"])
-@variable(jumpmodel, vtotaldiscountedcostbytechnology[sregion, stechnology, syear] >= 0)
+@variable(jumpmodel, vtotaldiscountedcostbytechnology[sregion, stechnology, syear])
 modelvarindices["vtotaldiscountedcostbytechnology"] = (vtotaldiscountedcostbytechnology, ["r", "t", "y"])
-@variable(jumpmodel, vtotaldiscountedcost[sregion, syear] >= 0)
+@variable(jumpmodel, vtotaldiscountedcost[sregion, syear])
 modelvarindices["vtotaldiscountedcost"] = (vtotaldiscountedcost, ["r", "y"])
 
 if in("vmodelperiodcostbyregion", varstosavearr)
-    @variable(jumpmodel, vmodelperiodcostbyregion[sregion] >= 0)
+    @variable(jumpmodel, vmodelperiodcostbyregion[sregion])
     modelvarindices["vmodelperiodcostbyregion"] = (vmodelperiodcostbyregion, ["r"])
 end
 
@@ -654,25 +659,25 @@ logmsg("Defined renewable energy target variables.", quiet)
 
 # Emissions
 if in("vannualtechnologyemissionbymode", varstosavearr)
-    @variable(jumpmodel, vannualtechnologyemissionbymode[sregion, stechnology, semission, smode_of_operation, syear] >= 0)
+    @variable(jumpmodel, vannualtechnologyemissionbymode[sregion, stechnology, semission, smode_of_operation, syear])
     modelvarindices["vannualtechnologyemissionbymode"] = (vannualtechnologyemissionbymode, ["r", "t", "e", "m", "y"])
 end
 
-@variable(jumpmodel, vannualtechnologyemission[sregion, stechnology, semission, syear] >= 0)
+@variable(jumpmodel, vannualtechnologyemission[sregion, stechnology, semission, syear])
 modelvarindices["vannualtechnologyemission"] = (vannualtechnologyemission, ["r", "t", "e", "y"])
 
 if in("vannualtechnologyemissionpenaltybyemission", varstosavearr)
-    @variable(jumpmodel, vannualtechnologyemissionpenaltybyemission[sregion, stechnology, semission, syear] >= 0)
+    @variable(jumpmodel, vannualtechnologyemissionpenaltybyemission[sregion, stechnology, semission, syear])
     modelvarindices["vannualtechnologyemissionpenaltybyemission"] = (vannualtechnologyemissionpenaltybyemission, ["r", "t", "e", "y"])
 end
 
-@variable(jumpmodel, vannualtechnologyemissionspenalty[sregion, stechnology, syear] >= 0)
+@variable(jumpmodel, vannualtechnologyemissionspenalty[sregion, stechnology, syear])
 modelvarindices["vannualtechnologyemissionspenalty"] = (vannualtechnologyemissionspenalty, ["r", "t", "y"])
-@variable(jumpmodel, vdiscountedtechnologyemissionspenalty[sregion, stechnology, syear] >= 0)
+@variable(jumpmodel, vdiscountedtechnologyemissionspenalty[sregion, stechnology, syear])
 modelvarindices["vdiscountedtechnologyemissionspenalty"] = (vdiscountedtechnologyemissionspenalty, ["r", "t", "y"])
-@variable(jumpmodel, vannualemissions[sregion, semission, syear] >= 0)
+@variable(jumpmodel, vannualemissions[sregion, semission, syear])
 modelvarindices["vannualemissions"] = (vannualemissions, ["r", "e", "y"])
-@variable(jumpmodel, vmodelperiodemissions[sregion, semission] >= 0)
+@variable(jumpmodel, vmodelperiodemissions[sregion, semission])
 modelvarindices["vmodelperiodemissions"] = (vmodelperiodemissions, ["r", "e"])
 
 logmsg("Defined emissions variables.", quiet)
@@ -845,6 +850,8 @@ if transmissionmodeling
     modelvarindices["vstoragelevelyearendnodal"] = (vstoragelevelyearendnodal, ["n", "s", "y"])
 
     # Costing
+    @variable(jumpmodel, vfinancecosttransmission[stransmission, syear] >= 0)
+    modelvarindices["vfinancecosttransmission"] = (vfinancecosttransmission, ["tr","y"])
     @variable(jumpmodel, vcapitalinvestmenttransmission[stransmission, syear] >= 0)
     modelvarindices["vcapitalinvestmenttransmission"] = (vcapitalinvestmenttransmission, ["tr","y"])
     @variable(jumpmodel, vdiscountedcapitalinvestmenttransmission[stransmission, syear] >= 0)
@@ -2848,7 +2855,7 @@ $(restrictyears ? "and y.val in" * inyears : "")")
         addns3 = true
         addns4 = true
     elseif tg1o == 1 && tg2o == 1 && lo == 1
-        # No carryover of energy for non-continguous years
+        # No carryover of energy for non-contiguous years
         startlevel = (!restrictyears || Meta.parse(y)-1 in calcyears ? vstoragelevelyearendnn[r, s, string(Meta.parse(y)-1)] : 0)
 
         # New endogenous and exogenous storage capacity is assumed to be delivered with minimum charge
@@ -3722,6 +3729,32 @@ end
 length(ns18_fullloadhours) > 0 && logmsg("Created constraint NS18_FullLoadHours.", quiet)
 # END: NS18_FullLoadHours.
 
+# BEGIN: SI4a_FinancingStorage.
+# Total financing costs discounted to year new capacity is deployed; assumes capital costs are financed at interest rate and repaid in equal installments over life of storage (payments occur at year's end)
+si4a_financingstorage::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(ccs.val as real) as ccs,
+cast(ols.val as real) as ols, cast(dr.val as real) as dr, cast(irs.val as real) as irs
+from region r, storage s, year y, CapitalCostStorage_def ccs, OperationalLifeStorage_def ols, DiscountRate_def dr, InterestRateStorage_def irs
+where ccs.r = r.val and ccs.s = s.val and ccs.y = y.val
+$(restrictyears ? "and y.val in" * inyears : "")
+and ols.r = r.val and ols.s = s.val
+and dr.r = r.val
+and irs.r = r.val and irs.s = s.val and irs.y = y.val and irs.val is not null and irs.val <> 0")
+    local r = row[:r]
+    local s = row[:s]
+    local y = row[:y]
+    local ols = row[:ols]
+    local dr = row[:dr]
+    local irs = row[:irs]
+
+    push!(si4a_financingstorage, @constraint(jumpmodel, row[:ccs] * vnewstoragecapacity[r,s,y] * (irs / (1 - (1 + irs)^(-ols)) - 1/ols)
+        * (1 - (1 + dr)^(-ols)) / dr == vfinancecoststorage[r,s,y]))
+end
+
+length(si4a_financingstorage) > 0 && logmsg("Created constraint SI4a_FinancingStorage.", quiet)
+# END: SI4a_FinancingStorage.
+
 # BEGIN: SI4_UndiscountedCapitalInvestmentStorage.
 si4_undiscountedcapitalinvestmentstorage::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
@@ -3732,7 +3765,8 @@ where ccs.r = r.val and ccs.s = s.val and ccs.y = y.val $(restrictyears ? "and y
     local s = row[:s]
     local y = row[:y]
 
-    push!(si4_undiscountedcapitalinvestmentstorage, @constraint(jumpmodel, row[:ccs] * vnewstoragecapacity[r,s,y] == vcapitalinvestmentstorage[r,s,y]))
+    push!(si4_undiscountedcapitalinvestmentstorage, @constraint(jumpmodel, row[:ccs] * vnewstoragecapacity[r,s,y]
+        + vfinancecoststorage[r,s,y] == vcapitalinvestmentstorage[r,s,y]))
 end
 
 length(si4_undiscountedcapitalinvestmentstorage) > 0 && logmsg("Created constraint SI4_UndiscountedCapitalInvestmentStorage.", quiet)
@@ -3743,12 +3777,9 @@ si5_discountingcapitalinvestmentstorage::Array{ConstraintRef, 1} = Array{Constra
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = sum of discounted costs over interval ending in y
 
 # When modeling selected years, discounted costs assume linear investment over each year's interval
-for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y,
-case when drs.val is not null then cast(drs.val as real) else cast(dr.val as real) end as dr
-from region r, storage s, year y
-left join DiscountRate_def dr on dr.r = r.val
-left join DiscountRateStorage_def drs on drs.r = r.val and drs.s = s.val
-where (drs.val is not null or dr.val is not null) $(restrictyears ? "and y.val in" * inyears : "")")
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr
+from region r, storage s, year y, DiscountRate_def dr
+where dr.r = r.val $(restrictyears ? "and y.val in" * inyears : "")")
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
@@ -3788,18 +3819,13 @@ length(si6_salvagevaluestorageatendofperiod1) > 0 && logmsg("Created constraint 
 si7_salvagevaluestorageatendofperiod2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 # Salvage values are figured as of last scenario year
-for row in SQLite.DBInterface.execute(db, "select r, s, y, ols from
-(select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols,
-case when drs.val is not null then drs.val else dr.val end as dr
-from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStorage_def ols
-left join DiscountRate_def dr on dr.r = r.val
-left join DiscountRateStorage_def drs on drs.r = r.val and drs.s = s.val
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols
+from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStorage_def ols, DiscountRate_def dr
 where dm.r = r.val and dm.val = 1
 $(restrictyears ? "and y.val in" * inyears : "")
 and ols.r = r.val and ols.s = s.val
 and y.val + ols.val - 1 > " * string(lastscenarioyear) *
-" and (drs.val is not null or dr.val is not null))
-where dr = 0
+" and dr.r = r.val and dr.val = 0
 union
 select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols
 from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStorage_def ols
@@ -3821,19 +3847,13 @@ length(si7_salvagevaluestorageatendofperiod2) > 0 && logmsg("Created constraint 
 si8_salvagevaluestorageatendofperiod3::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
 # Salvage values are figured as of last scenario year
-for row in SQLite.DBInterface.execute(db, "select r, s, y, dr, ols from
-(select r.val as r, s.val as s, y.val as y,
-case when drs.val is not null then cast(drs.val as real) else cast(dr.val as real) end as dr,
-cast(ols.val as real) as ols
-from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStorage_def ols
-left join DiscountRate_def dr on dr.r = r.val
-left join DiscountRateStorage_def drs on drs.r = r.val and drs.s = s.val
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) as dr, cast(ols.val as real) as ols
+from region r, storage s, year y, DepreciationMethod_def dm, OperationalLifeStorage_def ols, DiscountRate_def dr
 where dm.r = r.val and dm.val = 1
 and ols.r = r.val and ols.s = s.val
 $(restrictyears ? "and y.val in" * inyears : "")
 and y.val + ols.val - 1 > " * string(lastscenarioyear) *
-" and (drs.val is not null or dr.val is not null))
-where dr > 0")
+" and dr.r = r.val and dr != 0")
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
@@ -3848,13 +3868,9 @@ length(si8_salvagevaluestorageatendofperiod3) > 0 && logmsg("Created constraint 
 # BEGIN: SI9_SalvageValueStorageDiscountedToStartYear.
 si9_salvagevaluestoragediscountedtostartyear::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y,
-case when drs.val is not null then cast(drs.val as real) else cast(dr.val as real) end as dr
-from region r, storage s, year y
-left join DiscountRate_def dr on dr.r = r.val
-left join DiscountRateStorage_def drs on drs.r = r.val and drs.s = s.val
-where (drs.val is not null or dr.val is not null)
-$(restrictyears ? "and y.val in" * inyears : "")")
+for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(dr.val as real) dr
+from region r, storage s, year y, DiscountRate_def dr
+where dr.r = r.val $(restrictyears ? "and y.val in" * inyears : "")")
     local r = row[:r]
     local s = row[:s]
     local y = row[:y]
@@ -3875,6 +3891,32 @@ end
 length(si10_totaldiscountedcostbystorage) > 0 && logmsg("Created constraint SI10_TotalDiscountedCostByStorage.", quiet)
 # END: SI10_TotalDiscountedCostByStorage.
 
+# BEGIN: CC1a_FinancingTechnology.
+# Total financing costs discounted to year new capacity is deployed; assumes capital costs are financed at interest rate and repaid in equal installments over life of technology (payments occur at year's end)
+cc1a_financingtechnology::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc,
+cast(ol.val as real) as ol, cast(dr.val as real) as dr, cast(irt.val as real) as irt
+from region r, technology t, year y, CapitalCost_def cc, OperationalLife_def ol, DiscountRate_def dr, InterestRateTechnology_def irt
+where cc.r = r.val and cc.t = t.val and cc.y = y.val
+$(restrictyears ? "and y.val in" * inyears : "")
+and ol.r = r.val and ol.t = t.val
+and dr.r = r.val
+and irt.r = r.val and irt.t = t.val and irt.y = y.val and irt.val is not null and irt.val <> 0")
+    local r = row[:r]
+    local t = row[:t]
+    local y = row[:y]
+    local ol = row[:ol]
+    local dr = row[:dr]
+    local irt = row[:irt]
+
+    push!(cc1a_financingtechnology, @constraint(jumpmodel, row[:cc] * vnewcapacity[r,t,y] * (irt / (1 - (1 + irt)^(-ol)) - 1/ol)
+        * (1 - (1 + dr)^(-ol)) / dr == vfinancecost[r,t,y]))
+end
+
+length(cc1a_financingtechnology) > 0 && logmsg("Created constraint CC1a_FinancingTechnology.", quiet)
+# END: CC1a_FinancingTechnology.
+
 # BEGIN: CC1_UndiscountedCapitalInvestment.
 cc1_undiscountedcapitalinvestment::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
@@ -3885,11 +3927,39 @@ where cc.r = r.val and cc.t = t.val and cc.y = y.val $(restrictyears ? "and y.va
     local t = row[:t]
     local y = row[:y]
 
-    push!(cc1_undiscountedcapitalinvestment, @constraint(jumpmodel, row[:cc] * vnewcapacity[r,t,y] == vcapitalinvestment[r,t,y]))
+    push!(cc1_undiscountedcapitalinvestment, @constraint(jumpmodel, row[:cc] * vnewcapacity[r,t,y]
+        + vfinancecost[r,t,y] == vcapitalinvestment[r,t,y]))
 end
 
 length(cc1_undiscountedcapitalinvestment) > 0 && logmsg("Created constraint CC1_UndiscountedCapitalInvestment.", quiet)
 # END: CC1_UndiscountedCapitalInvestment.
+
+# BEGIN: CC1aTr_FinancingTransmission.
+# Total financing costs discounted to year new capacity is deployed; assumes capital costs are financed at interest rate and repaid in equal installments over life of transmission line (payments occur at year's end)
+if transmissionmodeling
+    cc1atr_financingtransmission::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+    for row in SQLite.DBInterface.execute(db, "select tl.id as tr, y.val as y, cast(tl.CapitalCost as real) as cc,
+        cast(tl.operationallife as integer) as ol, cast(dr.val as real) as dr, cast(tl.interestrate as real) as irt
+    	from TransmissionLine tl, YEAR y, NODE n, DiscountRate_def dr
+        where
+    	tl.CapitalCost is not null and tl.operationallife is not null and tl.interestrate is not null and tl.interestrate <> 0
+    	$(restrictyears ? "and y.val in" * inyears : "")
+    	and tl.n1 = n.val
+    	and n.r = dr.r")
+        local tr = row[:tr]
+        local y = row[:y]
+        local ol = row[:ol]
+        local dr = row[:dr]
+        local irt = row[:irt]
+
+        push!(cc1atr_financingtransmission, @constraint(jumpmodel, row[:cc] * vtransmissionbuilt[tr,y] * (irt / (1 - (1 + irt)^(-ol)) - 1/ol)
+            * (1 - (1 + dr)^(-ol)) / dr == vfinancecosttransmission[tr,y]))
+    end
+
+    length(cc1atr_financingtransmission) > 0 && logmsg("Created constraint CC1aTr_FinancingTransmission.", quiet)
+end
+# END: CC1aTr_FinancingTransmission.
 
 # BEGIN: CC1Tr_UndiscountedCapitalInvestment.
 if transmissionmodeling
@@ -3901,7 +3971,8 @@ if transmissionmodeling
         local tr = row[:tr]
         local y = row[:y]
 
-        push!(cc1tr_undiscountedcapitalinvestment, @constraint(jumpmodel, row[:cc] * vtransmissionbuilt[tr,y] == vcapitalinvestmenttransmission[tr,y]))
+        push!(cc1tr_undiscountedcapitalinvestment, @constraint(jumpmodel, row[:cc] * vtransmissionbuilt[tr,y]
+            + vfinancecosttransmission[tr,y] == vcapitalinvestmenttransmission[tr,y]))
     end
 
     length(cc1tr_undiscountedcapitalinvestment) > 0 && logmsg("Created constraint CC1Tr_UndiscountedCapitalInvestment.", quiet)
@@ -3909,13 +3980,9 @@ end
 # END: CC1Tr_UndiscountedCapitalInvestment.
 
 # BEGIN: CC2_DiscountingCapitalInvestment.
-queryrtydr::SQLite.Query = SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y,
-case when drt.val is not null then cast(drt.val as real) else cast(dr.val as real) end as dr
-from region r, technology t, year y
-left join DiscountRate_def dr on dr.r = r.val
-left join DiscountRateTechnology_def drt on drt.r = r.val and drt.t = t.val
-where (drt.val is not null or dr.val is not null)
-$(restrictyears ? "and y.val in" * inyears : "")")
+queryrtydr::SQLite.Query = SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, cast(dr.val as real) as dr
+from region r, technology t, year y, DiscountRate_def dr
+where dr.r = r.val $(restrictyears ? "and y.val in" * inyears : "")")
 
 cc2_discountingcapitalinvestment::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = sum of discounted costs over interval ending in y
@@ -3941,13 +4008,11 @@ length(cc2_discountingcapitalinvestment) > 0 && logmsg("Created constraint CC2_D
 # BEGIN: CC2Tr_DiscountingCapitalInvestment.
 if transmissionmodeling
     # Note: if a transmission line crosses regional boundaries, costs are assigned to from region (associated with n1)
-    querytrydr::SQLite.Query = SQLite.DBInterface.execute(db, "select tl.id as tr, y.val as y,
-    case when tl.discountrate is not null then cast(tl.discountrate as real) else cast(dr.val as real) end as dr
-	from TransmissionLine tl, NODE n, YEAR y
-	left join DiscountRate_def dr on n.r = dr.r
+    querytrydr::SQLite.Query = SQLite.DBInterface.execute(db, "select tl.id as tr, y.val as y, cast(dr.val as real) as dr
+	from TransmissionLine tl, NODE n, YEAR y, DiscountRate_def dr
     where tl.n1 = n.val
-	$(restrictyears ? "and y.val in" * inyears : "")
-	and (tl.discountrate is not null or dr.val is not null)")
+    and dr.r = n.r
+	$(restrictyears ? "and y.val in" * inyears : "")")
 
     cc2tr_discountingcapitalinvestment::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = sum of discounted costs over interval ending in y
@@ -3980,27 +4045,22 @@ end
 # Salvage values are figured as of last scenario year
 sv1_salvagevalueatendofperiod1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in SQLite.DBInterface.execute(db, "select r, t, y, cc, dr, ol from
-(select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc,
-case when drt.val is not null then cast(drt.val as real) else cast(dr.val as real) end as dr,
-cast(ol.val as real) as ol
-from region r, technology t, year y, DepreciationMethod_def dm, OperationalLife_def ol, CapitalCost_def cc
-left join DiscountRate_def dr on dr.r = r.val
-left join DiscountRateTechnology_def drt on drt.r = r.val and drt.t = t.val
+for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc,
+    cast(dr.val as real) as dr, cast(ol.val as real) as ol
+from region r, technology t, year y, DepreciationMethod_def dm, OperationalLife_def ol, CapitalCost_def cc, DiscountRate_def dr
 where dm.r = r.val and dm.val = 1
 and ol.r = r.val and ol.t = t.val
 and y.val + ol.val - 1 > " * string(lastscenarioyear) *
 " and cc.r = r.val and cc.t = t.val and cc.y = y.val
 $(restrictyears ? "and y.val in" * inyears : "")
-and (drt.val is not null or dr.val is not null))
-where dr > 0")
+and dr.r = r.val and dr.val <> 0")
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
     local dr = row[:dr]
 
     push!(sv1_salvagevalueatendofperiod1, @constraint(jumpmodel, vsalvagevalue[r,t,y] ==
-        row[:cc] * vnewcapacity[r,t,y] * (1 - (((1 + dr)^(lastscenarioyear - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ol]) - 1)))))
+        vcapitalinvestment[r,t,y] * (1 - (((1 + dr)^(lastscenarioyear - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ol]) - 1)))))
 end
 
 length(sv1_salvagevalueatendofperiod1) > 0 && logmsg("Created constraint SV1_SalvageValueAtEndOfPeriod1.", quiet)
@@ -4010,25 +4070,21 @@ length(sv1_salvagevalueatendofperiod1) > 0 && logmsg("Created constraint SV1_Sal
 if transmissionmodeling
     sv1tr_salvagevalueatendofperiod1::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in SQLite.DBInterface.execute(db, "select tr, y, cc, ol, dr from
-	(select tl.id as tr, y.val as y, cast(tl.CapitalCost as real) as cc,
-	cast(tl.operationallife as real) as ol,
-	case when tl.discountrate is not null then cast(tl.discountrate as real) else cast(dr.val as real) end as dr
-	from TransmissionLine tl, NODE n, YEAR y, DepreciationMethod_def dm
-	left join DiscountRate_def dr on n.r = dr.r
+    for row in SQLite.DBInterface.execute(db, "select tl.id as tr, y.val as y, cast(tl.CapitalCost as real) as cc,
+	cast(tl.operationallife as real) as ol, cast(dr.val as real) as dr
+	from TransmissionLine tl, NODE n, YEAR y, DepreciationMethod_def dm, DiscountRate_def dr
     where tl.CapitalCost is not null
 	and tl.n1 = n.val
 	and dm.r = n.r and dm.val = 1
 	and y.val + tl.operationallife - 1 > " * string(lastscenarioyear) *
 	" $(restrictyears ? "and y.val in" * inyears : "")
-	and (tl.discountrate is not null or dr.val is not null))
-	where dr > 0")
+	and dr.r = n.r and dr.val <> 0")
         local tr = row[:tr]
         local y = row[:y]
         local dr = row[:dr]
 
         push!(sv1tr_salvagevalueatendofperiod1, @constraint(jumpmodel, vsalvagevaluetransmission[tr,y] ==
-            row[:cc] * vtransmissionbuilt[tr,y] * (1 - (((1 + dr)^(lastscenarioyear - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ol]) - 1)))))
+            vcapitalinvestmenttransmission[tr,y] * (1 - (((1 + dr)^(lastscenarioyear - Meta.parse(y) + 1) - 1) / ((1 + dr)^(row[:ol]) - 1)))))
     end
 
     length(sv1tr_salvagevalueatendofperiod1) > 0 && logmsg("Created constraint SV1Tr_SalvageValueAtEndOfPeriod1.", quiet)
@@ -4038,19 +4094,14 @@ end
 # BEGIN: SV2_SalvageValueAtEndOfPeriod2.
 sv2_salvagevalueatendofperiod2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-for row in SQLite.DBInterface.execute(db, "select r, t, y, cc, ol from
-(select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc, cast(ol.val as real) as ol,
-case when drt.val is not null then drt.val else dr.val end as dr
-from region r, technology t, year y, DepreciationMethod_def dm, OperationalLife_def ol, CapitalCost_def cc
-left join DiscountRate_def dr on dr.r = r.val
-left join DiscountRateTechnology_def drt on drt.r = r.val and drt.t = t.val
+for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc, cast(ol.val as real) as ol
+from region r, technology t, year y, DepreciationMethod_def dm, OperationalLife_def ol, CapitalCost_def cc, DiscountRate_def dr
 where dm.r = r.val and dm.val = 1
 $(restrictyears ? "and y.val in" * inyears : "")
 and ol.r = r.val and ol.t = t.val
 and y.val + ol.val - 1 > " * string(lastscenarioyear) *
 " and cc.r = r.val and cc.t = t.val and cc.y = y.val
-and (drt.val is not null or dr.val is not null))
-where dr = 0
+and dr.r = r.val and dr.val = 0
 union
 select r.val as r, t.val as t, y.val as y, cast(cc.val as real) as cc, cast(ol.val as real) as ol
 from region r, technology t, year y, DepreciationMethod_def dm, OperationalLife_def ol,
@@ -4065,7 +4116,7 @@ and y.val + ol.val - 1 > " * string(lastscenarioyear) *
     local y = row[:y]
 
     push!(sv2_salvagevalueatendofperiod2, @constraint(jumpmodel, vsalvagevalue[r,t,y] ==
-        row[:cc] * vnewcapacity[r,t,y] * (1 - (lastscenarioyear - Meta.parse(y) + 1) / row[:ol])))
+        vcapitalinvestment[r,t,y] * (1 - (lastscenarioyear - Meta.parse(y) + 1) / row[:ol])))
 end
 
 length(sv2_salvagevalueatendofperiod2) > 0 && logmsg("Created constraint SV2_SalvageValueAtEndOfPeriod2.", quiet)
@@ -4075,24 +4126,21 @@ length(sv2_salvagevalueatendofperiod2) > 0 && logmsg("Created constraint SV2_Sal
 if transmissionmodeling
     sv2tr_salvagevalueatendofperiod2::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in SQLite.DBInterface.execute(db, "select tr, y, cc, ol from
-	(select tl.id as tr, y.val as y, cast(tl.CapitalCost as real) as cc,
-	cast(tl.operationallife as real) as ol, dm.val as dm,
-	case when tl.discountrate is not null then tl.discountrate else dr.val end as dr
-	from TransmissionLine tl, NODE n, YEAR y, DepreciationMethod_def dm
-	left join DiscountRate_def dr on n.r = dr.r
+    for row in SQLite.DBInterface.execute(db, "select tl.id as tr, y.val as y, cast(tl.CapitalCost as real) as cc,
+	cast(tl.operationallife as real) as ol
+	from TransmissionLine tl, NODE n, YEAR y, DepreciationMethod_def dm, DiscountRate_def dr
     where tl.CapitalCost is not null
 	and tl.n1 = n.val
 	and dm.r = n.r
     $(restrictyears ? "and y.val in" * inyears : "")
 	and y.val + tl.operationallife - 1 > " * string(lastscenarioyear) *
-	" and (tl.discountrate is not null or dr.val is not null))
-	where ((dm = 1 and dr = 0) or (dm = 2))")
+	" and dr.r = n.r
+    and ((dm.val = 1 and dr.val = 0) or (dm.val = 2))")
         local tr = row[:tr]
         local y = row[:y]
 
         push!(sv2tr_salvagevalueatendofperiod2, @constraint(jumpmodel, vsalvagevaluetransmission[tr,y] ==
-            row[:cc] * vtransmissionbuilt[tr,y] * (1 - (lastscenarioyear - Meta.parse(y) + 1) / row[:ol])))
+            vcapitalinvestmenttransmission[tr,y] * (1 - (lastscenarioyear - Meta.parse(y) + 1) / row[:ol])))
     end
 
     length(sv2tr_salvagevalueatendofperiod2) > 0 && logmsg("Created constraint SV2Tr_SalvageValueAtEndOfPeriod2.", quiet)
@@ -4274,19 +4322,16 @@ lastvals = Array{Float64, 1}(undef,3)  # lastvals[1] = dr, lastvals[2] = fsy_rtc
 lastvalsint = Array{Int64, 1}(undef,2)  # lastvalsint[1] = yint, lastvalsint[2] = nyears
 
 for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, vc.m as m, y.prev_y,
-case when drt.val is not null then cast(drt.val as real) else cast(dr.val as real) end as dr,
-cast(rtc.val as real) as fsy_rtc, cast(fc.val as real) as fc,
+cast(dr.val as real) as dr, cast(rtc.val as real) as fsy_rtc, cast(fc.val as real) as fc,
 cast(vc.val as real) as vc
 from region r, TECHNOLOGY t,
 	(select y.val, lag(y.val) over (order by y.val) as prev_y from year y
         $(restrictyears ? "where y.val in" * inyears : "")
-	) as y
-left join DiscountRate_def dr on dr.r = r.val
-left join DiscountRateTechnology_def drt on drt.r = r.val and drt.t = t.val
+	) as y, DiscountRate_def dr
 left join ResidualCapacity_def rtc on rtc.r = r.val and rtc.t = t.val and rtc.y = $firstscenarioyear
 left join FixedCost_def fc on fc.r = r.val and fc.t = t.val and fc.y = y.val
 left join VariableCost_def vc on vc.r = r.val and vc.t = t.val and vc.y = y.val and vc.val <> 0
-WHERE (drt.val is not null or dr.val is not null)
+WHERE dr.r = r.val
 order by r.val, t.val, y.val")
     local r = row[:r]
     local t = row[:t]
@@ -4390,13 +4435,12 @@ if transmissionmodeling
 
     for row in SQLite.DBInterface.execute(db, "select tl.id as tr, tl.f as f, tme1.y as y, y.prev_y,
         cast(tl.VariableCost as real) as vc, cast(tl.fixedcost as real) as fc, tl.yconstruction, tl.operationallife as ol,
-		case when tl.discountrate is not null then cast(tl.discountrate as real) else cast(dr.val as real) end as dr
+		cast(dr.val as real) as dr
         from TransmissionLine tl, NODE n1, NODE n2, TransmissionModelingEnabled tme1,
         TransmissionModelingEnabled tme2, TransmissionCapacityToActivityUnit_def tcta,
 		(select y.val, lag(y.val) over (order by y.val) as prev_y from year y
 			$(restrictyears ? "where y.val in" * inyears : "")
-		) as y
-		left join DiscountRate_def dr on n1.r = dr.r
+		) as y, DiscountRate_def dr
         where
         tl.n1 = n1.val and tl.n2 = n2.val
         and tme1.r = n1.r and tme1.f = tl.f
@@ -4405,7 +4449,7 @@ if transmissionmodeling
     	and exists (select 1 from YearSplit_def ys where ys.y = tme1.y)
     	and tcta.r = n1.r and tl.f = tcta.f
 		and tme1.y = y.val
-		and (tl.discountrate is not null or dr.val is not null)")
+        and dr.r = n1.r")
 
         local tr = row[:tr]
         local f = row[:f]
@@ -4997,8 +5041,8 @@ if in("vannualtechnologyemissionbymode", varstosavearr)
 end
 # END: E1_AnnualEmissionProductionByMode.
 
-# BEGIN: E2_AnnualEmissionProduction.
-e2_annualemissionproduction::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+# BEGIN: E2a_AnnualEmissionProduction.
+e2a_annualemissionproduction::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = e, lastkeys[4] = y
 sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vannualtechnologyemissionbymode-equivalent sum
 
@@ -5012,7 +5056,7 @@ for row in queryvannualtechnologyemissionbymode
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2] || e != lastkeys[3] || y != lastkeys[4])
         # Create constraint
-        push!(e2_annualemissionproduction, @constraint(jumpmodel, sumexps[1] ==
+        push!(e2a_annualemissionproduction, @constraint(jumpmodel, sumexps[1] ==
             vannualtechnologyemission[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
         sumexps[1] = AffExpr()
     end
@@ -5027,20 +5071,34 @@ end
 
 # Create last constraint
 if isassigned(lastkeys, 1)
-    push!(e2_annualemissionproduction, @constraint(jumpmodel, sumexps[1] ==
+    push!(e2a_annualemissionproduction, @constraint(jumpmodel, sumexps[1] ==
         vannualtechnologyemission[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
 end
 
-length(e2_annualemissionproduction) > 0 && logmsg("Created constraint E2_AnnualEmissionProduction.", quiet)
-# END: E2_AnnualEmissionProduction.
+length(e2a_annualemissionproduction) > 0 && logmsg("Created constraint E2a_AnnualEmissionProduction.", quiet)
+# END: E2a_AnnualEmissionProduction.
+
+# BEGIN: E2b_AnnualEmissionProduction.
+# This constraint is necessary because negative emissions and emission penalties are allowed
+e2b_annualemissionproduction::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+
+for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, e.val as e, y.val as y
+from REGION r, TECHNOLOGY t, EMISSION e, YEAR y
+left join EmissionActivityRatio_def ear on ear.r = r.val and ear.t = t.val and ear.e = e.val and ear.y = y.val
+where ear.val is null $(restrictyears ? "and y.val in" * inyears : "")")
+    push!(e2b_annualemissionproduction, @constraint(jumpmodel, vannualtechnologyemission[row[:r],row[:t],row[:e],row[:y]] == 0))
+end
+
+length(e2b_annualemissionproduction) > 0 && logmsg("Created constraint E2b_AnnualEmissionProduction.", quiet)
+# END: E2b_AnnualEmissionProduction.
 
 # BEGIN: E3_EmissionsPenaltyByTechAndEmission.
 queryvannualtechnologyemissionpenaltybyemission::SQLite.Query = SQLite.DBInterface.execute(db,
-"select distinct ear.r as r, ear.t as t, ear.e as e, ear.y as y, cast(ep.val as real) as ep
-from EmissionActivityRatio_def ear, EmissionsPenalty_def ep
-where ep.r = ear.r and ep.e = ear.e and ep.y = ear.y
-and ep.val <> 0 $(restrictyears ? "and ear.y in" * inyears : "")
-order by ear.r, ear.t, ear.y")
+"select r.val as r, t.val as t, y.val as y, e.val as e, cast(ep.val as real) as ep
+from REGION r, TECHNOLOGY t, EMISSION e, YEAR y
+left join EmissionsPenalty_def ep on ep.r = r.val and ep.e = e.val and ep.y = y.val and ep.val <> 0
+$(restrictyears ? "where y.val in" * inyears : "")
+order by r.val, t.val, y.val")
 
 if in("vannualtechnologyemissionpenaltybyemission", varstosavearr)
     e3_emissionspenaltybytechandemission::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
@@ -5050,8 +5108,11 @@ if in("vannualtechnologyemissionpenaltybyemission", varstosavearr)
         local t = row[:t]
         local e = row[:e]
         local y = row[:y]
+        local ep = row[:ep]
 
-        push!(e3_emissionspenaltybytechandemission, @constraint(jumpmodel, vannualtechnologyemission[r,t,e,y] * row[:ep] == vannualtechnologyemissionpenaltybyemission[r,t,e,y]))
+        if !ismissing(ep)
+            push!(e3_emissionspenaltybytechandemission, @constraint(jumpmodel, vannualtechnologyemission[r,t,e,y] * ep == vannualtechnologyemissionpenaltybyemission[r,t,e,y]))
+        end
     end
 
     length(e3_emissionspenaltybytechandemission) > 0 && logmsg("Created constraint E3_EmissionsPenaltyByTechAndEmission.", quiet)
@@ -5061,8 +5122,7 @@ end
 # BEGIN: E4_EmissionsPenaltyByTechnology.
 e4_emissionspenaltybytechnology::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = y
-sumexps = Array{AffExpr, 1}([AffExpr()])
-# sumexps[1] = vannualtechnologyemissionpenaltybyemission-equivalent sum
+sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vannualtechnologyemissionpenaltybyemission-equivalent sum
 
 SQLite.reset!(queryvannualtechnologyemissionpenaltybyemission)
 
@@ -5070,6 +5130,7 @@ for row in queryvannualtechnologyemissionpenaltybyemission
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
+    local ep = row[:ep]
 
     if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2] || y != lastkeys[3])
         # Create constraint
@@ -5078,7 +5139,9 @@ for row in queryvannualtechnologyemissionpenaltybyemission
         sumexps[1] = AffExpr()
     end
 
-    add_to_expression!(sumexps[1], vannualtechnologyemission[r,t,row[:e],y] * row[:ep])
+    if !ismissing(ep)
+        add_to_expression!(sumexps[1], vannualtechnologyemission[r,t,row[:e],y] * ep)
+    end
 
     lastkeys[1] = r
     lastkeys[2] = t
@@ -5102,8 +5165,8 @@ for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val 
 from region r, technology t,
 (select y.val, lag(y.val) over (order by y.val) as prev_y from year y
     $(restrictyears ? "where y.val in" * inyears : "")
-) as y, DiscountRate_def dr
-where dr.r = r.val")
+) as y
+left join DiscountRate_def dr on dr.r = r.val")
     local r = row[:r]
     local t = row[:t]
     local y = row[:y]
@@ -5112,24 +5175,29 @@ where dr.r = r.val")
     local dr = row[:dr]
     local nyears::Int64 = (ismissing(prev_y) ? yint - firstscenarioyear : yint - Meta.parse(prev_y) - 1)  # Number of years in y's interval, excluding y
 
-    # Add estimated emission penalties in non-modeled years to discounted penalties. Assume linear scaling of penalties over modeled intervals (for years before first modeled year, assume constant penalties).
-    local ppenalty  # Penalty for r & t at start of y's interval
-
-    if ismissing(prev_y)
-        ppenalty = vannualtechnologyemissionspenalty[r,t,y]
+    if ismissing(dr) || size(semission,1) == 0
+        # Ensure vdiscountedtechnologyemissionspenalty isn't made negative
+        push!(e5_discountedemissionspenaltybytechnology, @constraint(jumpmodel, 0 == vdiscountedtechnologyemissionspenalty[r,t,y]))
     else
-        ppenalty = vannualtechnologyemissionspenalty[r,t,prev_y]
+        # Add estimated emission penalties in non-modeled years to discounted penalties. Assume linear scaling of penalties over modeled intervals (for years before first modeled year, assume constant penalties).
+        local ppenalty  # Penalty for r & t at start of y's interval
+
+        if ismissing(prev_y)
+            ppenalty = vannualtechnologyemissionspenalty[r,t,y]
+        else
+            ppenalty = vannualtechnologyemissionspenalty[r,t,prev_y]
+        end
+
+        for i = 1:nyears
+            add_to_expression!(sumexps[1], (ppenalty + (vannualtechnologyemissionspenalty[r,t,y] - ppenalty) / (nyears + 1) * (nyears + 1 - i))
+                / ((1 + dr)^(yint - i - firstscenarioyear + 0.5)))
+        end
+
+        push!(e5_discountedemissionspenaltybytechnology, @constraint(jumpmodel, sumexps[1]
+            + vannualtechnologyemissionspenalty[r,t,y] / ((1 + dr)^(yint - firstscenarioyear + 0.5)) == vdiscountedtechnologyemissionspenalty[r,t,y]))
+
+        sumexps[1] = AffExpr()
     end
-
-    for i = 1:nyears
-        add_to_expression!(sumexps[1], (ppenalty + (vannualtechnologyemissionspenalty[r,t,y] - ppenalty) / (nyears + 1) * (nyears + 1 - i))
-            / ((1 + dr)^(yint - i - firstscenarioyear + 0.5)))
-    end
-
-    push!(e5_discountedemissionspenaltybytechnology, @constraint(jumpmodel, sumexps[1]
-        + vannualtechnologyemissionspenalty[r,t,y] / ((1 + dr)^(yint - firstscenarioyear + 0.5)) == vdiscountedtechnologyemissionspenalty[r,t,y]))
-
-    sumexps[1] = AffExpr()
 end
 
 length(e5_discountedemissionspenaltybytechnology) > 0 && logmsg("Created constraint E5_DiscountedEmissionsPenaltyByTechnology.", quiet)

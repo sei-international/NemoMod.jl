@@ -210,6 +210,25 @@ if @isdefined GLPK
 
         SQLite.DBInterface.execute(db, "delete from MinimumUtilization")
 
+        # Test interest rates
+        SQLite.DBInterface.execute(db, "insert into InterestRateStorage select rowid, 1, 'storage1', y.val, 0.05 from year y")
+        SQLite.DBInterface.execute(db, "insert into InterestRateTechnology select rowid, 1, 'solar', y.val, 0.05 from year y")
+        SQLite.DBInterface.execute(db, "update TransmissionLine set interestrate = 0.05 where id = 2")
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)), numprocs=1, varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029])
+        testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+
+        @test testqry[1,:y] == "2020"
+        @test testqry[2,:y] == "2025"
+        @test testqry[3,:y] == "2029"
+
+        @test isapprox(testqry[1,:val], 12672.8117352623; atol=TOL)
+        @test isapprox(testqry[2,:val], 2510.44571676115; atol=TOL)
+        @test isapprox(testqry[3,:val], 1611.02249720726; atol=TOL)
+
+        SQLite.DBInterface.execute(db, "delete from InterestRateStorage")
+        SQLite.DBInterface.execute(db, "delete from InterestRateTechnology")
+        SQLite.DBInterface.execute(db, "update TransmissionLine set interestrate = null where id = 2")
+
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
