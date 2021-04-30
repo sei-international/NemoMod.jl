@@ -208,14 +208,14 @@ Connections between [nodes](@ref node) in a transmission (or transmission and di
 | `n2` | text  | Second node connected to line (`NODE.val`) |
 | `f` | text  | [Fuel](@ref fuel) transported over line (`FUEL.val`) |
 | `maxflow` | real  | Maximum flow supported by line (MW) |
-| `reactance` | real  | Line's reactance (per unit assuming a 1 MVA power base, only relevant for electrical lines when using direct current optimized power flow modeling; see [TransmissionModelingEnabled](@ref TransmissionModelingEnabled)) |
+| `reactance` | real  | Line's reactance (per unit assuming a 1 MVA power base, only relevant for electrical lines when using direct current optimized power flow modeling; see [`TransmissionModelingEnabled`](@ref TransmissionModelingEnabled)) |
 | `yconstruction` | integer  | Exogenously specified construction year for line (leave null if NEMO should endogenously determine whether to build line [i.e., for candidate lines]) |
 | `capitalcost` | real  | Line's capital cost (scenario's cost unit) |
 | `fixedcost` | real  | Line's fixed annual operation and maintenance cost (scenario's cost unit) |
 | `variablecost` | real  | Line's variable operation and maintenance (scenario's cost unit / energy unit) |
 | `operationallife` | integer  | Line's operational lifetime (years, used to retire both exogenously and endogenously built lines) |
-| `efficiency` | real  | Efficiency of transmission over line (%, only used for pipeline flow modeling; see [TransmissionModelingEnabled](@ref TransmissionModelingEnabled)) |
-| `discountrate` | real  | Discount rate NEMO should use when discounting line's costs (0 to 1; if not specified, NEMO uses [default discount rate](@ref DiscountRate) for [region](@ref region) containing `n1`) |
+| `efficiency` | real  | Efficiency of transmission over line (%, only used for pipeline flow modeling; see [`TransmissionModelingEnabled`](@ref TransmissionModelingEnabled)) |
+| `interestrate` | real  | Interest rate NEMO should use to calculate financing costs if building line endogenously (0 to 1; see [`vfinancecosttransmission`](@ref vfinancecosttransmission)) |
 
 #### Julia code
 

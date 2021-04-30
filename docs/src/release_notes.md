@@ -5,11 +5,21 @@ CurrentModule = NemoMod
 
 This page highlights key changes in NEMO since its initial public release. For a full history of NEMO releases, including the code for each version, see the [Releases page on NEMO's GitHub site](https://github.com/sei-international/NemoMod.jl/releases).
 
+## Version 1.6
+
+  * **Interest rates for technologies, storage, and transmission lines:** Added parameters for interest rates for technologies ([`InterestRateTechnology`](@ref InterestRateTechnology)), storage ([`InterestRateStorage`](@ref InterestRateStorage)), and transmission lines (`interestrate` property of [`TransmissionLine`](@ref transmissionline)). If you specify an interest rate, NEMO uses it to calculate financing costs for new endogenous capacity, assuming the capital investment is financed at the interest rate and repaid in equal installments over the life of the capacity. The financing costs are reported in three new output variables ([`vfinancecost`](@ref vfinancecost), [`vfinancecoststorage`](@ref vfinancecoststorage), and [`vfinancecosttransmission`](@ref vfinancecosttransmission)) and enter into NEMO's cost minimization objective. They are also considered when calculating salvage values for technologies, storage, and transmission lines.
+
+  * **Negative emissions:** Revised NEMO to accommodate negative emissions from technologies. You can activate this feature by specifying a negative emission factor ([`EmissionActivityRatio`](@ref EmissionActivityRatio)). If a technology has a negative emission factor for a pollutant with an externality cost ([`EmissionsPenalty`](@ref EmissionsPenalty)), it can generate negative emission penalties ([`vannualtechnologyemissionspenalty`](@ref vannualtechnologyemissionspenalty)/[`vannualtechnologyemissionpenaltybyemission`](@ref vannualtechnologyemissionpenaltybyemission)), lowering total system costs. In this case, you may need to constrain the technology's operation to avoid an unbounded (infeasible) optimization problem. For example, if a technology can generate negative emissions of a pollutant with an externality cost, the cost of building and running the technology is lower than the externality value, and there are no limits on the technology's deployment and use, the optimization problem will be unbounded.
+
+  * **Deprecation of technology, storage, and transmission-specific discount rates:** Based on discussions with users, retired this functionality that was introduced in NEMO 1.5.
+
+  * **Other performance improvements:** Improved the robustness of the [`createnemodb`](@ref) function.
+
 ## Version 1.5
 
-  * **Technology, storage, and transmission-specific discount rates:** Revised NEMO so users can specify a different discount rate for each technology and region, storage and region, and transmission line. Technology and storage-specific rates are set with the new [DiscountRateTechnology](@ref DiscountRateTechnology) and [DiscountRateStorage](@ref DiscountRateStorage) parameters. Rates for transmission lines are defined as part of the [transmission line dimension](@ref transmissionline). The [DiscountRate](@ref DiscountRate) parameter continues to provide the default discount rate for each region.
+  * **Technology, storage, and transmission-specific discount rates:** Revised NEMO so users can specify a different discount rate for each technology and region, storage and region, and transmission line. Technology and storage-specific rates are set with the new `DiscountRateTechnology` and `DiscountRateStorage` parameters. Rates for transmission lines are defined as part of the [transmission line dimension](@ref transmissionline). The [`DiscountRate`](@ref DiscountRate) parameter continues to provide the default discount rate for each region.
 
-  * **Minimum utilization:** Added a parameter - [MinimumUtilization](@ref MinimumUtilization) - that enforces minimum utilization rates for technology capacity.
+  * **Minimum utilization:** Added a parameter - [`MinimumUtilization`](@ref MinimumUtilization) - that enforces minimum utilization rates for technology capacity.
 
   * **Other performance improvements:** Streamlined logic for scenario database upgrades.
 

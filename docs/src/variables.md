@@ -279,7 +279,7 @@ Use of a [fuel](@ref fuel) by a [technology](@ref technology) in a [time slice](
 
 ### [Capital investment](@id vcapitalinvestment)
 
-Undiscounted investment in new endogenously determined [technology](@ref technology) capacity. Unit: scenario's cost [unit](@ref uoms).
+Undiscounted investment in new endogenously determined [technology](@ref technology) capacity, including capital and [financing costs](@ref vfinancecost). Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -287,7 +287,7 @@ Undiscounted investment in new endogenously determined [technology](@ref technol
 
 ### [Capital investment storage](@id vcapitalinvestmentstorage)
 
-Undiscounted investment in new endogenously determined [storage](@ref storage) capacity. Unit: scenario's cost [unit](@ref uoms).
+Undiscounted investment in new endogenously determined [storage](@ref storage) capacity, including capital and [financing costs](@ref vfinancecoststorage). Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -295,7 +295,7 @@ Undiscounted investment in new endogenously determined [storage](@ref storage) c
 
 ### [Capital investment transmission](@id vcapitalinvestmenttransmission)
 
-Undiscounted investment in new endogenously determined [transmission](@ref transmissionline) capacity. Unit: scenario's cost [unit](@ref uoms).
+Undiscounted investment in new endogenously determined [transmission](@ref transmissionline) capacity, including capital and [financing costs](@ref vfinancecosttransmission). Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -303,7 +303,7 @@ Undiscounted investment in new endogenously determined [transmission](@ref trans
 
 ### [Discounted capital investment](@id vdiscountedcapitalinvestment)
 
-Discounted investment in new endogenously determined [technology](@ref technology) capacity. NEMO discounts to the first [year](@ref year) in the scenario's database using a [technology-specific discount rate](@ref DiscountRateTechnology) (or the [region's](@ref region) [default discount rate](@ref DiscountRate), if no technology-specific rate is defined). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
+Discounted investment in new endogenously determined [technology](@ref technology) capacity, including capital and [financing costs](@ref vfinancecost). NEMO discounts the investment to the first [year](@ref year) in the scenario's database using the associated [region's](@ref region) [discount rate](@ref DiscountRate). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -311,7 +311,7 @@ Discounted investment in new endogenously determined [technology](@ref technolog
 
 ### [Discounted capital investment storage](@id vdiscountedcapitalinvestmentstorage)
 
-Discounted investment in new endogenously determined [storage](@ref storage) capacity. NEMO discounts to the first [year](@ref year) in the scenario's database using a [storage-specific discount rate](@ref DiscountRateStorage) (or the [region's](@ref region) [default discount rate](@ref DiscountRate), if no storage-specific rate is defined). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
+Discounted investment in new endogenously determined [storage](@ref storage) capacity, including capital and [financing costs](@ref vfinancecoststorage). NEMO discounts the investment to the first [year](@ref year) in the scenario's database using the associated [region's](@ref region) [discount rate](@ref DiscountRate). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -319,7 +319,7 @@ Discounted investment in new endogenously determined [storage](@ref storage) cap
 
 ### [Discounted capital investment transmission](@id vdiscountedcapitalinvestmenttransmission)
 
-Discounted investment in new endogenously determined [transmission](@ref transmissionline) capacity. NEMO discounts to the first [year](@ref year) in the scenario's database using the transmission line's discount rate (or the [default discount rate](@ref DiscountRate) for the [region](@ref region) containing the line's first [node](@ref node), if no rate for the line is defined). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
+Discounted investment in new endogenously determined [transmission](@ref transmissionline) capacity, including capital and [financing costs](@ref vfinancecosttransmission). NEMO discounts the investment to the first [year](@ref year) in the scenario's database using the [discount rate](@ref DiscountRate) for the [region](@ref region) containing the transmission line's first [node](@ref node). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -343,11 +343,35 @@ Undiscounted total emission costs associated with a [technology](@ref technology
 
 ### [Discounted emission penalty](@id vdiscountedtechnologyemissionspenalty)
 
-Discounted total emission costs associated with a [technology](@ref technology) (i.e., summing across [emissions](@ref emission)). NEMO discounts to the first [year](@ref year) in the scenario's database using the [region's](@ref region) [default discount rate](@ref DiscountRate). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
+Discounted total emission costs associated with a [technology](@ref technology) (i.e., summing across [emissions](@ref emission)). NEMO discounts the costs to the first [year](@ref year) in the scenario's database using the associated [region's](@ref region) [discount rate](@ref DiscountRate). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
 * Variable in JuMP model: `vdiscountedtechnologyemissionspenalty[r,t,y]`
+
+### [Financing cost](@id vfinancecost)
+
+Financing cost incurred for new endogenously built [technology](@ref technology) capacity. NEMO calculates this cost by assuming that capital costs for the capacity are financed at the [technology's interest rate](@ref InterestRateTechnology) and repaid in equal installments over the capacity's lifetime. This variable provides the total financing cost over the lifetime, discounted to the capacity's installation year. Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vfinancecost[r,t,y]`
+
+### [Financing cost storage](@id vfinancecoststorage)
+
+Financing cost incurred for new endogenously built [storage](@ref storage) capacity. NEMO calculates this cost by assuming that capital costs for the capacity are financed at the [storage's interest rate](@ref InterestRateStorage) and repaid in equal installments over the capacity's lifetime. This variable provides the total financing cost over the lifetime, discounted to the capacity's installation year. Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vfinancecoststorage[r,s,y]`
+
+### [Financing cost transmission](@id vfinancecosttransmission)
+
+Financing cost incurred for new endogenously built [transmission](@ref transmissionline) capacity. NEMO calculates this cost by assuming that capital costs for the capacity are financed at the transmission line's interest rate and repaid in equal installments over the capacity's lifetime. This variable provides the total financing cost over the lifetime, discounted to the capacity's installation year. Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vfinancecosttransmission[tr,y]`
 
 ### [Model period cost by region](@id vmodelperiodcostbyregion)
 
@@ -367,7 +391,7 @@ Sum of [fixed](@ref vannualfixedoperatingcost) and [variable](@ref vannualvariab
 
 ### [Discounted operating cost](@id vdiscountedoperatingcost)
 
-Discounted [operation and maintenance costs](@ref voperatingcost) for a [technology](@ref technology). NEMO discounts to the first [year](@ref year) in the scenario's database using a [technology-specific discount rate](@ref DiscountRateTechnology) (or the [region's](@ref region) [default discount rate](@ref DiscountRate), if no technology-specific rate is defined). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
+Discounted [operation and maintenance costs](@ref voperatingcost) for a [technology](@ref technology). NEMO discounts the costs to the first [year](@ref year) in the scenario's database using the associated [region's](@ref region) [discount rate](@ref DiscountRate). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -399,7 +423,7 @@ Sum of fixed and variable operation and maintenance costs for a [transmission li
 
 ### [Discounted operating cost transmission](@id vdiscountedoperatingcosttransmission)
 
-Discounted [operation and maintenance costs](@ref voperatingcosttransmission) for a [transmission line](@ref transmissionline). NEMO discounts to the first [year](@ref year) in the scenario's database using the line's discount rate (or the [default discount rate](@ref DiscountRate) for the [region](@ref region) containing the line's first [node](@ref node), if no rate for the line is defined). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
+Discounted [operation and maintenance costs](@ref voperatingcosttransmission) for a [transmission line](@ref transmissionline). NEMO discounts the costs to the first [year](@ref year) in the scenario's database using the [discount rate](@ref DiscountRate) for the [region](@ref region) containing the line's first [node](@ref node). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -431,7 +455,7 @@ Undiscounted residual value of [capital investment transmission](@ref vcapitalin
 
 ### [Discounted salvage value](@id vdiscountedsalvagevalue)
 
-Discounted residual value of [capital investment](@ref vcapitalinvestment) remaining at the end of the modeling period. NEMO discounts to the first [year](@ref year) in the scenario's database using a [technology-specific discount rate](@ref DiscountRateTechnology) (or the [region's](@ref region) [default discount rate](@ref DiscountRate), if no technology-specific rate is defined). Unit: scenario's cost [unit](@ref uoms).
+Discounted residual value of [capital investment](@ref vcapitalinvestment) remaining at the end of the modeling period. NEMO discounts the value to the first [year](@ref year) in the scenario's database using the associated [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -439,7 +463,7 @@ Discounted residual value of [capital investment](@ref vcapitalinvestment) remai
 
 ### [Discounted salvage value storage](@id vdiscountedsalvagevaluestorage)
 
-Discounted residual value of [capital investment storage](@ref vcapitalinvestmentstorage) remaining at the end of the modeling period. NEMO discounts to the first [year](@ref year) in the scenario's database using a [storage-specific discount rate](@ref DiscountRateStorage) (or the [region's](@ref region) [default discount rate](@ref DiscountRate), if no storage-specific rate is defined). Unit: scenario's cost [unit](@ref uoms).
+Discounted residual value of [capital investment storage](@ref vcapitalinvestmentstorage) remaining at the end of the modeling period. NEMO discounts the value to the first [year](@ref year) in the scenario's database using the associated [region's](@ref region) [discount rate](@ref DiscountRate). Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -447,7 +471,7 @@ Discounted residual value of [capital investment storage](@ref vcapitalinvestmen
 
 ### [Discounted salvage value transmission](@id vdiscountedsalvagevaluetransmission)
 
-Discounted residual value of [capital investment transmission](@ref vcapitalinvestmenttransmission) remaining at the end of the modeling period. NEMO discounts to the first [year](@ref year) in the scenario's database using the transmission line's discount rate (or the [default discount rate](@ref DiscountRate) for the [region](@ref region) containing the line's first [node](@ref node), if no rate for the line is defined). Unit: scenario's cost [unit](@ref uoms).
+Discounted residual value of [capital investment transmission](@ref vcapitalinvestmenttransmission) remaining at the end of the modeling period. NEMO discounts the value to the first [year](@ref year) in the scenario's database using the [discount rate](@ref DiscountRate) for the [region](@ref region) containing the transmission line's first [node](@ref node). Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 

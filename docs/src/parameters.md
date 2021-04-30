@@ -182,7 +182,7 @@ Method for calculating the salvage value of [technology](@ref technology), [stor
 
 ## [Discount rate](@id DiscountRate)
 
-Default rate used to discount costs in a [region](@ref region). This parameter is supplanted by any [technology](@ref DiscountRateTechnology), [storage](@ref DiscountRateStorage), and [transmission line](@ref transmissionline)-specific discount rates you define.
+Rate used to discount costs in a [region](@ref region).
 
 #### Scenario database
 
@@ -192,36 +192,6 @@ Default rate used to discount costs in a [region](@ref region). This parameter i
 |:--- | :--: |:----------- |
 | `id` | integer | Unique identifier for row |
 | `r` | text  | Region |
-| `val` | real  | Rate (0 to 1) |
-
-## [Discount rate storage](@id DiscountRateStorage)
-
-Rate used to discount costs for a [storage](@ref storage) in a [region](@ref region). If you do not specify this parameter, NEMO discounts the storage's costs using the region's [default discount rate](@ref DiscountRate).
-
-#### Scenario database
-
-**Table: `DiscountRateStorage`**
-
-| Name | Type | Description |
-|:--- | :--: |:----------- |
-| `id` | integer | Unique identifier for row |
-| `r` | text  | Region |
-| `s` | text  | Storage |
-| `val` | real  | Rate (0 to 1) |
-
-## [Discount rate technology](@id DiscountRateTechnology)
-
-Rate used to discount costs for a [technology](@ref technology) in a [region](@ref region). If you do not specify this parameter, NEMO discounts the technology's costs using the region's [default discount rate](@ref DiscountRate).
-
-#### Scenario database
-
-**Table: `DiscountRateTechnology`**
-
-| Name | Type | Description |
-|:--- | :--: |:----------- |
-| `id` | integer | Unique identifier for row |
-| `r` | text  | Region |
-| `t` | text  | Technology |
 | `val` | real  | Rate (0 to 1) |
 
 ## [Emission penalty](@id EmissionsPenalty)
@@ -243,6 +213,9 @@ Cost of emissions.
 ## [Emissions activity ratio](@id EmissionActivityRatio)
 
 Emission factor for the indicated [technology](@ref technology) and [mode](@ref mode_of_operation).
+
+!!! note
+    Emission factors can be negative, and if you specify a negative emission factor for a pollutant with an [externality cost](@ref EmissionsPenalty), your scenario may result in [negative emission penalties](@ref vannualtechnologyemissionspenalty). In this case, you may need to constrain the associated technology's operation to avoid an unbounded (infeasible) optimization problem. For example, if a technology can generate negative emissions of a pollutant with an externality cost, the cost of building and running the technology is lower than the externality value, and there are no limits on the technology's deployment and use, the optimization problem will be unbounded.
 
 #### Scenario database
 
@@ -273,6 +246,38 @@ Fixed operation and maintenance costs for a [technology](@ref technology).
 | `t` | text  | Technology |
 | `y` | text  | Year |
 | `val` | real  | Cost (scenario's cost [unit](@ref uoms) / region's power unit) |
+
+## [Interest rate storage](@id InterestRateStorage)
+
+Interest rate used to calculate [financing costs](@ref vfinancecoststorage) for endogenously built [storage](@ref storage) capacity.
+
+#### Scenario database
+
+**Table: `InterestRateStorage`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `s` | text  | Storage |
+| `y` | text  | Year |
+| `val` | real  | Rate (0 to 1) |
+
+## [Interest rate technology](@id InterestRateTechnology)
+
+Interest rate used to calculate [financing costs](@ref vfinancecost) for endogenously built [technology](@ref technology) capacity.
+
+#### Scenario database
+
+**Table: `InterestRateTechnology`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `t` | text  | Technology |
+| `y` | text  | Year |
+| `val` | real  | Rate (0 to 1) |
 
 ## [Input activity ratio](@id InputActivityRatio)
 
