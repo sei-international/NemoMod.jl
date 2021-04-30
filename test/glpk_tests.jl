@@ -56,7 +56,7 @@ if @isdefined GLPK
         NemoMod.calculatescenario(dbfile; jumpmodel=Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)),
             varstosave = "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vrateofdemand, vproductionbytechnology, vtotaltechnologyannualactivity, "
             * "vtotaltechnologymodelperiodactivity, vusebytechnology, vmodelperiodcostbyregion, vannualtechnologyemissionpenaltybyemission, "
-            * "vtotaldiscountedcost", numprocs=1, restrictvars=false, quiet = false)
+            * "vtotaldiscountedcost", numprocs=1, restrictvars=true, quiet = false)
 
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
