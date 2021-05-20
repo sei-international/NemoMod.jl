@@ -26,8 +26,7 @@ makedocs(
             "Configuration files" => "configuration_file.md"
             "Performance tips" => "performance_tips.md"
         ]
-        # Advanced topics
-        #   Custom constraints
+        "Custom constraints" => "custom_constraints.md"
         "FAQs" => "faqs.md"
         "Function reference" => "functions.md"
         "Release notes" => "release_notes.md"
