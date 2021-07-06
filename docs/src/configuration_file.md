@@ -45,3 +45,19 @@ parameters=CPX_PARAM_DEPIND=-1,CPXPARAM_LPMethod=1  ; Parameters for CPLEX solve
 beforescenariocalc=./before_scenario_script.jl
 customconstraints=./custom_constraints.jl
 ```
+
+## Including a configuration file in a LEAP-NEMO model
+
+If you're running NEMO through LEAP, you can include a NEMO configuration file in your LEAP model to have it used at calculation time. Options set in the file will override or add to the NEMO options LEAP would otherwise choose (see above for details on which options override defaults and which add to them).
+
+Here are the steps to follow:
+
+1. Create the configuration file and name it `nemo.cfg`.
+2. Close your model in LEAP.
+3. Locate the LEAP areas repository on your computer. The areas repository is a folder where LEAP saves all models installed on a computer; typically, it is in your Windows user's Documents folder and is named "LEAP Areas". As of LEAP version 2020.1.0.37, you can find the path to the LEAP areas repository within LEAP by looking at Settings -> Folders -> Areas.
+   ![LEAP folder settings](assets/leap_folders.png)
+4. Copy the configuration file to your model's folder in the LEAP areas repository. This folder will have the same name as your model.
+5. Open the model in LEAP and calculate a scenario that optimizes with NEMO. If the configuration file is successfully used in the calculation, you should see output in the NEMO window that indicates the file was read (unless you set the `quiet` option in the configuration file to `true` - this suppresses the output).
+
+!!! note
+    When modifying a existing NEMO configuration file in a LEAP-NEMO model, be sure to close the model in LEAP first. Otherwise your changes may not be applied correctly.
