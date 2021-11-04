@@ -409,6 +409,9 @@ For the specified [node](@ref node) and the [region](@ref region) containing it,
 | `y` | text  | Year |
 | `val` | real  | Fraction (0 to 1) |
 
+!!! note
+    To enable nodal modeling for a storage, you must define `NodalDistributionStorageCapacity` and activate transmission modeling for the storage's input and output [fuels](@ref fuel). Use the [TransmissionModelingEnabled](@ref TransmissionModelingEnabled) parameter to activate transmission modeling.
+
 ## [Nodal distribution technology capacity](@id NodalDistributionTechnologyCapacity)
 
 For the specified [node](@ref node) and the [region](@ref region) containing it, fraction of the specified [technology's](@ref technology) capacity in the region that is assigned to the node.

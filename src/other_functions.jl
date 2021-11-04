@@ -769,7 +769,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
         return_val["queryvtransmissionbyline"] = (dbpath, "select tl.id as tr, ys.l as l, tl.f as f, tme1.y as y, tl.n1 as n1, tl.n2 as n2,
     	tl.reactance as reactance, tme1.type as type, tl.maxflow as maxflow,
         cast(tl.VariableCost as real) as vc, cast(ys.val as real) as ys,
-        cast(tl.fixedcost as real) as fc, cast(tcta.val as real) as tcta
+        cast(tl.fixedcost as real) as fc, cast(tcta.val as real) as tcta, cast(tl.efficiency as real) as eff
         from TransmissionLine tl, NODE n1, NODE n2, TransmissionModelingEnabled tme1,
         TransmissionModelingEnabled tme2, YearSplit_def ys, TransmissionCapacityToActivityUnit_def tcta
         where
@@ -780,6 +780,17 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     	and ys.y = tme1.y $(restrictyears ? "and ys.y in" * inyears : "")
     	and tcta.r = n1.r and tl.f = tcta.f
         order by tl.id, tme1.y")
+
+        return_val["queryvtransmissionlosses"] = (dbpath, "select tl.id as tr, tl.n1, tl.n2, ys.l as l, tl.f as f, tme1.y as y
+        from TransmissionLine tl, NODE n1, NODE n2, TransmissionModelingEnabled tme1,
+        TransmissionModelingEnabled tme2, YearSplit_def ys
+        where
+        tl.efficiency < 1
+        and tl.n1 = n1.val and tl.n2 = n2.val
+        and tme1.r = n1.r and tme1.f = tl.f
+        and tme2.r = n2.r and tme2.f = tl.f
+        and tme1.y = tme2.y and tme1.type = tme2.type and tme1.type = 3
+    	and ys.y = tme1.y $(restrictyears ? "and ys.y in" * inyears : "")")
 
         return_val["queryvstorageleveltsgroup1"] = (dbpath, "select ns.n as n, ns.s as s, tg1.name as tg1, ns.y as y
         from nodalstorage ns, TSGROUP1 tg1 $(restrictyears ? "where ns.y in" * inyears : "")")

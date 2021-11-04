@@ -33,7 +33,7 @@ This page highlights key changes in NEMO since its initial public release. For a
 
   * **Simplified parameters for inter-regional trading:** Trading between two [regions](@ref region) can now be enabled with a single row linking the regions in [`TradeRoute`](@ref TradeRoute).
 
-  * **New output variable - vtransmissionbylineannual:** Added a variable that reports [annual transmission through a transmission line in energy terms](@ref vtransmissionbylineannual).
+  * **New output variable - vtransmissionbylineannual:** Added a variable that reports annual transmission through a transmission line in energy terms.
 
   * **Bug fix - exogenous emissions:** Revised [`vannualemissions`](@ref vannualemissions) so it includes any exogenously specified annual emissions ([`AnnualExogenousEmission`](@ref AnnualExogenousEmission)), and [`vmodelperiodemissions`](@ref vmodelperiodemissions) so it includes any exogenously specified annual and model period emissions ([`AnnualExogenousEmission`](@ref AnnualExogenousEmission) and [`ModelPeriodExogenousEmission`](@ref ModelPeriodExogenousEmission)).
 

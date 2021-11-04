@@ -389,6 +389,14 @@ Sum of [fixed](@ref vannualfixedoperatingcost) and [variable](@ref vannualvariab
 
 * Variable in JuMP model: `voperatingcost[r,t,y]`
 
+### [Operating cost transmission](@id voperatingcosttransmission)
+
+Sum of fixed and variable operation and maintenance costs for a [transmission line](@ref transmissionline). Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `voperatingcosttransmission[tr,y]`
+
 ### [Discounted operating cost](@id vdiscountedoperatingcost)
 
 Discounted [operation and maintenance costs](@ref voperatingcost) for a [technology](@ref technology). NEMO discounts the costs to the first [year](@ref year) in the scenario's database using the associated [region's](@ref region) [discount rate](@ref DiscountRate). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
@@ -396,6 +404,14 @@ Discounted [operation and maintenance costs](@ref voperatingcost) for a [technol
 #### Julia code
 
 * Variable in JuMP model: `vdiscountedoperatingcost[r,t,y]`
+
+### [Discounted operating cost transmission](@id vdiscountedoperatingcosttransmission)
+
+Discounted [operation and maintenance costs](@ref voperatingcosttransmission) for a [transmission line](@ref transmissionline). NEMO discounts the costs to the first [year](@ref year) in the scenario's database using the [discount rate](@ref DiscountRate) for the [region](@ref region) containing the line's first [node](@ref node). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vdiscountedoperatingcosttransmission[tr,y]`
 
 ### [Fixed operating cost](@id vannualfixedoperatingcost)
 
@@ -413,21 +429,21 @@ Variable operation and maintenance costs for a [technology](@ref technology). Un
 
 * Variable in JuMP model: `vannualvariableoperatingcost[r,t,y]`
 
-### [Operating cost transmission](@id voperatingcosttransmission)
+### [Variable operating cost transmission](@id vvariablecosttransmission)
 
-Sum of fixed and variable operation and maintenance costs for a [transmission line](@ref transmissionline). Unit: scenario's cost [unit](@ref uoms).
-
-#### Julia code
-
-* Variable in JuMP model: `voperatingcosttransmission[tr,y]`
-
-### [Discounted operating cost transmission](@id vdiscountedoperatingcosttransmission)
-
-Discounted [operation and maintenance costs](@ref voperatingcosttransmission) for a [transmission line](@ref transmissionline). NEMO discounts the costs to the first [year](@ref year) in the scenario's database using the [discount rate](@ref DiscountRate) for the [region](@ref region) containing the line's first [node](@ref node). This variable includes adjustments to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details. Unit: scenario's cost [unit](@ref uoms).
+Variable operation and maintenance costs for a [transmission line](@ref transmissionline). Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
-* Variable in JuMP model: `vdiscountedoperatingcosttransmission[tr,y]`
+* Variable in JuMP model: `vvariablecosttransmission[tr,y]`
+
+### [Variable operating cost transmission by time slice](@id vvariablecosttransmissionbyts)
+
+Variable operation and maintenance costs for a [transmission line](@ref transmissionline) in a [time slice](@ref timeslice). Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vvariablecosttransmissionbyts[tr,l,f,y]`
 
 ### [Salvage value](@id vsalvagevalue)
 
@@ -820,19 +836,11 @@ Total [technology](@ref technology) capacity (endogenous and exogenous) existing
 
 ### [Annual transmission](@id vtransmissionannual)
 
-Net annual transmission of a [fuel](@ref fuel) from a [node](@ref node). Unit: energy [unit](@ref uoms) for [region](@ref region) containing node.
+Net annual transmission of a [fuel](@ref fuel) from a [node](@ref node). Accounts for efficiency losses in energy received at the node. Unit: energy [unit](@ref uoms) for [region](@ref region) containing node.
 
 #### Julia code
 
 * Variable in JuMP model: `vtransmissionannual[n,f,y]`
-
-### [Annual transmission by line](@id vtransmissionbylineannual)
-
-Net annual transmission of a [fuel](@ref fuel) through a [transmission line](@ref transmissionline) (i.e., from the line's first [node](@ref node) [`n1`] to its second node [`n2`]). Unit: energy [unit](@ref uoms) for [region](@ref region) containing `n1`.
-
-#### Julia code
-
-* Variable in JuMP model: `vtransmissionbylineannual[tr,f,y]`
 
 ### [Transmission built](@id vtransmissionbuilt)
 

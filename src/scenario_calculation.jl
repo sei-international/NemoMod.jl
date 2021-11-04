@@ -95,7 +95,7 @@ end  # calculatescenario()
         restrictvars::Bool = true, reportzeros::Bool = false, continuoustransmission::Bool = false,
         forcemip::Bool = false, quiet::Bool = false,
         writemodel::Bool = false, writefilename::String = "",
-        writefileformat::MathOptInterface.FileFormats.FORMAT_MPS
+        writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS
     )
 
 Implements scenario modeling logic for calculatescenario() and writescenariomodel().
@@ -739,11 +739,22 @@ if transmissionmodeling
         indexdicts = keydicts_parallel(queries["queryvtransmissionbyline"], 3, targetprocs)  # Array of Dicts used to restrict indices of following variable
         @variable(jumpmodel, vtransmissionbyline[tr=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[tr]], f=indexdicts[2][[tr,l]],
             y=indexdicts[3][[tr,l,f]]])
+
+        indexdicts = keydicts_parallel(filter(row -> row.vc > 0 || (row.type == 3 && row.eff < 1), queries["queryvtransmissionbyline"]), 3, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        @variable(jumpmodel, vtransmissionbylineneg[tr=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[tr]], f=indexdicts[2][[tr,l]],
+            y=indexdicts[3][[tr,l,f]]], Bin)
+
+        indexdicts = keydicts_parallel(vcat(select(queries["queryvtransmissionlosses"], :n1=>:n, :tr, :l, :f, :y),
+            select(queries["queryvtransmissionlosses"], :n2=>:n, :tr, :l, :f, :y)), 4, targetprocs)
+        @variable(jumpmodel, vtransmissionlosses[n=[k[1] for k = keys(indexdicts[1])], tr=indexdicts[1][[n]], l=indexdicts[2][[n,tr]],
+            f=indexdicts[3][[n,tr,l]], y=indexdicts[4][[n,tr,l,f]]])
     else
         @variable(jumpmodel, vrateofactivitynodal[snode, stimeslice, stechnology, smode_of_operation, syear] >= 0)
         @variable(jumpmodel, vrateofproductionbytechnologynodal[snode, stimeslice, stechnology, sfuel, syear] >= 0)
         @variable(jumpmodel, vrateofusebytechnologynodal[snode, stimeslice, stechnology, sfuel, syear] >= 0)
         @variable(jumpmodel, vtransmissionbyline[stransmission, stimeslice, sfuel, syear])
+        @variable(jumpmodel, vtransmissionbylineneg[stransmission, stimeslice, sfuel, syear], Bin)
+        @variable(jumpmodel, vtransmissionlosses[snode, stransmission, stimeslice, sfuel, syear])
     end
 
     modelvarindices["vrateofactivitynodal"] = (vrateofactivitynodal, ["n", "l", "t", "m", "y"])
@@ -751,9 +762,11 @@ if transmissionmodeling
     modelvarindices["vrateofusebytechnologynodal"] = (vrateofusebytechnologynodal, ["n", "l", "t", "f", "y"])
     # Note: n1 is from node; n2 is to node
     modelvarindices["vtransmissionbyline"] = (vtransmissionbyline, ["tr", "l", "f", "y"])
+    modelvarindices["vtransmissionbylineneg"] = (vtransmissionbylineneg, ["tr", "l", "f", "y"])  # Internal variable - indicates whether corresponding vtransmissionbyline is <= 0; only used when a) transmission modeling type is 3 and efficiency < 1; or b) transmission variable cost > 0
+    modelvarindices["vtransmissionlosses"] = (vtransmissionlosses, ["n", "tr", "l", "f", "y"])  # Internal variable - only used when transmission modeling type is 3 and efficiency < 1
 
-    @variable(jumpmodel, vtransmissionbylineannual[stransmission, sfuel, syear])
-    modelvarindices["vtransmissionbylineannual"] = (vtransmissionbylineannual, ["tr", "f", "y"])
+    # @variable(jumpmodel, vtransmissionbylineannual[stransmission, sfuel, syear])
+    # modelvarindices["vtransmissionbylineannual"] = (vtransmissionbylineannual, ["tr", "f", "y"])
 
     @variable(jumpmodel, vrateoftotalactivitynodal[snode, stechnology, stimeslice, syear] >= 0)
     modelvarindices["vrateoftotalactivitynodal"] = (vrateoftotalactivitynodal, ["n", "t", "l", "y"])
@@ -860,6 +873,18 @@ if transmissionmodeling
     modelvarindices["vsalvagevaluetransmissionvsalvagevaluetransmission"] = (vsalvagevaluetransmission, ["tr","y"])
     @variable(jumpmodel, vdiscountedsalvagevaluetransmission[stransmission, syear] >= 0)
     modelvarindices["vdiscountedsalvagevaluetransmission"] = (vdiscountedsalvagevaluetransmission, ["tr","y"])
+
+    if restrictvars
+        indexdicts = keydicts_parallel(filter(row -> row.vc > 0, queries["queryvtransmissionbyline"]), 3, targetprocs)  # Array of Dicts used to restrict indices of following variable
+        @variable(jumpmodel, vvariablecosttransmissionbyts[tr=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[tr]], f=indexdicts[2][[tr,l]],
+            y=indexdicts[3][[tr,l,f]]] >= 0)
+    else
+        @variable(jumpmodel, vvariablecosttransmissionbyts[stransmission, stimeslice, sfuel, syear] >= 0)
+    end
+
+    modelvarindices["vvariablecosttransmissionbyts"] = (vvariablecosttransmissionbyts, ["tr", "l", "f", "y"])
+    @variable(jumpmodel, vvariablecosttransmission[stransmission, syear] >= 0)
+    modelvarindices["vvariablecosttransmission"] = (vvariablecosttransmission, ["tr","y"])
     @variable(jumpmodel, voperatingcosttransmission[stransmission, syear] >= 0)
     modelvarindices["voperatingcosttransmission"] = (voperatingcosttransmission, ["tr","y"])
     @variable(jumpmodel, vdiscountedoperatingcosttransmission[stransmission, syear] >= 0)
@@ -2078,12 +2103,15 @@ if transmissionmodeling
 end
 # END: Tr2_TransmissionExists.
 
-# BEGIN: Tr3_Flow, Tr4_MaxFlow, and Tr5_MinFlow.
+# BEGIN: Tr3_Flow, Tr4_MaxFlow, Tr5_MinFlow, Tr6_VariableCost, Tr7_FlowNeg, and Tr8_Losses.
 if transmissionmodeling
     tr3_flow::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     tr3a_flow::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     tr4_maxflow::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     tr5_minflow::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    tr6_variablecost::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    tr7_flowneg::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    tr8_losses::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
     for row in DataFrames.eachrow(queries["queryvtransmissionbyline"])
         local tr = row[:tr]
@@ -2093,8 +2121,15 @@ if transmissionmodeling
         local f = row[:f]
         local y = row[:y]
         local type = row[:type]
+        local vc = ismissing(row[:vc]) ? 0.0 : row[:vc]
 
         # vtransmissionbyline is flow over line tr from n1 to n2; unit is MW
+        if (!ismissing(row[:eff]) && row[:eff] < 1) || vc > 0
+            # Constraints to populate vtransmissionbylineneg - indicates whether corresponding vtransmissionbyline <= 0
+            push!(tr7_flowneg, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] >= (-row[:maxflow] - 0.000001) * vtransmissionbylineneg[tr,l,f,y] + 0.000001))
+            push!(tr7_flowneg, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] <= row[:maxflow] * (1 - vtransmissionbylineneg[tr,l,f,y])))
+        end
+
         if type == 1  # DCOPF
             push!(tr3_flow, @constraint(jumpmodel, 1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]) * vtransmissionexists[tr,y]
                 == vtransmissionbyline[tr,l,f,y]))
@@ -2107,23 +2142,54 @@ if transmissionmodeling
             push!(tr3a_flow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] -
                 (1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]))
                 >= (vtransmissionexists[tr,y] - 1) * 500000))
-            #tr4_maxflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y]^2 <= vtransmissionexists[tr,y] * row[:maxflow]^2)
-            #tr5_minflow[constraintnum] = @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y]^2 >= 0)
+
             push!(tr4_maxflow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] <= vtransmissionexists[tr,y] * row[:maxflow]))
             push!(tr5_minflow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] >= -vtransmissionexists[tr,y] * row[:maxflow]))
         elseif type == 3  # Pipeline flow
             push!(tr4_maxflow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] <= vtransmissionexists[tr,y] * row[:maxflow]))
             push!(tr5_minflow, @constraint(jumpmodel, vtransmissionbyline[tr,l,f,y] >= -vtransmissionexists[tr,y] * row[:maxflow]))
+
+            if !ismissing(row[:eff]) && row[:eff] < 1
+                # Constraints to populate vtransmissionlosses - losses (as a negative number, in model's energy unit) from perspective of node receiving energy (0 for nodes sending energy)
+                push!(tr8_losses, @constraint(jumpmodel, vtransmissionlosses[n1,tr,l,f,y] - vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta] * (1 - row[:eff])
+                    <= (1 - vtransmissionbylineneg[tr,l,f,y]) * 500000))
+                push!(tr8_losses, @constraint(jumpmodel, vtransmissionlosses[n1,tr,l,f,y] - vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta] * (1 - row[:eff])
+                    >= (vtransmissionbylineneg[tr,l,f,y] - 1) * 500000))
+                push!(tr8_losses, @constraint(jumpmodel, vtransmissionlosses[n1,tr,l,f,y] <= vtransmissionbylineneg[tr,l,f,y] * row[:maxflow] * row[:ys] * row[:tcta] * (1 - row[:eff])))
+                push!(tr8_losses, @constraint(jumpmodel, vtransmissionlosses[n1,tr,l,f,y] >= -vtransmissionbylineneg[tr,l,f,y] * row[:maxflow] * row[:ys] * row[:tcta] * (1 - row[:eff])))
+
+                push!(tr8_losses, @constraint(jumpmodel, -vtransmissionlosses[n2,tr,l,f,y] - vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta] * (1 - row[:eff])
+                    <= (1 - (1-vtransmissionbylineneg[tr,l,f,y])) * 500000))
+                push!(tr8_losses, @constraint(jumpmodel, -vtransmissionlosses[n2,tr,l,f,y] - vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta] * (1 - row[:eff])
+                    >= ((1-vtransmissionbylineneg[tr,l,f,y]) - 1) * 500000))
+                push!(tr8_losses, @constraint(jumpmodel, vtransmissionlosses[n2,tr,l,f,y] <= (1-vtransmissionbylineneg[tr,l,f,y]) * row[:maxflow] * row[:ys] * row[:tcta] * (1 - row[:eff])))
+                push!(tr8_losses, @constraint(jumpmodel, vtransmissionlosses[n2,tr,l,f,y] >= -(1-vtransmissionbylineneg[tr,l,f,y]) * row[:maxflow] * row[:ys] * row[:tcta] * (1 - row[:eff])))
+            end
+        end
+
+        if vc > 0
+            # Constraints to populate vvariablecosttransmissionbyts - always >= 0 and accounting for possibility that vtransmissionbyline may be negative
+            push!(tr6_variablecost, @constraint(jumpmodel, vvariablecosttransmissionbyts[tr,l,f,y] + vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta] * vc
+                <= (1 - vtransmissionbylineneg[tr,l,f,y]) * 500000))
+            push!(tr6_variablecost, @constraint(jumpmodel, vvariablecosttransmissionbyts[tr,l,f,y] + vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta] * vc
+                >= (vtransmissionbylineneg[tr,l,f,y] - 1) * 500000))
+            push!(tr6_variablecost, @constraint(jumpmodel, vvariablecosttransmissionbyts[tr,l,f,y] - vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta] * vc
+                >= -2 * vtransmissionbylineneg[tr,l,f,y] * row[:maxflow] * row[:ys] * row[:tcta] * vc))
+            push!(tr6_variablecost, @constraint(jumpmodel, vvariablecosttransmissionbyts[tr,l,f,y] - vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta] * vc
+                <= 2 * vtransmissionbylineneg[tr,l,f,y] * row[:maxflow] * row[:ys] * row[:tcta] * vc))
         end
     end
 
     length(tr3_flow) > 0 && logmsg("Created constraint Tr3_Flow.", quiet)
     length(tr4_maxflow) > 0 && logmsg("Created constraint Tr4_MaxFlow.", quiet)
     length(tr5_minflow) > 0 && logmsg("Created constraint Tr5_MinFlow.", quiet)
+    length(tr6_variablecost) > 0 && logmsg("Created constraint Tr6_VariableCost.", quiet)
+    length(tr7_flowneg) > 0 && logmsg("Created constraint Tr7_FlowNeg.", quiet)
+    length(tr8_losses) > 0 && logmsg("Created constraint Tr8_Losses.", quiet)
 end
-# END: Tr3_Flow, Tr4_MaxFlow, and Tr5_MinFlow.
+# END: Tr3_Flow, Tr4_MaxFlow, Tr5_MinFlow, Tr6_VariableCost, Tr7_FlowNeg, and Tr8_Losses.
 
-# BEGIN: Tr6_TransmissionbyLineAnnual.
+#= BEGIN: Tr6_TransmissionbyLineAnnual.
 if transmissionmodeling
     tr6_transmissionbylineannual::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
     lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = tr, lastkeys[2] = y, lastkeys[3] = f
@@ -2154,7 +2220,7 @@ if transmissionmodeling
 
     length(tr6_transmissionbylineannual) > 0 && logmsg("Created constraint Tr6_TransmissionbyLineAnnual.", quiet)
 end
-# END: Tr6_TransmissionbyLineAnnual.
+# END: Tr6_TransmissionbyLineAnnual. =#
 
 # BEGIN: EBa11Tr_EnergyBalanceEachTS5 and EBb4_EnergyBalanceEachYear.
 if transmissionmodeling
@@ -2164,6 +2230,7 @@ if transmissionmodeling
     lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
     sumexps = Array{AffExpr, 1}([AffExpr(), AffExpr()])  # sumexps[1] = vtransmissionbyline sum for eba11tr_energybalanceeachts5 (aggregated by node),
         # sumexps[2] = vtransmissionbyline sum for ebb4_energybalanceeachyear (aggregated by node and timeslice)
+    # sumexpsq = Array{QuadExpr, 1}([QuadExpr(), QuadExpr()])  # Quadratic version of sumexps; used if transmission modeling type = 3 and efficiency < 1
 
     # First query selects transmission-enabled nodes without any transmission lines, second selects transmission-enabled
     #   nodes that are n1 in a valid transmission line, third selects transmission-enabled nodes that are n2 in a
@@ -2188,7 +2255,8 @@ if transmissionmodeling
 	and n2.r = tme2.r and tl.f = tme2.f and y.val = tme2.y and tme.type = tme2.type)
 union all
 select n.val as n, ys.l as l, f.val as f, y.val as y,
-    cast(ys.val as real) as ys, tl.id as tr, tl.n2 as n2, null as trneg, null as n1, null as eff, tme.type as type,
+    cast(ys.val as real) as ys, tl.id as tr, tl.n2 as n2, null as trneg, null as n1,
+    cast(tl.efficiency as real) as eff, tme.type as type,
 	cast(tcta.val as real) as tcta
     from NODE n, YearSplit_def ys, FUEL f, YEAR y, TransmissionModelingEnabled tme,
 	TransmissionLine tl, NODE n2, TransmissionModelingEnabled tme2, TransmissionCapacityToActivityUnit_def tcta
@@ -2226,30 +2294,41 @@ order by n, f, y, l")
             # May want to change this to an equality constraint
             push!(eba11tr_energybalanceeachts5, @constraint(jumpmodel, vproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
                 vdemandnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]))
+                #+ (length(quad_terms(sumexpsq[1])) > 0 ? sumexpsq[1] : 0)))
             sumexps[1] = AffExpr()
+            #sumexpsq[1] = QuadExpr()
         end
 
         if isassigned(lastkeys, 1) && (n != lastkeys[1] || f != lastkeys[3] || y != lastkeys[4])
             # Create constraint
             # vtransmissionannual is net annual transmission from n in energy terms
             push!(ebb4_energybalanceeachyear, @constraint(jumpmodel, vtransmissionannual[lastkeys[1],lastkeys[3],lastkeys[4]] == sumexps[2]))
+                #+ (length(quad_terms(sumexpsq[2])) > 0 ? sumexpsq[2] : 0)))
             sumexps[2] = AffExpr()
+            #sumexpsq[2] = QuadExpr()
         end
 
         if !ismissing(tr)
-            if trtype == 1 || trtype == 2 || trtype == 3
+            if trtype == 1 || trtype == 2 || (trtype == 3 && eff >= 1)
                 add_to_expression!(sumexps[1], vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta])
                 add_to_expression!(sumexps[2], vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta])
+            elseif trtype == 3 && eff < 1  # Incorporate efficiency in pipeline flow; vtransmissionlosses are losses (as a negative number, in model's energy unit) from perspective of node receiving energy (0 for nodes sending energy)
+                add_to_expression!(sumexps[1], vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta] - vtransmissionlosses[n,tr,l,f,y])
+                add_to_expression!(sumexps[2], vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta] - vtransmissionlosses[n,tr,l,f,y])
+                #sumexpsq[1] = @expression(jumpmodel, sumexpsq[1] + vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta] * (vtransmissionbylineneg[tr,l,f,y] * (eff-1) + 1))
+                #sumexpsq[2] = @expression(jumpmodel, sumexpsq[2] + vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta] * (vtransmissionbylineneg[tr,l,f,y] * (eff-1) + 1))
             end
         end
 
         if !ismissing(trneg)
-            if trtype == 1 || trtype == 2
+            if trtype == 1 || trtype == 2 || (trtype == 3 && eff >= 1)
                 add_to_expression!(sumexps[1], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta])
                 add_to_expression!(sumexps[2], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta])
-            elseif trtype == 3  # Incorporate efficiency for to node in pipeline flow
-                add_to_expression!(sumexps[1], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta] * eff)
-                add_to_expression!(sumexps[2], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta] * eff)
+            elseif trtype == 3 && eff < 1  # Incorporate efficiency for to node in pipeline flow; vtransmissionlosses are losses (as a negative number, in model's energy unit) from perspective of node receiving energy (0 for nodes sending energy)
+                add_to_expression!(sumexps[1], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta] - vtransmissionlosses[n,trneg,l,f,y])
+                add_to_expression!(sumexps[2], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta] - vtransmissionlosses[n,trneg,l,f,y])
+                #sumexpsq[1] = @expression(jumpmodel, sumexpsq[1] + -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta] * (eff + vtransmissionbylineneg[trneg,l,f,y] * (1-eff)))
+                #sumexpsq[2] = @expression(jumpmodel, sumexpsq[2] + -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta] * (eff + vtransmissionbylineneg[trneg,l,f,y] * (1-eff)))
             end
         end
 
@@ -2263,7 +2342,9 @@ order by n, f, y, l")
     if isassigned(lastkeys, 1)
         push!(eba11tr_energybalanceeachts5, @constraint(jumpmodel, vproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
             vdemandnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]))
+            #+ (length(quad_terms(sumexpsq[1])) > 0 ? sumexpsq[1] : 0)))
         push!(ebb4_energybalanceeachyear, @constraint(jumpmodel, vtransmissionannual[lastkeys[1],lastkeys[3],lastkeys[4]] == sumexps[2]))
+            #+ (length(quad_terms(sumexpsq[2])) > 0 ? sumexpsq[2] : 0)))
     end
 
     length(eba11tr_energybalanceeachts5) > 0 && logmsg("Created constraint EBa11Tr_EnergyBalanceEachTS5.", quiet)
@@ -2941,7 +3022,7 @@ if transmissionmodeling
             addns3 = true
             addns4 = true
         elseif tg1o == 1 && tg2o == 1 && lo == 1
-            # No carryover of energy for non-continguous years
+            # No carryover of energy for non-contiguous years
             startlevel = (!restrictyears || Meta.parse(y)-1 in calcyears ? vstoragelevelyearendnodal[n, s, string(Meta.parse(y)-1)] : 0)
 
             # New endogenous and exogenous storage capacity is assumed to be delivered with minimum charge
@@ -4284,11 +4365,42 @@ end
 length(oc3_operatingcoststotalannual) > 0 && logmsg("Created constraint OC3_OperatingCostsTotalAnnual.", quiet)
 # END: OC3_OperatingCostsTotalAnnual.
 
+# BEGIN: OCTr_VariableCosts.
+if transmissionmodeling
+    octr_variablecosts::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
+    lastkeys = Array{String, 1}(undef,2)  # lastkeys[1] = tr, lastkeys[2] = y
+    sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vvariablecosttransmissionbyts sum
+
+    for row in DataFrames.eachrow(filter(row -> row.vc > 0, queries["queryvtransmissionbyline"]))
+        local tr = row[:tr]
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (tr != lastkeys[1] || y != lastkeys[2])
+            # Create constraint
+            push!(octr_variablecosts, @constraint(jumpmodel, vvariablecosttransmission[lastkeys[1],lastkeys[2]] == sumexps[1]))
+            sumexps[1] = AffExpr()
+        end
+
+        add_to_expression!(sumexps[1], vvariablecosttransmissionbyts[tr,row[:l],row[:f],y])
+
+        lastkeys[1] = tr
+        lastkeys[2] = y
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        push!(octr_variablecosts, @constraint(jumpmodel, vvariablecosttransmission[lastkeys[1],lastkeys[2]] == sumexps[1]))
+    end
+
+    length(octr_variablecosts) > 0 && logmsg("Created constraint OCTr_VariableCosts.", quiet)
+end
+# END: OCTr_VariableCosts.
+
 # BEGIN: OCTr_OperatingCosts.
 if transmissionmodeling
     octr_operatingcosts::Array{ConstraintRef, 1} = Array{ConstraintRef, 1}()
 
-    for row in SQLite.DBInterface.execute(db, "select tl.id as tr, tl.f as f, tme1.y as y,
+    for row in SQLite.DBInterface.execute(db, "select tl.id as tr, tme1.y as y,
         cast(tl.VariableCost as real) as vc, cast(tl.fixedcost as real) as fc
         from TransmissionLine tl, NODE n1, NODE n2, TransmissionModelingEnabled tme1,
         TransmissionModelingEnabled tme2, TransmissionCapacityToActivityUnit_def tcta
@@ -4305,8 +4417,8 @@ if transmissionmodeling
         local vc = ismissing(row[:vc]) ? 0.0 : row[:vc]
         local fc = ismissing(row[:fc]) ? 0.0 : row[:fc]
 
-        # Note: if a transmission line crosses regional boundaries, variable costs are based on energy leaving from region (associated with n1)
-        push!(octr_operatingcosts, @constraint(jumpmodel, vtransmissionbylineannual[tr,row[:f],y] * vc
+        # Note: if a transmission line has efficiency < 1, variable costs are based on energy entering line
+        push!(octr_operatingcosts, @constraint(jumpmodel, (vc > 0 ? vvariablecosttransmission[tr,y] : 0)
             + vtransmissionexists[tr,y] * fc == voperatingcosttransmission[tr,y]))
     end
 
@@ -4482,17 +4594,19 @@ if transmissionmodeling
         end
 
         # Add estimated variable costs in non-modeled years to discounted operating costs; variable costs for y itself are already included in voperatingcosttransmission. Assume linear scaling of activity over modeled intervals (for years before first modeled year, assume constant activity).
-        local pactivity  # Activity for tr & f at start of y's interval
+        if vc > 0
+            local pactivity  # Activity for tr & f at start of y's interval
 
-        if ismissing(prev_y)
-            pactivity = vtransmissionbylineannual[tr,f,y]
-        else
-            pactivity = vtransmissionbylineannual[tr,f,prev_y]
-        end
+            if ismissing(prev_y)
+                pactivity = vvariablecosttransmission[tr,y] / vc
+            else
+                pactivity = vvariablecosttransmission[tr,prev_y] / vc
+            end
 
-        for i = 1:nyears
-            add_to_expression!(sumexps[2], (pactivity + (vtransmissionbylineannual[tr,f,y] - pactivity) / (nyears + 1) * (nyears + 1 - i))
-                * vc / ((1 + dr)^(yint - i - firstscenarioyear + 0.5)))
+            for i = 1:nyears
+                add_to_expression!(sumexps[2], (pactivity + (vvariablecosttransmission[tr,y] / vc - pactivity) / (nyears + 1) * (nyears + 1 - i))
+                    * vc / ((1 + dr)^(yint - i - firstscenarioyear + 0.5)))
+            end
         end
 
         push!(oc4tr_discountedoperatingcoststotalannual, @constraint(jumpmodel, sumexps[1] + sumexps[2]
