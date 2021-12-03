@@ -274,4 +274,6 @@ if @isdefined Cbc
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
     end  # "Solving ramp_test with Cbc"
+
+    GC.gc()
 end  # @isdefined Cbc

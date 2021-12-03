@@ -275,4 +275,6 @@ if @isdefined Gurobi
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
     end  # "Solving ramp_test with Gurobi"
+
+    GC.gc()
 end  # @isdefined Gurobi

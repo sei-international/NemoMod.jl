@@ -275,4 +275,6 @@ if @isdefined CPLEX
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
     end  # "Solving ramp_test with CPLEX"
+
+    GC.gc()
 end  # @isdefined CPLEX

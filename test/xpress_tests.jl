@@ -275,4 +275,6 @@ if @isdefined Xpress
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
     end  # "Solving ramp_test with Xpress"
+
+    GC.gc()
 end  # @isdefined Xpress

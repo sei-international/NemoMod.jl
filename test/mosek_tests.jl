@@ -274,4 +274,6 @@ if @isdefined MosekTools
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
     end  # "Solving ramp_test with Mosek"
+
+    GC.gc()
 end  # @isdefined MosekTools

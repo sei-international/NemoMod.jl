@@ -233,4 +233,6 @@ if @isdefined GLPK
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
     end  # "Solving storage_transmission_test with GLPK"
+
+    GC.gc()
 end  # @isdefined GLPK
