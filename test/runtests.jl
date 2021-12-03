@@ -13,7 +13,7 @@ if !@isdefined NemoMod
     using NemoMod
 end
 
-using Test, SQLite, DataFrames, JuMP, Distributed
+using Test, SQLite, DataFrames, JuMP
 
 const TOL = 0.01  # Default tolerance for isapprox() comparisons
 

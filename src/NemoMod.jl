@@ -15,12 +15,11 @@ export calculatescenario, createnemodb, dropdefaultviews, dropresulttables, logm
     • csquiet - quiet argument in most recent invocation of calculatescenario() or modelscenario()
     • csrestrictyears - indicates whether most recent invocation of calculatescenario() or modelscenario() is for a selected set of years
     • csinyears - SQL in clause predicate indicating which years are selected in most recent invocation of calculatescenario() or modelscenario()
-    • csmultithreaded - multithreaded argument in most recent invocation of calculatescenario() or modelscenario()
     • csjumpmodel - jumpmodel argument in most recent invocation of calculatescenario() or modelscenario() (only set if a customconstraints include is performed)
 =#
 
 # BEGIN: Access other modules and code files.
-using JuMP, SQLite, DataFrames, Distributed, Dates, ConfParser, MathOptInterface
+using JuMP, SQLite, DataFrames, Dates, ConfParser, MathOptInterface
 using GLPK, Cbc  # Open-source solvers
 
 # Proprietary solvers - enclosed in try blocks for users who aren't using NEMO installer
