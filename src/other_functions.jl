@@ -63,9 +63,7 @@ end  # getconfig(quiet::Bool = false)
     getconfigargs!(configfile::ConfParse,
         calcyears::Array{Int,1},
         varstosavearr::Array{String,1},
-        targetprocs::Array{Int,1},
         bools::Array{Bool,1},
-        ints::Array{Int,1},
         quiet::Bool)
 
 Loads run-time arguments for `calculatescenario()` from a configuration file.
@@ -77,21 +75,16 @@ Loads run-time arguments for `calculatescenario()` from a configuration file.
     replace what is in this array.
 - `varstosavearr::Array{String,1}`: Array representation of `calculatescenario()` `varstosave` argument.
     Values specified in the configuration file for `[calculatescenarioargs]/varstosave` are added to this array.
-- `targetprocs::Array{Int,1}`: `calculatescenario()` `targetprocs` argument. Values specified in the
-    configuration file for `[calculatescenarioargs]/targetprocs` are added to this array.
 - `bools::Array{Bool,1}`: Array of Boolean arguments for `calculatescenario()`: `restrictvars`, `reportzeros`,
     `continuoustransmission`, `forcemip`, and `quiet`, in that order. Values specified in the configuration file
     for `[calculatescenarioargs]/restrictvars`, `[calculatescenarioargs]/reportzeros`,
     `[calculatescenarioargs]/continuoustransmission`, `[calculatescenarioargs]/forcemip`, and `[calculatescenarioargs]/quiet`
     overwrite what is in this array (provided the values can be parsed as `Bool`).
-- `ints::Array{Int,1}`: Array of `Int` arguments for `calculatescenario()`: `numprocs`. Values specified in the
-    configuration file for `[calculatescenarioargs]/numprocs` overwrite what is in this array (provided
-    the values can be parsed as `Int`).
 - `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to `STDOUT`).
     This argument is not changed by the function.
 """
 function getconfigargs!(configfile::ConfParse, calcyears::Array{Int,1}, varstosavearr::Array{String,1},
-    targetprocs::Array{Int,1}, bools::Array{Bool,1}, ints::Array{Int,1}, quiet::Bool)
+    bools::Array{Bool,1}, quiet::Bool)
 
     if haskey(configfile, "calculatescenarioargs", "calcyears")
         try
@@ -128,32 +121,6 @@ function getconfigargs!(configfile::ConfParse, calcyears::Array{Int,1}, varstosa
             logmsg("Read varstosave argument from configuration file.", quiet)
         catch e
             logmsg("Could not read varstosave argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
-        end
-    end
-
-    if haskey(configfile, "calculatescenarioargs", "numprocs")
-        try
-            ints[1] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "numprocs")))
-            logmsg("Read numprocs argument from configuration file.", quiet)
-        catch e
-            logmsg("Could not read numprocs argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
-        end
-    end
-
-    if haskey(configfile, "calculatescenarioargs", "targetprocs")
-        try
-            targetprocsconfig = retrieve(configfile, "calculatescenarioargs", "targetprocs")
-
-            if typeof(targetprocsconfig) == String
-                union!(targetprocs, [Meta.parse(targetprocsconfig)])
-            else
-                # targetprocsconfig should be an array of strings
-                union!(targetprocs, [Meta.parse(v) for v in targetprocsconfig])
-            end
-
-            logmsg("Read targetprocs argument from configuration file.", quiet)
-        catch e
-            logmsg("Could not read targetprocs argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
         end
     end
 
@@ -201,7 +168,7 @@ function getconfigargs!(configfile::ConfParse, calcyears::Array{Int,1}, varstosa
             logmsg("Could not read quiet argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
         end
     end
-end  # getconfigargs!(configfile::ConfParse, varstosavearr::Array{String,1}, targetprocs::Array{Int,1}, bools::Array{Bool,1}, quiet::Bool)
+end  # getconfigargs!(configfile::ConfParse, calcyears::Array{Int,1}, varstosavearr::Array{String,1}, bools::Array{Bool,1}, quiet::Bool)
 
 """
     setsolverparamsfromcfg(configfile::ConfParse, jumpmodel::JuMP.Model, quiet::Bool)
@@ -348,6 +315,7 @@ function keydicts(df::DataFrames.DataFrame, numdicts::Int)
     return returnval
 end  # keydicts(df::DataFrames.DataFrame, numdicts::Int)
 
+#=
 """
     keydicts_parallel(df::DataFrames.DataFrame, numdicts::Int,
     targetprocs::Array{Int,1})
@@ -393,47 +361,91 @@ function keydicts_parallel(df::DataFrames.DataFrame, numdicts::Int, targetprocs:
 
     return returnval
 end  # keydicts_parallel(df::DataFrames.DataFrame, numdicts::Int, targetprocs::Array{Int,1})
-
-#= Testing code:
-using JuMP, SQLite, IterTools, NullableArrays, DataFrames
-dbpath = "C:\\temp\\utopia_2015_08_27.sl3"
-db = SQLite.DB(dbpath)
-stechnology = dropnull(SQLite.query(db, "select val from technology limit 10")[:val])
-@constraintref(abc[1:10])
-m = Model()
-@variable(m, vtest[stechnology])
-createconstraint(m, "TestConstraint", abc, DataFrames.eachrow(SQLite.query(db, "select t.val as t from technology t limit 10")), ["t"], "vtest[t]", ">=", "0")
 =#
 
-# Demonstration function - performance is too poor for production use
-#=
-function createconstraint(model::JuMP.Model, logname::String, constraintref::Array{JuMP.ConstraintRef,1}, rows::DataFrames.DFRowIterator,
-    keyfields::Array{String,1}, lh::String, operator::String, rh::String)
+"""
+    keydicts_threaded(df::DataFrames.DataFrame, numdicts::Int)
 
-    local constraintnum = 1  # Number of next constraint to be added to constraint array
-    global row = Void  # Row in subsequent iteration; needs to be defined as global to be accessible in eval statements
+Runs `keydicts` on multiple threads. Uses one thread per 10,000 rows in `df`,
+subject to an overall limit of `Threads.nthreads()`.
+"""
+function keydicts_threaded(df::DataFrames.DataFrame, numdicts::Int)
+    local returnval = Array{Dict{Array{String,1},Set{String}},1}()  # Function return value
+    local dfrows::Int = size(df)[1]  # Number of rows in df
+    local nt::Int = min(Threads.nthreads(), div(dfrows-1, 10000) + 1)  # Number of threads on which keydicts will be run
 
-    for rw in rows
-        row = rw
+    if nt == 1
+        # Run keydicts for entire df
+        returnval = keydicts(df, numdicts)
+    else
+        # Divide operation among multiple threads
+        local blockdivrem = divrem(dfrows, nt)  # Quotient and remainder from dividing dfrows by nt; element 1 = quotient, element 2 = remainder
+        local results = Array{typeof(returnval), 1}(undef, nt)  # Collection of results from threaded processing
 
-        for kf in keyfields
-            eval(parse(kf * " = row[:" * kf * "]"))
+        # Threads.@threads waits for all tasks to finish before proceeding
+        Threads.@threads for p=1:nt
+            results[p] = keydicts(df[((p-1) * blockdivrem[1] + 1):((p) * blockdivrem[1] + (p == nt ? blockdivrem[2] : 0)),:], numdicts)
         end
 
-        if operator == "=="
-            constraintref[constraintnum] = @constraint(model, eval(parse(lh)) == eval(parse(rh)))
-        elseif operator == "<="
-            constraintref[constraintnum] = @constraint(model, eval(parse(lh)) <= eval(parse(rh)))
-        elseif operator == ">="
-            constraintref[constraintnum] = @constraint(model, eval(parse(lh)) >= eval(parse(rh)))
-        end
+        # Merge results from threaded tasks
+        for i = 1:numdicts
+            push!(returnval, Dict{Array{String,1},Set{String}}())
 
-        constraintnum += 1
+            for j = 1:nt
+                returnval[i] = merge(union, returnval[i], results[j][i])
+            end
+        end
     end
 
-    logmsg("Created constraint " * logname * ".")
-end  # createconstraint
-=#
+    return returnval
+end  # keydicts_threaded(df::DataFrames.DataFrame, numdicts::Int)
+
+#=
+"""
+    threadexecute(expr)
+
+If `NemoMod.csmultithreaded` is true, passes `expr` to `Threads.@spawn`.
+Otherwise returns `expr`.
+"""
+macro threadexecute(expr)
+    return quote
+        if NemoMod.csmultithreaded
+            Threads.@spawn $(esc(expr))
+        else
+            $(esc(expr))
+        end
+    end
+end  # threadexecute(expr) =#
+
+#=
+"""
+    lockexecute(lck, expr)
+
+If `NemoMod.csmultithreaded` is true, returns `expr` wrapped in a `do` block
+that locks and unlocks `lck`. Otherwise returns `expr`.
+"""
+macro lockexecute(lck, expr)
+    return quote
+        if NemoMod.csmultithreaded
+            lock($(esc(lck))) do
+                $(esc(expr))
+            end
+        else
+            $(esc(expr))
+        end
+    end
+end  # lockexecute(lck, expr) =#
+
+"""
+    createconstraints(jumpmodel::JuMP.Model, cons::Array{AbstractConstraint, 1})
+
+Adds the constraints in `cons` to `jumpmodel` using `JuMP.add_constraint()`.
+"""
+function createconstraints(jumpmodel::JuMP.Model, cons::Array{AbstractConstraint, 1})
+    for c in cons
+        add_constraint(jumpmodel, c)
+    end
+end  # createconstraints(jumpmodel::JuMP.Model, cons::Array{AbstractConstraint, 1})
 
 """
     savevarresults(vars::Array{String,1},
@@ -577,6 +589,17 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     return_val::Dict{String, Tuple{String, String}} = Dict{String, Tuple{String, String}}()  # Return value for this function; map of query names
     #   to tuples of (DB path, SQL command)
 
+    return_val["queryvrateofdemandnn"] = (dbpath, "select sdp.r as r, sdp.f as f, sdp.l as l, sdp.y as y,
+    cast(sdp.val as real) as specifieddemandprofile, cast(sad.val as real) as specifiedannualdemand,
+    cast(ys.val as real) as ys
+    from SpecifiedDemandProfile_def sdp, SpecifiedAnnualDemand_def sad, YearSplit_def ys
+    left join TransmissionModelingEnabled tme on tme.r = sad.r and tme.f = sad.f and tme.y = sad.y
+    where sad.r = sdp.r and sad.f = sdp.f and sad.y = sdp.y
+    and ys.l = sdp.l and ys.y = sdp.y
+    and sdp.val <> 0 and sad.val <> 0 and ys.val <> 0
+    $(restrictyears ? "and sdp.y in" * inyears : "")
+    and tme.id is null")
+
     return_val["queryvrateofactivityvar"] = (dbpath, "with ar as (select r, t, m, y from OutputActivityRatio_def
     where val <> 0 $(restrictyears ? "and y in" * inyears : "")
     union
@@ -695,6 +718,24 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     return_val["querycaa5_totalnewcapacity"] = (dbpath, "select cot.r as r, cot.t as t, cot.y as y, cast(cot.val as real) as cot
     from CapacityOfOneTechnologyUnit_def cot where cot.val <> 0 $(restrictyears ? "and cot.y in" * inyears : "")")
 
+    return_val["queryrtydr"] = (dbpath, "select r.val as r, t.val as t, y.val as y, cast(dr.val as real) as dr
+    from region r, technology t, year y, DiscountRate_def dr
+    where dr.r = r.val $(restrictyears ? "and y.val in" * inyears : "")")
+
+    return_val["queryvannualtechnologyemissionbymode"] = (dbpath, "select r, t, e, y, m, cast(val as real) as ear
+    from EmissionActivityRatio_def ear $(restrictyears ? "where y in" * inyears : "")
+    order by r, t, e, y")
+
+    return_val["queryvannualtechnologyemissionpenaltybyemission"] = (dbpath, "select r.val as r, t.val as t, y.val as y, e.val as e, cast(ep.val as real) as ep
+    from REGION r, TECHNOLOGY t, EMISSION e, YEAR y
+    left join EmissionsPenalty_def ep on ep.r = r.val and ep.e = e.val and ep.y = y.val and ep.val <> 0
+    $(restrictyears ? "where y.val in" * inyears : "")
+    order by r.val, t.val, y.val")
+
+    return_val["queryvmodelperiodemissions"] = (dbpath, "select r.val as r, e.val as e, cast(mpl.val as real) as mpl
+    from region r, emission e, ModelPeriodEmissionLimit_def mpl
+    where mpl.r = r.val and mpl.e = e.val")
+
     if transmissionmodeling
         return_val["queryvrateofactivitynodal"] = (dbpath, "select ntc.n as n, l.val as l, ntc.t as t, ar.m as m, ntc.y as y
         from NodalDistributionTechnologyCapacity_def ntc, node n,
@@ -750,6 +791,20 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
             and ntc.n = n.val
             and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
             and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y")
+
+            return_val["queryvproductionbytechnologynodal"] = (dbpath, "select n.r as r, ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y,
+                cast(ys.val as real) as ys
+            from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
+            TransmissionModelingEnabled tme,
+            (select distinct r, t, f, y
+            from OutputActivityRatio_def
+            where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar
+            where ntc.val > 0
+            and ntc.y = ys.y
+            and ntc.n = n.val
+            and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
+            and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
+            order by n.r, ys.l, ntc.t, oar.f, ntc.y")
         end
 
         if vusebytechnologysaved
@@ -764,6 +819,20 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
             and ntc.n = n.val
             and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
             and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y")
+
+            return_val["queryvusebytechnologynodal"] = (dbpath, "select n.r as r, ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y,
+                cast(ys.val as real) as ys
+            from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
+            TransmissionModelingEnabled tme,
+            (select distinct r, t, f, y
+            from InputActivityRatio_def
+            where val <> 0 $(restrictyears ? "and y in" * inyears : "")) iar
+            where ntc.val > 0
+            and ntc.y = ys.y
+            and ntc.n = n.val
+            and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
+            and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
+            order by n.r, ys.l, ntc.t, iar.f, ntc.y")
         end
 
         return_val["queryvtransmissionbyline"] = (dbpath, "select tl.id as tr, ys.l as l, tl.f as f, tme1.y as y, tl.n1 as n1, tl.n2 as n2,
@@ -800,17 +869,61 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
 
         return_val["queryvstoragelevelts"] = (dbpath, "select ns.n as n, ns.s as s, l.val as l, ns.y as y
         from nodalstorage ns, TIMESLICE l $(restrictyears ? "where ns.y in" * inyears : "")")
+
+        return_val["queryvrateofproduse"] = (dbpath, "select r.val as r, l.val as l, f.val as f, y.val as y, tme.id as tme, n.val as n
+        from region r, timeslice l, fuel f, year y, YearSplit_def ys
+        left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
+        left join NODE n on n.r = r.val
+        where
+        ys.l = l.val and ys.y = y.val
+        $(restrictyears ? "and y.val in" * inyears : "")
+        order by r.val, l.val, f.val, y.val")
+
+        return_val["querytrydr"] = (dbpath, "select tl.id as tr, y.val as y, cast(dr.val as real) as dr
+    	from TransmissionLine tl, NODE n, YEAR y, DiscountRate_def dr
+        where tl.n1 = n.val
+        and dr.r = n.r
+    	$(restrictyears ? "and y.val in" * inyears : "")")
     end  # transmissionmodeling
 
     return return_val
 end  # scenario_calc_queries()
 
 """
+    run_queries(querycommands::Dict{String, Tuple{String, String}})
+
+Runs the SQLite database queries specified in `querycommands` and returns a `Dict` that
+    maps each query's name to a `DataFrame` of the query's results. Designed to work with
+    the output of `scenario_calc_queries`. Uses multiple threads if they are available.
+"""
+function run_queries(querycommands::Dict{String, Tuple{String, String}})
+    return_val = Dict{String, DataFrame}()
+    lck = Base.ReentrantLock()
+
+    Threads.@threads for q in collect(keys(querycommands))
+        local df::DataFrame = run_qry(querycommands[q])
+
+        lock(lck) do
+            return_val[q] = df
+        end
+    end
+
+    # Code for running queries without multi-threading; no longer used
+    # return_val = Dict{String, DataFrame}(keys(querycommands) .=> map(run_qry, values(querycommands)))
+
+    # Code for running queries in distributed processes; no longer used
+    # Omitting process 1 from WorkerPool improves performance
+    # queries = Dict{String, DataFrame}(keys(querycommands) .=> pmap(run_qry, WorkerPool(setdiff(targetprocs, [1])), values(querycommands)))
+
+    return return_val
+end  # run_queries(querycommands::Dict{String, Tuple{String, String}})
+
+"""
     run_qry(qtpl::Tuple{String, String})
 
 Runs the SQLite database query specified in `qtpl` and returns the result as a DataFrame.
     Element 1 in `qtpl` should be the path to the SQLite database, and element 2 should be the query's
-    SQL command. Designed to work with the output of `scenario_calc_queries` in a `map` or `pmap` call."""
+    SQL command. Designed to work with the output of `scenario_calc_queries`."""
 function run_qry(qtpl::Tuple{String, String})
     return SQLite.DBInterface.execute(SQLite.DB(qtpl[1]), qtpl[2]) |> DataFrame
 end  # run_qry(qtpl::Tuple{String, String, String})
@@ -821,7 +934,6 @@ end  # run_qry(qtpl::Tuple{String, String, String})
         varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual,
             vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
             vusenn, vtotaldiscountedcost",
-        numprocs::Int = 0, targetprocs::Array{Int, 1} = Array{Int, 1}(),
         restrictvars::Bool = true, continuoustransmission::Bool = false,
         forcemip::Bool = false, quiet::Bool = false,
         writefilename::String = "nemomodel.bz2",
@@ -829,7 +941,7 @@ end  # run_qry(qtpl::Tuple{String, String, String})
     )
 
 Writes a file representing the optimization problem for a NEMO scenario. Returns the name of the file.
-All arguments except `writefilename` and `writefileformat` function as in
+All arguments except `writefilename` and `writefileformat` function are as in
 [`calculatescenario`](@ref). `writefilename` and `writefileformat` are described below.
 
 # Arguments
@@ -846,8 +958,6 @@ function writescenariomodel(
     dbpath::String;
     calcyears::Array{Int, 1} = Array{Int, 1}(),
     varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
-    numprocs::Int = 0,
-    targetprocs::Array{Int, 1} = Array{Int, 1}(),
     restrictvars::Bool = true,
     continuoustransmission::Bool = false,
     forcemip = false,
@@ -857,7 +967,7 @@ function writescenariomodel(
     )
 
     try
-        modelscenario(dbpath; calcyears=calcyears, varstosave=varstosave, numprocs=numprocs, targetprocs=targetprocs, restrictvars=restrictvars,
+        modelscenario(dbpath; calcyears=calcyears, varstosave=varstosave, restrictvars=restrictvars,
             continuoustransmission=continuoustransmission, forcemip=forcemip, quiet=quiet, writemodel=true,
             writefilename=writefilename, writefileformat=writefileformat)
     catch e

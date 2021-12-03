@@ -11,9 +11,12 @@ module NemoMod
 export calculatescenario, createnemodb, dropdefaultviews, dropresulttables, logmsg, setparamdefault
 
 #= List of module global variables.
-    • csdbpath - dbpath argument in last invocation of calculatescenario()
-    • csquiet - quiet argument in last invocation of calculatescenario()
-    • csjumpmodel - jumpmodel argument in last invocation of calculatescenario() (only set if a customconstraints include is performed)
+    • csdbpath - dbpath argument in most recent invocation of calculatescenario() or modelscenario()
+    • csquiet - quiet argument in most recent invocation of calculatescenario() or modelscenario()
+    • csrestrictyears - indicates whether most recent invocation of calculatescenario() or modelscenario() is for a selected set of years
+    • csinyears - SQL in clause predicate indicating which years are selected in most recent invocation of calculatescenario() or modelscenario()
+    • csmultithreaded - multithreaded argument in most recent invocation of calculatescenario() or modelscenario()
+    • csjumpmodel - jumpmodel argument in most recent invocation of calculatescenario() or modelscenario() (only set if a customconstraints include is performed)
 =#
 
 # BEGIN: Access other modules and code files.

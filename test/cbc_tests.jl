@@ -21,11 +21,11 @@ if @isdefined Cbc
 
     @testset "Solving storage_test with Cbc" begin
         dbfile = joinpath(@__DIR__, "storage_test.sqlite")
-        #dbfile = "c:/temp/storage_test.sqlite"
+        # dbfile = "c:/temp/storage_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
-        NemoMod.calculatescenario(dbfile; numprocs=1, restrictvars=false, quiet = false)  # Cbc is NEMO's default solver
+        NemoMod.calculatescenario(dbfile; restrictvars=false, quiet = false)  # Cbc is NEMO's default solver
 
         db = SQLite.DB(dbfile)
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -58,7 +58,7 @@ if @isdefined Cbc
                 "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vrateofdemand, vproductionbytechnology, vtotaltechnologyannualactivity, "
                 * "vtotaltechnologymodelperiodactivity, vusebytechnology, vmodelperiodcostbyregion, vannualtechnologyemissionpenaltybyemission, "
                 * "vtotaldiscountedcost",
-            numprocs=1, restrictvars=false, quiet = false)
+            restrictvars=false, quiet = false)
 
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
@@ -88,7 +88,7 @@ if @isdefined Cbc
         NemoMod.calculatescenario(dbfile; jumpmodel = Model(optimizer_with_attributes(Cbc.Optimizer, "presolve" => "on", "logLevel" => 1)),
             varstosave = "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vproductionbytechnology, vusebytechnology, "
                 * "vtotaldiscountedcost",
-            targetprocs=[1], restrictvars = true, quiet = false)
+            restrictvars = true, quiet = false)
 
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
@@ -116,7 +116,7 @@ if @isdefined Cbc
 
         # Test with storage net zero constraints
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(optimizer_with_attributes(Cbc.Optimizer, "presolve" => "on", "logLevel" => 1)), restrictvars=false, numprocs=1)
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(optimizer_with_attributes(Cbc.Optimizer, "presolve" => "on", "logLevel" => 1)), restrictvars=false)
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
@@ -145,7 +145,7 @@ if @isdefined Cbc
 
         # Test with calcyears
         NemoMod.calculatescenario(dbfile; jumpmodel = Model(optimizer_with_attributes(Cbc.Optimizer, "presolve" => "on", "logLevel" => 1)), restrictvars=true,
-            numprocs=1, calcyears=[2020,2029])
+            calcyears=[2020,2029])
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
@@ -156,7 +156,7 @@ if @isdefined Cbc
 
         # Test MinimumUtilization
         SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.5 from TIMESLICE")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Cbc.Optimizer), numprocs=1, varstosave="vproductionbytechnologyannual")
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Cbc.Optimizer), varstosave="vproductionbytechnologyannual")
         testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
 
         @test isapprox(testqry[1,:val], 15.768; atol=TOL)
@@ -177,7 +177,7 @@ if @isdefined Cbc
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
                 * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
-            numprocs=1, restrictvars=false, quiet = false)
+            restrictvars=false, quiet = false)
 
         db = SQLite.DB(dbfile)
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -206,7 +206,7 @@ if @isdefined Cbc
 
         # Test MinimumUtilization
         SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.2 from TIMESLICE")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Cbc.Optimizer), numprocs=1, varstosave="vproductionbytechnologyannual", calcyears=[2020,2025,2029])
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Cbc.Optimizer), varstosave="vproductionbytechnologyannual", calcyears=[2020,2025,2029])
         testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
 
         @test isapprox(testqry[1,:val], 16.3149963697108; atol=TOL)
@@ -217,7 +217,7 @@ if @isdefined Cbc
         SQLite.DBInterface.execute(db, "insert into InterestRateStorage select rowid, 1, 'storage1', y.val, 0.05 from year y")
         SQLite.DBInterface.execute(db, "insert into InterestRateTechnology select rowid, 1, 'solar', y.val, 0.05 from year y")
         SQLite.DBInterface.execute(db, "update TransmissionLine set interestrate = 0.05 where id = 2")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Cbc.Optimizer), numprocs=1, varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029])
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Cbc.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029])
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
         @test testqry[1,:y] == "2020"
@@ -243,7 +243,7 @@ if @isdefined Cbc
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(Cbc.Optimizer),
-            numprocs=1, quiet = false)
+            quiet = false)
 
         db = SQLite.DB(dbfile)
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame

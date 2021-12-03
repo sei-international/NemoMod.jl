@@ -15,7 +15,7 @@ end
 
 using Test, SQLite, DataFrames, JuMP, Distributed
 
-const TOL = 1e-3  # Default tolerance for isapprox() comparisons
+const TOL = 0.01  # Default tolerance for isapprox() comparisons
 
 """Helper function for deleting a file after Julia has been told to release it (e.g.,
     with finalize(db); db = nothing; GC.gc())."""
