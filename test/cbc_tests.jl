@@ -21,7 +21,7 @@ if @isdefined Cbc
 
     @testset "Solving storage_test with Cbc" begin
         dbfile = joinpath(@__DIR__, "storage_test.sqlite")
-        # dbfile = "c:/temp/storage_test.sqlite"
+        #dbfile = "c:/temp/storage_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
@@ -231,6 +231,22 @@ if @isdefined Cbc
         SQLite.DBInterface.execute(db, "delete from InterestRateStorage")
         SQLite.DBInterface.execute(db, "delete from InterestRateTechnology")
         SQLite.DBInterface.execute(db, "update TransmissionLine set interestrate = null where id = 2")
+
+        # Test transshipment power flow
+        SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 3")
+        SQLite.DBInterface.execute(db, "update TransmissionLine set efficiency = 0.9")
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Cbc.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029])
+        testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+        @test testqry[1,:y] == "2020"
+        @test testqry[2,:y] == "2025"
+        @test testqry[3,:y] == "2029"
+
+        @test isapprox(testqry[1,:val], 4855.79076447287; atol=TOL)
+        @test isapprox(testqry[2,:val], 2687.29032799192; atol=TOL)
+        @test isapprox(testqry[3,:val], 1738.34669443912; atol=TOL)
+
+        SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 2")
+        SQLite.DBInterface.execute(db, "update TransmissionLine set efficiency = null")
 
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)

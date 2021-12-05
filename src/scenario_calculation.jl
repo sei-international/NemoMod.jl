@@ -56,6 +56,8 @@ function calculatescenario(
     jumpmodel::JuMP.Model = Model(Cbc.Optimizer),
     calcyears::Array{Int, 1} = Array{Int, 1}(),
     varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
+    numprocs::Int = 0,
+    targetprocs::Array{Int, 1} = Array{Int, 1}(),
     restrictvars::Bool = true,
     reportzeros::Bool = false,
     continuoustransmission::Bool = false,
