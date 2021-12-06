@@ -4,9 +4,8 @@
 
     Copyright © 2021: Stockholm Environment Institute U.S.
 
-	File description: Defines a function for running full suite of tests of
-        NemoMod package, plus functions for tests not involving scenario solution.
-        Sets up package references and constants required for testing.
+	File description: Defines functions, package references, and constants used
+        to test NemoMod package.
 =#
 
 if !@isdefined NemoMod
@@ -63,6 +62,14 @@ catch e
     @info "Skipping Xpress tests."
     # Continue
 end
+
+# Functions for solver-specific tests of scenario solution
+include(joinpath(@__DIR__, "cbc_tests.jl"))
+include(joinpath(@__DIR__, "glpk_tests.jl"))
+include(joinpath(@__DIR__, "cplex_tests.jl"))
+include(joinpath(@__DIR__, "gurobi_tests.jl"))
+include(joinpath(@__DIR__, "mosek_tests.jl"))
+include(joinpath(@__DIR__, "xpress_tests.jl"))
 
 """Helper function for deleting a file after Julia has been told to release it (e.g.,
     with finalize(db); db = nothing; GC.gc())."""
@@ -123,12 +130,12 @@ end  # param_default_db(compilation::Bool = false)
 """Runs entire suite of NemoMod tests. If `compilation` is true, does not execute calls to `@test`."""
 function all_tests(compilation::Bool = false)
     @testset "Solving a scenario" begin
-        include(joinpath(@__DIR__, "cbc_tests.jl"))
-        include(joinpath(@__DIR__, "glpk_tests.jl"))
-        include(joinpath(@__DIR__, "cplex_tests.jl"))
-        include(joinpath(@__DIR__, "gurobi_tests.jl"))
-        include(joinpath(@__DIR__, "mosek_tests.jl"))
-        include(joinpath(@__DIR__, "xpress_tests.jl"))
+        cbc_tests(compilation)
+        cplex_tests(compilation)
+        glpk_tests(compilation)
+        gurobi_tests(compilation)
+        mosek_tests(compilation)
+        xpress_tests(compilation)
     end  # @testset "Solving a scenario"
 
     @testset "Writing optimization problem for a scenario" begin
