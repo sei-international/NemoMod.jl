@@ -234,16 +234,16 @@ if @isdefined MosekTools
 
         # Test transshipment power flow
         SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 3")
-        SQLite.DBInterface.execute(db, "update TransmissionLine set efficiency = 0.9")
+        SQLite.DBInterface.execute(db, "update TransmissionLine set efficiency = 1.0")
         NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029])
         testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
         @test testqry[1,:y] == "2020"
         @test testqry[2,:y] == "2025"
         @test testqry[3,:y] == "2029"
 
-        @test isapprox(testqry[1,:val], 4855.79076447287; atol=TOL)
-        @test isapprox(testqry[2,:val], 2687.29032799192; atol=TOL)
-        @test isapprox(testqry[3,:val], 1738.34669443912; atol=TOL)
+        @test isapprox(testqry[1,:val], 4649.69120037856; atol=TOL)
+        @test isapprox(testqry[2,:val], 2586.91004106252; atol=TOL)
+        @test isapprox(testqry[3,:val], 1673.92988604328; atol=TOL)
 
         SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 2")
         SQLite.DBInterface.execute(db, "update TransmissionLine set efficiency = null")
