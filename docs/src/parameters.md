@@ -305,6 +305,23 @@ For example, if a technology had an efficiency of 80%, the `InputActivityRatio` 
 | `y` | text  | Year |
 | `val` | real  | Factor |
 
+## [Minimum production share](@id MinShareProduction)
+
+For the specified [region](@ref region), [fuel](@ref fuel), and [year](@ref year), minimum fraction of production (excluding production from [storage](@ref storage)) that must be delivered by the indicated [technology](@ref technology).
+
+#### Scenario database
+
+**Table: `MinShareProduction`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `t` | text  | Technology |
+| `f` | text  | Fuel |
+| `y` | text  | Year |
+| `val` | real  | Fraction (0 to 1) |
+
 ## [Minimum storage charge](@id MinStorageCharge)
 
 Minimum fraction of a [storage's](@ref storage) capacity that must be charged. NEMO ensures the charge never drops below this level.
@@ -539,17 +556,10 @@ Note that because of the way time slices and groups are configured in NEMO, thes
 
 ## [Renewable energy minimum production target](@id REMinProductionTarget)
 
-Fraction of production of [fuels](@ref fuel) tagged with [`RETagFuel`](@ref RETagFuel) that constitutes a renewable energy target. NEMO ensures that production by [technologies](@ref technology) tagged with [`RETagTechnology`](@ref RETagTechnology) meets or exceeds the target, pro-rating each technology's production by its `RETagTechnology`. To take a specific example, suppose that in a given [region](@ref region) and [year](@ref year),
+For the specified [region](@ref region), [fuel](@ref fuel), and [year](@ref year), fraction of production that must be from renewable sources. The renewability of production is determined by [`RETagTechnology`](@ref RETagTechnology): this parameter defines what fraction of a [technology's](@ref technology) production counts as renewable.
 
-* There is one fuel - electricity - whose `RETagFuel` is 1;
-
-* Total electricity production is 100 (in the region's energy [unit](@ref uoms));
-
-* `REMinProductionTarget` is 0.5; and
-
-* There are two technologies, `t1` with an `RETagTechnology` of 0.75 and `t2` with an `RETagTechnology` of 0.5.
-
-Then NEMO will make sure that 75% of `t1`'s production + 50% of `t2`'s production is at least 50 energy units.
+!!! note
+    NEMO ignores production from [storage](@ref storage) when calculating target and actual levels of renewable production.
 
 #### Scenario database
 
@@ -559,31 +569,13 @@ Then NEMO will make sure that 75% of `t1`'s production + 50% of `t2`'s productio
 |:--- | :--: |:----------- |
 | `id` | integer | Unique identifier for row |
 | `r` | text  | Region |
+| `f` | text  | Fuel |
 | `y` | text  | Year |
 | `val` | real  | Fraction (0 to 1) |
 
-## [Renewable energy tag fuel](@id RETagFuel)
-
-Indicator of whether a fuel is included when calculating the [renewable energy minimum production target](@ref REMinProductionTarget).
-
-#### Scenario database
-
-**Table: `RETagFuel`**
-
-| Name | Type | Description |
-|:--- | :--: |:----------- |
-| `id` | integer | Unique identifier for row |
-| `r` | text  | Region |
-| `f` | text  | Fuel |
-| `y` | text  | Year |
-| `val` | real  | Indicator (0 for no, 1 for yes) |
-
-!!! tip
-    It is not necessary to populate zeros in `RETagFuel` for fuels that are excluded from the renewable energy minimum production target. NEMO assumes exclusion if a fuel isn't represented in the table.
-
 ## [Renewable energy tag technology](@id RETagTechnology)
 
-Fraction of a [technology's](@ref technology) production that counts toward meeting the [renewable energy minimum production target](@ref REMinProductionTarget).
+Fraction of a [technology's](@ref technology) production that counts as renewable.
 
 #### Scenario database
 

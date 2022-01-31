@@ -11,9 +11,25 @@ Many NEMO outputs have "nodal" and "non-nodal" variants. **Nodal** variables sho
 
 ## Activity
 
+### [Annual nodal generation](@id vgenerationannualnodal)
+
+Total annual [nodal](@ref nodal_def) production of a [fuel](@ref fuel) excluding production from [storage](@ref storage). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vgenerationannualnodal[n,f,y]`
+
+### [Annual renewable nodal generation](@id vregenerationannualnodal)
+
+Total annual [nodal](@ref nodal_def) production of a [fuel](@ref fuel) from renewable sources, excluding production from [storage](@ref storage). The renewability of production is determined by the [RETagTechnology](@ref RETagTechnology) parameter. Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vregenerationannualnodal[n,f,y]`
+
 ### [Annual nodal production](@id vproductionannualnodal)
 
-Total annual [nodal](@ref nodal_def) production of a [fuel](@ref fuel), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms).
+Total annual [nodal](@ref nodal_def) production of a [fuel](@ref fuel) from all sources. Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -21,15 +37,31 @@ Total annual [nodal](@ref nodal_def) production of a [fuel](@ref fuel), combinin
 
 ### [Annual nodal use](@id vuseannualnodal)
 
-Total annual [nodal](@ref nodal_def) use of a [fuel](@ref fuel), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms).
+Total annual [nodal](@ref nodal_def) use of a [fuel](@ref fuel). Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
 * Variable in JuMP model: `vuseannualnodal[n,l,f,y]`
 
+### [Annual non-nodal generation](@id vgenerationannualnn)
+
+Total annual [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel) excluding production from [storage](@ref storage). Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vgenerationannualnn[r,f,y]`
+
+### [Annual renewable non-nodal generation](@id vregenerationannualnn)
+
+Total annual [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel) from renewable sources, excluding production from [storage](@ref storage). The renewability of production is determined by the [RETagTechnology](@ref RETagTechnology) parameter. Unit: region's energy [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vregenerationannualnn[r,f,y]`
+
 ### [Annual non-nodal production](@id vproductionannualnn)
 
-Total annual [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms).
+Total annual [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel) from all sources. Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -37,7 +69,7 @@ Total annual [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel), comb
 
 ### [Annual non-nodal use](@id vuseannualnn)
 
-Total annual [non-nodal](@ref nodal_def) use of a [fuel](@ref fuel), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms).
+Total annual [non-nodal](@ref nodal_def) use of a [fuel](@ref fuel). Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -599,24 +631,6 @@ Total emissions during all modeled [years](@ref year). Includes any exogenously 
 #### Julia code
 
 * Variable in JuMP model: `vmodelperiodemissions[r,e]`
-
-## Renewable energy target
-
-### [Annual production of fuels considered in renewable target](@id vretotalproductionoftargetfuelannual)
-
-Total production of [fuels](@ref fuel) tagged with [`RETagFuel`](@ref RETagFuel). See [`REMinProductionTarget`](@ref REMinProductionTarget) for details of how this quantity is used in renewable energy target calculations. Unit: region's energy [unit](@ref uoms).
-
-#### Julia code
-
-* Variable in JuMP model: `vretotalproductionoftargetfuelannual[r,y]`
-
-### [Annual renewable energy production](@id vtotalreproductionannual)
-
-Total production by [technologies](@ref technology) tagged with [`RETagTechnology`](@ref RETagTechnology), pro-rating each technology's production by its `RETagTechnology`. See [`REMinProductionTarget`](@ref REMinProductionTarget) for details of how this quantity is used in renewable energy target calculations. Unit: region's energy [unit](@ref uoms).
-
-#### Julia code
-
-* Variable in JuMP model: `vtotalreproductionannual[r,y]`
 
 ## Reserve margin
 

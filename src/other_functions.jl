@@ -623,16 +623,22 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     r.val = tr.r and rr.val = tr.rr and f.val = tr.f and y.val = tr.y
     and tr.r <> tr.rr and tr.val = 1 $(restrictyears ? "and tr.y in" * inyears : "")")
 
+    # fs_t is populated if t produces from storage
     return_val["queryvrateofproductionbytechnologybymodenn"] = (dbpath, "select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y,
-    cast(oar.val as real) as oar
+    cast(oar.val as real) as oar, cast(ys.val as real) as ys, fs.t as fs_t, cast(ret.val as real) as ret
     from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, OutputActivityRatio_def oar
     left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
+	left join (select DISTINCT tfs.r, tfs.t, tfs.m, y.val as y from TechnologyFromStorage_def tfs, year y
+		left join nodalstorage ns on ns.r = tfs.r and ns.s = tfs.s and ns.y = y.val
+		where tfs.val > 0 $(restrictyears ? "and y.val in" * inyears : "")
+		and ns.r is null) fs on fs.r = r.val and fs.t = t.val and fs.m = m.val and fs.y = y.val
+    left join RETagTechnology_def ret on ret.r = r.val and ret.t = t.val and ret.y = y.val
     where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.m = m.val and oar.y = y.val
     and oar.val <> 0
     and ys.y = y.val
     and tme.id is null
     $(restrictyears ? "and y.val in" * inyears : "")
-    order by r.val, ys.l, t.val, f.val, y.val")
+	order by r.val, f.val, y.val, ys.l, t.val")
 
     return_val["queryvrateofproductionbytechnologynn"] = (dbpath, "select r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
     from region r, YearSplit_def ys, technology t, fuel f, year y,

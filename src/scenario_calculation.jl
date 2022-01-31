@@ -176,6 +176,7 @@ dbversion < 4 && db_v3_to_v4(db; quiet = quiet)
 dbversion < 5 && db_v4_to_v5(db; quiet = quiet)
 dbversion < 6 && db_v5_to_v6(db; quiet = quiet)
 dbversion < 7 && db_v6_to_v7(db; quiet = quiet)
+dbversion < 8 && db_v7_to_v8(db; quiet = quiet)
 # END: Update database if necessary.
 
 # BEGIN: Perform beforescenariocalc include.
@@ -217,13 +218,13 @@ local paramsneedingdefs::Array{String, 1} = ["OutputActivityRatio", "InputActivi
 "ResidualStorageCapacity", "MinStorageCharge", "OperationalLifeStorage", "DepreciationMethod", "TotalAnnualMaxCapacity",
 "TotalAnnualMinCapacity", "TotalAnnualMaxCapacityInvestment", "TotalAnnualMinCapacityInvestment",
 "TotalTechnologyAnnualActivityUpperLimit", "TotalTechnologyAnnualActivityLowerLimit", "TotalTechnologyModelPeriodActivityUpperLimit",
-"TotalTechnologyModelPeriodActivityLowerLimit", "ReserveMarginTagTechnology", "ReserveMarginTagFuel", "ReserveMargin", "RETagTechnology", "RETagFuel",
+"TotalTechnologyModelPeriodActivityLowerLimit", "ReserveMarginTagTechnology", "ReserveMarginTagFuel", "ReserveMargin", "RETagTechnology",
 "REMinProductionTarget", "EmissionActivityRatio", "EmissionsPenalty", "ModelPeriodExogenousEmission",
 "AnnualExogenousEmission", "AnnualEmissionLimit", "ModelPeriodEmissionLimit", "AccumulatedAnnualDemand", "TotalAnnualMaxCapacityStorage",
 "TotalAnnualMinCapacityStorage", "TotalAnnualMaxCapacityInvestmentStorage", "TotalAnnualMinCapacityInvestmentStorage",
 "TransmissionCapacityToActivityUnit", "StorageFullLoadHours", "RampRate", "RampingReset", "NodalDistributionDemand",
 "NodalDistributionTechnologyCapacity", "NodalDistributionStorageCapacity", "MinimumUtilization", "InterestRateTechnology",
-"InterestRateStorage"]
+"InterestRateStorage", "MinShareProduction"]
 
 createviewwithdefaults(db, paramsneedingdefs)
 create_other_nemo_indices(db)
@@ -544,6 +545,10 @@ modelvarindices["vtradeannual"] = (vtradeannual, ["r", "rr", "f", "y"])
 
 @variable(jumpmodel, vproductionannualnn[sregion, sfuel, syear] >= 0)
 modelvarindices["vproductionannualnn"] = (vproductionannualnn, ["r", "f", "y"])
+@variable(jumpmodel, vgenerationannualnn[sregion, sfuel, syear] >= 0)
+modelvarindices["vgenerationannualnn"] = (vgenerationannualnn, ["r", "f", "y"])
+@variable(jumpmodel, vregenerationannualnn[sregion, sfuel, syear] >= 0)
+modelvarindices["vregenerationannualnn"] = (vregenerationannualnn, ["r", "f", "y"])
 @variable(jumpmodel, vuseannualnn[sregion, sfuel, syear] >= 0)
 modelvarindices["vuseannualnn"] = (vuseannualnn, ["r", "f", "y"])
 logmsg("Defined activity variables.", quiet)
@@ -586,14 +591,6 @@ modelvarindices["vtotalcapacityinreservemargin"] = (vtotalcapacityinreservemargi
 modelvarindices["vdemandneedingreservemargin"] = (vdemandneedingreservemargin, ["r", "l", "y"])
 
 logmsg("Defined reserve margin variables.", quiet)
-
-# RE target
-@variable(jumpmodel, vtotalreproductionannual[sregion, syear])
-@variable(jumpmodel, vretotalproductionoftargetfuelannual[sregion, syear])
-
-modelvarindices["vtotalreproductionannual"] = (vtotalreproductionannual, ["r", "y"])
-modelvarindices["vretotalproductionoftargetfuelannual"] = (vretotalproductionoftargetfuelannual, ["r", "y"])
-logmsg("Defined renewable energy target variables.", quiet)
 
 # Emissions
 if in("vannualtechnologyemissionbymode", varstosavearr)
@@ -689,6 +686,12 @@ if transmissionmodeling
 
     @variable(jumpmodel, vproductionannualnodal[snode, sfuel, syear] >= 0)
     modelvarindices["vproductionannualnodal"] = (vproductionannualnodal, ["n","f","y"])
+
+    @variable(jumpmodel, vgenerationannualnodal[snode, sfuel, syear] >= 0)
+    modelvarindices["vgenerationannualnodal"] = (vgenerationannualnodal, ["n","f","y"])
+
+    @variable(jumpmodel, vregenerationannualnodal[snode, sfuel, syear] >= 0)
+    modelvarindices["vregenerationannualnodal"] = (vregenerationannualnodal, ["n","f","y"])
 
     @variable(jumpmodel, vusenodal[snode, stimeslice, sfuel, syear] >= 0)
     modelvarindices["vusenodal"] = (vusenodal, ["n","l","f","y"])
@@ -849,7 +852,7 @@ addconstask::Task = @task begin
             createconstraints(jumpmodel, a)
             #@info "Created constraints for numconsarrays = " * string(numconsarrays)
             numaddedconsarrays += 1
-            # @info "In while loop. numaddedconsarrays = " * string(numaddedconsarrays)
+            #@info "In while loop. numaddedconsarrays = " * string(numaddedconsarrays)
         else
             wait(cons_channel)
         end
@@ -1369,13 +1372,14 @@ if in("vrateofproductionbytechnologybymodenn", varstosavearr)
 end  # in("vrateofproductionbytechnologybymodenn", varstosavearr)
 # END: EBa1_RateOfFuelProduction1.
 
-# BEGIN: EBa2_RateOfFuelProduction2.
+# BEGIN: EBa2_RateOfFuelProduction2, GenerationAnnualNN, and ReGenerationAnnualNN.
 eba2_rateoffuelproduction2::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+generationannualnn::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+regenerationannualnn::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
 t = Threads.@spawn(let
     local lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
-    local sumexps = Array{AffExpr, 1}([AffExpr()])
-    # sumexps[1] = vrateofproductionbytechnologybymodenn-equivalent sum
+    local sumexps = Array{AffExpr, 1}([AffExpr(), AffExpr(), AffExpr()])  # sumexps[1] = vrateofproductionbytechnologybymodenn-equivalent sum for vrateofproductionbytechnologynn, sumexps[2] = vrateofproductionbytechnologybymodenn-equivalent sum for vgenerationannualnn, sumexps[3] = vrateofproductionbytechnologybymodenn-equivalent sum for vregenerationannualnn
 
     for row in DataFrames.eachrow(queries["queryvrateofproductionbytechnologybymodenn"])
         local r = row[:r]
@@ -1391,8 +1395,25 @@ t = Threads.@spawn(let
             sumexps[1] = AffExpr()
         end
 
+        if isassigned(lastkeys, 1) && (r != lastkeys[1] || f != lastkeys[4] || y != lastkeys[5])
+            # Create constraints
+            push!(generationannualnn, @build_constraint(sumexps[2] == vgenerationannualnn[lastkeys[1], lastkeys[4], lastkeys[5]]))
+            push!(regenerationannualnn, @build_constraint(sumexps[3] == vregenerationannualnn[lastkeys[1], lastkeys[4], lastkeys[5]]))
+            sumexps[2] = AffExpr()
+            sumexps[3] = AffExpr()
+        end
+
         add_to_expression!(sumexps[1], vrateofactivity[r,l,t,row[:m],y] * row[:oar])
         # Sum is of vrateofproductionbytechnologybymodenn[r,l,t,row[:m],f,y])
+
+        # Exclude production from storage in vgenerationannualnn and vregenerationannualnn
+        if ismissing(row[:fs_t])
+            add_to_expression!(sumexps[2], vrateofactivity[r,l,t,row[:m],y] * row[:oar] * row[:ys])
+
+            if !ismissing(row[:ret]) && row[:ret] > 0
+                add_to_expression!(sumexps[3], vrateofactivity[r,l,t,row[:m],y] * row[:oar] * row[:ys] * row[:ret])
+            end
+        end
 
         lastkeys[1] = r
         lastkeys[2] = l
@@ -1401,40 +1422,51 @@ t = Threads.@spawn(let
         lastkeys[5] = y
     end
 
-    # Create last constraint
+    # Create last constraints
     if isassigned(lastkeys, 1)
         push!(eba2_rateoffuelproduction2, @build_constraint(sumexps[1] ==
             vrateofproductionbytechnologynn[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]]))
+        push!(generationannualnn, @build_constraint(sumexps[2] == vgenerationannualnn[lastkeys[1], lastkeys[4], lastkeys[5]]))
+        push!(regenerationannualnn, @build_constraint(sumexps[3] == vregenerationannualnn[lastkeys[1], lastkeys[4], lastkeys[5]]))
     end
 
     put!(cons_channel, eba2_rateoffuelproduction2)
+    put!(cons_channel, generationannualnn)
+    put!(cons_channel, regenerationannualnn)
 end)
 
-numconsarrays += 1
+numconsarrays += 3
 logmsg("Queued constraint EBa2_RateOfFuelProduction2 for creation.", quiet)
-# END: EBa2_RateOfFuelProduction2.
+logmsg("Queued constraint GenerationAnnualNN for creation.", quiet)
+logmsg("Queued constraint ReGenerationAnnualNN for creation.", quiet)
+# END: EBa2_RateOfFuelProduction2 and GenerationAnnualNN, and ReGenerationAnnualNN.
 
-# BEGIN: EBa2Tr_RateOfFuelProduction2.
+# BEGIN: EBa2Tr_RateOfFuelProduction2, GenerationAnnualNodal, and ReGenerationAnnualNodal.
 if transmissionmodeling
     eba2tr_rateoffuelproduction2::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+    generationannualnodal::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+    regenerationannualnodal::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
     t = Threads.@spawn(let
         local lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = t, lastkeys[4] = f, lastkeys[5] = y
-        local sumexps = Array{AffExpr, 1}([AffExpr()])
-        # sumexps[1] = vrateofactivitynodal sum
+        local sumexps = Array{AffExpr, 1}([AffExpr(), AffExpr(), AffExpr()])  # sumexps[1] = vrateofactivitynodal sum for vrateofproductionbytechnologynodal, sumexps[2] = vrateofactivitynodal sum for vgenerationannualnodal, sumexps[3] = vrateofactivitynodal sum for vregenerationannualnodal
 
-        for row in SQLite.DBInterface.execute(db,
-        "select ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y, m.val as m,
-    	   cast(oar.val as real) as oar
+        for row in SQLite.DBInterface.execute(db, "select ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y, m.val as m,
+    	   cast(oar.val as real) as oar, cast(ys.val as real) as ys, fs.t as fs_t, cast(ret.val as real) as ret
         from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, MODE_OF_OPERATION m, NODE n, OutputActivityRatio_def oar,
     	TransmissionModelingEnabled tme
+		left join (select distinct ns.n, tfs.t, tfs.m, ns.y
+		from nodalstorage ns, TechnologyFromStorage_def tfs
+		where ns.r = tfs.r and ns.s = tfs.s and tfs.val > 0 $(restrictyears ? "and ns.y in" * inyears : "")
+		) fs on fs.n = ntc.n and fs.t = ntc.t and fs.m = m.val and fs.y = ntc.y
+        left join RETagTechnology_def ret on ret.r = n.r and ret.t = ntc.t and ret.y = ntc.y
         where ntc.val > 0 $(restrictyears ? "and ntc.y in" * inyears : "")
         and ntc.y = ys.y
         and ntc.n = n.val
         and oar.r = n.r and oar.t = ntc.t and oar.m = m.val and oar.y = ntc.y
         and oar.val > 0
     	and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
-        order by ntc.n, ys.l, ntc.t, oar.f, ntc.y")
+        order by ntc.n, oar.f, ntc.y, ys.l, ntc.t")
             local n = row[:n]
             local l = row[:l]
             local t = row[:t]
@@ -1448,7 +1480,24 @@ if transmissionmodeling
                 sumexps[1] = AffExpr()
             end
 
+            if isassigned(lastkeys, 1) && (n != lastkeys[1] || f != lastkeys[4] || y != lastkeys[5])
+                # Create constraints
+                push!(generationannualnodal, @build_constraint(sumexps[2] == vgenerationannualnodal[lastkeys[1], lastkeys[4], lastkeys[5]]))
+                push!(regenerationannualnodal, @build_constraint(sumexps[3] == vregenerationannualnodal[lastkeys[1], lastkeys[4], lastkeys[5]]))
+                sumexps[2] = AffExpr()
+                sumexps[3] = AffExpr()
+            end
+
             add_to_expression!(sumexps[1], vrateofactivitynodal[n,l,t,row[:m],y] * row[:oar])
+
+            # Exclude production from storage in vgenerationannualnodal and vregenerationannualnodal
+            if ismissing(row[:fs_t])
+                add_to_expression!(sumexps[2], vrateofactivitynodal[n,l,t,row[:m],y] * row[:oar] * row[:ys])
+
+                if !ismissing(row[:ret]) && row[:ret] > 0
+                    add_to_expression!(sumexps[3], vrateofactivitynodal[n,l,t,row[:m],y] * row[:oar] * row[:ys] * row[:ret])
+                end
+            end
 
             lastkeys[1] = n
             lastkeys[2] = l
@@ -1457,19 +1506,25 @@ if transmissionmodeling
             lastkeys[5] = y
         end
 
-        # Create last constraint
+        # Create last constraints
         if isassigned(lastkeys, 1)
             push!(eba2tr_rateoffuelproduction2, @build_constraint(sumexps[1] ==
                 vrateofproductionbytechnologynodal[lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4], lastkeys[5]]))
+            push!(generationannualnodal, @build_constraint(sumexps[2] == vgenerationannualnodal[lastkeys[1], lastkeys[4], lastkeys[5]]))
+            push!(regenerationannualnodal, @build_constraint(sumexps[3] == vregenerationannualnodal[lastkeys[1], lastkeys[4], lastkeys[5]]))
         end
 
         put!(cons_channel, eba2tr_rateoffuelproduction2)
+        put!(cons_channel, generationannualnodal)
+        put!(cons_channel, regenerationannualnodal)
     end)
 
-    numconsarrays += 1
+    numconsarrays += 3
     logmsg("Queued constraint EBa2Tr_RateOfFuelProduction2 for creation.", quiet)
+    logmsg("Queued constraint GenerationAnnualNodal for creation.", quiet)
+    logmsg("Queued constraint ReGenerationAnnualNodal for creation.", quiet)
 end
-# END: EBa2Tr_RateOfFuelProduction2.
+# END: EBa2Tr_RateOfFuelProduction2 and GenerationAnnualNodal, and ReGenerationAnnualNodal.
 
 # BEGIN: EBa3_RateOfFuelProduction3.
 eba3_rateoffuelproduction3::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
@@ -5546,123 +5601,121 @@ numconsarrays += 1
 logmsg("Queued constraint FuelUseByTechnologyAnnual for creation.", quiet)
 # END: FuelUseByTechnologyAnnual.
 
-# BEGIN: RE2_TechIncluded.
-re2_techincluded::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+# BEGIN: RE2_ProductionTarget.
+re2_productiontarget::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
 t = Threads.@spawn(let
-    local lastkeys = Array{String, 1}(undef,2)  # lastkeys[1] = r, lastkeys[2] = y
-    local sumexps = Array{AffExpr, 1}([AffExpr()]) # sumexps[1] = vproductionbytechnologyannual sum
+    local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = f, lastkeys[3] = y
+    local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = rmp
+    local sumexps = Array{AffExpr, 1}([AffExpr(), AffExpr()])  # sumexps[1] = sum of vregenerationannualnn and vregenerationannualnodal, sumexps[2] = sum of vgenerationannualnn and vgenerationannualnodal
 
-    for row in SQLite.DBInterface.execute(db, "select r.val as r, y.val as y, oar.t as t, oar.f as f, cast(ret.val as real) as ret
-    from REGION r, YEAR y, RETagTechnology_def ret,
-    (select distinct r, t, f, y
-    from OutputActivityRatio_def
-    where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar
-    where oar.r = r.val and oar.t = ret.t and oar.y = y.val
-    and ret.r = r.val and ret.y = y.val and ret.val <> 0
-    order by r.val, y.val")
+    for row in SQLite.DBInterface.execute(db, "select rmp.r, rmp.f, rmp.y, rn.n, cast(rmp.val as real) as rmp
+    from REMinProductionTarget_def rmp,
+    (select r.val as r, null as n
+    from region r
+    union all
+    select n.r as r, n.val as n
+    from node n) rn
+    where
+    rmp.r = rn.r and rmp.val > 0
+    $(restrictyears ? "and rmp.y in" * inyears : "")
+    order by rmp.r, rmp.f, rmp.y")
         local r = row[:r]
+        local f = row[:f]
         local y = row[:y]
 
-        if isassigned(lastkeys, 1) && (r != lastkeys[1] || y != lastkeys[2])
+        if isassigned(lastkeys, 1) && (r != lastkeys[1] || f != lastkeys[2] || y != lastkeys[3])
             # Create constraint
-            push!(re2_techincluded, @build_constraint(sumexps[1] ==
-                vtotalreproductionannual[lastkeys[1],lastkeys[2]]))
+            push!(re2_productiontarget, @build_constraint(sumexps[1] >= (sumexps[2]) * lastvals[1]))
             sumexps[1] = AffExpr()
+            sumexps[2] = AffExpr()
         end
 
-        add_to_expression!(sumexps[1], vproductionbytechnologyannual[r,row[:t],row[:f],y] * row[:ret])
+        if ismissing(row[:n])
+            add_to_expression!(sumexps[1], vregenerationannualnn[r,f,y])
+            add_to_expression!(sumexps[2], vgenerationannualnn[r,f,y])
+        else
+            add_to_expression!(sumexps[1], vregenerationannualnodal[row[:n],f,y])
+            add_to_expression!(sumexps[2], vgenerationannualnodal[row[:n],f,y])
+        end
 
         lastkeys[1] = r
-        lastkeys[2] = y
+        lastkeys[2] = f
+        lastkeys[3] = y
+        lastvals[1] = row[:rmp]
     end
 
     # Create last constraint
     if isassigned(lastkeys, 1)
-        push!(re2_techincluded, @build_constraint(sumexps[1] ==
-            vtotalreproductionannual[lastkeys[1],lastkeys[2]]))
+        push!(re2_productiontarget, @build_constraint(sumexps[1] >= (sumexps[2]) * lastvals[1]))
     end
 
-    put!(cons_channel, re2_techincluded)
+    put!(cons_channel, re2_productiontarget)
 end)
 
 numconsarrays += 1
-logmsg("Queued constraint RE2_TechIncluded for creation.", quiet)
-# END: RE2_TechIncluded.
+logmsg("Queued constraint RE2_ProductionTarget for creation.", quiet)
+# END: RE2_ProductionTarget.
 
-# BEGIN: RE3_FuelIncluded.
-re3_fuelincluded::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+# BEGIN: MinShareProduction.
+minshareproduction::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
 t = Threads.@spawn(let
-    local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = y
-    local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproduction sum
+    local lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = f, lastkeys[4] = y
+    local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = msp
+    local sumexps = Array{AffExpr, 1}([AffExpr()]) # sumexps[1] = sum of vgenerationannualnn and vgenerationannualnodal
 
-    for row in SQLite.DBInterface.execute(db, "select r.val as r, y.val as y, ys.l as l, rtf.f as f, cast(ys.val as real) as ys,
-    cast(rtf.val as real) as rtf
-    from REGION r, YEAR y, YearSplit_def ys, RETagFuel_def rtf
-    where ys.y = y.val and ys.val <> 0
-    and rtf.r = r.val and rtf.y = y.val and rtf.val <> 0
-    $(restrictyears ? "and y.val in" * inyears : "")
-    order by r.val, y.val")
+    for row in SQLite.DBInterface.execute(db, "select msp.r, msp.t, msp.f, msp.y, rn.n, cast(msp.val as real) as msp
+    from MinShareProduction_def msp,
+    (select r.val as r, null as n
+    from region r
+    union all
+    select n.r as r, n.val as n
+    from node n) rn
+    where
+    msp.r = rn.r and msp.val > 0
+    $(restrictyears ? "and msp.y in" * inyears : "")
+    order by msp.r, msp.t, msp.f, msp.y")
         local r = row[:r]
+        local t = row[:t]
+        local f = row[:f]
         local y = row[:y]
 
-        if isassigned(lastkeys, 1) && (r != lastkeys[1] || y != lastkeys[2])
+        if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
             # Create constraint
-            push!(re3_fuelincluded, @build_constraint(sumexps[1] ==
-                vretotalproductionoftargetfuelannual[lastkeys[1],lastkeys[2]]))
+            if !isnothing(variable_by_name(jumpmodel, "vproductionbytechnologyannual[$(lastkeys[1]),$(lastkeys[2]),$(lastkeys[3]),$(lastkeys[4])]"))
+                push!(minshareproduction, @build_constraint(vproductionbytechnologyannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >= (sumexps[1]) * lastvals[1]))
+            end
+
             sumexps[1] = AffExpr()
         end
 
-        add_to_expression!(sumexps[1], vrateofproduction[r,row[:l],row[:f],y] * row[:ys] * row[:rtf])
+        if !ismissing(row[:n])
+            transmissionmodeling && add_to_expression!(sumexps[1], vgenerationannualnodal[row[:n],f,y])
+        else
+            add_to_expression!(sumexps[1], vgenerationannualnn[r,f,y])
+        end
 
         lastkeys[1] = r
-        lastkeys[2] = y
+        lastkeys[2] = t
+        lastkeys[3] = f
+        lastkeys[4] = y
+        lastvals[1] = row[:msp]
     end
 
     # Create last constraint
     if isassigned(lastkeys, 1)
-        push!(re3_fuelincluded, @build_constraint(sumexps[1] ==
-            vretotalproductionoftargetfuelannual[lastkeys[1],lastkeys[2]]))
+        if !isnothing(variable_by_name(jumpmodel, "vproductionbytechnologyannual[$(lastkeys[1]),$(lastkeys[2]),$(lastkeys[3]),$(lastkeys[4])]"))
+            push!(minshareproduction, @build_constraint(vproductionbytechnologyannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >= (sumexps[1]) * lastvals[1]))
+        end
     end
 
-    put!(cons_channel, re3_fuelincluded)
+    put!(cons_channel, minshareproduction)
 end)
 
 numconsarrays += 1
-logmsg("Queued constraint RE3_FuelIncluded for creation.", quiet)
-# END: RE3_FuelIncluded.
-
-# BEGIN: RE4_EnergyConstraint.
-re4_energyconstraint::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
-
-t = Threads.@spawn(begin
-    for row in SQLite.DBInterface.execute(db, "select ry.r as r, ry.y as y, cast(rmp.val as real) as rmp
-    from
-    (select distinct r.val as r, y.val as y
-    from REGION r, TECHNOLOGY t, FUEL f, YEAR y, OutputActivityRatio_def oar, RETagTechnology_def ret
-    where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val and oar.val <> 0
-    and ret.r = r.val and ret.t = t.val and ret.y = y.val and ret.val <> 0
-    intersect
-    select distinct r.val as r, y.val as y
-    from REGION r, YEAR y, TIMESLICE l, FUEL f, YearSplit_def ys, RETagFuel_def rtf
-    where ys.l = l.val and ys.y = y.val
-    and rtf.r = r.val and rtf.f = f.val and rtf.y = y.val and rtf.val <> 0) ry, REMinProductionTarget_def rmp
-    where rmp.r = ry.r and rmp.y = ry.y $(restrictyears ? "and rmp.y in" * inyears : "")")
-        local r = row[:r]
-        local y = row[:y]
-
-        push!(re4_energyconstraint, @build_constraint(row[:rmp] * vretotalproductionoftargetfuelannual[r,y] <= vtotalreproductionannual[r,y]))
-    end
-
-    put!(cons_channel, re4_energyconstraint)
-end)
-
-numconsarrays += 1
-logmsg("Queued constraint RE4_EnergyConstraint for creation.", quiet)
-# END: RE4_EnergyConstraint.
-
-# Omitting RE5_FuelUseByTechnologyAnnual because it's just an identity that's not used elsewhere in model
+logmsg("Queued constraint MinShareProduction for creation.", quiet)
+# END: MinShareProduction.
 
 # BEGIN: E1_AnnualEmissionProductionByMode.
 if in("vannualtechnologyemissionbymode", varstosavearr)
