@@ -27,6 +27,33 @@ function logmsg(msg::String, suppress=false, dtm=now()::DateTime)
 end  # logmsg(msg::String)
 
 """
+    ConfParser.parse_line(line::String)
+
+Overload of ConfParser.parse_line() in which quoted key values are returned as-is in their
+entirety.
+"""
+function ConfParser.parse_line(line::String)
+    parsed = String[]
+    splitted = split(line, ",")
+
+    # BEGIN: Code added to standard parse_line function.
+    if occursin(r"^\".*\"$", line)
+        m = match(r"^\"(.*)\"$", line)
+        push!(parsed, m.captures[1])
+        return parsed
+    end
+    # END: Code added to standard parse_line function.
+
+    for raw = splitted
+        if occursin(r"\S+", raw)
+            clean = match(r"\S+", raw)
+            push!(parsed, clean.match)
+        end
+    end
+    parsed
+end
+
+"""
     getconfig(quiet::Bool = false)
 
 Reads in NEMO's configuration file, which should be in the Julia working directory,
@@ -84,7 +111,7 @@ Loads run-time arguments for `calculatescenario()` from a configuration file.
     This argument is not changed by the function.
 """
 function getconfigargs!(configfile::ConfParse, calcyears::Array{Int,1}, varstosavearr::Array{String,1},
-    bools::Array{Bool,1}, quiet::Bool)
+    bools::Array{Bool,1}, strings::Array{String,1}, quiet::Bool)
 
     if haskey(configfile, "calculatescenarioargs", "calcyears")
         try
@@ -157,6 +184,57 @@ function getconfigargs!(configfile::ConfParse, calcyears::Array{Int,1}, varstosa
             logmsg("Read forcemip argument from configuration file.", quiet)
         catch e
             logmsg("Could not read forcemip argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
+        end
+    end
+
+    if haskey(configfile, "calculatescenarioargs", "startvalsdbpath")
+        try
+            startvalsdbpathconfig = retrieve(configfile, "calculatescenarioargs", "startvalsdbpath")
+
+            if typeof(startvalsdbpathconfig) == String
+                strings[1] = startvalsdbpathconfig
+            else
+                # startvalsdbpathconfig should be an array of strings
+                strings[1] = join(startvalsdbpathconfig, ",")
+            end
+
+            logmsg("Read startvalsdbpath argument from configuration file.", quiet)
+        catch e
+            logmsg("Could not read startvalsdbpath argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
+        end
+    end
+
+    if haskey(configfile, "calculatescenarioargs", "startvalsvars")
+        try
+            startvalsvarsconfig = retrieve(configfile, "calculatescenarioargs", "startvalsvars")
+
+            if typeof(startvalsvarsconfig) == String
+                strings[2] = startvalsvarsconfig
+            else
+                # startvalsdbpathconfig should be an array of strings
+                strings[2] = join(startvalsvarsconfig, ",")
+            end
+
+            logmsg("Read startvalsvars argument from configuration file.", quiet)
+        catch e
+            logmsg("Could not read startvalsvars argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
+        end
+    end
+
+    if haskey(configfile, "calculatescenarioargs", "precalcresultspath")
+        try
+            precalcresultspathconfig = retrieve(configfile, "calculatescenarioargs", "precalcresultspath")
+
+            if typeof(precalcresultspathconfig) == String
+                strings[3] = precalcresultspathconfig
+            else
+                # startvalsdbpathconfig should be an array of strings
+                strings[3] = join(precalcresultspathconfig, ",")
+            end
+
+            logmsg("Read precalcresultspath argument from configuration file.", quiet)
+        catch e
+            logmsg("Could not read precalcresultspath argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
         end
     end
 
@@ -448,11 +526,12 @@ function createconstraints(jumpmodel::JuMP.Model, cons::Array{AbstractConstraint
 end  # createconstraints(jumpmodel::JuMP.Model, cons::Array{AbstractConstraint, 1})
 
 """
-    savevarresults(vars::Array{String,1},
+    savevarresults_threaded(vars::Array{String,1},
     modelvarindices::Dict{String, Tuple{AbstractArray,Array{String,1}}},
     db::SQLite.DB, solvedtmstr::String, reportzeros::Bool = false, quiet::Bool = false)
 
-Saves model results to a SQLite database using SQL inserts with transaction batching.
+Saves model results to a SQLite database using SQL inserts with transaction batching. Uses all available threads
+when reading results from memory.
 
 # Arguments
 - `vars::Array{String,1}`: Names of model variables for which results will be retrieved and saved to database.
@@ -463,6 +542,87 @@ Saves model results to a SQLite database using SQL inserts with transaction batc
 - `reportzeros::Bool`: Indicates whether values equal to 0 should be saved.
 - `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to STDOUT).
 """
+function savevarresults_threaded(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{AbstractArray,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String,
+    reportzeros::Bool = false, quiet::Bool = false)
+
+    local nt = Threads.nthreads()  # Number of threads used in this function
+
+    for vname in intersect(vars, keys(modelvarindices))
+        local v = modelvarindices[vname][1]  # Model variable corresponding to vname (technically, a variable container in JuMP)
+        local allindices = Array{Tuple, 1}()  # Array of tuples of all index values for v
+        local allvarrefs = Array{VariableRef, 1}()  # Array of all variable references contained in v
+
+        local indices = Array{Array{Tuple}, 1}(undef, nt)  # Mutually exclusive arrays of tuples of index values for v; one array assigned to and processed by each thread
+        local vals = Array{Array{Float64}, 1}(undef, nt)  # Mutually exclusive arrays of model results for v; one array populated by each thread
+
+        # BEGIN: Populate allindices and allvarrefs.
+        if v isa JuMP.Containers.DenseAxisArray
+            for e in Base.product(axes(v)...)  # Ellipsis splats axes into their values for passing to product()
+                push!(allindices, e)
+            end
+
+            # Preceding product and v.data are in same order
+            for e in v.data
+                push!(allvarrefs, e)
+            end
+        elseif v isa JuMP.Containers.SparseAxisArray
+            # Again, allindices and allvarrefs are in same order
+            allindices = collect(keys(v.data))
+            allvarrefs = collect(values(v.data))
+        end
+        # END: Populate allindices and allvarrefs.
+
+        # BEGIN: Read variable (result) values and populate indices and vals.
+        local blockdivrem = divrem(length(allindices), nt)  # Quotient and remainder from dividing length(allindices) by nt; element 1 = quotient, element 2 = remainder
+
+        # Threads.@threads waits for all tasks to finish before proceeding
+        Threads.@threads for t=1:nt
+            local ind1 = ((t-1) * blockdivrem[1] + 1)  # First index in allindices and allvarrefs assigned to this thread
+            local ind2 = ((t) * blockdivrem[1] + (t == nt ? blockdivrem[2] : 0))  # Last index in allindices and allvarrefs assigned to this thread
+
+            indices[t] = allindices[ind1:ind2]
+            vals[t] = Array{Float64, 1}()
+
+            for vr in allvarrefs[ind1:ind2]
+                push!(vals[t], value(vr))
+            end
+        end
+        # END: Read variable (result) values and populate indices and vals.
+
+        # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
+        try
+            # Begin SQLite transaction
+            SQLite.DBInterface.execute(db, "BEGIN")
+
+            # Create target table for v (drop any existing table for v)
+            SQLite.DBInterface.execute(db,"drop table if exists " * vname)
+
+            SQLite.DBInterface.execute(db, "create table '" * vname * "' ('" * join(modelvarindices[vname][2], "' text, '") * "' text, 'val' real, 'solvedtm' text)")
+
+            # Insert data from indices and vals
+            for t=1:nt
+                for i in 1:length(indices[t])
+                    if reportzeros || vals[t][i] != 0.0
+                        SQLite.DBInterface.execute(db, "insert into " * vname * " values('" * join(indices[t][i], "', '") * "', '" * string(vals[t][i]) * "', '" * solvedtmstr * "')")
+                    end
+                end
+            end
+
+            # Complete SQLite transaction
+            SQLite.DBInterface.execute(db, "COMMIT")
+            logmsg("Saved results for " * vname * " to database.", quiet)
+        catch
+            # Rollback db transaction
+            SQLite.DBInterface.execute(db, "ROLLBACK")
+
+            # Proceed with normal Julia error sequence
+            rethrow()
+        end
+        # END: Wrap database operations in try-catch block to allow rollback on error.
+    end
+end  # savevarresults_threaded(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{AbstractArray,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String)
+
+#= Single-threaded version of savevarresults
 function savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{AbstractArray,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String,
     reportzeros::Bool = false, quiet::Bool = false)
     for vname in intersect(vars, keys(modelvarindices))
@@ -511,7 +671,7 @@ function savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tup
         end
         # END: Wrap database operations in try-catch block to allow rollback on error.
     end
-end  # savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{AbstractArray,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String)
+end  # savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{AbstractArray,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String) =#
 
 """
     checkactivityupperlimits(db::SQLite.DB, tolerance::Float64, restrictyears::Bool, inyears::String)
@@ -941,13 +1101,14 @@ end  # run_qry(qtpl::Tuple{String, String, String})
             vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
             vusenn, vtotaldiscountedcost",
         restrictvars::Bool = true, continuoustransmission::Bool = false,
-        forcemip::Bool = false, quiet::Bool = false,
+        forcemip::Bool = false, startvalsdbpath::String = "",
+        startvalsvars::String = "", quiet::Bool = false,
         writefilename::String = "nemomodel.bz2",
         writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS
     )
 
 Writes a file representing the optimization problem for a NEMO scenario. Returns the name of the file.
-All arguments except `writefilename` and `writefileformat` function are as in
+All arguments except `writefilename` and `writefileformat` function as in
 [`calculatescenario`](@ref). `writefilename` and `writefileformat` are described below.
 
 # Arguments
@@ -967,6 +1128,8 @@ function writescenariomodel(
     restrictvars::Bool = true,
     continuoustransmission::Bool = false,
     forcemip = false,
+    startvalsdbpath::String = "",
+    startvalsvars::String = "",
     quiet::Bool = false,
     writefilename::String = "nemomodel.bz2",
     writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS
@@ -974,10 +1137,80 @@ function writescenariomodel(
 
     try
         modelscenario(dbpath; calcyears=calcyears, varstosave=varstosave, restrictvars=restrictvars,
-            continuoustransmission=continuoustransmission, forcemip=forcemip, quiet=quiet, writemodel=true,
-            writefilename=writefilename, writefileformat=writefileformat)
+            continuoustransmission=continuoustransmission, forcemip=forcemip, startvalsdbpath=startvalsdbpath,
+            startvalsvars=startvalsvars, quiet=quiet, writemodel=true, writefilename=writefilename,
+            writefileformat=writefileformat)
     catch e
         println("NEMO encountered an error with the following message: " * sprint(showerror, e) * ".")
         println("To report this issue to the NEMO team, please submit an error report at https://leap.sei.org/support/. Please include in the report a list of steps to reproduce the error and the error message.")
     end
 end  # writescenariomodel
+
+"""
+    setstartvalues(jumpmodel::JuMP.Model,
+        seeddbpath::String,
+        quiet::Bool = false;
+        selectedvars::Array{String,1} = Array{String,1}()
+    )
+
+Sets starting values for variables in `jumpmodel` using results saved in a previously calculated
+scenario database.
+
+# Arguments
+
+- `jumpmodel::JuMP.Model`: Model in which to set starting values for variables.
+- `seeddbpath::String`: Path to previously calculated scenario database. Results in this
+    database are used as starting values for matching variables in `jumpmodel`.
+- `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to STDOUT).
+- `selectedvars::Array{String,1}`: Array of names of variables for which starting values should
+    be set. If this argument is an empty array, starting values are set for all variables present
+    in both `jumpmodel` and the previously calculated scenario database.
+"""
+function setstartvalues(jumpmodel::JuMP.Model, seeddbpath::String, quiet::Bool = false; selectedvars::Array{String,1} = Array{String,1}())
+    # BEGIN: Validate seeddbpath and connect to seed DB.
+    if !isfile(seeddbpath)
+        logmsg("Could not set variable start values: no file found at $seeddbpath. Continuing with NEMO.")
+        return
+    end
+
+    seeddb::SQLite.DB = SQLite.DB()
+
+    try
+        seeddb = SQLite.DB(seeddbpath)
+        SQLite.DBInterface.execute(seeddb, "select 1 from sqlite_master limit 1")  # Verify connectivity
+    catch
+        logmsg("Could not set variable start values: no scenario database found at $seeddbpath. Continuing with NEMO.")
+        return
+    end
+    # END: Validate seeddbpath and connect to seed DB.
+
+    # BEGIN: Process selected result tables and set start values in jumpmodel.
+    SQLite.DBInterface.execute(seeddb, "pragma case_sensitive_like = true")
+
+    for smrow in SQLite.DBInterface.execute(seeddb, "select name from sqlite_master where type = 'table' and name like 'v%'
+        $(length(selectedvars) > 0 ? " and name in ('" * join(selectedvars, "','") * "')" : "")")
+
+        local tname = smrow[:name]  # Name of table being processed
+        local selectfields::Array{String,1} = Array{String,1}()  # Names of fields to select from table being processed, excluding val
+        local excludefields::Array{String,1} = ["solvedtm", "val"]  # Fields that are not added to selectfields in following loop
+
+        # Build selectfields
+        for row in SQLite.DBInterface.execute(seeddb, "pragma table_info('$tname')")
+            if !in(row[:name], excludefields)
+                push!(selectfields, row[:name])
+            end
+        end
+
+        # Set start values for variables existing in jumpmodel and seeddb
+        for row in SQLite.DBInterface.execute(seeddb, "select $(join(selectfields,",")), val from $tname")
+            local var = variable_by_name(jumpmodel, "$tname[$(join([row[Symbol(f)] for f in selectfields], ","))]")
+
+            !isnothing(var) && set_start_value(var, row[:val])
+        end
+    end  # smrow
+
+    SQLite.DBInterface.execute(seeddb,"pragma case_sensitive_like = false")
+    # END: Process selected result tables and set start values in jumpmodel.
+
+    logmsg("Set variable start values using values in $(normpath(seeddbpath)).", quiet)
+end  # setstartvalues(jumpmodel::JuMP.Model, seeddbpath::String, quiet::Bool = false; selectedvars::Array{String,1} = Array{String,1}())

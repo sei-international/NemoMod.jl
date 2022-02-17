@@ -13,31 +13,37 @@
         varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual,
             vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
             vusenn, vtotaldiscountedcost",
-        restrictvars::Bool = true, reportzeros::Bool = false, continuoustransmission::Bool = false,
-        forcemip::Bool = false, quiet::Bool = false
+        restrictvars::Bool = true, reportzeros::Bool = false,
+        continuoustransmission::Bool = false,
+        forcemip::Bool = false, startvalsdbpath::String = "",
+        startvalsvars::String = "", precalcresultspath::String = "",
+        quiet::Bool = false
     )
 
 Calculates a scenario specified in a scenario database. Returns a `MathOptInterface.TerminationStatusCode` indicating
-the termination status reported by the solver (e.g., `OPTIMAL::TerminationStatusCode = 1`).
+the termination status reported by the solver used for the calculation (e.g., `OPTIMAL::TerminationStatusCode = 1`).
 
 # Arguments
-- `dbpath::String`: Path to the scenario database (must be a SQLite version 3 database).
+- `dbpath::String`: Path to the scenario database, which must be a SQLite version 3 database that
+    implements NEMO's scenario database structure. See NEMO's documentation on scenario databases
+    for details. Empty scenario databases can be generated with NEMO's `createnemodb` function.
 - `jumpmodel::JuMP.Model`: [JuMP](https://github.com/jump-dev/JuMP.jl) model object
-    specifying the solver to be used.
+    specifying the solver to be used for the calculation.
     Examples: `Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))`,
     `Model(CPLEX.Optimizer)`, `Model(optimizer_with_attributes(Gurobi.Optimizer, "NumericFocus" => 1))`.
     Note that the solver's Julia package (Julia wrapper) must be installed. See the
     documentation for JuMP for information on how to specify a solver and set solver options.
 - `calcyears::Array{Int, 1}`: Years to include in the calculation (a subset of the years specified in
-    the scenario database). All years are included if this argument is omitted.
+    the scenario database). All years in the database are included if this argument is omitted.
 - `varstosave::String`: Comma-delimited list of output variables whose results should be
-    saved in the scenario database when the scenario is calculated.
+    saved in the scenario database when the scenario is calculated. See NEMO's documentation on
+    outputs for information on the variables that are available.
 - `restrictvars::Bool`: Indicates whether NEMO should conduct additional data analysis
-    to limit the set of model variables created for the scenario. By default, to improve
-    performance, NEMO selectively creates certain variables to avoid combinations of
-    subscripts that do not exist in the scenario's data. This option increases the
-    stringency of this filtering. It requires more processing time as the model is
-    built, but it can substantially reduce the solve time for large models.
+    to limit the set of variables created in the optimization problem for the scenario.
+    By default, to improve performance, NEMO selectively creates certain variables to
+    avoid combinations of subscripts that do not exist in the scenario's data. This option
+    increases the stringency of this filtering. It requires more processing time as the
+    problem is built, but it can substantially reduce the solve time for large models.
 - `reportzeros::Bool`: Indicates whether results saved in the scenario database should
     include values equal to zero. Specifying `false` can substantially improve the
     performance of large models.
@@ -48,6 +54,21 @@ the termination status reported by the solver (e.g., `OPTIMAL::TerminationStatus
     mixed-integer problem. This can improve performance with some solvers (e.g., CPLEX). If this
     option is set to `false`, the input parameters for the scenario (i.e., in the scenario
     database) determine whether the optimization problem is mixed-integer.
+- `startvalsdbpath::String`: Path to a previously calculated scenario database from which NEMO
+    should take starting values for variables in the optimization problem formulated in this
+    function. This argument is used in conjunction with `startvalsvars`.
+- `startvalsvars::String`: Comma-delimited list of variables for which starting values should be set.
+    See NEMO's documentation on outputs for information on the variables that are available. NEMO
+    takes starting values from output variable results saved in the database identified by
+    `startvalsdbpath`. Saved results are matched to variables in the optimization problem using
+    the variables' subscripts, and starting values are set with JuMP's `set_start_value` function.
+    If `startvalsvars` is an empty string, NEMO sets starting values for all variables present in
+    both the optimization problem and the `startvalsdbpath` database.
+- `precalcresultspath::String`: Path to a previously calculated scenario database that NEMO should
+    copy over the database specified by `dbpath`. This argument can also be a directory containing
+    previously calculated scenario databases, in which case NEMO copies any file in the directory
+    with the same name as the `dbpath` database. The intent of the argument is to short-circuit
+    calculations in situations where valid results already exist.
 - `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to
     `STDOUT`).
 """
@@ -62,11 +83,15 @@ function calculatescenario(
     reportzeros::Bool = false,
     continuoustransmission::Bool = false,
     forcemip::Bool = false,
+    startvalsdbpath::String = "",
+    startvalsvars::String = "",
+    precalcresultspath::String = "",
     quiet::Bool = false)
 
     try
         modelscenario(dbpath; jumpmodel=jumpmodel, calcyears=calcyears, varstosave=varstosave,
-            restrictvars=restrictvars, reportzeros=reportzeros, continuoustransmission=continuoustransmission, forcemip=forcemip, quiet=quiet)
+            restrictvars=restrictvars, reportzeros=reportzeros, continuoustransmission=continuoustransmission, forcemip=forcemip,
+            startvalsdbpath=startvalsdbpath, startvalsvars=startvalsvars, precalcresultspath=precalcresultspath, quiet=quiet)
     catch e
         println("NEMO encountered an error with the following message: " * sprint(showerror, e) * ".")
         println("To report this issue to the NEMO team, please submit an error report at https://leap.sei.org/support/. Please include in the report a list of steps to reproduce the error and the error message.")
@@ -81,7 +106,11 @@ end  # calculatescenario()
             vusenn, vtotaldiscountedcost",
         restrictvars::Bool = true,
         reportzeros::Bool = false, continuoustransmission::Bool = false,
-        forcemip::Bool = false, quiet::Bool = false,
+        forcemip::Bool = false,
+        startvalsdbpath::String = "",
+        startvalsvars::String = "",
+        precalcresultspath::String = "",
+        quiet::Bool = false,
         writemodel::Bool = false, writefilename::String = "",
         writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS
     )
@@ -97,6 +126,9 @@ function modelscenario(
     reportzeros::Bool = false,
     continuoustransmission::Bool = false,
     forcemip = false,
+    startvalsdbpath::String = "",
+    startvalsvars::String = "",
+    precalcresultspath::String = "",
     quiet::Bool = false,
     writemodel::Bool = false,
     writefilename::String = "",
@@ -127,10 +159,11 @@ logmsg("Validated run-time arguments.", quiet)
 configfile = getconfig(quiet)  # ConfParse structure for config file if one is found; otherwise nothing
 
 if configfile != nothing
-    # Array of Boolean arguments for calculatescenario(); necessary in order to have mutable objects for getconfigargs! call
+    # Arrays of Boolean and string arguments for calculatescenario(); necessary in order to have mutable objects for getconfigargs! call
     local boolargs::Array{Bool,1} = [restrictvars,reportzeros,continuoustransmission,forcemip,quiet]
+    local stringargs::Array{String,1} = [startvalsdbpath,startvalsvars,precalcresultspath]
 
-    getconfigargs!(configfile, calcyears, varstosavearr, boolargs, quiet)
+    getconfigargs!(configfile, calcyears, varstosavearr, boolargs, stringargs, quiet)
 
     restrictvars = boolargs[1]
     reportzeros = boolargs[2]
@@ -138,9 +171,40 @@ if configfile != nothing
     forcemip = boolargs[4]
     quiet = boolargs[5]
 
+    startvalsdbpath = stringargs[1]
+    startvalsvars = stringargs[2]
+    precalcresultspath = stringargs[3]
+
     setsolverparamsfromcfg(configfile, jumpmodel, quiet)
 end
 # END: Read config file and process calculatescenarioargs and solver blocks.
+
+# BEGIN: Check precalcresultspath and return pre-calculated scenario database if appropriate.
+if length(precalcresultspath) > 0
+    local precalcfilepath::String = ""  # Full path to pre-calculated scenario database, if precalcresultspath identifies one
+
+    if isfile(precalcresultspath)
+        precalcfilepath = normpath(precalcresultspath)
+    elseif isdir(precalcresultspath)
+        (root, dirs, files) = first(walkdir(precalcresultspath))
+
+        for f in files
+            if f == basename(dbpath)
+                precalcfilepath = normpath(joinpath(root, f))
+                break
+            end
+        end
+    end
+
+    if length(precalcfilepath) > 0
+        cp(precalcfilepath, dbpath; force=true, follow_symlinks=true)
+        logmsg("Copied pre-calculated results file $precalcfilepath to $(normpath(dbpath)). Finished modeling scenario." )
+        return termination_status(jumpmodel)
+    end
+
+    logmsg("Could not identify a pre-calculated results file using precalcresultspath argument. Continuing with NEMO." )
+end
+# END: Check precalcresultspath and return pre-calculated scenario database if appropriate.
 
 # BEGIN: Check whether modeling is for selected years only.
 local restrictyears::Bool = (calcyears == Array{Int, 1}() ? false : true)  # Indicates whether scenario modeling is for a selected set of years
@@ -165,7 +229,7 @@ end
 
 # BEGIN: Connect to SQLite database.
 db = SQLite.DB(dbpath)
-logmsg("Connected to scenario database. Path = " * dbpath * ".", quiet)
+logmsg("Connected to scenario database. Path = " * normpath(dbpath) * ".", quiet)
 # END: Connect to SQLite database.
 
 # BEGIN: Update database if necessary.
@@ -834,6 +898,13 @@ logmsg("Defined combined nodal and non-nodal variables.", quiet)
 
 logmsg("Finished defining model variables.", quiet)
 # END: Define model variables.
+
+# BEGIN: Set variable start values.
+if length(startvalsdbpath) > 0
+    # For call to setstartvalues, convert startvalsvars into an array of strings with no empty values
+    setstartvalues(jumpmodel, startvalsdbpath, quiet; selectedvars = String.(split(replace(startvalsvars, " " => ""), ","; keepempty = false)))
+end
+# END: Set variable start values.
 
 # BEGIN: Define model constraints.
 
@@ -6076,7 +6147,7 @@ else
 
     # BEGIN: Save results to database.
     if Int(returnval) == 1 && has_values(jumpmodel)  # 1 = Optimal
-        savevarresults(varstosavearr, modelvarindices, db, solvedtmstr, reportzeros, quiet)
+        savevarresults_threaded(varstosavearr, modelvarindices, db, solvedtmstr, reportzeros, quiet)
         logmsg("Finished saving results to database.", quiet)
     else
         logmsg("Solver did not find an optimal solution for model. No results will be saved to database.")
