@@ -4,7 +4,7 @@ CurrentModule = NemoMod
 
 # [Scenario databases](@id scenario_db)
 
-Scenario databases store inputs and outputs for a NEMO model scenario, including dimensions, parameters, and calculated result variables. Each scenario has its own database. To calculate a scenario, you pass its database to the [`calculatescenario`](@ref) function. NEMO then reads inputs from the database and writes results back to it.
+Scenario databases store inputs and outputs for a NEMO model scenario, including [dimensions](@ref dimensions), [parameters](@ref parameters), and [calculated result variables](@ref variables). Each scenario has its own database. To calculate a scenario, you pass its database to the [`calculatescenario`](@ref) function. NEMO then reads inputs from the database and writes results back to it.
 
 !!! tip
     For examples of scenario databases, look in the `test` directory for the NEMO Julia package. You can find this directory as follows.
@@ -17,7 +17,7 @@ Scenario databases store inputs and outputs for a NEMO model scenario, including
 
 ## Tables
 
-Scenario databases include tables for [dimensions](@ref dimensions), [parameters](@ref parameters), and [calculated variables](@ref variables), all described in other parts of this documentation. There is also a table called `Version` that indicates the NEMO data dictionary version with which the database is compatible.
+Scenario databases include tables for dimensions, parameters, and calculated variables, all described in other parts of this documentation. There is also a table called `Version` that indicates the NEMO data dictionary version with which the database is compatible.
 
 ## Views and indices
 
@@ -25,7 +25,7 @@ When NEMO calculates a scenario, it automatically builds views and indices in th
 
 ## Database platform
 
-NEMO uses [SQLite](https://www.sqlite.org/) version 3 as its database platform. You can access a scenario database with any SQLite client, such as [DB Browser for SQLite](https://sqlitebrowser.org/). To work with a scenario database in Julia, use the [SQLite package](https://juliadatabases.github.io/SQLite.jl/stable/).
+NEMO uses [SQLite](https://www.sqlite.org/) version 3 as its database platform. You can access a scenario database with any SQLite client, such as [DB Browser for SQLite](https://sqlitebrowser.org/). To work with a scenario database in Julia, use the [SQLite package](https://juliadatabases.org/SQLite.jl/stable/).
 
 ## Utility functions
 

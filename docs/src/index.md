@@ -17,6 +17,7 @@ NEMO is a high-performance, open-source energy system optimization modeling tool
 - Support for simulating selected years in a modeling period
 - Parallel processing
 - Support for multiple solvers: [Cbc](https://github.com/coin-or/Cbc), [CPLEX](https://www.ibm.com/analytics/cplex-optimizer), [GLPK](https://www.gnu.org/software/glpk/), [Gurobi](https://www.gurobi.com/), [Mosek](https://www.mosek.com/), and [Xpress](https://www.fico.com/en/products/fico-xpress-optimization)
+- Optimization warm starts
 - [SQLite](https://www.sqlite.org/) data store
 - Numerous performance tuning options
 
@@ -26,7 +27,7 @@ For more background on NEMO and its raison d'être, see the README at NEMO's [Gi
 
 # NEMO team
 
-NEMO is a project of the Energy Modeling Program at the [Stockholm Environment Institute](https://www.sei.org/) (SEI). Key contributors include [Jason Veysey](https://www.sei.org/people/jason-veysey/), [Eric Kemp-Benedict](https://www.sei.org/people/eric-kemp-benedict/), [Taylor Binnington](https://www.sei.org/people/taylor-binnington/), and [Charlie Heaps](https://www.sei.org/people/charles-heaps/). The project was started through an SEI Seed & Innovation grant funded by the [Swedish International Development Cooperation Agency](https://www.sida.se/English/) (Sida).
+NEMO is a project of the Energy Modeling Program at the [Stockholm Environment Institute](https://www.sei.org/) (SEI). Key contributors include [Jason Veysey](https://www.sei.org/people/jason-veysey/), [Charlie Heaps](https://www.sei.org/people/charles-heaps/), [Eric Kemp-Benedict](https://www.sei.org/people/eric-kemp-benedict/), and [Taylor Binnington](https://www.sei.org/people/taylor-binnington/). The project was started through an SEI Seed & Innovation grant funded by the [Swedish International Development Cooperation Agency](https://www.sida.se/English/) (Sida).
 
 ```@raw html
 <a href="https://www.sei.org"><img src="assets/sei_logo.svg" alt="SEI logo" style="display:block; margin: 0 auto"/></a>

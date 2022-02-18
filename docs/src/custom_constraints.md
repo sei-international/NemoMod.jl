@@ -62,12 +62,14 @@ build_constraints(SQLite.DB(csdbpath), csjumpmodel, csquiet, csrestrictyears, cs
 
 Note how the script uses the global variables, and also how it refers to NEMO [output variables](@ref variables) with the JuMP function `variable_by_name`. The calls to `variable_by_name` are necessary because the output variables are not in scope.
 
+Another good practice in this script is that it writes a message to `STDOUT` if it creates any new constraints. NEMO's [`logmsg`](@ref) function is invoked for this purpose.
+
 ## Custom constraints in LEAP-NEMO models
 
 For the most part, adding custom constraints to a LEAP-NEMO model is just a matter of following the procedure laid out above. There are a few additional steps, however, which are needed to ensure that at run-time, LEAP copies the custom constraints script and NEMO configuration file to the Julia working directory it uses with NEMO.
 
 1. Turn off LEAP.
-2. Name your custom constraints script with a `.txt` extension (e.g., `customconstraints.txt`), and save it in the LEAP Areas folder for your model. To find this folder, go to Settings -> Folders in LEAP, and make note of the path in the Areas field. The LEAP areas folder for your model is a subdirectory in this path with the same name as the model.
+2. Name your custom constraints script with a `.txt` extension (e.g., `customconstraints.txt`), and save it in the LEAP Areas folder for your model. To find this folder, go to Settings -> Folders in LEAP, and make note of the path in the Areas field. The LEAP Areas folder for your model is a subdirectory in this path with the same name as the model.
 3. Add a NEMO configuration file named `nemo.cfg` in the LEAP Areas folder for your model. In this file, set the `customconstraints` key in the `includes` block to `./[name of your custom constraints script]`. For example:
 
 ```

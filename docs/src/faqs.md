@@ -7,13 +7,17 @@ CurrentModule = NemoMod
 
 #### How can I install NEMO on 32-bit Windows?
 
-The [NEMO installer program](@ref installer_program) is only compatible with Windows 10 64-bit. If you want to run NEMO on 32-bit Windows, please follow the instructions for [GitHub installation](@ref github_installation) of NEMO. As they explain, you'll need separately to download and install Julia, then add the NEMO package within Julia.
+[NEMO's automated installer program](@ref installer_program) is only compatible with 64-bit Windows. If you want to run NEMO on 32-bit Windows, please follow the instructions for [GitHub installation](@ref github_installation) of NEMO. As they explain, you'll need to download and install Julia, then add the NEMO package within Julia.
 
 With GitHub installation, NEMO will be slower to start than if installed with the installer program. This is because the installer program supplies a pre-compiled session environment (system image) for Julia that includes support for NEMO. Without this component, Julia performs some of the compilation of NEMO each time NEMO is run. To create your own pre-compiled session environment for a 32-bit installation, you can use the [PackageCompiler tool](https://github.com/JuliaLang/PackageCompiler.jl).
 
+#### Can I install NEMO for all Windows users?
+
+Yes, the easiest way to do this is to use the [NEMO installer program](@ref installer_program). As of NEMO 1.7, the installer program installs NEMO for all Windows users. If you [install NEMO from GitHub](@ref github_installation), you'll have to make sure Julia is installed for all users, and all users have access to a Julia environment that includes NEMO's Julia package. See the Julia documentation for details on Julia environments.
+
 #### I got an error when I ran the [NEMO installer program](@ref installer_program). What should I do?
 
-If you're running the installer on Windows, **make sure you're using a licensed copy of Windows 10 64-bit**. The installer may not work on other versions of Windows, including Windows 7. If you've verified your operating system but are still encountering an error, click the "Show details" button in the installer and record the error message. You can then report the issue at the [LEAP and NEMO support forum](https://leap.sei.org/support/). When you do, please note which operating system and operating-system display language you're using.
+If you're running the installer on Windows, **make sure you're using a licensed copy of Windows 10 or 11 64-bit**. The installer may not work on other versions of Windows, including Windows 7. If you've verified your operating system but are still encountering an error, click the "Show details" button in the installer and record the error message. You can then report the issue at the [LEAP and NEMO support forum](https://leap.sei.org/support/). When you do, please note which operating system and operating-system display language you're using.
 
 #### Is there a silent mode for the [NEMO installer program](@ref installer_program)?
 
@@ -42,7 +46,7 @@ See [Performance tips](@ref performance_tips) for some ideas.
 
 #### Are there training exercises for NEMO?
 
-Not yet, but the NEMO team is working on it. Exercises will be linked here when they're ready.
+An [introductory training lecture on NEMO and using NEMO with LEAP](https://www.youtube.com/watch?v=RjwtX2eL7tM&list=PLX-Kjcc7K01HvpJxOMfjMS69e2ZAADGso&index=6) is available on the LEAP YouTube Channel. The NEMO team is working on NEMO exercises and will link them here when they're ready.
 
 #### Where should I report problems with NEMO?
 
