@@ -80,7 +80,7 @@ Fraction of time a [technology](@ref technology) is available to operate.
 
 Increment in which endogenously determined capacity is added for a [technology](@ref technology).
 
-!!! warning
+!!! note
     If this parameter is defined, NEMO uses an integer variable to solve for the technology's endogenous capacity. This can substantially increase model run-time. If the parameter is not defined, a continuous variable is used instead.
 
 #### Scenario database

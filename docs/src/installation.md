@@ -78,9 +78,9 @@ When you [calculate a scenario](@ref scenario_calc) in NEMO, the tool formulates
 
     NEMO generates an ordinary LP optimization problem when calculating a scenario unless you do one of the following:
     * Set the [capacity of one technology unit](@ref CapacityOfOneTechnologyUnit) parameter (creates a mixed-integer linear programming [MILP] problem)
-    * Set the `continuoustransmission` argument for [`calculatescenario`](@ref) to `false` (creates an MILP problem if transmission modeling is enabled)
-    * Model a [transmission line](@ref transmissionline) with a non-zero variable cost (creates an MILP problem if transmission modeling is enabled)
-    * Model a transmission whose efficiency is less than 1 using [transmission modeling type 3 (pipeline flow)](@ref TransmissionModelingEnabled) (creates an MILP problem)
+    * Set the `continuoustransmission` argument for [`calculatescenario`](@ref) to `false` (creates a MILP problem if transmission modeling is enabled)
+    * Model a [transmission line](@ref transmissionline) with a non-zero variable cost (creates a MILP problem if transmission modeling is enabled)
+    * Model a transmission line whose efficiency is less than 1 using [transmission modeling type 3](@ref TransmissionModelingEnabled) (creates a MILP problem)
     * Run a direct current optimized power flow simulation using [transmission modeling type 1](@ref TransmissionModelingEnabled) (creates a problem with a quadratic term)
 
 Optimization operations in NEMO are carried out with version 0.21.6 of the [JuMP](https://github.com/JuliaOpt/JuMP.jl) package. In principle, NEMO is compatible with any solver that can be called through JuMP, but you must ensure the selected solver can handle the problem you're presenting (LP/MILP/quadratic). For a list of solvers that work with JuMP, see [the JuMP documentation](https://jump.dev/JuMP.jl/v0.21.6/installation/#Supported-solvers).

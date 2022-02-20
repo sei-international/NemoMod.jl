@@ -2311,7 +2311,7 @@ if transmissionmodeling
             local vc = ismissing(row[:vc]) ? 0.0 : row[:vc]
 
             # vtransmissionbyline is flow over line tr from n1 to n2; unit is MW
-            if (!ismissing(row[:eff]) && row[:eff] < 1) || vc > 0
+            if (!ismissing(row[:eff]) && row[:eff] < 1 && type == 3) || vc > 0
                 # Constraints to populate vtransmissionbylineneg - indicates whether corresponding vtransmissionbyline <= 0
                 push!(tr7_flowneg, @build_constraint(vtransmissionbyline[tr,l,f,y] >= (-row[:maxflow] - 0.000001) * vtransmissionbylineneg[tr,l,f,y] + 0.000001))
                 push!(tr7_flowneg, @build_constraint(vtransmissionbyline[tr,l,f,y] <= row[:maxflow] * (1 - vtransmissionbylineneg[tr,l,f,y])))

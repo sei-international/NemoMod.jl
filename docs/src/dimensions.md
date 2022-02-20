@@ -222,6 +222,10 @@ Connections between [nodes](@ref node) in a transmission (or transmission and di
 * Set of lines: `stransmission` (an `Array` of `TransmissionLine.id`)
 * Subscript for lines in other variables: `tr`
 
+!!! note
+
+    NEMO includes binary decision variables in a scenario's optimization problem if you a) model a transmission line with a non-zero variable cost; or b) model a line with an efficiency less than 1 using [transmission modeling type 3](@ref TransmissionModelingEnabled). This can increase solver run-time.
+
 ## [Year](@id year)
 
 Years covered by scenario. Years must be integral. **Abbreviation: `y`.**
