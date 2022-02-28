@@ -912,11 +912,11 @@ end
 local cons_channel::Channel{Array{AbstractConstraint,1}} = Channel{Array{AbstractConstraint,1}}(Threads.nthreads() * 2)  # A channel used as a queue for built constraints that must be added to the model
 local numconsarrays::Int64 = 0  # Number of Array{AbstractConstraint,1} of built constraints that must be added to the model
 local numaddedconsarrays::Int64 = 0  # Number of Array{AbstractConstraint,1} of built constraints that have been added to the model
-local finishedbuildingcons::Bool = false  # Indicates whether all constraints have been built (but not necessarily added to the model)
+local finishedqueuingcons::Bool = false  # Indicates whether all constraints have been queued for building (but not necessarily built or added to the model)
 
 # BEGIN: Schedule task to add constraints to model asynchronously.
 addconstask::Task = @task begin
-    while !finishedbuildingcons || numaddedconsarrays < numconsarrays
+    while !finishedqueuingcons || numaddedconsarrays < numconsarrays
         if isready(cons_channel)
             local a = take!(cons_channel)
             #@info "Performed take for numconsarrays = " * string(numconsarrays)
@@ -925,7 +925,13 @@ addconstask::Task = @task begin
             numaddedconsarrays += 1
             #@info "In while loop. numaddedconsarrays = " * string(numaddedconsarrays)
         else
-            wait(cons_channel)
+            if numaddedconsarrays == numconsarrays
+                #@info "Yielding. finishedqueuingcons = $finishedqueuingcons, numconsarrays = $numconsarrays, numaddedconsarrays = $numaddedconsarrays"
+                yield()  # Provides a chance to update finishedqueuingcons before continuing (i.e., once all constraints are built and added to cons_channel)
+            else
+                #@info "Waiting. finishedqueuingcons = $finishedqueuingcons, numconsarrays = $numconsarrays, numaddedconsarrays = $numaddedconsarrays"
+                wait(cons_channel)
+            end
         end
     end
 
@@ -936,6 +942,10 @@ end
 schedule(addconstask)
 logmsg("Scheduled task to add constraints to model.", quiet)
 # END: Schedule task to add constraints to model asynchronously.
+
+# BEGIN: Wrap multi-threaded constraint building in @sync to allow any errors to propagate.
+# For readability's sake, code within @sync block is not indented
+@sync(begin
 
 # BEGIN: EQ_SpecifiedDemand.
 if in("vrateofdemandnn", varstosavearr)
@@ -6101,12 +6111,14 @@ if restrictyears && size(queries["queryvmodelperiodemissions"])[1] > 0
 end
 # END: E9_ModelPeriodEmissionsLimit.
 
-# BEGIN: Ensure all non-custom constraints are added to model.
 logmsg("Queued $numconsarrays standard constraints for creation.", quiet)
 
-finishedbuildingcons = true
+finishedqueuingcons = true
+end)  # @sync
+# END: Wrap multi-threaded constraint building in @sync to allow any errors to propagate.
 
-if numaddedconsarrays < numconsarrays
+# BEGIN: Ensure all non-custom constraints are added to model.
+if !istaskdone(addconstask)
     wait(addconstask)
 end
 
