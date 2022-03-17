@@ -16,7 +16,7 @@ end
 
 using Test, SQLite, DataFrames, JuMP
 
-const TOL = 0.01  # Default tolerance for isapprox() comparisons
+const TOL = 0.1  # Default tolerance for isapprox() comparisons
 
 if !@isdefined compilation  # Flag that turns off @test calls
     compilation = false
@@ -92,12 +92,12 @@ function param_default_db()
 end  # param_default_db()
 
 @testset "Solving a scenario" begin
-    #include(joinpath(@__DIR__, "cbc_tests.jl"))
-    #include(joinpath(@__DIR__, "cplex_tests.jl"))
-    #include(joinpath(@__DIR__, "glpk_tests.jl"))
-    #include(joinpath(@__DIR__, "gurobi_tests.jl"))
-    #include(joinpath(@__DIR__, "mosek_tests.jl"))
-    #include(joinpath(@__DIR__, "xpress_tests.jl"))
+    include(joinpath(@__DIR__, "cbc_tests.jl"))
+    include(joinpath(@__DIR__, "cplex_tests.jl"))
+    include(joinpath(@__DIR__, "glpk_tests.jl"))
+    include(joinpath(@__DIR__, "gurobi_tests.jl"))
+    include(joinpath(@__DIR__, "mosek_tests.jl"))
+    include(joinpath(@__DIR__, "xpress_tests.jl"))
 end  # @testset "Solving a scenario"
 
 @testset "Writing optimization problem for a scenario" begin
