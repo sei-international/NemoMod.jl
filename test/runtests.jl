@@ -56,6 +56,19 @@ function write_opt_prob(optprobfile::String)
     !compilation && @test isfile(optprobfile)
 end  # write_opt_prob(optprobfile::String)
 
+"""Helper function used in test of precalcresultspath logic. Wrapping file creation operations
+    in a function helps ensure Julia releases new files for modification/deletion."""
+function precalcresultspath_setup(testpath::String, db1name::String, db2name::String)
+    mkdir(testpath)
+
+    # Create two empty scenario databases, one used to test passing a directory path to precalcresultspath and one used to test passing a file path to precalcresultspath
+    NemoMod.createnemodb(joinpath(testpath, db1name))
+    !compilation && @test isfile(joinpath(testpath, db1name))
+
+    NemoMod.createnemodb(joinpath(testpath, db2name))
+    !compilation && @test isfile(joinpath(testpath, db2name))
+end  # precalcresultspath_setup(testpath::String, db1name::String, db2name::String)
+
 """Helper function used in test of creating a new NEMO database. Wrapping SQLite
     operations in a function helps ensure Julia releases new DB file for deletion."""
 function new_nemo_db()
@@ -79,12 +92,12 @@ function param_default_db()
 end  # param_default_db()
 
 @testset "Solving a scenario" begin
-    include(joinpath(@__DIR__, "cbc_tests.jl"))
-    include(joinpath(@__DIR__, "cplex_tests.jl"))
-    include(joinpath(@__DIR__, "glpk_tests.jl"))
-    include(joinpath(@__DIR__, "gurobi_tests.jl"))
-    include(joinpath(@__DIR__, "mosek_tests.jl"))
-    include(joinpath(@__DIR__, "xpress_tests.jl"))
+    #include(joinpath(@__DIR__, "cbc_tests.jl"))
+    #include(joinpath(@__DIR__, "cplex_tests.jl"))
+    #include(joinpath(@__DIR__, "glpk_tests.jl"))
+    #include(joinpath(@__DIR__, "gurobi_tests.jl"))
+    #include(joinpath(@__DIR__, "mosek_tests.jl"))
+    #include(joinpath(@__DIR__, "xpress_tests.jl"))
 end  # @testset "Solving a scenario"
 
 @testset "Writing optimization problem for a scenario" begin
@@ -99,6 +112,49 @@ end  # @testset "Solving a scenario"
 
     !compilation && @test !isfile(optprobfile)
 end  # @testset "Writing optimization problem for a scenario"
+
+@testset "Testing precalcresultspath logic" begin
+    @info "Testing precalcresultspath logic."
+
+    testpath = joinpath(@__DIR__, "precalctest")
+    db1name = "storage_test.sqlite"
+    db2name = "precalctest.sqlite"
+    precalcresultspath_setup(testpath, db1name, db2name)
+
+    db1path = joinpath(testpath, db1name)
+    db2path = joinpath(testpath, db2name)
+
+    # BEGIN: Test passing a directory path to precalcresultspath.
+    # db1 should be overwritten with file in precalcresultspath with same name
+    NemoMod.calculatescenario(db1path; precalcresultspath=@__DIR__)
+
+    !compilation && @test isfile(db1path)
+    db = SQLite.DB(db1path)
+    !compilation && @test !SQLite.done(SQLite.DBInterface.execute(db, "select val from TECHNOLOGY"))
+
+    # Try up to 20 times to delete file
+    GC.gc()
+    delete_file(db1path, 20)
+    !compilation && @test !isfile(db1path)
+    # END: Test passing a directory path to precalcresultspath.
+
+    # BEGIN: Test passing a file path to precalcresultspath.
+    # db2 should be overwritten with specified file
+    NemoMod.calculatescenario(db2path; precalcresultspath=joinpath(@__DIR__, "storage_test.sqlite"))
+
+    !compilation && @test isfile(db2path)
+    db = SQLite.DB(db2path)
+    !compilation && @test !SQLite.done(SQLite.DBInterface.execute(db, "select val from TECHNOLOGY"))
+
+    # Try up to 20 times to delete file
+    GC.gc()
+    delete_file(db2path, 20)
+    !compilation && @test !isfile(db2path)
+    # END: Test passing a file path to precalcresultspath.
+
+    rm(testpath)
+    !compilation && @test !ispath(testpath)
+end  # @testset "Testing precalcresultspath logic"
 
 @testset "Other database operations" begin
     @info "Testing other database operations."
