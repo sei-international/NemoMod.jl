@@ -120,6 +120,7 @@ end  # @testset "Writing optimization problem for a scenario"
     db1name = "storage_test.sqlite"
     db2name = "precalctest.sqlite"
     precalcresultspath_setup(testpath, db1name, db2name)
+    GC.gc()
 
     db1path = joinpath(testpath, db1name)
     db2path = joinpath(testpath, db2name)
@@ -133,7 +134,7 @@ end  # @testset "Writing optimization problem for a scenario"
     !compilation && @test !SQLite.done(SQLite.DBInterface.execute(db, "select val from TECHNOLOGY"))
 
     # Try up to 20 times to delete file
-    GC.gc()
+    finalize(db); db = nothing; GC.gc()
     delete_file(db1path, 20)
     !compilation && @test !isfile(db1path)
     # END: Test passing a directory path to precalcresultspath.
@@ -147,7 +148,7 @@ end  # @testset "Writing optimization problem for a scenario"
     !compilation && @test !SQLite.done(SQLite.DBInterface.execute(db, "select val from TECHNOLOGY"))
 
     # Try up to 20 times to delete file
-    GC.gc()
+    finalize(db); db = nothing; GC.gc()
     delete_file(db2path, 20)
     !compilation && @test !isfile(db2path)
     # END: Test passing a file path to precalcresultspath.
