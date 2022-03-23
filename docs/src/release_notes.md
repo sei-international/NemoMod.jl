@@ -7,6 +7,9 @@ This page highlights key changes in NEMO since its initial public release. For a
 
 ## Version 1.7
 
+!!! note
+    To use NEMO 1.7 with LEAP, please ensure you are running LEAP version **2020.1.0.57** or higher.
+
   * **Multi-threading:** Implemented a new paradigm for parallel processing in NEMO - replaced distributed Julia processes with multi-threading. In addition to streamlining operations that were already parallelized, this change allowed parallelization of constraint creation and results saving in [`calculatescenario`](@ref scenario_calc). It should reduce run-time and memory use for most models. Deprecated the `numprocs` and `targetprocs` arguments for `calculatescenario` and [`writescenariomodel`](@ref writescenariomodel); they were used to select distributed Julia processes and are no longer needed. When parallel processing, NEMO uses as many threads as are available in the Julia session. This in turn is controlled by a command line argument or environment variable provided when invoking Julia (see [Julia's documentation](https://docs.julialang.org/) for details).
 
   * **Improved functionality for renewable energy targets:** Increased the flexibility and simplicity of NEMO's renewable energy target calculations. Added fuel as a dimension for [`REMinProductionTarget`](@ref REMinProductionTarget), so this parameter now describes the fraction of a fuel's production in a region and year that must be by renewable technologies. As in earlier versions of NEMO, the [`RETagTechnology`](@ref RETagTechnology) parameter determines the renewability of technologies. Modified the logic for verifying compliance with `REMinProductionTarget` to exclude production from storage. Removed the `RETagFuel` parameter and `vtotalreproductionannual` and `vretotalproductionoftargetfuelannual` output variables since the new calculation method made them superfluous.

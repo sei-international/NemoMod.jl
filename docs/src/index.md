@@ -28,11 +28,3 @@ For more background on NEMO and its raison d'être, see the README at NEMO's [Gi
 # NEMO team
 
 NEMO is a project of the Energy Modeling Program at the [Stockholm Environment Institute](https://www.sei.org/) (SEI). Key contributors include [Jason Veysey](https://www.sei.org/people/jason-veysey/), [Charlie Heaps](https://www.sei.org/people/charles-heaps/), [Eric Kemp-Benedict](https://www.sei.org/people/eric-kemp-benedict/), and [Taylor Binnington](https://www.sei.org/people/taylor-binnington/). The project was started through an SEI Seed & Innovation grant funded by the [Swedish International Development Cooperation Agency](https://www.sida.se/English/) (Sida).
-
-```@raw html
-<a href="https://www.sei.org"><img src="assets/sei_logo.svg" alt="SEI logo" style="display:block; margin: 0 auto"/></a>
-
-<div style="text-align:right">
-    <img src="https://hitcounter.pythonanywhere.com/count/tag.svg?url=https%3A%2F%2Fsei-international.github.io%2FNemoMod.jl%2F" alt="Hits">
-</div>
-```

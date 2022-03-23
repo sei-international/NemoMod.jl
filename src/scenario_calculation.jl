@@ -186,19 +186,16 @@ if length(precalcresultspath) > 0
     if isfile(precalcresultspath)
         precalcfilepath = normpath(precalcresultspath)
     elseif isdir(precalcresultspath)
-        (root, dirs, files) = first(walkdir(precalcresultspath))
+        local testpcf::String = normpath(joinpath(precalcresultspath, basename(realpath(dbpath))))
 
-        for f in files
-            if f == basename(dbpath)
-                precalcfilepath = normpath(joinpath(root, f))
-                break
-            end
+        if isfile(testpcf)
+            precalcfilepath = testpcf
         end
     end
 
     if length(precalcfilepath) > 0
         cp(precalcfilepath, dbpath; force=true, follow_symlinks=true)
-        logmsg("Copied pre-calculated results file $precalcfilepath to $(normpath(dbpath)). Finished modeling scenario." )
+        logmsg("Copied pre-calculated results file $precalcfilepath to $(realpath(dbpath)). Finished modeling scenario." )
         return termination_status(jumpmodel)
     end
 

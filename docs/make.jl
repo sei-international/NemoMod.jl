@@ -1,9 +1,30 @@
 using Documenter
 using NemoMod
 
+"""
+    Documenter.Writers.HTMLWriter.analytics_script(line::String)
+
+Overload of Documenter.Writers.HTMLWriter.analytics_script() that provides
+compatibility with Google Analytics 4.
+"""
+function Documenter.Writers.HTMLWriter.analytics_script(tracking_id::AbstractString)
+    if isempty(tracking_id)
+        return Documenter.Utilities.DOM.Tag(Symbol("#RAW#"))("")
+    else
+        return Documenter.Utilities.DOM.Tag(Symbol("#RAW#"))("""<!-- Global site tag (gtag.js) - Google Analytics -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=$(tracking_id)"></script>
+        <script>
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', '$(tracking_id)');
+        </script>""")
+    end
+end  # Documenter.Writers.HTMLWriter.analytics_script(tracking_id::AbstractString)
+
 makedocs(
     sitename = "NEMO",
-    format = Documenter.HTML(),
+    format = Documenter.HTML(analytics="G-9GTNP1Q3KY"),
     pages = [
         "Introduction" => "index.md"
         "Quick start" => "quick_start.md"
