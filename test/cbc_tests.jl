@@ -260,7 +260,7 @@ if @isdefined Cbc
         # Test transshipment power flow
         SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 3")
         SQLite.DBInterface.execute(db, "update TransmissionLine set efficiency = 0.9")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Cbc.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029])
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Cbc.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029], continuoustransmission=true)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -268,9 +268,9 @@ if @isdefined Cbc
             @test testqry[2,:y] == "2025"
             @test testqry[3,:y] == "2029"
 
-            @test isapprox(testqry[1,:val], 4855.79076447287; atol=TOL)
-            @test isapprox(testqry[2,:val], 2687.29032799192; atol=TOL)
-            @test isapprox(testqry[3,:val], 1738.34669443912; atol=TOL)
+            @test isapprox(testqry[1,:val], 4568.0349068348; atol=TOL)
+            @test isapprox(testqry[2,:val], 2866.3130600198; atol=TOL)
+            @test isapprox(testqry[3,:val], 1839.39242059821; atol=TOL)
         end
 
         SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 2")
