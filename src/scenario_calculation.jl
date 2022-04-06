@@ -51,8 +51,8 @@ the termination status reported by the solver used for the calculation (e.g., `O
     variables are used to represent investment decisions for candidate transmission lines. Not
     relevant in scenarios that do not model transmission.
 - `forcemip::Bool`: Forces NEMO to formulate the optimization problem for the scenario as a
-    mixed-integer problem. This can improve performance with some solvers (e.g., CPLEX). If this
-    option is set to `false`, the input parameters for the scenario (i.e., in the scenario
+    mixed-integer problem. This can improve performance with some solvers (e.g., CPLEX, Mosek). If
+    this option is set to `false`, the input parameters for the scenario (i.e., in the scenario
     database) determine whether the optimization problem is mixed-integer.
 - `startvalsdbpath::String`: Path to a previously calculated scenario database from which NEMO
     should take starting values for variables in the optimization problem formulated in this
