@@ -99,7 +99,7 @@ NEMO has been tested for compatibility with the following solver packages (which
 | Solver | Julia package version | Solver program versions |
 |:--- | :-- |:-- |
 | [Cbc](https://github.com/jump-dev/Cbc.jl) | 1.0.0 | 2.10.5 |
-| [CPLEX](https://github.com/jump-dev/CPLEX.jl) | 0.9.3 | 12.10 - 20.1 |
+| [CPLEX](https://github.com/jump-dev/CPLEX.jl) | 0.9.3 | 12.10 - 22.1 |
 | [GLPK](https://github.com/jump-dev/GLPK.jl) | 1.0.1 | 5.0 |
 | [Gurobi](https://github.com/jump-dev/Gurobi.jl) | 0.11.0 | 9.0 - 9.5 |
 | [Mosek](https://github.com/jump-dev/MosekTools.jl) | 1.2.2 | 9.3.18 |
