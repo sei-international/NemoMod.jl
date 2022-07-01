@@ -7,6 +7,9 @@ This page highlights key changes in NEMO since its initial public release. For a
 
 ## Version 1.8
 
+!!! note
+    To use NEMO 1.8 with LEAP, please ensure you are running LEAP version **2020.1.0.65** or higher.
+
   * **Julia platform upgrade:** Updated NEMO to run on Julia 1.7.2, JuMP 1.0.0, and new versions of the Julia interfaces (packages) for the Cbc, CPLEX, GLPK, Gurobi, Mosek, and Xpress solvers. With this enhancement, NEMO can now be used with Gurobi 9.5, CPLEX 22.1, and Xpress 8.10-8.13, among other solver versions. See [Solver compatibility](@ref solver_compatibility) for full details on compatible solvers.
 
 ## Version 1.7
