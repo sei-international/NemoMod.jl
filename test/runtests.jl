@@ -101,6 +101,34 @@ end  # param_default_db()
     include(joinpath(@__DIR__, "xpress_tests.jl"))
 end  # @testset "Solving a scenario"
 
+@testset "JuMP direct mode and bridging"
+    # Tests will be skipped if HiGHS package is not installed.
+    if @isdefined HiGHS
+        @info "Testing options to control JuMP direct mode and bridging."
+        dbfile = joinpath(@__DIR__, "storage_test.sqlite")
+        chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
+
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(HiGHS.Optimizer), jumpdirectmode=true)
+        db = SQLite.DB(dbfile)
+
+        if !compilation
+            @test DataFrame(SQLite.DBInterface.execute(db, "select count(*) from vtotaldiscountedcost"))[1,1] > 0
+        end
+
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(HiGHS.Optimizer), jumpbridges=false)
+
+        if !compilation
+            @test DataFrame(SQLite.DBInterface.execute(db, "select count(*) from vtotaldiscountedcost"))[1,1] > 0
+        end
+
+        # Delete test results and re-compact test database
+        NemoMod.dropresulttables(db)
+        testqry = SQLite.DBInterface.execute(db, "VACUUM")
+    else
+        @info "Skipping tests of options to control JuMP direct mode and bridging as HiGHS is not initialized."
+    end
+end  # @testset "JuMP direct mode and bridging"
+
 @testset "Writing optimization problem for a scenario" begin
     @info "Testing function to write optimization problem for a scenario."
     optprobfile = joinpath(@__DIR__, "storage_test_prob.gz")
