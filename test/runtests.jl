@@ -101,7 +101,7 @@ end  # param_default_db()
     include(joinpath(@__DIR__, "xpress_tests.jl"))
 end  # @testset "Solving a scenario"
 
-@testset "JuMP direct mode and bridging"
+@testset "JuMP direct mode and bridging" begin
     # Tests will be skipped if HiGHS package is not installed.
     if @isdefined HiGHS
         @info "Testing options to control JuMP direct mode and bridging."
