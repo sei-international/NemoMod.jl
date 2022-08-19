@@ -5,6 +5,18 @@ CurrentModule = NemoMod
 
 This page highlights key changes in NEMO since its initial public release. For a full history of NEMO releases, including the code for each version, see the [Releases page on NEMO's GitHub site](https://github.com/sei-international/NemoMod.jl/releases).
 
+## Version 1.9
+
+  * **Microarchitecture-specific optimizations:** Introduced microarchitecture-specific optimizations in the Julia system image delivered by the NEMO installer. This enhancement can reduce NEMO’s start-up and calculation time on many computers. Currently, optimizations for Skylake, Cannon Lake, Ice Lake, Rocket Lake, Tiger Lake, and Alder Lake microarchitectures are included in the installer.
+
+  * **Bug fix - renewable energy targets with transmission:** Fixed a bug in how NEMO handles renewable energy minimum production targets for fuels for which transmission modeling is enabled.
+
+  * **Options for JuMP direct mode and bridging:** Added two options that allow you to control whether NEMO uses JuMP's direct mode and bridging features when calculating a scenario. Both are arguments for [`calculatescenario`](@ref scenario_calc): `jumpdirectmode` enables/disables direct mode, while `jumpbridges` enables/disables bridging. These switches let you bypass default behavior of JuMP that enhances solver compatibility at the expense of performance. Turning on direct mode or deactivating bridging can substantially reduce memory use and solve time, but it may lead to solver errors. See the [documentation for `calculatescenario`](@ref scenario_calc) and [Performance tips](@performance_tips) for more details.
+
+  * **JuMP upgrade:** Updated NEMO to use JuMP 1.2.0, MathOptInterface 1.7.0, and the latest versions of the Julia interfaces (packages) for the Cbc, Gurobi, and Mosek solvers.
+
+  * **Other enhancements:** Implemented miscellaneous robustness improvements for multithreading in NEMO. Updated NEMO to use the latest versions of some other Julia packages on which it depends, including SQLite and DataFrames.
+
 ## Version 1.8
 
 !!! note

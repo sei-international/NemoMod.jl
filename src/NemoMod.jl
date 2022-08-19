@@ -20,28 +20,7 @@ export calculatescenario, createnemodb, dropdefaultviews, dropresulttables, logm
 
 # BEGIN: Access other modules and code files.
 using JuMP, SQLite, DataFrames, Dates, ConfParser, MathOptInterface
-using GLPK, Cbc  # Open-source solvers
-
-#= Proprietary solvers - enclosed in try blocks for users who aren't using NEMO installer
-try
-    using CPLEX
-catch
-    # Just continue
-end
-
-try
-    using Gurobi
-catch
-    # Just continue
-end
-
-try
-    using Mosek
-catch
-    # Just continue
-end
-
-# Do not load Xpress since it throws an unrecoverable error when loaded in a package on a machine without an Xpress license =#
+using Cbc  # Open-source solvers
 
 include("db_structure.jl")  # Functions for manipulating structure of scenario databases
 include("other_functions.jl")  # Core NEMO functions

@@ -246,7 +246,64 @@ function getconfigargs!(configfile::ConfParse, calcyears::Array{Int,1}, varstosa
             logmsg("Could not read quiet argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
         end
     end
+
+    if haskey(configfile, "calculatescenarioargs", "jumpdirectmode")
+        try
+            bools[6] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "jumpdirectmode")))
+            logmsg("Read jumpdirectmode argument from configuration file.", quiet)
+        catch e
+            logmsg("Could not read jumpdirectmode argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
+        end
+    end
+
+    if haskey(configfile, "calculatescenarioargs", "jumpbridges")
+        try
+            bools[7] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "jumpbridges")))
+            logmsg("Read jumpbridges argument from configuration file.", quiet)
+        catch e
+            logmsg("Could not read jumpbridges argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
+        end
+    end
 end  # getconfigargs!(configfile::ConfParse, calcyears::Array{Int,1}, varstosavearr::Array{String,1}, bools::Array{Bool,1}, quiet::Bool)
+
+"""
+    reset_jumpmodel(jumpmodel::JuMP.Model; direct::Bool=false, bridges::Bool=true,
+        quiet::Bool=false)
+
+Returns a `JuMP.Model` that uses the same solver as `jumpmodel`, whose use of JuMP's
+direct mode aligns with `direct`, and whose use of MathOptInterface bridging aligns
+with `bridges`. If `jumpmodel` is consistent with `direct` and `bridges`, it is
+returned unchanged. Otherwise a new `JuMP.Model` is returned (in which case model
+attributes and solver parameters are not preserved).
+
+# Arguments
+- `jumpmodel::JuMP.Model`: Original `JuMP.Model`.
+- `direct::Bool`: Indicates whether return value should be in JuMP's direct mode.
+- `bridges::Bool`: Indicates whether return value should use MathOptInterface bridging.
+- `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to `STDOUT`).
+"""
+function reset_jumpmodel(jumpmodel::JuMP.Model; direct::Bool=false, bridges::Bool=true,
+    quiet::Bool=false)
+
+    local returnval::JuMP.Model = jumpmodel  # This function's return value
+
+    if direct
+        if mode(jumpmodel) != JuMP.DIRECT
+            returnval = direct_model(typeof(unsafe_backend(jumpmodel))())
+            logmsg("Converted model to use JuMP's direct mode.", quiet)
+        end
+    else
+        if ((mode(jumpmodel) == JuMP.DIRECT)
+            || (bridges && !(typeof(backend(jumpmodel).optimizer) <: MathOptInterface.Bridges.LazyBridgeOptimizer))
+            || (!bridges && typeof(backend(jumpmodel).optimizer) <: MathOptInterface.Bridges.LazyBridgeOptimizer))
+
+            returnval = Model(typeof(unsafe_backend(jumpmodel)); add_bridges=bridges)
+            logmsg("Converted model to use JuMP's automatic mode $(bridges ? "with" : "without") MathOptInterface bridging.", quiet)
+        end
+    end
+
+    return returnval
+end  # reset_jumpmodel(jumpmodel::JuMP.Model; direct::Bool=false, bridges::Bool=false)
 
 """
     setsolverparamsfromcfg(configfile::ConfParse, jumpmodel::JuMP.Model, quiet::Bool)
@@ -462,8 +519,22 @@ function keydicts_threaded(df::DataFrames.DataFrame, numdicts::Int)
 
         # Threads.@threads waits for all tasks to finish before proceeding
         Threads.@threads for p=1:nt
-            results[p] = keydicts(df[((p-1) * blockdivrem[1] + 1):((p) * blockdivrem[1] + (p == nt ? blockdivrem[2] : 0)),:], numdicts)
+            # @info "calling keydicts for p=$p, df rows from $((p-1) * blockdivrem[1] + 1) to $((p) * blockdivrem[1] + (p == nt ? blockdivrem[2] : 0))"
+            results[p] = keydicts(deepcopy(df[((p-1) * blockdivrem[1] + 1):((p) * blockdivrem[1] + (p == nt ? blockdivrem[2] : 0)),:]), numdicts)
+            # @info "finished keydicts for p=$p"
         end
+
+        #= @sync(begin
+            for p in 1:nt
+                Threads.@spawn(begin
+                    local r = keydicts($(df[((p-1) * blockdivrem[1] + 1):((p) * blockdivrem[1] + (p == nt ? blockdivrem[2] : 0)),:]), $numdicts)
+
+                    lock(lck) do
+                        push!(results, r)
+                    end
+                end)
+            end
+        end) =#
 
         # Merge results from threaded tasks
         for i = 1:numdicts

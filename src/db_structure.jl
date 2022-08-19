@@ -690,7 +690,9 @@ function dropresulttables(db::SQLite.DB, quiet::Bool = true)
         # Begin SQLite transaction
         SQLite.DBInterface.execute(db, "BEGIN")
 
-        for tname in SQLite.tables(db).name
+        for t in SQLite.tables(db)
+            local tname = t.name
+            
             if tname[1:1] == "v" || (length(tname) >= 11 && tname[1:11] == "sqlite_stat")
                 SQLite.DBInterface.execute(db, "drop table " * tname)
                 logmsg("Dropped table " * tname * ".", quiet)

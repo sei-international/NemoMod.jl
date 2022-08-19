@@ -84,7 +84,7 @@ When you [calculate a scenario](@ref scenario_calc) in NEMO, the tool formulates
     * Run a direct current optimized power flow simulation using [transmission modeling type 1](@ref TransmissionModelingEnabled) (creates a problem with a quadratic term)
     * Set the `forcemip` argument for `calculatescenario` to `true` (creates a MILP problem)
 
-Optimization operations in NEMO are carried out with version 1.0.0 of the [JuMP](https://github.com/jump-dev/JuMP.jl) package. In principle, NEMO is compatible with any solver that can be called through JuMP, but you must ensure the selected solver can handle the problem you're presenting (LP/MILP/quadratic). For a list of solvers that work with JuMP, see [the JuMP documentation](https://jump.dev/JuMP.jl/v1.0.0/installation/#Supported-solvers).
+Optimization operations in NEMO are carried out with version 1.2.0 of the [JuMP](https://github.com/jump-dev/JuMP.jl) package. In principle, NEMO is compatible with any solver that can be called through JuMP, but you must ensure the selected solver can handle the problem you're presenting (LP/MILP/quadratic). For a list of solvers that work with JuMP, see [the JuMP documentation](https://jump.dev/JuMP.jl/v1.2.0/installation/#Supported-solvers).
 
 A solver can be specified when calculating a scenario in NEMO by passing a JuMP `Model` object that references the solver to NEMO's [`calculatescenario`](@ref) method. For example:
 
@@ -98,11 +98,11 @@ NEMO has been tested for compatibility with the following solver packages (which
 
 | Solver | Julia package version | Solver program versions |
 |:--- | :-- |:-- |
-| [Cbc](https://github.com/jump-dev/Cbc.jl) | 1.0.0 | 2.10.5 |
+| [Cbc](https://github.com/jump-dev/Cbc.jl) | 1.0.1 | 2.10.5 |
 | [CPLEX](https://github.com/jump-dev/CPLEX.jl) | 0.9.3 | 12.10 - 22.1 |
 | [GLPK](https://github.com/jump-dev/GLPK.jl) | 1.0.1 | 5.0 |
-| [Gurobi](https://github.com/jump-dev/Gurobi.jl) | 0.11.0 | 9.0 - 9.5 |
-| [Mosek](https://github.com/jump-dev/MosekTools.jl) | 1.2.2 | 9.3.18 |
+| [Gurobi](https://github.com/jump-dev/Gurobi.jl) | 0.11.3 | 9.0 - 9.5 |
+| [Mosek](https://github.com/jump-dev/MosekTools.jl) | 1.2.3 | 9.3.21 |
 | [Xpress](https://github.com/jump-dev/Xpress.jl) | 0.15.1 | 8.4 - 8.13 |
 
 !!! tip
