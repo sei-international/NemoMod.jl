@@ -2,31 +2,30 @@
     NEMO: Next Energy Modeling system for Optimization.
     https://github.com/sei-international/NemoMod.jl
 
-    Copyright © 2019: Stockholm Environment Institute U.S.
+    Copyright © 2022: Stockholm Environment Institute U.S.
 
-	File description: Tests of NemoMod package using CPLEX solver.
+	File description: Tests of NemoMod package using HiGHS solver.
 =#
 
 try
-    using CPLEX
+    using HiGHS
 catch e
-    @info "Error when initializing CPLEX. Error message: " * sprint(showerror, e) * "."
-    @info "Skipping CPLEX tests."
+    @info "Error when initializing HiGHS. Error message: " * sprint(showerror, e) * "."
+    @info "Skipping HiGHS tests."
     # Continue
 end
 
-# Tests will be skipped if CPLEX package is not installed.
-if @isdefined CPLEX
-    @info "Testing scenario solution with CPLEX."
+# Tests will be skipped if HiGHS package is not installed.
+if @isdefined HiGHS
+    @info "Testing scenario solution with HiGHS."
 
-    @testset "Solving storage_test with CPLEX" begin
-        dbfile = joinpath(@__DIR__, "storage_test.sqlite")
-        #dbfile = "c:/temp/storage_test.sqlite"
+    @testset "Solving storage_test with HiGHS" begin
+        #dbfile = joinpath(@__DIR__, "storage_test.sqlite")
+        dbfile = "c:/temp/storage_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(CPLEX.Optimizer),
-            restrictvars=false, quiet = false)
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(HiGHS.Optimizer), quiet = false)
 
         db = SQLite.DB(dbfile)
 
@@ -323,4 +322,4 @@ if @isdefined CPLEX
     end  # "Solving ramp_test with CPLEX"
 
     GC.gc()
-end  # @isdefined CPLEX
+end  # @isdefined HiGHS
