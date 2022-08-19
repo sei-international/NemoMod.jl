@@ -100,6 +100,8 @@ the termination status reported by the solver used for the calculation (e.g., `O
 function calculatescenario(
     dbpath::String;
     jumpmodel::JuMP.Model = Model(Cbc.Optimizer),
+    jumpdirectmode::Bool = false,
+    jumpbridges::Bool = true,
     calcyears::Array{Int, 1} = Array{Int, 1}(),
     varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
     numprocs::Int = 0,
@@ -114,9 +116,9 @@ function calculatescenario(
     quiet::Bool = false)
 
     try
-        modelscenario(dbpath; jumpmodel=jumpmodel, calcyears=calcyears, varstosave=varstosave,
-            restrictvars=restrictvars, reportzeros=reportzeros, continuoustransmission=continuoustransmission, forcemip=forcemip,
-            startvalsdbpath=startvalsdbpath, startvalsvars=startvalsvars, precalcresultspath=precalcresultspath, quiet=quiet)
+        modelscenario(dbpath; jumpmodel=jumpmodel, jumpdirectmode=jumpdirectmode, jumpbridges=jumpbridges, calcyears=calcyears,
+            varstosave=varstosave, restrictvars=restrictvars, reportzeros=reportzeros, continuoustransmission=continuoustransmission,
+            forcemip=forcemip, startvalsdbpath=startvalsdbpath, startvalsvars=startvalsvars, precalcresultspath=precalcresultspath, quiet=quiet)
     catch e
         println("NEMO encountered an error with the following message: " * sprint(showerror, e) * ".")
         println("To report this issue to the NEMO team, please submit an error report at https://leap.sei.org/support/. Please include in the report a list of steps to reproduce the error and the error message.")
