@@ -102,13 +102,14 @@ NEMO has been tested for compatibility with the following solver packages (which
 | [CPLEX](https://github.com/jump-dev/CPLEX.jl) | 0.9.3 | 12.10 - 22.1 |
 | [GLPK](https://github.com/jump-dev/GLPK.jl) | 1.0.1 | 5.0 |
 | [Gurobi](https://github.com/jump-dev/Gurobi.jl) | 0.11.3 | 9.0 - 9.5 |
+| [HiGHS](https://github.com/jump-dev/HiGHS.jl) | 1.1.4 | 1.2.1 |
 | [Mosek](https://github.com/jump-dev/MosekTools.jl) | 1.2.3 | 9.3.21 |
 | [Xpress](https://github.com/jump-dev/Xpress.jl) | 0.15.1 | 8.4 - 8.13 |
 
 !!! tip
     Older versions of NEMO may be compatible with older versions of these solvers. For example, [NEMO 1.2](https://github.com/sei-international/NemoMod.jl/releases/tag/v1.2) is compatible with CPLEX 12.8 - 12.9 and Gurobi 7 - 8.
 
-If you install NEMO with the [NEMO installer](@ref installer_program), all of the preceding solver packages will be installed as well. The packages for the open-source solvers (GLPK and Cbc) come with the underlying solver programs, so you should be able to use these solvers immediately upon installation.
+If you install NEMO with the [NEMO installer](@ref installer_program), all of the preceding solver packages will be installed as well. The packages for the open-source solvers (Cbc, GLPK, and HiGHS) come with the underlying solver programs, so you should be able to use these solvers immediately upon installation.
 
 The Mosek Julia package also provides the underlying solver program. In this case, though, you must have a valid Mosek license installed on your computer in order to use the solver. Typically, for a single-computer license (a server license), a license file must be installed at `%USERPROFILE%\mosek\mosek.lic` (Windows) or `$HOME/mosek/mosek.lic` (Linux or MacOS). See the [Mosek documentation](https://www.mosek.com/resources/getting-started/) for more information.
 

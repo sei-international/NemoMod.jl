@@ -7,6 +7,8 @@ This page highlights key changes in NEMO since its initial public release. For a
 
 ## Version 1.9
 
+  * **HiGHS solver:** Added [HiGHS](https://highs.dev/) as an officially supported NEMO solver. HiGHS is a high-performance, open-source solver that works with linear programming, mixed-integer programming, and quadratic programming models. This enhancement includes incorporating HiGHS in the Julia system image that's distributed with the [NEMO installer program](@ref installer_program).
+
   * **Microarchitecture-specific optimizations:** Introduced microarchitecture-specific optimizations in the Julia system image delivered by the NEMO installer. This enhancement can reduce NEMO’s start-up and calculation time on many computers. Currently, optimizations for Skylake, Cannon Lake, Ice Lake, Rocket Lake, Tiger Lake, and Alder Lake microarchitectures are included in the installer.
 
   * **Bug fix - renewable energy targets with transmission:** Fixed a bug in how NEMO handles renewable energy minimum production targets for fuels for which transmission modeling is enabled.
