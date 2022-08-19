@@ -20,8 +20,8 @@ if @isdefined HiGHS
     @info "Testing scenario solution with HiGHS."
 
     @testset "Solving storage_test with HiGHS" begin
-        #dbfile = joinpath(@__DIR__, "storage_test.sqlite")
-        dbfile = "c:/temp/storage_test.sqlite"
+        dbfile = joinpath(@__DIR__, "storage_test.sqlite")
+        #dbfile = "c:/temp/storage_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
@@ -56,44 +56,11 @@ if @isdefined HiGHS
         end
 
         # Test with optional outputs
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(CPLEX.Optimizer),
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(HiGHS.Optimizer),
             varstosave =
                 "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vrateofdemand, vproductionbytechnology, vtotaltechnologyannualactivity, "
                 * "vtotaltechnologymodelperiodactivity, vusebytechnology, vmodelperiodcostbyregion, vannualtechnologyemissionpenaltybyemission, "
-                * "vtotaldiscountedcost",
-            restrictvars=false, quiet = false)
-
-        if !compilation
-            testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
-
-            @test testqry[1,:y] == "2020"
-            @test testqry[2,:y] == "2021"
-            @test testqry[3,:y] == "2022"
-            @test testqry[4,:y] == "2023"
-            @test testqry[5,:y] == "2024"
-            @test testqry[6,:y] == "2025"
-            @test testqry[7,:y] == "2026"
-            @test testqry[8,:y] == "2027"
-            @test testqry[9,:y] == "2028"
-            @test testqry[10,:y] == "2029"
-
-            @test isapprox(testqry[1,:val], 3845.15703404259; atol=TOL)
-            @test isapprox(testqry[2,:val], 146.55227050539; atol=TOL)
-            @test isapprox(testqry[3,:val], 139.57362837926; atol=TOL)
-            @test isapprox(testqry[4,:val], 132.927266053843; atol=TOL)
-            @test isapprox(testqry[5,:val], 126.597396376304; atol=TOL)
-            @test isapprox(testqry[6,:val], 120.568948487497; atol=TOL)
-            @test isapprox(testqry[7,:val], 114.827569988092; atol=TOL)
-            @test isapprox(testqry[8,:val], 109.35959046485; atol=TOL)
-            @test isapprox(testqry[9,:val], 104.151990918904; atol=TOL)
-            @test isapprox(testqry[10,:val], 99.1923723037184; atol=TOL)
-        end
-
-        # Test with restrictvars
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(CPLEX.Optimizer),
-            varstosave = "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vproductionbytechnology, vusebytechnology, "
-                * "vtotaldiscountedcost",
-            restrictvars = true, quiet = false)
+                * "vtotaldiscountedcost", quiet = false)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -123,7 +90,7 @@ if @isdefined HiGHS
 
         # Test with storage net zero constraints
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(CPLEX.Optimizer), restrictvars=false)
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(HiGHS.Optimizer))
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -154,8 +121,7 @@ if @isdefined HiGHS
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 0")
 
         # Test with calcyears
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(CPLEX.Optimizer), restrictvars=true,
-            calcyears=[2020,2029])
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(HiGHS.Optimizer), calcyears=[2020,2029])
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -169,7 +135,7 @@ if @isdefined HiGHS
 
         # Test MinimumUtilization
         SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.5 from TIMESLICE")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(CPLEX.Optimizer), varstosave="vproductionbytechnologyannual")
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(HiGHS.Optimizer), varstosave="vproductionbytechnologyannual")
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
@@ -182,18 +148,18 @@ if @isdefined HiGHS
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
-    end  # "Solving storage_test with CPLEX"
+    end  # "Solving storage_test with HiGHS"
 
-    @testset "Solving storage_transmission_test with CPLEX" begin
+    @testset "Solving storage_transmission_test with HiGHS" begin
         dbfile = joinpath(@__DIR__, "storage_transmission_test.sqlite")
         #dbfile = "c:/temp/storage_transmission_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(CPLEX.Optimizer),
+        # Disable JuMP bridging as it has an outsized performance penalty for HiGHS
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(HiGHS.Optimizer),
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
-                * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
-            restrictvars=false, quiet = false)
+                * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual", jumpbridges=false, quiet = false)
 
         db = SQLite.DB(dbfile)
 
@@ -225,7 +191,7 @@ if @isdefined HiGHS
 
         # Test MinimumUtilization
         SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.2 from TIMESLICE")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(CPLEX.Optimizer), varstosave="vproductionbytechnologyannual", calcyears=[2020,2025,2029])
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(HiGHS.Optimizer), varstosave="vproductionbytechnologyannual", calcyears=[2020,2025,2029], jumpbridges=false)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
@@ -239,7 +205,7 @@ if @isdefined HiGHS
         SQLite.DBInterface.execute(db, "insert into InterestRateStorage select rowid, 1, 'storage1', y.val, 0.05 from year y")
         SQLite.DBInterface.execute(db, "insert into InterestRateTechnology select rowid, 1, 'solar', y.val, 0.05 from year y")
         SQLite.DBInterface.execute(db, "update TransmissionLine set interestrate = 0.05 where id = 2")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(CPLEX.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029])
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(HiGHS.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029], jumpbridges=false)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -259,8 +225,8 @@ if @isdefined HiGHS
 
         # Test transshipment power flow
         SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 3")
-        SQLite.DBInterface.execute(db, "update TransmissionLine set efficiency = 0.9")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(CPLEX.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029])
+        SQLite.DBInterface.execute(db, "update TransmissionLine set efficiency = 1.0")
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(HiGHS.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029], jumpbridges=false)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -268,9 +234,9 @@ if @isdefined HiGHS
             @test testqry[2,:y] == "2025"
             @test testqry[3,:y] == "2029"
 
-            @test isapprox(testqry[1,:val], 4855.79076447287; atol=TOL)
-            @test isapprox(testqry[2,:val], 2687.29032799192; atol=TOL)
-            @test isapprox(testqry[3,:val], 1738.34669443912; atol=TOL)
+            @test isapprox(testqry[1,:val], 4649.69119946267; atol=TOL)
+            @test isapprox(testqry[2,:val], 2586.91004106252; atol=TOL)
+            @test isapprox(testqry[3,:val], 1673.92988604328; atol=TOL)
         end
 
         SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 2")
@@ -279,14 +245,14 @@ if @isdefined HiGHS
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
-    end  # "Solving storage_transmission_test with CPLEX"
+    end  # "Solving storage_transmission_test with HiGHS"
 
-    @testset "Solving ramp_test with CPLEX" begin
+    @testset "Solving ramp_test with HiGHS" begin
         dbfile = joinpath(@__DIR__, "ramp_test.sqlite")
         #dbfile = "c:/temp/ramp_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(CPLEX.Optimizer), quiet = false)
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(HiGHS.Optimizer), jumpbridges=false, quiet = false)
 
         db = SQLite.DB(dbfile)
 
@@ -319,7 +285,7 @@ if @isdefined HiGHS
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
-    end  # "Solving ramp_test with CPLEX"
+    end  # "Solving ramp_test with HiGHS"
 
     GC.gc()
 end  # @isdefined HiGHS
