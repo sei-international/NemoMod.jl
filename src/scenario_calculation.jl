@@ -5747,6 +5747,68 @@ numconsarrays += 1
 logmsg("Queued constraint RE2_ProductionTarget for creation.", quiet)
 # END: RE2_ProductionTarget.
 
+# BEGIN: RE3_ProductionTargetRG.
+re3_productiontarget::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+
+t = Threads.@spawn(let
+    local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = rg, lastkeys[2] = f, lastkeys[3] = y
+    local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = rgmp
+    local sumexps = Array{AffExpr, 1}([AffExpr(), AffExpr()])  # sumexps[1] = sum of vregenerationannualnn and vregenerationannualnodal, sumexps[2] = sum of vgenerationannualnn and vgenerationannualnodal
+
+    for row in SQLite.DBInterface.execute(db, "select rgmp.rg, rrg.r, rn.n, rgmp.f, rgmp.y, cast(rgmp.val as real) as rgmp, tme.id as tme
+    from REMinProductionTargetRG rgmp, RRGroup rrg,
+    (select r.val as r, null as n
+    from region r
+    union all
+    select n.r as r, n.val as n
+    from node n) rn
+	left join TransmissionModelingEnabled tme on tme.r = rrg.r and tme.f = rgmp.f and tme.y = rgmp.y
+    where
+    rgmp.val > 0
+	and rgmp.rg = rrg.rg
+	and rrg.r = rn.r
+    $(restrictyears ? "and rgmp.y in" * inyears : "")
+    order by rgmp.rg, rgmp.f, rgmp.y")
+        local rg = row[:rg]
+        local f = row[:f]
+        local y = row[:y]
+        local r = row[:r]
+        local n = row[:n]
+        local tme = row[:tme]
+
+        if isassigned(lastkeys, 1) && (rg != lastkeys[1] || f != lastkeys[2] || y != lastkeys[3])
+            # Create constraint
+            push!(re3_productiontarget, @build_constraint(sumexps[1] >= (sumexps[2]) * lastvals[1]))
+            sumexps[1] = AffExpr()
+            sumexps[2] = AffExpr()
+        end
+
+        if ismissing(n) && ismissing(tme)
+            add_to_expression!(sumexps[1], vregenerationannualnn[r,f,y])
+            add_to_expression!(sumexps[2], vgenerationannualnn[r,f,y])
+        elseif !ismissing(n) && !ismissing(tme)
+            add_to_expression!(sumexps[1], vregenerationannualnodal[n,f,y])
+            add_to_expression!(sumexps[2], vgenerationannualnodal[n,f,y])
+        end
+
+        lastkeys[1] = rg
+        lastkeys[2] = f
+        lastkeys[3] = y
+        lastvals[1] = row[:rgmp]
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        push!(re3_productiontarget, @build_constraint(sumexps[1] >= (sumexps[2]) * lastvals[1]))
+    end
+
+    put!(cons_channel, re3_productiontarget)
+end)
+
+numconsarrays += 1
+logmsg("Queued constraint RE3_ProductionTargetRG for creation.", quiet)
+# END: RE3_ProductionTargetRG.
+
 # BEGIN: MinShareProduction.
 minshareproduction::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
