@@ -108,18 +108,33 @@ end  # @testset "Solving a scenario"
         dbfile = joinpath(@__DIR__, "storage_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(HiGHS.Optimizer), jumpdirectmode=true)
+        configfile = joinpath(pwd(), "nemo.ini")  # Config file used to access options for controlling direct mode and bridging
+        delete_file(configfile, 20)
+
+        open(configfile, "w") do io
+            write(io, "[calculatescenarioargs]\r\n")
+            write(io, "jumpbridges=false\r\n")
+        end
+
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(HiGHS.Optimizer))
         db = SQLite.DB(dbfile)
 
         if !compilation
             @test DataFrame(SQLite.DBInterface.execute(db, "select count(*) from vtotaldiscountedcost"))[1,1] > 0
         end
 
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(HiGHS.Optimizer), jumpbridges=false)
+        open(configfile, "a") do io
+            write(io, "jumpdirectmode=true\r\n")
+        end
+
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(HiGHS.Optimizer))
 
         if !compilation
             @test DataFrame(SQLite.DBInterface.execute(db, "select count(*) from vtotaldiscountedcost"))[1,1] > 0
         end
+
+        # Delete config file
+        delete_file(configfile, 20)
 
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)

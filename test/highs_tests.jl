@@ -156,10 +156,10 @@ if @isdefined HiGHS
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Disable JuMP bridging as it has an outsized performance penalty for HiGHS
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(HiGHS.Optimizer),
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(HiGHS.Optimizer, add_bridges=false),
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
-                * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual", jumpbridges=false, quiet = false)
+                * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual", quiet = false)
 
         db = SQLite.DB(dbfile)
 
@@ -191,7 +191,7 @@ if @isdefined HiGHS
 
         # Test MinimumUtilization
         SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.2 from TIMESLICE")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(HiGHS.Optimizer), varstosave="vproductionbytechnologyannual", calcyears=[2020,2025,2029], jumpbridges=false)
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(HiGHS.Optimizer, add_bridges=false), varstosave="vproductionbytechnologyannual", calcyears=[2020,2025,2029])
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
@@ -205,7 +205,7 @@ if @isdefined HiGHS
         SQLite.DBInterface.execute(db, "insert into InterestRateStorage select rowid, 1, 'storage1', y.val, 0.05 from year y")
         SQLite.DBInterface.execute(db, "insert into InterestRateTechnology select rowid, 1, 'solar', y.val, 0.05 from year y")
         SQLite.DBInterface.execute(db, "update TransmissionLine set interestrate = 0.05 where id = 2")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(HiGHS.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029], jumpbridges=false)
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(HiGHS.Optimizer, add_bridges=false), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029])
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -226,7 +226,7 @@ if @isdefined HiGHS
         # Test transshipment power flow
         SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 3")
         SQLite.DBInterface.execute(db, "update TransmissionLine set efficiency = 1.0")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(HiGHS.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029], jumpbridges=false)
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(HiGHS.Optimizer, add_bridges=false), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029])
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -252,7 +252,7 @@ if @isdefined HiGHS
         #dbfile = "c:/temp/ramp_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(HiGHS.Optimizer), jumpbridges=false, quiet = false)
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(HiGHS.Optimizer, add_bridges=false), quiet = false)
 
         db = SQLite.DB(dbfile)
 
