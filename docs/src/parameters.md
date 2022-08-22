@@ -554,7 +554,21 @@ Note that because of the way time slices and groups are configured in NEMO, thes
 | `r` | text  | Region |
 | `val` | integer  | 0, 1, or 2 |
 
-## [Renewable energy minimum production target](@id REMinProductionTarget)
+## [Region group assignment](@id RRGroup)
+
+Map of [regions](@ref region) to [region groups](@ref regiongroup). A region can belong to zero or more groups.
+
+#### Scenario database
+
+**Table: `RRGroup`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `rg` | text  | Region group |
+| `r` | text  | Region |
+
+## [Renewable energy minimum production target (by region)](@id REMinProductionTarget)
 
 For the specified [region](@ref region), [fuel](@ref fuel), and [year](@ref year), fraction of production that must be from renewable sources. The renewability of production is determined by [`RETagTechnology`](@ref RETagTechnology): this parameter defines what fraction of a [technology's](@ref technology) production counts as renewable.
 
@@ -569,6 +583,25 @@ For the specified [region](@ref region), [fuel](@ref fuel), and [year](@ref year
 |:--- | :--: |:----------- |
 | `id` | integer | Unique identifier for row |
 | `r` | text  | Region |
+| `f` | text  | Fuel |
+| `y` | text  | Year |
+| `val` | real  | Fraction (0 to 1) |
+
+## [Renewable energy minimum production target (by region group)](@id REMinProductionTargetRG)
+
+For the specified [region group](@ref regiongroup), [fuel](@ref fuel), and [year](@ref year), fraction of production that must be from renewable sources. The renewability of production is determined by [`RETagTechnology`](@ref RETagTechnology): this parameter defines what fraction of a [technology's](@ref technology) production counts as renewable.
+
+!!! note
+    NEMO ignores production from [storage](@ref storage) when calculating target and actual levels of renewable production.
+
+#### Scenario database
+
+**Table: `REMinProductionTargetRG`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `rg` | text  | Region group |
 | `f` | text  | Fuel |
 | `y` | text  | Year |
 | `val` | real  | Fraction (0 to 1) |

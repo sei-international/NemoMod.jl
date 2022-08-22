@@ -96,6 +96,23 @@ Geographic regions. **Abbreviation: `r`.**
 * Set of regions: `sregion` (an `Array` of `REGION.val`)
 * Subscript for regions in other variables: `r`
 
+## [Region group](@id regiongroup)
+
+Groups of geographic regions. Each region can belong to multiple groups. **Abbreviation: `rg`.**
+
+#### Scenario database
+
+**Table: `REGIONGROUP`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `val` | text | Unique identifier for region group |
+| `desc` | text  | Description of region group |
+
+#### Julia code
+
+* Subscript for region groups in variables: `rg`
+
 ## [Storage](@id storage)
 
 Energy storage options or facilities. **Abbreviation: `s`.**
