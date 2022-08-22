@@ -270,16 +270,16 @@ end  # getconfigargs!(configfile::ConfParse, calcyears::Array{Int,1}, varstosave
     reset_jumpmodel(jumpmodel::JuMP.Model; direct::Bool=false, bridges::Bool=true,
         quiet::Bool=false)
 
-Returns a `JuMP.Model` that uses the same solver as `jumpmodel`, whose use of JuMP's
-direct mode aligns with `direct`, and whose use of MathOptInterface bridging aligns
-with `bridges`. If `jumpmodel` is consistent with `direct` and `bridges`, it is
-returned unchanged. Otherwise a new `JuMP.Model` is returned (in which case model
-attributes and solver parameters are not preserved).
+Returns a new `JuMP.Model` that's initialized with the same solver as `jumpmodel`, whose
+use of JuMP's direct mode aligns with `direct`, and whose use of MathOptInterface
+bridging aligns with `bridges`. Except for the choice of solver, other model attributes
+and solver parameters defined for `jumpmodel` are not preserved in the return value.
 
 # Arguments
 - `jumpmodel::JuMP.Model`: Original `JuMP.Model`.
 - `direct::Bool`: Indicates whether return value should be in JuMP's direct mode.
 - `bridges::Bool`: Indicates whether return value should use MathOptInterface bridging.
+    Ignored if `direct` is true.
 - `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to `STDOUT`).
 """
 function reset_jumpmodel(jumpmodel::JuMP.Model; direct::Bool=false, bridges::Bool=true,
@@ -288,18 +288,11 @@ function reset_jumpmodel(jumpmodel::JuMP.Model; direct::Bool=false, bridges::Boo
     local returnval::JuMP.Model = jumpmodel  # This function's return value
 
     if direct
-        if mode(jumpmodel) != JuMP.DIRECT
-            returnval = direct_model(typeof(unsafe_backend(jumpmodel))())
-            logmsg("Converted model to use JuMP's direct mode.", quiet)
-        end
+        returnval = direct_model(typeof(unsafe_backend(jumpmodel))())
+        logmsg("Converted model to use JuMP's direct mode.", quiet)
     else
-        if ((mode(jumpmodel) == JuMP.DIRECT)
-            || (bridges && !(typeof(backend(jumpmodel).optimizer) <: MathOptInterface.Bridges.LazyBridgeOptimizer))
-            || (!bridges && typeof(backend(jumpmodel).optimizer) <: MathOptInterface.Bridges.LazyBridgeOptimizer))
-
-            returnval = Model(typeof(unsafe_backend(jumpmodel)); add_bridges=bridges)
-            logmsg("Converted model to use JuMP's automatic mode $(bridges ? "with" : "without") MathOptInterface bridging.", quiet)
-        end
+        returnval = Model(typeof(unsafe_backend(jumpmodel)); add_bridges=bridges)
+        logmsg("Converted model to use JuMP's automatic mode $(bridges ? "with" : "without") MathOptInterface bridging.", quiet)
     end
 
     return returnval

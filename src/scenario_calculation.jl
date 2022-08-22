@@ -9,7 +9,6 @@
 
 """
     calculatescenario(dbpath::String; jumpmodel::JuMP.Model = Model(Cbc.Optimizer),
-        jumpdirectmode::Bool = false, jumpbridges::Bool = true,
         calcyears::Array{Int, 1} = Array{Int, 1}(),
         varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual,
             vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
@@ -34,30 +33,6 @@ the termination status reported by the solver used for the calculation (e.g., `O
     `Model(CPLEX.Optimizer)`, `Model(optimizer_with_attributes(Gurobi.Optimizer, "NumericFocus" => 1))`.
     Note that the solver's Julia package (Julia wrapper) must be installed. See the
     documentation for JuMP for information on how to specify a solver and set solver options.
-- `jumpdirectmode::Bool`: Indicates whether JuMP's direct mode should be used in the calculation.
-    Direct mode bypasses some JuMP features that help to ensure compatibility with a wide range
-    of solvers. These include reformulating (or bridging) the constraints, variables, and
-    optimization objective that NEMO defines as needed to promote cross-solver compatibility.
-    When direct mode is invoked, scenario calculation is generally faster and requires less
-    memory. However, it can result in a solver error in some cases. If the mode of `jumpmodel`
-    is not aligned with `jumpdirectmode` (e.g., `jumpmodel` is not in direct mode, and
-    `jumpdirectmode` is `true`), NEMO resets `jumpmodel` to follow `jumpdirectmode`.
-    This also resets `jumpmodel`'s attributes (except for the choice of solver) and
-    solver parameters to default values. To apply solver parameters after `jumpmodel`
-    is reset, specify them in a [NEMO configuration file](https://sei-international.github.io/NemoMod.jl/stable/configuration_file/).
-    For more information on direct mode, see the JuMP documentation.
-- `jumpbridges::Bool`: Indicates whether JuMP's bridging features should be used in the
-    calculation (ignored if `jumpdirectmode` is `true`, as this implies bridging is disabled).
-    Bridging involves reformulating the constraints, variables, and optimization
-    objective that NEMO defines as needed to promote cross-solver compatibility. When
-    bridging is disabled, scenario calculation is generally faster and requires less
-    memory. However, it can result in a solver error in some cases. If the use of
-    bridging in `jumpmodel` is not aligned with `jumpbridges` (e.g., `jumpmodel` uses
-    bridging, and `jumpbridges` is `false`), NEMO resets `jumpmodel` to follow `jumpbridges`.
-    This also resets `jumpmodel`'s attributes (except for the choice of solver) and
-    solver parameters to default values. To apply solver parameters after `jumpmodel`
-    is reset, specify them in a NEMO configuration file. For more information on bridging,
-    see the JuMP documentation.
 - `calcyears::Array{Int, 1}`: Years to include in the calculation (a subset of the years specified in
     the scenario database). All years in the database are included if this argument is omitted.
 - `varstosave::String`: Comma-delimited list of output variables whose results should be
@@ -100,8 +75,6 @@ the termination status reported by the solver used for the calculation (e.g., `O
 function calculatescenario(
     dbpath::String;
     jumpmodel::JuMP.Model = Model(Cbc.Optimizer),
-    jumpdirectmode::Bool = false,
-    jumpbridges::Bool = true,
     calcyears::Array{Int, 1} = Array{Int, 1}(),
     varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
     numprocs::Int = 0,
@@ -116,9 +89,9 @@ function calculatescenario(
     quiet::Bool = false)
 
     try
-        modelscenario(dbpath; jumpmodel=jumpmodel, jumpdirectmode=jumpdirectmode, jumpbridges=jumpbridges, calcyears=calcyears,
-            varstosave=varstosave, restrictvars=restrictvars, reportzeros=reportzeros, continuoustransmission=continuoustransmission,
-            forcemip=forcemip, startvalsdbpath=startvalsdbpath, startvalsvars=startvalsvars, precalcresultspath=precalcresultspath, quiet=quiet)
+        modelscenario(dbpath; jumpmodel=jumpmodel, calcyears=calcyears, varstosave=varstosave, restrictvars=restrictvars, reportzeros=reportzeros,
+            continuoustransmission=continuoustransmission, forcemip=forcemip, startvalsdbpath=startvalsdbpath, startvalsvars=startvalsvars,
+            precalcresultspath=precalcresultspath, quiet=quiet)
     catch e
         println("NEMO encountered an error with the following message: " * sprint(showerror, e) * ".")
         println("To report this issue to the NEMO team, please submit an error report at https://leap.sei.org/support/. Please include in the report a list of steps to reproduce the error and the error message.")
@@ -128,8 +101,6 @@ end  # calculatescenario()
 """
     modelscenario(dbpath::String;
         jumpmodel::JuMP.Model = Model(Cbc.Optimizer),
-        jumpdirectmode::Bool = false,
-        jumpbridges::Bool = true,
         calcyears::Array{Int, 1} = Array{Int, 1}(),
         varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual,
             vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
@@ -150,8 +121,6 @@ Implements scenario modeling logic for calculatescenario() and writescenariomode
 function modelscenario(
     dbpath::String;
     jumpmodel::JuMP.Model = Model(Cbc.Optimizer),
-    jumpdirectmode::Bool = false,
-    jumpbridges::Bool = true,
     calcyears::Array{Int, 1} = Array{Int, 1}(),
     varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
     restrictvars::Bool = true,
@@ -187,10 +156,13 @@ end
 logmsg("Validated run-time arguments.", quiet)
 # END: Validate arguments.
 
-# BEGIN: Read config file and process calculatescenarioargs and solver blocks. Apply jumpdirectmode and jumpbridges as necessary.
+# BEGIN: Read config file and process calculatescenarioargs and solver blocks.
 configfile = getconfig(quiet)  # ConfParse structure for config file if one is found; otherwise nothing
 
 if configfile != nothing
+    local jumpdirectmode::Bool = (mode(jumpmodel) == JuMP.DIRECT)  # Indicates whether jumpmodel is in direct mode
+    local jumpbridges::Bool = (jumpdirectmode ? false : (typeof(backend(jumpmodel).optimizer) <: MathOptInterface.Bridges.LazyBridgeOptimizer))  # Indicates whether bridging is enabled in jumpmodel
+
     # Arrays of Boolean and string arguments for calculatescenario(); necessary in order to have mutable objects for getconfigargs! call
     local boolargs::Array{Bool,1} = [restrictvars,reportzeros,continuoustransmission,forcemip,quiet,jumpdirectmode,jumpbridges]
     local stringargs::Array{String,1} = [startvalsdbpath,startvalsvars,precalcresultspath]
@@ -202,18 +174,18 @@ if configfile != nothing
     continuoustransmission = boolargs[3]
     forcemip = boolargs[4]
     quiet = boolargs[5]
-    jumpdirectmode = boolargs[6]
-    jumpbridges = boolargs[7]
 
     startvalsdbpath = stringargs[1]
     startvalsvars = stringargs[2]
     precalcresultspath = stringargs[3]
-end
 
-# Reset jumpmodel if needed and apply solver parameters
-jumpmodel = reset_jumpmodel(jumpmodel; direct=jumpdirectmode, bridges=jumpbridges)
-configfile != nothing && setsolverparamsfromcfg(configfile, jumpmodel, quiet)
-# END: Read config file and process calculatescenarioargs and solver blocks. Apply jumpdirectmode and jumpbridges as necessary.
+    if jumpdirectmode != boolargs[6] || jumpbridges != boolargs[7]
+        reset_jumpmodel(jumpmodel; direct=boolargs[6], bridges=boolargs[7])
+    end
+
+    setsolverparamsfromcfg(configfile, jumpmodel, quiet)
+end
+# END: Read config file and process calculatescenarioargs and solver blocks.
 
 # BEGIN: Check precalcresultspath and return pre-calculated scenario database if appropriate.
 if length(precalcresultspath) > 0
@@ -274,6 +246,7 @@ dbversion < 5 && db_v4_to_v5(db; quiet = quiet)
 dbversion < 6 && db_v5_to_v6(db; quiet = quiet)
 dbversion < 7 && db_v6_to_v7(db; quiet = quiet)
 dbversion < 8 && db_v7_to_v8(db; quiet = quiet)
+dbversion < 9 && db_v8_to_v9(db; quiet = quiet)
 # END: Update database if necessary.
 
 # BEGIN: Perform beforescenariocalc include.
@@ -316,7 +289,7 @@ local paramsneedingdefs::Array{String, 1} = ["OutputActivityRatio", "InputActivi
 "TotalAnnualMinCapacity", "TotalAnnualMaxCapacityInvestment", "TotalAnnualMinCapacityInvestment",
 "TotalTechnologyAnnualActivityUpperLimit", "TotalTechnologyAnnualActivityLowerLimit", "TotalTechnologyModelPeriodActivityUpperLimit",
 "TotalTechnologyModelPeriodActivityLowerLimit", "ReserveMarginTagTechnology", "ReserveMarginTagFuel", "ReserveMargin", "RETagTechnology",
-"REMinProductionTarget", "EmissionActivityRatio", "EmissionsPenalty", "ModelPeriodExogenousEmission",
+"REMinProductionTarget", "REMinProductionTargetRG", "EmissionActivityRatio", "EmissionsPenalty", "ModelPeriodExogenousEmission",
 "AnnualExogenousEmission", "AnnualEmissionLimit", "ModelPeriodEmissionLimit", "AccumulatedAnnualDemand", "TotalAnnualMaxCapacityStorage",
 "TotalAnnualMinCapacityStorage", "TotalAnnualMaxCapacityInvestmentStorage", "TotalAnnualMinCapacityInvestmentStorage",
 "TransmissionCapacityToActivityUnit", "StorageFullLoadHours", "RampRate", "RampingReset", "NodalDistributionDemand",

@@ -72,6 +72,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.DBInterface.execute(db,"drop table if exists RampRate")
     SQLite.DBInterface.execute(db,"drop table if exists RampingReset")
     SQLite.DBInterface.execute(db,"drop table if exists REMinProductionTarget")
+    SQLite.DBInterface.execute(db,"drop table if exists REMinProductionTargetRG")
     SQLite.DBInterface.execute(db,"drop table if exists RETagFuel")
     SQLite.DBInterface.execute(db,"drop table if exists RETagTechnology")
     SQLite.DBInterface.execute(db,"drop table if exists ReserveMargin")
@@ -79,6 +80,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.DBInterface.execute(db,"drop table if exists ReserveMarginTagTechnology")
     SQLite.DBInterface.execute(db,"drop table if exists ResidualCapacity")
     SQLite.DBInterface.execute(db,"drop table if exists ResidualStorageCapacity")
+    SQLite.DBInterface.execute(db,"drop table if exists RRGroup")
     SQLite.DBInterface.execute(db,"drop table if exists SpecifiedAnnualDemand")
     SQLite.DBInterface.execute(db,"drop table if exists SpecifiedDemandProfile")
     SQLite.DBInterface.execute(db,"drop table if exists StorageFullLoadHours")
@@ -111,6 +113,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
 
     SQLite.DBInterface.execute(db,"drop table if exists DAILYTIMEBRACKET")
     SQLite.DBInterface.execute(db,"drop table if exists DAYTYPE")
+    SQLite.DBInterface.execute(db,"drop table if exists REGIONGROUP")
     SQLite.DBInterface.execute(db,"drop table if exists REGION")
     SQLite.DBInterface.execute(db,"drop table if exists YEAR")
     SQLite.DBInterface.execute(db,"drop table if exists TECHNOLOGY")
@@ -136,14 +139,16 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     #   - 6: Added MinimumUtilization, DiscountRateStorage, DiscountRateTechnology, TransmissionLine.discountrate
     #   - 7: Removed DiscountRateStorage, DiscountRateTechnology, TransmissionLine.discountrate. Added InterestRateStorage, InterestRateTechnology, TransmissionLine.interestrate
     #   - 8: Removed RETagFuel. Added REMinProductionTarget.f and MinShareProduction.
+    #   - 9: Added REGIONGROUP, RRGroup, REMinProductionTargetRG.
     SQLite.DBInterface.execute(db, "CREATE TABLE `Version` (`version` INTEGER, PRIMARY KEY(`version`))")
-    SQLite.DBInterface.execute(db, "INSERT INTO Version VALUES(8)")
+    SQLite.DBInterface.execute(db, "INSERT INTO Version VALUES(9)")
 
     # No defaults in DefaultParams for sets/dimensions
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `EMISSION` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`) )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `FUEL` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`) )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `MODE_OF_OPERATION` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `REGION` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
+    SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `REGIONGROUP` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `STORAGE` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, `netzeroyear` INTEGER NOT NULL DEFAULT 1, `netzerotg1` INTEGER NOT NULL DEFAULT 0, `netzerotg2` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`val`) )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TECHNOLOGY` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TIMESLICE` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
@@ -183,12 +188,14 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `StorageFullLoadHours` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `SpecifiedDemandProfile` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `l` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `SpecifiedAnnualDemand` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
+    SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `RRGroup` ( `id` INTEGER PRIMARY KEY NOT NULL, `rg` TEXT, `r` TEXT" * (foreignkeys ? ", FOREIGN KEY(`rg`) REFERENCES `REGIONGROUP`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `ResidualStorageCapacity` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `ResidualCapacity` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `ReserveMarginTagTechnology` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `ReserveMarginTagFuel` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `ReserveMargin` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `RETagTechnology` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`)" : "") * " )")
+    SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `REMinProductionTargetRG` ( `id` INTEGER PRIMARY KEY NOT NULL, `rg` TEXT, `f` TEXT, `y` TEXT, `val` REAL" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`rg`) REFERENCES `REGIONGROUP`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `REMinProductionTarget` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `RampingReset` (`id` INTEGER NOT NULL UNIQUE, `r` TEXT, `val` INTEGER, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `RampRate` (`id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `l` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`)" : "") * " )")
@@ -467,6 +474,31 @@ function db_v7_to_v8(db::SQLite.DB; quiet::Bool = false)
     # END: Wrap database operations in try-catch block to allow rollback on error.
 end  # db_v7_to_v8(db::SQLite.DB; quiet::Bool = false)
 
+# Upgrades NEMO database from version 8 to version 7 by: adding REGIONGROUP, REMinProductionTargetRG, and RRGroup.
+function db_v8_to_v9(db::SQLite.DB; quiet::Bool = false)
+    # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
+    try
+        # BEGIN: SQLite transaction.
+        SQLite.DBInterface.execute(db, "BEGIN")
+
+        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `REGIONGROUP` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
+        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `REMinProductionTargetRG` ( `id` INTEGER PRIMARY KEY NOT NULL, `rg` TEXT, `f` TEXT, `y` TEXT, `val` REAL )")
+        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `RRGroup` ( `id` INTEGER PRIMARY KEY NOT NULL, `rg` TEXT, `r` TEXT )")
+
+        SQLite.DBInterface.execute(db, "update version set version = 9")
+
+        SQLite.DBInterface.execute(db, "COMMIT")
+        # END: SQLite transaction.
+
+        logmsg("Upgraded database to version 9.", quiet)
+    catch
+        # Rollback transaction and rethrow error
+        SQLite.DBInterface.execute(db, "ROLLBACK")
+        rethrow()
+    end
+    # END: Wrap database operations in try-catch block to allow rollback on error.
+end  # db_v8_to_v9(db::SQLite.DB; quiet::Bool = false)
+
 """
     create_temp_tables(db::SQLite.DB)
 
@@ -692,7 +724,7 @@ function dropresulttables(db::SQLite.DB, quiet::Bool = true)
 
         for t in SQLite.tables(db)
             local tname = t.name
-            
+
             if tname[1:1] == "v" || (length(tname) >= 11 && tname[1:11] == "sqlite_stat")
                 SQLite.DBInterface.execute(db, "drop table " * tname)
                 logmsg("Dropped table " * tname * ".", quiet)
