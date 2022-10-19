@@ -22,6 +22,10 @@ if !@isdefined compilation  # Flag that turns off @test calls
     compilation = false
 end
 
+if !@isdefined reg_jumpmode  # If reg_jumpmode is false, disables JuMP bridging or turns on JuMP's direct mode (depending on the solver) in solver-specific tests
+    reg_jumpmode = true
+end
+
 """Helper function for deleting a file after Julia has been told to release it (e.g.,
     with finalize(db); db = nothing; GC.gc())."""
 function delete_file(path::String, max_del_attempts::Int)

@@ -25,7 +25,7 @@ if @isdefined MosekTools
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(Mosek.Optimizer),
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Mosek.Optimizer) : Model(Mosek.Optimizer, add_bridges=false)),
             restrictvars=false, forcemip=true, quiet = false)
 
         db = SQLite.DB(dbfile)
@@ -57,7 +57,7 @@ if @isdefined MosekTools
         end
 
         # Test with optional outputs
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(Mosek.Optimizer),
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Mosek.Optimizer) : Model(Mosek.Optimizer, add_bridges=false)),
             varstosave =
                 "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vrateofdemand, vproductionbytechnology, vtotaltechnologyannualactivity, "
                 * "vtotaltechnologymodelperiodactivity, vusebytechnology, vmodelperiodcostbyregion, vannualtechnologyemissionpenaltybyemission, "
@@ -91,7 +91,7 @@ if @isdefined MosekTools
         end
 
         # Test with restrictvars
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(Mosek.Optimizer),
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Mosek.Optimizer) : Model(Mosek.Optimizer, add_bridges=false)),
             varstosave = "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vproductionbytechnology, vusebytechnology, "
                 * "vtotaldiscountedcost",
             restrictvars = true, forcemip=true, quiet = false)
@@ -124,7 +124,7 @@ if @isdefined MosekTools
 
         # Test with storage net zero constraints
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(Mosek.Optimizer), restrictvars=false, forcemip=true)
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Mosek.Optimizer) : Model(Mosek.Optimizer, add_bridges=false)), restrictvars=false, forcemip=true)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -155,7 +155,7 @@ if @isdefined MosekTools
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 0")
 
         # Test with calcyears
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), restrictvars=true, forcemip=true,
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Mosek.Optimizer) : Model(Mosek.Optimizer, add_bridges=false)), restrictvars=true, forcemip=true,
             calcyears=[2020,2029])
 
         if !compilation
@@ -170,7 +170,7 @@ if @isdefined MosekTools
 
         # Test MinimumUtilization
         SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.5 from TIMESLICE")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), varstosave="vproductionbytechnologyannual", forcemip=true)
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Mosek.Optimizer) : Model(Mosek.Optimizer, add_bridges=false)), varstosave="vproductionbytechnologyannual", forcemip=true)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
@@ -190,7 +190,8 @@ if @isdefined MosekTools
         #dbfile = "c:/temp/storage_transmission_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(Mosek.Optimizer),
+        # Mosek can't handle transmission constraints without bridging
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer),
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
                 * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
@@ -288,7 +289,7 @@ if @isdefined MosekTools
         #dbfile = "c:/temp/ramp_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(Mosek.Optimizer),
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Mosek.Optimizer) : Model(Mosek.Optimizer, add_bridges=false)),
             restrictvars=false, forcemip=true, quiet = false)
 
         db = SQLite.DB(dbfile)

@@ -25,8 +25,7 @@ if @isdefined CPLEX
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(CPLEX.Optimizer),
-            restrictvars=false, quiet = false)
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())), restrictvars=false, quiet = false)
 
         db = SQLite.DB(dbfile)
 
@@ -57,7 +56,7 @@ if @isdefined CPLEX
         end
 
         # Test with optional outputs
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(CPLEX.Optimizer),
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())),
             varstosave =
                 "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vrateofdemand, vproductionbytechnology, vtotaltechnologyannualactivity, "
                 * "vtotaltechnologymodelperiodactivity, vusebytechnology, vmodelperiodcostbyregion, vannualtechnologyemissionpenaltybyemission, "
@@ -91,7 +90,7 @@ if @isdefined CPLEX
         end
 
         # Test with restrictvars
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(CPLEX.Optimizer),
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())),
             varstosave = "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vproductionbytechnology, vusebytechnology, "
                 * "vtotaldiscountedcost",
             restrictvars = true, quiet = false)
@@ -124,7 +123,7 @@ if @isdefined CPLEX
 
         # Test with storage net zero constraints
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(CPLEX.Optimizer), restrictvars=false)
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())), restrictvars=false)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -155,7 +154,7 @@ if @isdefined CPLEX
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 0")
 
         # Test with calcyears
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(CPLEX.Optimizer), restrictvars=true,
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())), restrictvars=true,
             calcyears=[2020,2029])
 
         if !compilation
@@ -170,7 +169,7 @@ if @isdefined CPLEX
 
         # Test MinimumUtilization
         SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.5 from TIMESLICE")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(CPLEX.Optimizer), varstosave="vproductionbytechnologyannual")
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())), varstosave="vproductionbytechnologyannual")
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
@@ -190,7 +189,7 @@ if @isdefined CPLEX
         #dbfile = "c:/temp/storage_transmission_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(CPLEX.Optimizer),
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())),
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
                 * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
@@ -226,7 +225,7 @@ if @isdefined CPLEX
 
         # Test MinimumUtilization
         SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.2 from TIMESLICE")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(CPLEX.Optimizer), varstosave="vproductionbytechnologyannual", calcyears=[2020,2025,2029])
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())), varstosave="vproductionbytechnologyannual", calcyears=[2020,2025,2029])
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
@@ -240,7 +239,7 @@ if @isdefined CPLEX
         SQLite.DBInterface.execute(db, "insert into InterestRateStorage select rowid, 1, 'storage1', y.val, 0.05 from year y")
         SQLite.DBInterface.execute(db, "insert into InterestRateTechnology select rowid, 1, 'solar', y.val, 0.05 from year y")
         SQLite.DBInterface.execute(db, "update TransmissionLine set interestrate = 0.05 where id = 2")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(CPLEX.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029])
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029])
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -261,7 +260,7 @@ if @isdefined CPLEX
         # Test transshipment power flow
         SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 3")
         SQLite.DBInterface.execute(db, "update TransmissionLine set efficiency = 0.9")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(CPLEX.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029])
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029])
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -287,7 +286,7 @@ if @isdefined CPLEX
         #dbfile = "c:/temp/ramp_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(CPLEX.Optimizer), quiet = false)
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())), quiet = false)
 
         db = SQLite.DB(dbfile)
 
