@@ -55,7 +55,7 @@ Once you do this, there will be a performance penalty when starting NEMO, but an
 
 ## [GitHub installation](@id github_installation)
 
-To install NEMO from GitHub, you must first have a working Julia installation on your computer. **The NEMO team has verified NEMO's compatibility with Julia 1.5; other versions of Julia may not work correctly.**
+To install NEMO from GitHub, you must first have a working Julia installation on your computer. **The NEMO team has verified NEMO's compatibility with Julia 1.7.2; other versions of Julia may not work correctly.**
 
 Once Julia is set up, start a Julia session and add the NEMO package (named `NemoMod`):
 

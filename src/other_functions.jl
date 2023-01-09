@@ -1257,13 +1257,19 @@ function setstartvalues(jumpmodel::JuMP.Model, seeddbpath::String, quiet::Bool =
         local tname = smrow[:name]  # Name of table being processed
         local selectfields::Array{String,1} = Array{String,1}()  # Names of fields to select from table being processed, excluding val
         local excludefields::Array{String,1} = ["solvedtm", "val"]  # Fields that are not added to selectfields in following loop
+        local containsvalcol::Bool = false  # Indicates whether table being processed contains a val column
 
         # Build selectfields
         for row in SQLite.DBInterface.execute(seeddb, "pragma table_info('$tname')")
             if !in(row[:name], excludefields)
                 push!(selectfields, row[:name])
+            elseif row[:name] == "val"
+                containsvalcol = true
             end
         end
+
+        # Skip table if it does not contain a val column
+        !containsvalcol && continue
 
         # Set start values for variables existing in jumpmodel and seeddb
         for row in SQLite.DBInterface.execute(seeddb, "select $(join(selectfields,",")), val from $tname")
