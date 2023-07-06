@@ -1249,8 +1249,6 @@ function setstartvalues(jumpmodel::JuMP.Model, seeddbpath::String, quiet::Bool =
     # END: Validate seeddbpath and connect to seed DB.
 
     # BEGIN: Process selected result tables and set start values in jumpmodel.
-    SQLite.DBInterface.execute(seeddb, "pragma case_sensitive_like = true")
-
     for smrow in SQLite.DBInterface.execute(seeddb, "select name from sqlite_master where type = 'table' and name like 'v%'
         $(length(selectedvars) > 0 ? " and name in ('" * join(selectedvars, "','") * "')" : "")")
 
@@ -1278,8 +1276,6 @@ function setstartvalues(jumpmodel::JuMP.Model, seeddbpath::String, quiet::Bool =
             !isnothing(var) && set_start_value(var, row[:val])
         end
     end  # smrow
-
-    SQLite.DBInterface.execute(seeddb,"pragma case_sensitive_like = false")
     # END: Process selected result tables and set start values in jumpmodel.
 
     logmsg("Set variable start values using values in $(normpath(seeddbpath)).", quiet)
