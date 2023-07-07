@@ -7,6 +7,8 @@ This page highlights key changes in NEMO since its initial public release. For a
 
 ## Version 2.0
 
+  * **Fuel-specific reserve margins:** Refactored NEMO's reserve margin calculations to allow a different margin for each fuel, region, and year. Added a fuel subscript to the [`ReserveMargin`](@ref ReserveMargin) parameter, the [`ReserveMarginTagTechnology`](@ref ReserveMarginTagTechnology) parameter, and the [`vtotalcapacityinreservemargin`](@ref vtotalcapacityinreservemargin) output variable. Removed the `ReserveMarginTagFuel` parameter and `vdemandneedingreservemargin` output variable.
+
   * **Bug fix - warm starts:** Fixed a bug in NEMO's warm starting functionality that was caused by a recent release of the Julia SQLite package. This bug led to the following error when performing a warm start without specifying `startvalsvars`: `SQLite.SQLiteException("no such column: val")`.
 
   * **Other enhancements:** Better aligned solver invocation in NEMO's test cases with how solvers are called when using NEMO with LEAP. This change should improve performance for most LEAP-NEMO users.

@@ -634,21 +634,13 @@ Total emissions during all modeled [years](@ref year). Includes any exogenously 
 
 ## Reserve margin
 
-### [Demand needing reserve margin](@id vdemandneedingreservemargin)
-
-Total rate of production of [fuels](@ref fuel) tagged with [`ReserveMarginTagFuel`](@ref ReserveMarginTagFuel). This variable is an element in [reserve margin](@ref ReserveMargin) calculations. Unit: region's energy [unit](@ref uoms) / year.
-
-#### Julia code
-
-* Variable in JuMP model: `vdemandneedingreservemargin[r,l,y]`
-
 ### [Total capacity in reserve margin](@id vtotalcapacityinreservemargin)
 
-Total [technology](@ref technology) capacity (combining all technologies) that counts toward meeting the [region's](@ref region) [reserve margin](@ref ReserveMargin). Unit: region's energy [unit](@ref uoms) / year.
+Total [technology](@ref technology) capacity (combining all technologies) that counts toward meeting the [reserve margin](@ref ReserveMargin) for a [region](@ref region), [fuel](@ref fuel), and [year](@ref year). Unit: region's energy [unit](@ref uoms) / year.
 
 #### Julia code
 
-* Variable in JuMP model: `vtotalcapacityinreservemargin[r,y]`
+* Variable in JuMP model: `vtotalcapacityinreservemargin[r,f,y]`
 
 ## Storage
 

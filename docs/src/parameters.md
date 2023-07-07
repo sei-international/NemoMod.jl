@@ -624,7 +624,7 @@ Fraction of a [technology's](@ref technology) production that counts as renewabl
 
 ## [Reserve margin](@id ReserveMargin)
 
-Multiplier that causes NEMO to deploy extra [technology](@ref technology) capacity as a reserve. In each [year](@ref year) and [time slice](@ref timeslice), NEMO ensures that the capacity of [technologies](@ref technology) tagged with [`ReserveMarginTagTechnology`](@ref ReserveMarginTagTechnology) is at least `ReserveMargin` times the rate of production of [fuels](@ref fuel) tagged with [`ReserveMarginTagFuel`](@ref ReserveMarginTagFuel). Technology capacity is pro-rated by `ReserveMarginTagTechnology` in these calculations.
+Multiplier that defines the level of reserve production capacity for a [region](@ref region), [fuel](@ref fuel), and [year](@ref year) - i.e., capacity beyond what is needed to meet production requirements. When a reserve margin is specified, NEMO ensures the total capacity of [technologies](@ref technology) tagged with [`ReserveMarginTagTechnology`](@ref ReserveMarginTagTechnology) (for the region, fuel, and year) is at least the margin times the rate of production of the fuel in each [time slice](@ref timeslice). Technology capacity is pro-rated by `ReserveMarginTagTechnology` in these calculations, allowing technologies to qualify differentially toward the reserve.
 
 #### Scenario database
 
@@ -634,31 +634,13 @@ Multiplier that causes NEMO to deploy extra [technology](@ref technology) capaci
 |:--- | :--: |:----------- |
 | `id` | integer | Unique identifier for row |
 | `r` | text  | Region |
-| `y` | text  | Year |
-| `val` | real  | Multiplier (typically > 0; e.g., 1.15 for a 15% reserve margin) |
-
-## [Reserve margin tag fuel](@id ReserveMarginTagFuel)
-
-Indicator of whether a fuel is included in [reserve margin](@ref ReserveMargin) calculations.
-
-#### Scenario database
-
-**Table: `ReserveMarginTagFuel`**
-
-| Name | Type | Description |
-|:--- | :--: |:----------- |
-| `id` | integer | Unique identifier for row |
-| `r` | text  | Region |
 | `f` | text  | Fuel |
 | `y` | text  | Year |
-| `val` | real  | Indicator (0 for no, 1 for yes) |
-
-!!! tip
-    It is not necessary to populate zeros in `ReserveMarginTagFuel` for fuels that are excluded from reserve margin calculations. NEMO assumes exclusion if a fuel isn't represented in the table.
+| `val` | real  | Multiplier (e.g., 1.15 for a 15% reserve margin) |
 
 ## [Reserve margin tag technology](@id ReserveMarginTagTechnology)
 
-Fraction of a [technology's](@ref technology) capacity that counts toward the [reserve margin](@ref ReserveMargin).
+Fraction of a [technology's](@ref technology) installed capacity that counts toward the [reserve margin](@ref ReserveMargin).
 
 #### Scenario database
 
@@ -669,6 +651,7 @@ Fraction of a [technology's](@ref technology) capacity that counts toward the [r
 | `id` | integer | Unique identifier for row |
 | `r` | text  | Region |
 | `t` | text  | Technology |
+| `f` | text  | Fuel |
 | `y` | text  | Year |
 | `val` | real  | Fraction (0 to 1) |
 
