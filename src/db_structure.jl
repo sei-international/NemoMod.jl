@@ -140,8 +140,9 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     #   - 7: Removed DiscountRateStorage, DiscountRateTechnology, TransmissionLine.discountrate. Added InterestRateStorage, InterestRateTechnology, TransmissionLine.interestrate
     #   - 8: Removed RETagFuel. Added REMinProductionTarget.f and MinShareProduction.
     #   - 9: Added REGIONGROUP, RRGroup, REMinProductionTargetRG.
+    #   - 10: Added ReserveMargin.f and ReserveMarginTagTechnology.f. Deprecated ReserveMarginTagFuel.
     SQLite.DBInterface.execute(db, "CREATE TABLE `Version` (`version` INTEGER, PRIMARY KEY(`version`))")
-    SQLite.DBInterface.execute(db, "INSERT INTO Version VALUES(9)")
+    SQLite.DBInterface.execute(db, "INSERT INTO Version VALUES(10)")
 
     # No defaults in DefaultParams for sets/dimensions
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `EMISSION` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`) )")
@@ -191,9 +192,8 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `RRGroup` ( `id` INTEGER PRIMARY KEY NOT NULL, `rg` TEXT, `r` TEXT, UNIQUE(`rg`, `r`)" * (foreignkeys ? ", FOREIGN KEY(`rg`) REFERENCES `REGIONGROUP`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `ResidualStorageCapacity` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `ResidualCapacity` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
-    SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `ReserveMarginTagTechnology` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`)" : "") * " )")
-    SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `ReserveMarginTagFuel` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
-    SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `ReserveMargin` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
+    SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `ReserveMarginTagTechnology` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
+    SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `ReserveMargin` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `RETagTechnology` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `REMinProductionTargetRG` ( `id` INTEGER PRIMARY KEY NOT NULL, `rg` TEXT, `f` TEXT, `y` TEXT, `val` REAL" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`rg`) REFERENCES `REGIONGROUP`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `REMinProductionTarget` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
@@ -498,6 +498,69 @@ function db_v8_to_v9(db::SQLite.DB; quiet::Bool = false)
     end
     # END: Wrap database operations in try-catch block to allow rollback on error.
 end  # db_v8_to_v9(db::SQLite.DB; quiet::Bool = false)
+
+# Upgrades NEMO database from version 9 to version 10 by: adding ReserveMargin.f and ReserveMarginTagTechnology.f; migrating information in ReserveMarginTagFuel to ReserveMargin and ReserveMarginTagTechnology if possible; and dropping ReserveMarginTagFuel.
+function db_v9_to_v10(db::SQLite.DB; quiet::Bool = false)
+    # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
+    try
+        # Ensure required views with defaults exist
+        createviewwithdefaults(db, ["ReserveMargin", "ReserveMarginTagTechnology", "ReserveMarginTagFuel"])
+
+        # BEGIN: SQLite transaction.
+        SQLite.DBInterface.execute(db, "BEGIN")
+
+        SQLite.DBInterface.execute(db, "alter table ReserveMargin rename to ReserveMargin_old")
+        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `ReserveMargin` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`))")
+        SQLite.DBInterface.execute(db,"insert into ReserveMargin select null, rm.r, rmf.f, rm.y, rm.val from ReserveMargin_def rm, 
+            (select r, f, y from 
+            (select r, f, y, count(f) over (partition by r, y rows between UNBOUNDED PRECEDING and UNBOUNDED FOLLOWING) as cnt
+            from ReserveMarginTagFuel_def
+            where val = 1)
+            where cnt = 1) rmf
+            WHERE
+            rm.r =  rmf.r
+            and rm.y = rmf.y")
+    
+        SQLite.DBInterface.execute(db, "alter table ReserveMarginTagTechnology rename to ReserveMarginTagTechnology_old")
+        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `ReserveMarginTagTechnology` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`))")
+        SQLite.DBInterface.execute(db, "insert into ReserveMarginTagTechnology select null, rmt.r, rmt.t, rmf.f, rmt.y, rmt.val from ReserveMarginTagTechnology_def rmt, 
+            (select r, f, y from 
+            (select r, f, y, count(f) over (partition by r, y rows between UNBOUNDED PRECEDING and UNBOUNDED FOLLOWING) as cnt
+            from ReserveMarginTagFuel_def
+            where val = 1)
+            where cnt = 1) rmf
+            WHERE
+            rmt.r =  rmf.r
+            and rmt.y = rmf.y
+            and rmt.val > 0")
+
+        if DataFrame(SQLite.DBInterface.execute(db, "select count(*) from ReserveMargin"))[1,1] != DataFrame(SQLite.DBInterface.execute(db, "select count(*) from ReserveMargin_def"))[1,1]
+            @warn "Could not migrate some reserve margin data when upgrading database to version 10. Please verify data in ReserveMargin and ReserveMarginTagTechnology tables."
+        end
+        
+        SQLite.DBInterface.execute(db, "drop view if exists ReserveMarginTagFuel_def")
+        SQLite.DBInterface.execute(db, "drop table if exists ReserveMarginTagFuel")
+        SQLite.DBInterface.execute(db, "drop view if exists ReserveMarginTagTechnology_def")
+        SQLite.DBInterface.execute(db, "drop table if exists ReserveMarginTagTechnology_old")
+        SQLite.DBInterface.execute(db, "drop view if exists ReserveMargin_def")
+        SQLite.DBInterface.execute(db, "drop table if exists ReserveMargin_old")
+
+        # Remove old default values since they no longer operate in same way, and their old operation is encapsulated in data in ReserveMargin and ReserveMarginTagTechnology
+        SQLite.DBInterface.execute(db, "delete from DefaultParams where tablename in ('ReserveMargin', 'ReserveMarginTagTechnology', 'ReserveMarginTagFuel')")
+
+        SQLite.DBInterface.execute(db, "update version set version = 10")
+
+        SQLite.DBInterface.execute(db, "COMMIT")
+        # END: SQLite transaction.
+
+        logmsg("Upgraded database to version 10.", quiet)
+    catch
+        # Rollback transaction and rethrow error
+        SQLite.DBInterface.execute(db, "ROLLBACK")
+        rethrow()
+    end
+    # END: Wrap database operations in try-catch block to allow rollback on error.
+end  # db_v9_to_v10(db::SQLite.DB; quiet::Bool = false)
 
 """
     create_temp_tables(db::SQLite.DB)

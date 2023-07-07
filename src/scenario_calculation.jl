@@ -247,6 +247,7 @@ dbversion < 6 && db_v5_to_v6(db; quiet = quiet)
 dbversion < 7 && db_v6_to_v7(db; quiet = quiet)
 dbversion < 8 && db_v7_to_v8(db; quiet = quiet)
 dbversion < 9 && db_v8_to_v9(db; quiet = quiet)
+dbversion < 10 && db_v9_to_v10(db; quiet = quiet)
 # END: Update database if necessary.
 
 # BEGIN: Perform beforescenariocalc include.
@@ -288,7 +289,7 @@ local paramsneedingdefs::Array{String, 1} = ["OutputActivityRatio", "InputActivi
 "ResidualStorageCapacity", "MinStorageCharge", "OperationalLifeStorage", "DepreciationMethod", "TotalAnnualMaxCapacity",
 "TotalAnnualMinCapacity", "TotalAnnualMaxCapacityInvestment", "TotalAnnualMinCapacityInvestment",
 "TotalTechnologyAnnualActivityUpperLimit", "TotalTechnologyAnnualActivityLowerLimit", "TotalTechnologyModelPeriodActivityUpperLimit",
-"TotalTechnologyModelPeriodActivityLowerLimit", "ReserveMarginTagTechnology", "ReserveMarginTagFuel", "ReserveMargin", "RETagTechnology",
+"TotalTechnologyModelPeriodActivityLowerLimit", "ReserveMarginTagTechnology", "ReserveMargin", "RETagTechnology",
 "REMinProductionTarget", "REMinProductionTargetRG", "EmissionActivityRatio", "EmissionsPenalty", "ModelPeriodExogenousEmission",
 "AnnualExogenousEmission", "AnnualEmissionLimit", "ModelPeriodEmissionLimit", "AccumulatedAnnualDemand", "TotalAnnualMaxCapacityStorage",
 "TotalAnnualMinCapacityStorage", "TotalAnnualMaxCapacityInvestmentStorage", "TotalAnnualMinCapacityInvestmentStorage",
@@ -655,10 +656,8 @@ end
 logmsg("Defined costing variables.", quiet)
 
 # Reserve margin
-@variable(jumpmodel, vtotalcapacityinreservemargin[sregion, syear] >= 0)
-modelvarindices["vtotalcapacityinreservemargin"] = (vtotalcapacityinreservemargin, ["r", "y"])
-@variable(jumpmodel, vdemandneedingreservemargin[sregion, stimeslice, syear] >= 0)
-modelvarindices["vdemandneedingreservemargin"] = (vdemandneedingreservemargin, ["r", "l", "y"])
+@variable(jumpmodel, vtotalcapacityinreservemargin[sregion, sfuel, syear] >= 0)
+modelvarindices["vtotalcapacityinreservemargin"] = (vtotalcapacityinreservemargin, ["r", "f", "y"])
 
 logmsg("Defined reserve margin variables.", quiet)
 
@@ -5493,112 +5492,87 @@ if modelperiodactivitylowerlimits
 end
 # END: TAC3_TotalModelHorizonTechnologyActivityLowerLimit.
 
-# BEGIN: RM1_ReserveMargin_TechnologiesIncluded_In_Activity_Units.
-rm1_reservemargin_technologiesincluded_in_activity_units::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+# BEGIN: RM1_TotalCapacityInReserveMargin.
+rm1_totalcapacityinreservemargin::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
 t = Threads.@spawn(let
-    local lastkeys = Array{String, 1}(undef,2)  # lastkeys[1] = r, lastkeys[2] = y
+    local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = f, lastkeys[3] = y
     local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtotalcapacityannual sum
 
-    for row in SQLite.DBInterface.execute(db, "select r.val as r, y.val as y, rmt.t as t, cast(rmt.val as real) as rmt, cast(cau.val as real) as cau
-    from region r, year y, ReserveMarginTagTechnology_def rmt, CapacityToActivityUnit_def cau
-    where rmt.r = r.val and rmt.t = cau.t and rmt.y = y.val and rmt.val <> 0
-    and cau.r = r.val and cau.val <> 0 $(restrictyears ? "and y.val in" * inyears : "")
-    order by r.val, y.val")
+    # Define vtotalcapacityinreservemargin for [r,f,y] with corresponding technologies
+    for row in SQLite.DBInterface.execute(db, "select rmt.r, rmt.f, rmt.y, rmt.t, cast(rmt.val as real) as rmt, cast(cau.val as real) as cau
+        from ReserveMarginTagTechnology_def rmt, CapacityToActivityUnit_def cau
+        where
+        rmt.r = cau.r and rmt.t = cau.t
+        and rmt.val > 0
+        $(restrictyears ? "and rmt.y in" * inyears : "")
+        order by rmt.r, rmt.f, rmt.y")
         local r = row[:r]
+        local f = row[:f]
         local y = row[:y]
 
-        if isassigned(lastkeys, 1) && (r != lastkeys[1] || y != lastkeys[2])
+        if isassigned(lastkeys, 1) && (r != lastkeys[1] || f != lastkeys[2] || y != lastkeys[3])
             # Create constraint
-            push!(rm1_reservemargin_technologiesincluded_in_activity_units, @build_constraint(sumexps[1] ==
-                vtotalcapacityinreservemargin[lastkeys[1],lastkeys[2]]))
+            push!(rm1_totalcapacityinreservemargin, @build_constraint(sumexps[1] == vtotalcapacityinreservemargin[lastkeys[1],lastkeys[2],lastkeys[3]]))
             sumexps[1] = AffExpr()
         end
 
         add_to_expression!(sumexps[1], vtotalcapacityannual[r,row[:t],y] * row[:rmt] * row[:cau])
 
         lastkeys[1] = r
-        lastkeys[2] = y
-    end
-
-    # Create last constraint
-    if isassigned(lastkeys, 1)
-        push!(rm1_reservemargin_technologiesincluded_in_activity_units, @build_constraint(sumexps[1] ==
-            vtotalcapacityinreservemargin[lastkeys[1],lastkeys[2]]))
-    end
-
-    put!(cons_channel, rm1_reservemargin_technologiesincluded_in_activity_units)
-end)
-
-numconsarrays += 1
-logmsg("Queued constraint RM1_ReserveMargin_TechnologiesIncluded_In_Activity_Units for creation.", quiet)
-# END: RM1_ReserveMargin_TechnologiesIncluded_In_Activity_Units.
-
-# BEGIN: RM2_ReserveMargin_FuelsIncluded.
-rm2_reservemargin_fuelsincluded::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
-
-t = Threads.@spawn(let
-    local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = y
-    local sumexps = Array{AffExpr, 1}([AffExpr()])
-    # sumexps[1] = vrateofproduction sum
-
-    for row in SQLite.DBInterface.execute(db, "select r.val as r, l.val as l, y.val as y, rmf.f as f, cast(rmf.val as real) as rmf
-    from region r, timeslice l, year y, ReserveMarginTagFuel_def rmf
-    where rmf.r = r.val and rmf.y = y.val and rmf.val <> 0
-    $(restrictyears ? "and y.val in" * inyears : "")
-    order by r.val, l.val, y.val")
-        local r = row[:r]
-        local l = row[:l]
-        local y = row[:y]
-
-        if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || y != lastkeys[3])
-            # Create constraint
-            push!(rm2_reservemargin_fuelsincluded, @build_constraint(sumexps[1] ==
-                vdemandneedingreservemargin[lastkeys[1],lastkeys[2],lastkeys[3]]))
-            sumexps[1] = AffExpr()
-        end
-
-        add_to_expression!(sumexps[1], vrateofproduction[r,l,row[:f],y] * row[:rmf])
-
-        lastkeys[1] = r
-        lastkeys[2] = l
+        lastkeys[2] = f
         lastkeys[3] = y
     end
 
     # Create last constraint
     if isassigned(lastkeys, 1)
-        push!(rm2_reservemargin_fuelsincluded, @build_constraint(sumexps[1] ==
-            vdemandneedingreservemargin[lastkeys[1],lastkeys[2],lastkeys[3]]))
+        push!(rm1_totalcapacityinreservemargin, @build_constraint(sumexps[1] == vtotalcapacityinreservemargin[lastkeys[1],lastkeys[2],lastkeys[3]]))
     end
 
-    put!(cons_channel, rm2_reservemargin_fuelsincluded)
+    # Define vtotalcapacityinreservemargin for [r,f,y] with no corresponding technologies
+    for row in SQLite.DBInterface.execute(db, "select r.val as r, f.val as f, y.val as y
+        from REGION r, FUEL f, YEAR y
+        where
+        (r, f, y) not in (select rmt.r, rmt.f, rmt.y
+            from ReserveMarginTagTechnology_def rmt, CapacityToActivityUnit_def cau
+            where
+            rmt.r = cau.r
+            and rmt.t = cau.t
+            and rmt.val > 0)
+        $(restrictyears ? "and y.val in" * inyears : "")")
+
+        push!(rm1_totalcapacityinreservemargin, @build_constraint(vtotalcapacityinreservemargin[row[:r],row[:f],row[:y]] == 0))
+    end
+
+    put!(cons_channel, rm1_totalcapacityinreservemargin)
 end)
 
 numconsarrays += 1
-logmsg("Queued constraint RM2_ReserveMargin_FuelsIncluded for creation.", quiet)
-# END: RM2_ReserveMargin_FuelsIncluded.
+logmsg("Queued constraint RM1_TotalCapacityInReserveMargin for creation.", quiet)
+# END: RM1_TotalCapacityInReserveMargin.
 
-# BEGIN: RM3_ReserveMargin_Constraint.
-rm3_reservemargin_constraint::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+# BEGIN: RM2_ReserveMargin.
+rm2_reservemargin::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
 t = Threads.@spawn(begin
-    for row in SQLite.DBInterface.execute(db, "select r.val as r, l.val as l, y.val as y, cast(rm.val as real) as rm
-    from region r, timeslice l, year y, ReserveMargin_def rm
-    where rm.r = r.val and rm.y = y.val
-    $(restrictyears ? "and y.val in" * inyears : "")")
+    for row in SQLite.DBInterface.execute(db, "select rm.r, l.val as l, rm.f, rm.y, cast(rm.val as real) as rm 
+        from ReserveMargin rm, TIMESLICE l
+        where 1 = 1
+        $(restrictyears ? "and rm.y in" * inyears : "")")
         local r = row[:r]
         local l = row[:l]
+        local f = row[:f]
         local y = row[:y]
 
-        push!(rm3_reservemargin_constraint, @build_constraint(vdemandneedingreservemargin[r,l,y] * row[:rm] <= vtotalcapacityinreservemargin[r,y]))
+        push!(rm2_reservemargin, @build_constraint(vrateofproduction[r,l,f,y] * row[:rm] <= vtotalcapacityinreservemargin[r,f,y]))
     end
 
-    put!(cons_channel, rm3_reservemargin_constraint)
+    put!(cons_channel, rm2_reservemargin)
 end)
 
 numconsarrays += 1
-logmsg("Queued constraint RM3_ReserveMargin_Constraint for creation.", quiet)
-# END: RM3_ReserveMargin_Constraint.
+logmsg("Queued constraint RM2_ReserveMargin for creation.", quiet)
+# END: RM2_ReserveMargin.
 
 # BEGIN: RE1_FuelProductionByTechnologyAnnual.
 re1_fuelproductionbytechnologyannual::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()

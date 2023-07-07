@@ -21,14 +21,14 @@ if @isdefined Cbc
 
     @testset "Solving storage_test with Cbc" begin
         dbfile = joinpath(@__DIR__, "storage_test.sqlite")
-        #dbfile = "c:/temp/storage_test.sqlite"
+        # dbfile = "c:/temp/storage_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
         if reg_jumpmode
             NemoMod.calculatescenario(dbfile; restrictvars=false, quiet = false)  # Cbc is NEMO's default solver
         else
-            NemoMod.calculatescenario(dbfile; jumpmodel=Model(Cbc.Optimizer, add_bridges=false) restrictvars=false, quiet = false)  # Cbc isn't compatible with direct mode
+            NemoMod.calculatescenario(dbfile; jumpmodel=Model(Cbc.Optimizer, add_bridges=false), restrictvars=false, quiet = false)  # Cbc isn't compatible with direct mode
         end
 
         db = SQLite.DB(dbfile)
@@ -190,7 +190,7 @@ if @isdefined Cbc
 
     @testset "Solving storage_transmission_test with Cbc" begin
         dbfile = joinpath(@__DIR__, "storage_transmission_test.sqlite")
-        #dbfile = "c:/temp/storage_transmission_test.sqlite"
+        # dbfile = "c:/temp/storage_transmission_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(Cbc.Optimizer, add_bridges=reg_jumpmode),
@@ -287,7 +287,7 @@ if @isdefined Cbc
 
     @testset "Solving ramp_test with Cbc" begin
         dbfile = joinpath(@__DIR__, "ramp_test.sqlite")
-        #dbfile = "c:/temp/ramp_test.sqlite"
+        # dbfile = "c:/temp/ramp_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(Cbc.Optimizer, add_bridges=reg_jumpmode), quiet = false)

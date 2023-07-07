@@ -5,6 +5,12 @@ CurrentModule = NemoMod
 
 This page highlights key changes in NEMO since its initial public release. For a full history of NEMO releases, including the code for each version, see the [Releases page on NEMO's GitHub site](https://github.com/sei-international/NemoMod.jl/releases).
 
+## Version 2.0
+
+  * **Bug fix - warm starts:** Fixed a bug in NEMO's warm starting functionality that was caused by a recent release of the Julia SQLite package. This bug led to the following error when performing a warm start without specifying `startvalsvars`: `SQLite.SQLiteException("no such column: val")`.
+
+  * **Other enhancements:** Better aligned solver invocation in NEMO's test cases with how solvers are called when using NEMO with LEAP. This change should improve performance for most LEAP-NEMO users.
+
 ## Version 1.9
 
   * **HiGHS solver:** Added [HiGHS](https://highs.dev/) as an officially supported NEMO solver. HiGHS is a high-performance, open-source solver that works with linear programming, mixed-integer programming, and quadratic programming models. This enhancement includes incorporating HiGHS in the Julia system image that's distributed with the [NEMO installer program](@ref installer_program).
