@@ -25,7 +25,8 @@ if @isdefined HiGHS
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer) : direct_model(HiGHS.Optimizer())), quiet = false)
+        @info "Running HiGHS test 1 on storage_test.sqlite: default outputs."
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer) : direct_model(HiGHS.Optimizer())), quiet = calculatescenario_quiet)
 
         db = SQLite.DB(dbfile)
 
@@ -56,11 +57,12 @@ if @isdefined HiGHS
         end
 
         # Test with optional outputs
+        @info "Running HiGHS test 2 on storage_test.sqlite: optional outputs."
         NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer) : direct_model(HiGHS.Optimizer())),
             varstosave =
                 "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vrateofdemand, vproductionbytechnology, vtotaltechnologyannualactivity, "
                 * "vtotaltechnologymodelperiodactivity, vusebytechnology, vmodelperiodcostbyregion, vannualtechnologyemissionpenaltybyemission, "
-                * "vtotaldiscountedcost", quiet = false)
+                * "vtotaldiscountedcost", quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -89,8 +91,9 @@ if @isdefined HiGHS
         end
 
         # Test with storage net zero constraints
+        @info "Running HiGHS test 3 on storage_test.sqlite: storage net zero constraints."
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer) : direct_model(HiGHS.Optimizer())))
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer) : direct_model(HiGHS.Optimizer())), quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -121,7 +124,8 @@ if @isdefined HiGHS
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 0")
 
         # Test with calcyears
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer) : direct_model(HiGHS.Optimizer())), calcyears=[2020,2029])
+        @info "Running HiGHS test 4 on storage_test.sqlite: calcyears."
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer) : direct_model(HiGHS.Optimizer())), calcyears=[2020,2029], quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -134,8 +138,9 @@ if @isdefined HiGHS
         end
 
         # Test MinimumUtilization
+        @info "Running HiGHS test 5 on storage_test.sqlite: minimum utilization."
         SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.5 from TIMESLICE")
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer) : direct_model(HiGHS.Optimizer())), varstosave="vproductionbytechnologyannual")
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer) : direct_model(HiGHS.Optimizer())), varstosave="vproductionbytechnologyannual", quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
@@ -156,10 +161,11 @@ if @isdefined HiGHS
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Disable JuMP bridging as it has an outsized performance penalty for HiGHS
+        @info "Running HiGHS test 1 on storage_transmission_test.sqlite: default outputs."
         NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer, add_bridges=false) : direct_model(HiGHS.Optimizer())),
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
-                * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual", quiet = false)
+                * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual", quiet = calculatescenario_quiet)
 
         db = SQLite.DB(dbfile)
 
@@ -190,8 +196,9 @@ if @isdefined HiGHS
         end
 
         # Test MinimumUtilization
+        @info "Running HiGHS test 2 on storage_transmission_test.sqlite: minimum utilization."
         SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.2 from TIMESLICE")
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer, add_bridges=false) : direct_model(HiGHS.Optimizer())), varstosave="vproductionbytechnologyannual", calcyears=[2020,2025,2029])
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer, add_bridges=false) : direct_model(HiGHS.Optimizer())), varstosave="vproductionbytechnologyannual", calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
@@ -202,10 +209,11 @@ if @isdefined HiGHS
         SQLite.DBInterface.execute(db, "delete from MinimumUtilization")
 
         # Test interest rates
+        @info "Running HiGHS test 3 on storage_transmission_test.sqlite: interest rates."
         SQLite.DBInterface.execute(db, "insert into InterestRateStorage select rowid, 1, 'storage1', y.val, 0.05 from year y")
         SQLite.DBInterface.execute(db, "insert into InterestRateTechnology select rowid, 1, 'solar', y.val, 0.05 from year y")
         SQLite.DBInterface.execute(db, "update TransmissionLine set interestrate = 0.05 where id = 2")
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer, add_bridges=false) : direct_model(HiGHS.Optimizer())), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029])
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer, add_bridges=false) : direct_model(HiGHS.Optimizer())), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -224,9 +232,10 @@ if @isdefined HiGHS
         SQLite.DBInterface.execute(db, "update TransmissionLine set interestrate = null where id = 2")
 
         # Test transshipment power flow
+        @info "Running HiGHS test 4 on storage_transmission_test.sqlite: transshipment power flow."
         SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 3")
         SQLite.DBInterface.execute(db, "update TransmissionLine set efficiency = 1.0")
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer, add_bridges=false) : direct_model(HiGHS.Optimizer())), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029])
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer, add_bridges=false) : direct_model(HiGHS.Optimizer())), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -252,7 +261,8 @@ if @isdefined HiGHS
         #dbfile = "c:/temp/ramp_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer, add_bridges=false) : direct_model(HiGHS.Optimizer())), quiet = false)
+        @info "Running HiGHS test 1 on ramp_test.sqlite: default outputs."
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer, add_bridges=false) : direct_model(HiGHS.Optimizer())), quiet = calculatescenario_quiet)
 
         db = SQLite.DB(dbfile)
 

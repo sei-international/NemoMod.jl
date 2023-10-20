@@ -26,6 +26,10 @@ if !@isdefined reg_jumpmode  # If reg_jumpmode is false, disables JuMP bridging 
     reg_jumpmode = true
 end
 
+if !@isdefined calculatescenario_quiet  # quiet argument passed to calculatescenario calls
+    calculatescenario_quiet = true
+end
+
 """Helper function for deleting a file after Julia has been told to release it (e.g.,
     with finalize(db); db = nothing; GC.gc())."""
 function delete_file(path::String, max_del_attempts::Int)
@@ -120,7 +124,7 @@ end  # @testset "Solving a scenario"
             write(io, "jumpbridges=false\r\n")
         end
 
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(HiGHS.Optimizer))
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(HiGHS.Optimizer), quiet = calculatescenario_quiet)
         db = SQLite.DB(dbfile)
 
         if !compilation
@@ -131,7 +135,7 @@ end  # @testset "Solving a scenario"
             write(io, "jumpdirectmode=true\r\n")
         end
 
-        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(HiGHS.Optimizer))
+        NemoMod.calculatescenario(dbfile; jumpmodel = JuMP.Model(HiGHS.Optimizer), quiet = calculatescenario_quiet)
 
         if !compilation
             @test DataFrame(SQLite.DBInterface.execute(db, "select count(*) from vtotaldiscountedcost"))[1,1] > 0
@@ -175,7 +179,7 @@ end  # @testset "Writing optimization problem for a scenario"
 
     # BEGIN: Test passing a directory path to precalcresultspath.
     # db1 should be overwritten with file in precalcresultspath with same name
-    NemoMod.calculatescenario(db1path; precalcresultspath=@__DIR__)
+    NemoMod.calculatescenario(db1path; precalcresultspath=@__DIR__, quiet = calculatescenario_quiet)
 
     !compilation && @test isfile(db1path)
     db = SQLite.DB(db1path)
@@ -189,7 +193,7 @@ end  # @testset "Writing optimization problem for a scenario"
 
     # BEGIN: Test passing a file path to precalcresultspath.
     # db2 should be overwritten with specified file
-    NemoMod.calculatescenario(db2path; precalcresultspath=joinpath(@__DIR__, "storage_test.sqlite"))
+    NemoMod.calculatescenario(db2path; precalcresultspath=joinpath(@__DIR__, "storage_test.sqlite"), quiet = calculatescenario_quiet)
 
     !compilation && @test isfile(db2path)
     db = SQLite.DB(db2path)

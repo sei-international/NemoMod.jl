@@ -7,6 +7,8 @@ This page highlights key changes in NEMO since its initial public release. For a
 
 ## Version 2.0
 
+  * **Julia platform upgrade:** Updated NEMO to use Julia 1.9.3 and the latest releases of the Julia packages for the Cbc, CPLEX, GLPK, Gurobi, HiGHS, Mosek, and Xpress solvers. These packages add support for new versions of several solvers, including Gurobi 10.0, HiGHS 1.6, and Mosek 10.1.
+
   * **Fuel-specific reserve margins:** Refactored NEMO's reserve margin calculations to allow a different margin for each fuel, region, and year. Added a fuel subscript to the [`ReserveMargin`](@ref ReserveMargin) parameter, the [`ReserveMarginTagTechnology`](@ref ReserveMarginTagTechnology) parameter, and the [`vtotalcapacityinreservemargin`](@ref vtotalcapacityinreservemargin) output variable. Removed the `ReserveMarginTagFuel` parameter and `vdemandneedingreservemargin` output variable.
 
   * **Bug fix - warm starts:** Fixed a bug in NEMO's warm starting functionality that was caused by a recent release of the Julia SQLite package. This bug led to the following error when performing a warm start without specifying `startvalsvars`: `SQLite.SQLiteException("no such column: val")`.

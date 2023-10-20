@@ -25,8 +25,9 @@ if @isdefined Gurobi
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
+        @info "Running Gurobi test 1 on storage_test.sqlite: default outputs."
         NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Gurobi.Optimizer) : direct_model(Gurobi.Optimizer())),
-            restrictvars=false, quiet = false)
+            restrictvars=false, quiet = calculatescenario_quiet)
 
         db = SQLite.DB(dbfile)
 
@@ -57,12 +58,13 @@ if @isdefined Gurobi
         end
 
         # Test with optional outputs
+        @info "Running Gurobi test 2 on storage_test.sqlite: optional outputs."
         NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Gurobi.Optimizer) : direct_model(Gurobi.Optimizer())),
             varstosave =
                 "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vrateofdemand, vproductionbytechnology, vtotaltechnologyannualactivity, "
                 * "vtotaltechnologymodelperiodactivity, vusebytechnology, vmodelperiodcostbyregion, vannualtechnologyemissionpenaltybyemission, "
                 * "vtotaldiscountedcost",
-            restrictvars=false, quiet = false)
+            restrictvars=false, quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -91,10 +93,11 @@ if @isdefined Gurobi
         end
 
         # Test with restrictvars
+        @info "Running Gurobi test 3 on storage_test.sqlite: restrictvars."
         NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Gurobi.Optimizer) : direct_model(Gurobi.Optimizer())),
             varstosave = "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vproductionbytechnology, vusebytechnology, "
                 * "vtotaldiscountedcost",
-            restrictvars = true, quiet = false)
+            restrictvars = true, quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -123,8 +126,9 @@ if @isdefined Gurobi
         end
 
         # Test with storage net zero constraints
+        @info "Running Gurobi test 4 on storage_test.sqlite: storage net zero constraints."
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Gurobi.Optimizer) : direct_model(Gurobi.Optimizer())), restrictvars=false)
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Gurobi.Optimizer) : direct_model(Gurobi.Optimizer())), restrictvars=false, quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -155,7 +159,8 @@ if @isdefined Gurobi
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 0")
 
         # Test with calcyears
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Gurobi.Optimizer) : direct_model(Gurobi.Optimizer())), restrictvars=true, calcyears=[2020,2029])
+        @info "Running Gurobi test 5 on storage_test.sqlite: calcyears."
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Gurobi.Optimizer) : direct_model(Gurobi.Optimizer())), restrictvars=true, calcyears=[2020,2029], quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -168,8 +173,9 @@ if @isdefined Gurobi
         end
 
         # Test MinimumUtilization
+        @info "Running Gurobi test 6 on storage_test.sqlite: minimum utilization."
         SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.5 from TIMESLICE")
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Gurobi.Optimizer) : direct_model(Gurobi.Optimizer())), varstosave="vproductionbytechnologyannual")
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Gurobi.Optimizer) : direct_model(Gurobi.Optimizer())), varstosave="vproductionbytechnologyannual", quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
@@ -189,11 +195,12 @@ if @isdefined Gurobi
         #dbfile = "c:/temp/storage_transmission_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
+        @info "Running Gurobi test 1 on storage_transmission_test.sqlite: default outputs."
         NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Gurobi.Optimizer) : direct_model(Gurobi.Optimizer())),
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
                 * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
-            restrictvars=false, quiet = false)
+            restrictvars=false, quiet = calculatescenario_quiet)
 
         db = SQLite.DB(dbfile)
 
@@ -224,8 +231,9 @@ if @isdefined Gurobi
         end
 
         # Test MinimumUtilization
+        @info "Running Gurobi test 2 on storage_transmission_test.sqlite: minimum utilization."
         SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.2 from TIMESLICE")
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Gurobi.Optimizer) : direct_model(Gurobi.Optimizer())), varstosave="vproductionbytechnologyannual", calcyears=[2020,2025,2029])
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Gurobi.Optimizer) : direct_model(Gurobi.Optimizer())), varstosave="vproductionbytechnologyannual", calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
@@ -236,10 +244,11 @@ if @isdefined Gurobi
         SQLite.DBInterface.execute(db, "delete from MinimumUtilization")
 
         # Test interest rates
+        @info "Running Gurobi test 3 on storage_transmission_test.sqlite: interest rates."
         SQLite.DBInterface.execute(db, "insert into InterestRateStorage select rowid, 1, 'storage1', y.val, 0.05 from year y")
         SQLite.DBInterface.execute(db, "insert into InterestRateTechnology select rowid, 1, 'solar', y.val, 0.05 from year y")
         SQLite.DBInterface.execute(db, "update TransmissionLine set interestrate = 0.05 where id = 2")
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Gurobi.Optimizer) : direct_model(Gurobi.Optimizer())), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029])
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Gurobi.Optimizer) : direct_model(Gurobi.Optimizer())), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -258,9 +267,10 @@ if @isdefined Gurobi
         SQLite.DBInterface.execute(db, "update TransmissionLine set interestrate = null where id = 2")
 
         # Test transshipment power flow
+        @info "Running Gurobi test 4 on storage_transmission_test.sqlite: transshipment power flow."
         SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 3")
         SQLite.DBInterface.execute(db, "update TransmissionLine set efficiency = 0.9")
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Gurobi.Optimizer) : direct_model(Gurobi.Optimizer())), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029])
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Gurobi.Optimizer) : direct_model(Gurobi.Optimizer())), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -286,8 +296,9 @@ if @isdefined Gurobi
         #dbfile = "c:/temp/ramp_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
+        @info "Running Gurobi test 1 on ramp_test.sqlite: default outputs."
         NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Gurobi.Optimizer) : direct_model(Gurobi.Optimizer())),
-            quiet = false)
+            quiet = calculatescenario_quiet)
 
         db = SQLite.DB(dbfile)
 
