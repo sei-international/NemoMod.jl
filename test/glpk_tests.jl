@@ -196,7 +196,7 @@ if @isdefined GLPK
         NemoMod.calculatescenario(dbfile; jumpmodel=(reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))),
             varstosave = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
                 * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
-            restrictvars=true, quiet = calculatescenario_quiet)
+            restrictvars=true, calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
 
         db = SQLite.DB(dbfile)
 
@@ -204,26 +204,12 @@ if @isdefined GLPK
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
             @test testqry[1,:y] == "2020"
-            @test testqry[2,:y] == "2021"
-            @test testqry[3,:y] == "2022"
-            @test testqry[4,:y] == "2023"
-            @test testqry[5,:y] == "2024"
-            @test testqry[6,:y] == "2025"
-            @test testqry[7,:y] == "2026"
-            @test testqry[8,:y] == "2027"
-            @test testqry[9,:y] == "2028"
-            @test testqry[10,:y] == "2029"
+            @test testqry[2,:y] == "2025"
+            @test testqry[3,:y] == "2029"
 
-            @test isapprox(testqry[1,:val], 9786.56610437941; atol=TOL)
-            @test isapprox(testqry[2,:val], 239.495268121409; atol=TOL)
-            @test isapprox(testqry[3,:val], 228.090669080493; atol=TOL)
-            @test isapprox(testqry[4,:val], 217.229187314711; atol=TOL)
-            @test isapprox(testqry[5,:val], 206.884940299725; atol=TOL)
-            @test isapprox(testqry[6,:val], 197.033276475929; atol=TOL)
-            @test isapprox(testqry[7,:val], 187.650739500884; atol=TOL)
-            @test isapprox(testqry[8,:val], 178.714990000842; atol=TOL)
-            @test isapprox(testqry[9,:val], 170.204752381754; atol=TOL)
-            @test isapprox(testqry[10,:val], 162.099764173099; atol=TOL)
+            @test isapprox(testqry[1,:val], 9774.87377127422; atol=TOL)
+            @test isapprox(testqry[2,:val], 2510.44571676115; atol=TOL)
+            @test isapprox(testqry[3,:val], 1611.02249720726; atol=TOL)
         end
 
         # Test MinimumUtilization
