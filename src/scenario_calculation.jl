@@ -1746,7 +1746,7 @@ t = Threads.@spawn(let
 
             if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
                 # Create constraint
-                push!(vrateofproduction1, @build_constraint((sumexps[1] == AffExpr() ? vrateofproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] : sumexps[1])
+                push!(vrateofproduction1, @build_constraint((isequal(sumexps[1], AffExpr()) ? vrateofproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] : sumexps[1])
                     == vrateofproduction[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
                 sumexps[1] = AffExpr()
             end
@@ -1763,7 +1763,7 @@ t = Threads.@spawn(let
 
         # Create last constraint
         if isassigned(lastkeys, 1)
-            push!(vrateofproduction1, @build_constraint((sumexps[1] == AffExpr() ? vrateofproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] : sumexps[1])
+            push!(vrateofproduction1, @build_constraint((isequal(sumexps[1], AffExpr()) ? vrateofproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] : sumexps[1])
                 == vrateofproduction[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
         end
     end
@@ -2000,7 +2000,7 @@ t = Threads.@spawn(let
 
             if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
                 # Create constraint
-                push!(vrateofuse1, @build_constraint((sumexps[1] == AffExpr() ? vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] : sumexps[1])
+                push!(vrateofuse1, @build_constraint((isequal(sumexps[1], AffExpr()) ? vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] : sumexps[1])
                     == vrateofuse[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
                 sumexps[1] = AffExpr()
             end
@@ -2017,7 +2017,7 @@ t = Threads.@spawn(let
 
         # Create last constraint
         if isassigned(lastkeys, 1)
-            push!(vrateofuse1, @build_constraint((sumexps[1] == AffExpr() ? vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] : sumexps[1])
+            push!(vrateofuse1, @build_constraint((isequal(sumexps[1], AffExpr()) ? vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] : sumexps[1])
                 == vrateofuse[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
         end
     end
@@ -2256,7 +2256,7 @@ if transmissionmodeling
 
             if isassigned(lastkeys, 1) && (tr != lastkeys[1] || y != lastkeys[2])
                 # Create constraint
-                if sumexps[1] == AffExpr()
+                if isequal(sumexps[1], AffExpr())
                     # Exogenously built line
                     if (lastvalsint[1] <= Meta.parse(lastkeys[2])) && (lastvalsint[1] + lastvalsint[2] > Meta.parse(lastkeys[2]))
                         push!(tr2_transmissionexists, @build_constraint(vtransmissionexists[lastkeys[1],lastkeys[2]] == 1))
@@ -2283,7 +2283,7 @@ if transmissionmodeling
 
         # Create last constraint
         if isassigned(lastkeys, 1)
-            if sumexps[1] == AffExpr()
+            if isequal(sumexps[1], AffExpr())
                 # Exogenously built line
                 if (lastvalsint[1] <= Meta.parse(lastkeys[2])) && (lastvalsint[1] + lastvalsint[2] > Meta.parse(lastkeys[2]))
                     push!(tr2_transmissionexists, @build_constraint(vtransmissionexists[lastkeys[1],lastkeys[2]] == 1))
