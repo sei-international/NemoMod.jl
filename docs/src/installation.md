@@ -98,13 +98,13 @@ NEMO has been tested for compatibility with the following solver packages (which
 
 | Solver | Julia package version | Solver program versions |
 |:--- | :-- |:-- |
-| [Cbc](https://github.com/jump-dev/Cbc.jl) | 1.0.1 | 2.10.5 |
-| [CPLEX](https://github.com/jump-dev/CPLEX.jl) | 0.9.3 | 12.10 - 22.1 |
-| [GLPK](https://github.com/jump-dev/GLPK.jl) | 1.0.1 | 5.0 |
-| [Gurobi](https://github.com/jump-dev/Gurobi.jl) | 0.11.3 | 9.0 - 9.5 |
-| [HiGHS](https://github.com/jump-dev/HiGHS.jl) | 1.1.4 | 1.2.1 |
-| [Mosek](https://github.com/jump-dev/MosekTools.jl) | 1.2.3 | 9.3.21 |
-| [Xpress](https://github.com/jump-dev/Xpress.jl) | 0.15.1 | 8.4 - 8.13 |
+| [Cbc](https://github.com/jump-dev/Cbc.jl) | 1.2.0 | 2.10.8 |
+| [CPLEX](https://github.com/jump-dev/CPLEX.jl) | 1.0.0 | 12.10 - 22.1 |
+| [GLPK](https://github.com/jump-dev/GLPK.jl) | 1.1.3 | 5.0 |
+| [Gurobi](https://github.com/jump-dev/Gurobi.jl) | 1.0.3 | 9.0 - 10.0.3 |
+| [HiGHS](https://github.com/jump-dev/HiGHS.jl) | 1.7.3 | 1.6.0 |
+| [Mosek](https://github.com/jump-dev/MosekTools.jl) | 10.1.3 | 10.1.15 |
+| [Xpress](https://github.com/jump-dev/Xpress.jl) | 0.16.1 | 8.4 - 8.13 |
 
 !!! tip
     Older versions of NEMO may be compatible with older versions of these solvers. For example, [NEMO 1.2](https://github.com/sei-international/NemoMod.jl/releases/tag/v1.2) is compatible with CPLEX 12.8 - 12.9 and Gurobi 7 - 8.
