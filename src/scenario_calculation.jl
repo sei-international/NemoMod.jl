@@ -312,7 +312,20 @@ logmsg("Created temporary tables.", quiet)
 # BEGIN: Execute database queries in parallel.
 querycommands::Dict{String, Tuple{String, String}} = scenario_calc_queries(dbpath, transmissionmodeling,
     in("vproductionbytechnology", varstosavearr), in("vusebytechnology", varstosavearr), restrictyears, inyears)
-queries::Dict{String, DataFrame} = run_queries(querycommands)
+
+local queries::Dict{String, DataFrame}
+
+try
+    queries = run_queries(querycommands)
+catch ex
+    if contains(lowercase(sprint(showerror, ex)), "database is locked")
+        # Synchronization problem among Julia threads; collect garbage and retry
+        GC.gc()
+        queries = run_queries(querycommands)
+    else
+        rethrow()
+    end
+end
 
 logmsg("Executed core database queries.", quiet)
 # END: Execute database queries in parallel.
