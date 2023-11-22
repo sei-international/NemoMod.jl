@@ -320,6 +320,7 @@ try
 catch ex
     if contains(lowercase(sprint(showerror, ex)), "database is locked")
         # Synchronization problem among Julia threads; collect garbage and retry
+        logmsg("Could not execute core database queries due to a database locking problem. Retrying...", quiet)
         GC.gc()
         queries = run_queries(querycommands)
     else
