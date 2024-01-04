@@ -101,7 +101,7 @@ NEMO has been tested for compatibility with the following solver packages (which
 | [Cbc](https://github.com/jump-dev/Cbc.jl) | 1.2.0 | 2.10.8 |
 | [CPLEX](https://github.com/jump-dev/CPLEX.jl) | 1.0.0 | 12.10 - 22.1 |
 | [GLPK](https://github.com/jump-dev/GLPK.jl) | 1.1.3 | 5.0 |
-| [Gurobi](https://github.com/jump-dev/Gurobi.jl) | 1.0.4 | 9.0 - 10.0.3 |
+| [Gurobi](https://github.com/jump-dev/Gurobi.jl) | 1.2.1 | 9.0 - 11.0.0 |
 | [HiGHS](https://github.com/jump-dev/HiGHS.jl) | 1.7.4 | 1.6.0 |
 | [Mosek](https://github.com/jump-dev/MosekTools.jl) | 10.1.3 | 10.1.15 |
 | [Xpress](https://github.com/jump-dev/Xpress.jl) | 0.16.1 | 8.4 - 8.13 |
