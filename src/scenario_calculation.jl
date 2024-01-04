@@ -284,7 +284,7 @@ logmsg("Verified that transmission modeling " * (transmissionmodeling ? "is" : "
 # Array of parameter tables needing default views in scenario database
 local paramsneedingdefs::Array{String, 1} = ["OutputActivityRatio", "InputActivityRatio", "ResidualCapacity", "OperationalLife",
 "FixedCost", "YearSplit", "SpecifiedAnnualDemand", "SpecifiedDemandProfile", "VariableCost", "DiscountRate", "CapitalCost",
-"CapitalCostStorage", "CapacityFactor", "CapacityToActivityUnit", "CapacityOfOneTechnologyUnit", "AvailabilityFactor",
+"CapitalCostStorage", "CapacityToActivityUnit", "CapacityOfOneTechnologyUnit", "AvailabilityFactor",
 "TradeRoute", "TechnologyToStorage", "TechnologyFromStorage", "StorageLevelStart", "StorageMaxChargeRate", "StorageMaxDischargeRate",
 "ResidualStorageCapacity", "MinStorageCharge", "OperationalLifeStorage", "DepreciationMethod", "TotalAnnualMaxCapacity",
 "TotalAnnualMinCapacity", "TotalAnnualMaxCapacityInvestment", "TotalAnnualMinCapacityInvestment",
@@ -1125,13 +1125,13 @@ t = Threads.@spawn(begin
     select * from (
     select rr.r, rr.t, rr.y, rr.l, m.val as m, cast(rr.val as real) as rr, ltgs.tg1o, ltgs.tg2o, ltgs.lorder, ltgs.prior_l,
     case rrs.val when 0 then 0 when 1 then 1 when 2 then 2 else 2 end as rrs,
-    cast(cf.val as real) as cf, cast(cta.val as real) as cta
-    from RampRate_def rr, ltgs, CapacityFactor_def cf, CapacityToActivityUnit_def cta, MODE_OF_OPERATION m
+    cast(af.val as real) as af, cast(cta.val as real) as cta
+    from RampRate_def rr, ltgs, AvailabilityFactor_def af, CapacityToActivityUnit_def cta, MODE_OF_OPERATION m
     left join RampingReset_def rrs on rr.r = rrs.r
     left join nodal on rr.r = nodal.r and rr.t = nodal.t and rr.y = nodal.y and nodal.m = m.val
     where rr.l = ltgs.l
     and rr.val <> 1.0
-    and rr.r = cf.r and rr.t = cf.t and rr.l = cf.l and rr.y = cf.y
+    and rr.r = af.r and rr.t = af.t and rr.l = af.l and rr.y = af.y
     and rr.r = cta.r and rr.t = cta.t
     and nodal.n is null
     and exists (select 1 from ar where ar.r = rr.r and ar.t = rr.t and ar.m = m.val and ar.y = rr.y)
@@ -1148,9 +1148,9 @@ t = Threads.@spawn(begin
         local prior_l = row[:prior_l]
 
         push!(ramprate, @build_constraint(vrateofactivity[r,l,t,m,y] <= vrateofactivity[r,prior_l,t,m,y]
-            + vtotalcapacityannual[r,t,y] * row[:rr] * row[:cf] * row[:cta]))
+            + vtotalcapacityannual[r,t,y] * row[:rr] * row[:af] * row[:cta]))
         push!(ramprate, @build_constraint(vrateofactivity[r,l,t,m,y] >= vrateofactivity[r,prior_l,t,m,y]
-            - vtotalcapacityannual[r,t,y] * row[:rr] * row[:cf] * row[:cta]))
+            - vtotalcapacityannual[r,t,y] * row[:rr] * row[:af] * row[:cta]))
     end
 
     put!(cons_channel, ramprate)
@@ -1173,8 +1173,8 @@ if transmissionmodeling
         select * from (
         select rr.r, ntc.n, rr.t, rr.y, rr.l, ar.m, cast(rr.val as real) as rr, ltgs.tg1o, ltgs.tg2o, ltgs.lorder, ltgs.prior_l,
         case rrs.val when 0 then 0 when 1 then 1 when 2 then 2 else 2 end as rrs,
-        cast(cf.val as real) as cf, cast(cta.val as real) as cta, cast(ntc.val as real) as ntc
-        from RampRate_def rr, ltgs, CapacityFactor_def cf, CapacityToActivityUnit_def cta, NodalDistributionTechnologyCapacity_def ntc,
+        cast(af.val as real) as af, cast(cta.val as real) as cta, cast(ntc.val as real) as ntc
+        from RampRate_def rr, ltgs, AvailabilityFactor_def af, CapacityToActivityUnit_def cta, NodalDistributionTechnologyCapacity_def ntc,
         	node n, TransmissionModelingEnabled tme,
         	(select r, t, f, m, y from OutputActivityRatio_def
         	where val <> 0 $(restrictyears ? "and y in" * inyears : "")
@@ -1184,7 +1184,7 @@ if transmissionmodeling
         left join RampingReset_def rrs on rr.r = rrs.r
         where rr.l = ltgs.l
         and rr.val <> 1.0
-        and rr.r = cf.r and rr.t = cf.t and rr.l = cf.l and rr.y = cf.y
+        and rr.r = af.r and rr.t = af.t and rr.l = af.l and rr.y = af.y
         and rr.r = cta.r and rr.t = cta.t
         and ntc.n = n.val
         and rr.r = n.r and rr.t = ntc.t and rr.y = ntc.y and ntc.val > 0
@@ -1204,9 +1204,9 @@ if transmissionmodeling
             local prior_l = row[:prior_l]
 
             push!(rampratetr, @build_constraint(vrateofactivitynodal[n,l,t,m,y] <= vrateofactivitynodal[n,prior_l,t,m,y]
-                + vtotalcapacityannual[r,t,y] * row[:ntc] * row[:rr] * row[:cf] * row[:cta]))
+                + vtotalcapacityannual[r,t,y] * row[:ntc] * row[:rr] * row[:af] * row[:cta]))
             push!(rampratetr, @build_constraint(vrateofactivitynodal[n,l,t,m,y] >= vrateofactivitynodal[n,prior_l,t,m,y]
-                - vtotalcapacityannual[r,t,y] * row[:ntc] * row[:rr] * row[:cf] * row[:cta]))
+                - vtotalcapacityannual[r,t,y] * row[:ntc] * row[:rr] * row[:af] * row[:cta]))
         end
 
         put!(cons_channel, rampratetr)
@@ -1301,10 +1301,10 @@ minimum_technology_utilization::Array{AbstractConstraint, 1} = Array{AbstractCon
 
 t = Threads.@spawn(begin
     for row in SQLite.DBInterface.execute(db,"select r.val as r, l.val as l, t.val as t, y.val as y,
-        cast(cf.val as real) as cf, cast(cta.val as real) as cta, cast(mu.val as real) as mu
-    from REGION r, TIMESLICE l, TECHNOLOGY t, YEAR y, CapacityFactor_def cf, CapacityToActivityUnit_def cta
+        cast(af.val as real) as af, cast(cta.val as real) as cta, cast(mu.val as real) as mu
+    from REGION r, TIMESLICE l, TECHNOLOGY t, YEAR y, AvailabilityFactor_def af, CapacityToActivityUnit_def cta
     left join MinimumUtilization_def mu on mu.r = r.val and mu.t = t.val and mu.l = l.val and mu.y = y.val
-    where cf.r = r.val and cf.t = t.val and cf.l = l.val and cf.y = y.val
+    where af.r = r.val and af.t = t.val and af.l = l.val and af.y = y.val
     and cta.r = r.val and cta.t = t.val
     $(restrictyears ? "and y.val in" * inyears : "")")
         local r = row[:r]
@@ -1313,11 +1313,11 @@ t = Threads.@spawn(begin
         local y = row[:y]
 
         push!(caa4_constraint_capacity, @build_constraint(vrateoftotalactivity[r,t,l,y]
-            <= vtotalcapacityannual[r,t,y] * row[:cf] * row[:cta]))
+            <= vtotalcapacityannual[r,t,y] * row[:af] * row[:cta]))
 
         if !ismissing(row[:mu])
             push!(minimum_technology_utilization, @build_constraint(vrateoftotalactivity[r,t,l,y]
-            >= vtotalcapacityannual[r,t,y] * row[:cf] * row[:cta] * row[:mu]))
+            >= vtotalcapacityannual[r,t,y] * row[:af] * row[:cta] * row[:mu]))
         end
     end
 
@@ -1337,14 +1337,14 @@ if transmissionmodeling
 
     t = Threads.@spawn(begin
         for row in SQLite.DBInterface.execute(db,"select ntc.n as n, ntc.t as t, l.val as l, ntc.y as y, n.r as r,
-        	cast(ntc.val as real) as ntc, cast(cf.val as real) as cf,
+        	cast(ntc.val as real) as ntc, cast(af.val as real) as af,
         	cast(cta.val as real) as cta, cast(mu.val as real) as mu
         from NodalDistributionTechnologyCapacity_def ntc, TIMESLICE l, NODE n,
-        CapacityFactor_def cf, CapacityToActivityUnit_def cta
+        AvailabilityFactor_def af, CapacityToActivityUnit_def cta
         left join MinimumUtilization_def mu on mu.r = n.r and mu.t = ntc.t and mu.l = l.val and mu.y = ntc.y
         where ntc.val > 0 $(restrictyears ? "and ntc.y in" * inyears : "")
         and ntc.n = n.val
-        and cf.r = n.r and cf.t = ntc.t and cf.l = l.val and cf.y = ntc.y
+        and af.r = n.r and af.t = ntc.t and af.l = l.val and af.y = ntc.y
         and cta.r = n.r and cta.t = ntc.t")
             local n = row[:n]
             local t = row[:t]
@@ -1353,10 +1353,10 @@ if transmissionmodeling
             local r = row[:r]
 
             push!(caa4tr_constraint_capacity, @build_constraint(vrateoftotalactivitynodal[n,t,l,y]
-                    <= vtotalcapacityannual[r,t,y] * row[:ntc] * row[:cf] * row[:cta]))
+                    <= vtotalcapacityannual[r,t,y] * row[:ntc] * row[:af] * row[:cta]))
 
             !ismissing(row[:mu]) && push!(minimum_technology_utilization_tr, @build_constraint(vrateoftotalactivitynodal[n,t,l,y]
-                >= vtotalcapacityannual[r,t,y] * row[:ntc] * row[:cf] * row[:cta] * row[:mu]))
+                >= vtotalcapacityannual[r,t,y] * row[:ntc] * row[:af] * row[:cta] * row[:mu]))
         end
 
         put!(cons_channel, caa4tr_constraint_capacity)
@@ -1390,63 +1390,6 @@ if size(queries["querycaa5_totalnewcapacity"])[1] > 0
     logmsg("Queued constraint CAa5_TotalNewCapacity for creation.", quiet)
 end
 # END: CAa5_TotalNewCapacity.
-
-#= BEGIN: CAb1_PlannedMaintenance.
-# Omitting this constraint since it only serves to apply AvailabilityFactor, for which user demand isn't clear.
-#   This parameter specifies an outage on an annual level and lets the model choose when (in which time slices) to take it.
-#   Note that the parameter isn't used by LEAP. Omitting the constraint improves performance. If the constraint were
-#   reinstated, a variant for transmission modeling (incorporating vrateoftotalactivitynodal) would be needed.
-constraintnum = 1  # Number of next constraint to be added to constraint array
-@AbstractConstraint cab1_plannedmaintenance[1:length(sregion) * length(stechnology) * length(syear)]
-
-lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = y
-lastvals = Array{Float64, 1}(undef,2)  # lastvals[1] = af, lastvals[2] = cta
-sumexps = Array{AffExpr, 1}([AffExpr(), AffExpr()])
-# sumexps[1] = vrateoftotalactivity sum, sumexps[2] vtotalcapacityannual sum
-
-for row in DataFrames.eachrow(SQLite.query(db, "select r.val as r, t.val as t, y.val as y,
-ys.l as l, cast(ys.val as real) as ys, cast(cf.val as real) as cf,
-cast(af.val as real) as af, cast(cta.val as real) as cta
-from REGION r, TECHNOLOGY t, YEAR y, YearSplit_def ys, CapacityFactor_def cf,
-AvailabilityFactor_def af, CapacityToActivityUnit_def cta
-where
-ys.y = y.val
-and cf.r = r.val and cf.t = t.val and cf.l = ys.l and cf.y = y.val
-and af.r = r.val and af.t = t.val and af.y = y.val
-and cta.r = r.val and cta.t = t.val
-order by r.val, t.val, y.val"))
-    local r = row[:r]
-    local t = row[:t]
-    local l = row[:l]
-    local y = row[:y]
-    local ys = row[:ys]
-
-    if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2] || y != lastkeys[3])
-        # Create constraint
-        cab1_plannedmaintenance[constraintnum] = @build_constraint(sumexps[1] <= sumexps[2] * lastvals[1] * lastvals[2])
-        constraintnum += 1
-
-        sumexps[1] = AffExpr()
-        sumexps[2] = AffExpr()
-    end
-
-    add_to_expression!(sumexps[1], vrateoftotalactivity[r,t,l,y] * ys)
-    add_to_expression!(sumexps[2], vtotalcapacityannual[r,t,y] * row[:cf] * ys)
-
-    lastkeys[1] = r
-    lastkeys[2] = t
-    lastkeys[3] = y
-    lastvals[1] = row[:af]
-    lastvals[2] = row[:cta]
-end
-
-# Create last constraint
-if isassigned(lastkeys, 1)
-    cab1_plannedmaintenance[constraintnum] = @build_constraint(sumexps[1] <= sumexps[2] * lastvals[1] * lastvals[2])
-end
-
-logmsg("Created constraint CAb1_PlannedMaintenance.", quiet)
-# END: CAb1_PlannedMaintenance. =#
 
 # BEGIN: EBa1_RateOfFuelProduction1.
 if in("vrateofproductionbytechnologybymodenn", varstosavearr)

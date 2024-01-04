@@ -25,7 +25,7 @@ Yes, you can run the installer in silent mode with a `/S` switch.
 
 #### Why won't my solver work with NEMO?
 
-The first thing to do in case of problems with a solver is to check [whether NEMO supports the solver](@ref solver_compatibility). The NEMO team generally doesn't help to troubleshoot unsupported solvers. Note in particular that **right now, NEMO is only compatible with versions 12.10 and 20.1 of CPLEX and versions 9.0 - 9.1 of Gurobi.**
+The first thing to do in case of problems with a solver is to check [whether NEMO supports the solver](@ref solver_compatibility). The NEMO team generally doesn't help to troubleshoot unsupported solvers. Note in particular that **right now, NEMO is only compatible with versions 12.10-22.1 of CPLEX and versions 9.0 - 11.0 of Gurobi.**
 
 You should also make sure your solver is properly licensed. Proprietary solvers including CPLEX, Gurobi, Mosek, and Xpress require a license that must be obtained from their provider.
 

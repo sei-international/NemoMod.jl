@@ -57,15 +57,11 @@ Exogenously specified emissions, assumed to occur regardless of what else is hap
 
 ## [Availability factor](@id AvailabilityFactor)
 
-*Not currently used.*
-
-## [Capacity factor](@id CapacityFactor)
-
 Fraction of time a [technology](@ref technology) is available to operate.
 
 #### Scenario database
 
-**Table: `CapacityFactor`**
+**Table: `AvailabilityFactor`**
 
 | Name | Type | Description |
 |:--- | :--: |:----------- |
@@ -346,7 +342,7 @@ Minimum fraction of a [storage's](@ref storage) capacity that must be charged. N
 
 ## [Minimum utilization](@id MinimumUtilization)
 
-Minimum fraction of a [technology's](@ref technology) available capacity that must be utilized (dispatched) in a [region](@ref region), [time slice](@ref timeslice), and [year](@ref year). NEMO calculates available capacity by multiplying installed capacity by the applicable [capacity factor](@ref CapacityFactor) parameter. If the technology is involved in nodal transmission modeling, the minimum utilization rule applies equally to all [nodes](@ref node) in the region.
+Minimum fraction of a [technology's](@ref technology) available capacity that must be utilized (dispatched) in a [region](@ref region), [time slice](@ref timeslice), and [year](@ref year). NEMO calculates available capacity by multiplying installed capacity by the applicable [availability factor](@ref AvailabilityFactor) parameter. If the technology is involved in nodal transmission modeling, the minimum utilization rule applies equally to all [nodes](@ref node) in the region.
 
 !!! tip
     It is not necessary to specify 0 for this parameter. NEMO assumes the minimum utilization is 0 if the parameter is not set.
