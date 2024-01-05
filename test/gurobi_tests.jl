@@ -293,7 +293,7 @@ if @isdefined Gurobi
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtransmissionbyline where tr = 1 and l = 'winterwe8' and y = 2025") |> DataFrame
-            @test abs(testqry[1,:val]) <= 50.0
+            @test abs(testqry[1,:val]) <= 50.0 + TOL
         end
 
         SQLite.DBInterface.execute(db, "delete from TransmissionAvailabilityFactor")

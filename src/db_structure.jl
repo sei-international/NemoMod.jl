@@ -730,7 +730,7 @@ function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
                         for row in SQLite.DBInterface.execute(db, "pragma table_info($(dimension_tbl))")
                             if row[:pk] == 1
                                 dimension_pks[dimension_tbl] = row[:name]
-                                #break
+                                #break  # Breaking before cursor is fully traversed can cause database locking errors
                             end
                         end
 

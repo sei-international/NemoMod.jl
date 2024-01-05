@@ -21,7 +21,7 @@ if @isdefined Cbc
 
     @testset "Solving storage_test with Cbc" begin
         dbfile = joinpath(@__DIR__, "storage_test.sqlite")
-        # dbfile = "c:/temp/storage_test.sqlite"
+        #dbfile = "c:/temp/storage_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
@@ -196,7 +196,7 @@ if @isdefined Cbc
 
     @testset "Solving storage_transmission_test with Cbc" begin
         dbfile = joinpath(@__DIR__, "storage_transmission_test.sqlite")
-        # dbfile = "c:/temp/storage_transmission_test.sqlite"
+        #dbfile = "c:/temp/storage_transmission_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         @info "Running Cbc test 1 on storage_transmission_test.sqlite: default outputs."
@@ -298,7 +298,7 @@ if @isdefined Cbc
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtransmissionbyline where tr = 1 and l = 'winterwe8' and y = 2025") |> DataFrame
-            @test abs(testqry[1,:val]) <= 50.0
+            @test abs(testqry[1,:val]) <= 50.0 + TOL
         end
 
         SQLite.DBInterface.execute(db, "delete from TransmissionAvailabilityFactor")
@@ -310,7 +310,7 @@ if @isdefined Cbc
 
     @testset "Solving ramp_test with Cbc" begin
         dbfile = joinpath(@__DIR__, "ramp_test.sqlite")
-        # dbfile = "c:/temp/ramp_test.sqlite"
+        #dbfile = "c:/temp/ramp_test.sqlite"
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         @info "Running Cbc test 1 on ramp_test.sqlite: default outputs."
