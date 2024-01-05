@@ -102,6 +102,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.DBInterface.execute(db,"drop table if exists TotalTechnologyAnnualActivityUpperLimit")
     SQLite.DBInterface.execute(db,"drop table if exists TotalTechnologyModelPeriodActivityLowerLimit")
     SQLite.DBInterface.execute(db,"drop table if exists TotalTechnologyModelPeriodActivityUpperLimit")
+    SQLite.DBInterface.execute(db,"drop table if exists TransmissionAvailabilityFactor")
     SQLite.DBInterface.execute(db,"drop table if exists TransmissionCapacityToActivityUnit")
     SQLite.DBInterface.execute(db,"drop table if exists TransmissionLine")
     SQLite.DBInterface.execute(db,"drop table if exists TransmissionModelingEnabled")
@@ -140,7 +141,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     #   - 7: Removed DiscountRateStorage, DiscountRateTechnology, TransmissionLine.discountrate. Added InterestRateStorage, InterestRateTechnology, TransmissionLine.interestrate
     #   - 8: Removed RETagFuel. Added REMinProductionTarget.f and MinShareProduction.
     #   - 9: Added REGIONGROUP, RRGroup, REMinProductionTargetRG.
-    #   - 10: Added ReserveMargin.f and ReserveMarginTagTechnology.f. Deprecated ReserveMarginTagFuel. Dropped original AvailabilityFactor table and renamed CapacityFactor to AvailabilityFactor.
+    #   - 10: Added ReserveMargin.f and ReserveMarginTagTechnology.f. Deprecated ReserveMarginTagFuel. Dropped original AvailabilityFactor table and renamed CapacityFactor to AvailabilityFactor. Added TransmissionAvailabilityFactor.
     SQLite.DBInterface.execute(db, "CREATE TABLE `Version` (`version` INTEGER, PRIMARY KEY(`version`))")
     SQLite.DBInterface.execute(db, "INSERT INTO Version VALUES(10)")
 
@@ -168,6 +169,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionModelingEnabled` ( `id` INTEGER, `r` TEXT, `f` TEXT, `y` TEXT, `type` INTEGER DEFAULT 1, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionLine` ( `id` TEXT, `n1` TEXT, `n2` TEXT, `f` TEXT, `maxflow` REAL, `reactance` REAL, `yconstruction` INTEGER, `capitalcost` REAL, `fixedcost` REAL, `variablecost` REAL, `operationallife` INTEGER, `efficiency` REAL, `interestrate` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`n2`) REFERENCES `NODE`(`val`), FOREIGN KEY(`n1`) REFERENCES `NODE`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionCapacityToActivityUnit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
+    SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionAvailabilityFactor` ( `id` INTEGER NOT NULL UNIQUE, `tr` TEXT, `l` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`tr`) REFERENCES `TransmissionLine`(`id`), FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TradeRoute` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `rr` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`rr`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TotalTechnologyModelPeriodActivityUpperLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TotalTechnologyModelPeriodActivityLowerLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
@@ -504,6 +506,7 @@ end  # db_v8_to_v9(db::SQLite.DB; quiet::Bool = false)
     - Dropping ReserveMarginTagFuel
     - Dropping AvailabilityFactor
     - Renaming CapacityFactor to AvailabilityFactor
+    - Adding TransmissionAvailabilityFactor
 =#
 function db_v9_to_v10(db::SQLite.DB; quiet::Bool = false)
     # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
@@ -561,6 +564,9 @@ function db_v9_to_v10(db::SQLite.DB; quiet::Bool = false)
         SQLite.DBInterface.execute(db, "alter table CapacityFactor rename to AvailabilityFactor")
         SQLite.DBInterface.execute(db, "delete from DefaultParams where tablename in ('AvailabilityFactor')")
         SQLite.DBInterface.execute(db, "update DefaultParams set tablename = 'AvailabilityFactor' where tablename = 'CapacityFactor'")
+
+        # Add TransmissionAvailabilityFactor
+        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionAvailabilityFactor` ( `id` INTEGER NOT NULL UNIQUE, `tr` TEXT, `l` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`))")
 
         SQLite.DBInterface.execute(db, "update version set version = 10")
 
@@ -659,6 +665,8 @@ for the `val` column, if one is available. View name = [table name]  * "_def". T
 sensitive."""
 function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
     try
+        dimension_pks::Dict{String, String} = Dict{String, String}()  # Dictionary mapping names of dimension tables to names of their primary key fields
+
         # BEGIN: SQLite transaction.
         SQLite.DBInterface.execute(db, "BEGIN")
 
@@ -713,11 +721,26 @@ function createviewwithdefaults(db::SQLite.DB, tables::Array{String,1})
                 local fromclause::String = ""  # Dynamic from clause for create view inner select
                 local leftjoinclause::String = ""  # Dynamic left join criteria for create view inner select
 
+                local f_tab_pk::String = ""
+
                 for f in pks
+                    local dimension_tbl::String = translatesetabb(f)  # Name of dimension table associated with f
+
+                    if !haskey(dimension_pks, dimension_tbl)
+                        for row in SQLite.DBInterface.execute(db, "pragma table_info($(dimension_tbl))")
+                            if row[:pk] == 1
+                                dimension_pks[dimension_tbl] = row[:name]
+                                #break
+                            end
+                        end
+
+                        !haskey(dimension_pks, dimension_tbl) && error("Could not determine primary key in $(dimension_tbl).")
+                    end
+               
                     outerfieldsclause = outerfieldsclause * f * ", "
-                    innerfieldsclause = innerfieldsclause * f * "_tab.val as " * f * ", "
-                    fromclause = fromclause * translatesetabb(f) * " as " * f * "_tab, "
-                    leftjoinclause = leftjoinclause * "t." * f * " = " * f * "_tab.val and "
+                    innerfieldsclause = innerfieldsclause * f * "_tab.$(dimension_pks[dimension_tbl]) as " * f * ", "
+                    fromclause = fromclause * dimension_tbl * " as " * f * "_tab, "
+                    leftjoinclause = leftjoinclause * "t." * f * " = " * f * "_tab.$(dimension_pks[dimension_tbl]) and "
                 end
 
                 innerfieldsclause = innerfieldsclause * "t.val as val "

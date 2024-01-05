@@ -11,6 +11,8 @@ This page highlights key changes in NEMO since its initial public release. For a
 
   * **Fuel-specific reserve margins:** Refactored NEMO's reserve margin calculations to allow a different margin for each fuel, region, and year. Added a fuel subscript to the [`ReserveMargin`](@ref ReserveMargin) parameter, the [`ReserveMarginTagTechnology`](@ref ReserveMarginTagTechnology) parameter, and the [`vtotalcapacityinreservemargin`](@ref vtotalcapacityinreservemargin) output variable. Removed the `ReserveMarginTagFuel` parameter and `vdemandneedingreservemargin` output variable.
 
+  * **Availability factors for transmission lines:** Added a parameter that defines time-sliced availability factors for transmission lines ([`TransmissionAvailabilityFactor`](@ref TransmissionAvailabilityFactor)). It allows you to simulate times when lines are unavailable or at reduced capacity. This parameter must be used when modeling transmission - if you don't want to represent reduced availability for lines, set a default of 1.0 for `TransmissionAvailabilityFactor` in the [default parameters table](@ref DefaultParams) or by using the [`setparamdefault`](@ref) function.
+
   * **Bug fix - warm starts:** Fixed a bug in NEMO's warm starting functionality that was caused by a recent release of the Julia SQLite package. This bug led to the following error when performing a warm start without specifying `startvalsvars`: `SQLite.SQLiteException("no such column: val")`.
 
   * **Other database changes:** Deleted the unused `AvailabilityFactor` parameter and renamed `CapacityFactor` to [`AvailabilityFactor`](@ref AvailabilityFactor). The revised name more clearly describes the parameter's purpose.

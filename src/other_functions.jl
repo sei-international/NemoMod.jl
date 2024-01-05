@@ -1068,9 +1068,11 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
         return_val["queryvtransmissionbyline"] = (dbpath, "select tl.id as tr, ys.l as l, tl.f as f, tme1.y as y, tl.n1 as n1, tl.n2 as n2,
     	tl.reactance as reactance, tme1.type as type, tl.maxflow as maxflow,
         cast(tl.VariableCost as real) as vc, cast(ys.val as real) as ys,
-        cast(tl.fixedcost as real) as fc, cast(tcta.val as real) as tcta, cast(tl.efficiency as real) as eff
+        cast(tl.fixedcost as real) as fc, cast(tcta.val as real) as tcta, cast(tl.efficiency as real) as eff,
+        cast(taf.val as real) as taf
         from TransmissionLine tl, NODE n1, NODE n2, TransmissionModelingEnabled tme1,
-        TransmissionModelingEnabled tme2, YearSplit_def ys, TransmissionCapacityToActivityUnit_def tcta
+        TransmissionModelingEnabled tme2, YearSplit_def ys, TransmissionCapacityToActivityUnit_def tcta, 
+        TransmissionAvailabilityFactor_def taf
         where
         tl.n1 = n1.val and tl.n2 = n2.val
         and tme1.r = n1.r and tme1.f = tl.f
@@ -1078,6 +1080,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
         and tme1.y = tme2.y and tme1.type = tme2.type
     	and ys.y = tme1.y $(restrictyears ? "and ys.y in" * inyears : "")
     	and tcta.r = n1.r and tl.f = tcta.f
+        and taf.tr = tl.id and taf.l = ys.l and taf.y = tme1.y
         order by tl.id, tme1.y")
 
         return_val["queryvtransmissionlosses"] = (dbpath, "select tl.id as tr, tl.n1, tl.n2, ys.l as l, tl.f as f, tme1.y as y

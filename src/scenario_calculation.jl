@@ -292,7 +292,7 @@ local paramsneedingdefs::Array{String, 1} = ["OutputActivityRatio", "InputActivi
 "TotalTechnologyModelPeriodActivityLowerLimit", "ReserveMarginTagTechnology", "ReserveMargin", "RETagTechnology",
 "REMinProductionTarget", "REMinProductionTargetRG", "EmissionActivityRatio", "EmissionsPenalty", "ModelPeriodExogenousEmission",
 "AnnualExogenousEmission", "AnnualEmissionLimit", "ModelPeriodEmissionLimit", "AccumulatedAnnualDemand", "TotalAnnualMaxCapacityStorage",
-"TotalAnnualMinCapacityStorage", "TotalAnnualMaxCapacityInvestmentStorage", "TotalAnnualMinCapacityInvestmentStorage",
+"TotalAnnualMinCapacityStorage", "TotalAnnualMaxCapacityInvestmentStorage", "TotalAnnualMinCapacityInvestmentStorage", "TransmissionAvailabilityFactor",
 "TransmissionCapacityToActivityUnit", "StorageFullLoadHours", "RampRate", "RampingReset", "NodalDistributionDemand",
 "NodalDistributionTechnologyCapacity", "NodalDistributionStorageCapacity", "MinimumUtilization", "InterestRateTechnology",
 "InterestRateStorage", "MinShareProduction"]
@@ -2292,8 +2292,8 @@ if transmissionmodeling
             if type == 1  # DCOPF
                 push!(tr3_flow, @build_constraint(1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]) * vtransmissionexists[tr,y]
                     == vtransmissionbyline[tr,l,f,y]))
-                push!(tr4_maxflow, @build_constraint(vtransmissionbyline[tr,l,f,y] <= row[:maxflow]))
-                push!(tr5_minflow, @build_constraint(vtransmissionbyline[tr,l,f,y] >= -row[:maxflow]))
+                push!(tr4_maxflow, @build_constraint(vtransmissionbyline[tr,l,f,y] <= row[:maxflow] * row[:taf]))
+                push!(tr5_minflow, @build_constraint(vtransmissionbyline[tr,l,f,y] >= -row[:maxflow] * row[:taf]))
             elseif type == 2  # DCOPF with disjunctive formulation
                 push!(tr3_flow, @build_constraint(vtransmissionbyline[tr,l,f,y] -
                     (1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]))
@@ -2302,11 +2302,11 @@ if transmissionmodeling
                     (1/row[:reactance] * (vvoltageangle[n1,l,y] - vvoltageangle[n2,l,y]))
                     >= (vtransmissionexists[tr,y] - 1) * 500000))
 
-                push!(tr4_maxflow, @build_constraint(vtransmissionbyline[tr,l,f,y] <= vtransmissionexists[tr,y] * row[:maxflow]))
-                push!(tr5_minflow, @build_constraint(vtransmissionbyline[tr,l,f,y] >= -vtransmissionexists[tr,y] * row[:maxflow]))
+                push!(tr4_maxflow, @build_constraint(vtransmissionbyline[tr,l,f,y] <= vtransmissionexists[tr,y] * row[:maxflow] * row[:taf]))
+                push!(tr5_minflow, @build_constraint(vtransmissionbyline[tr,l,f,y] >= -vtransmissionexists[tr,y] * row[:maxflow] * row[:taf]))
             elseif type == 3  # Pipeline flow
-                push!(tr4_maxflow, @build_constraint(vtransmissionbyline[tr,l,f,y] <= vtransmissionexists[tr,y] * row[:maxflow]))
-                push!(tr5_minflow, @build_constraint(vtransmissionbyline[tr,l,f,y] >= -vtransmissionexists[tr,y] * row[:maxflow]))
+                push!(tr4_maxflow, @build_constraint(vtransmissionbyline[tr,l,f,y] <= vtransmissionexists[tr,y] * row[:maxflow] * row[:taf]))
+                push!(tr5_minflow, @build_constraint(vtransmissionbyline[tr,l,f,y] >= -vtransmissionexists[tr,y] * row[:maxflow] * row[:taf]))
 
                 if !ismissing(row[:eff]) && row[:eff] < 1
                     # Constraints to populate vtransmissionlosses - losses (as a negative number, in model's energy unit) from perspective of node receiving energy (0 for nodes sending energy)

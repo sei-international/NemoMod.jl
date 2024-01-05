@@ -1052,6 +1052,24 @@ Indicator of whether [region](@ref region) `r` can trade a [fuel](@ref fuel) wit
 !!! tip
     It is not necessary to populate zeros in `TradeRoute` for cases where trade is disallowed. NEMO assumes trade is not allowed unless a route is explicitly defined in the table.
 
+## [Transmission availability factor](@id TransmissionAvailabilityFactor)
+
+Fraction of time a [transmission line](@ref TransmissionLine) is available to operate.
+
+#### Scenario database
+
+**Table: `TransmissionAvailabilityFactor`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `tr` | text | Transmission line |
+| `l` | text  | Time slice |
+| `y` | text  | Fuel |
+| `val` | real  | Fraction (0 to 1) |
+
+!!! note
+    This parameter must be used when modeling transmission. If you don't want to represent reduced availability for lines, set a default of 1.0 for `TransmissionAvailabilityFactor` in the [default parameters table](@ref DefaultParams) or by using the [`setparamdefault`](@ref) function.
+
 ## [Transmission capacity to activity unit](@id TransmissionCapacityToActivityUnit)
 
 Multiplier to convert 1 megawatt-year to a [region's](@ref region) energy [unit](@ref uoms) (e.g., 0.031536 if the energy unit is petajoules). This parameter is required if transmission modeling is enabled (see [TransmissionModelingEnabled](@ref TransmissionModelingEnabled)).
