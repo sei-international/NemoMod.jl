@@ -248,6 +248,18 @@ if @isdefined GLPK
         SQLite.DBInterface.execute(db, "delete from InterestRateTechnology")
         SQLite.DBInterface.execute(db, "update TransmissionLine set interestrate = null where id = 2")
 
+        # Test transmission line availability
+        @info "Running GLPK test 4 on storage_transmission_test.sqlite: transmission line availability."
+        SQLite.DBInterface.execute(db, "insert into TransmissionAvailabilityFactor values (null, 1, 'winterwe8', 2025, 0.2)")
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), varstosave="vtransmissionbyline", calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
+
+        if !compilation
+            testqry = SQLite.DBInterface.execute(db, "select * from vtransmissionbyline where tr = 1 and l = 'winterwe8' and y = 2025") |> DataFrame
+            @test abs(testqry[1,:val]) <= 50.0
+        end
+
+        SQLite.DBInterface.execute(db, "delete from TransmissionAvailabilityFactor")
+
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
