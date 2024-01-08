@@ -18,7 +18,7 @@ This page highlights key changes in NEMO since its initial public release. For a
   * **Other database changes:** Deleted the unused `AvailabilityFactor` parameter and renamed `CapacityFactor` to [`AvailabilityFactor`](@ref AvailabilityFactor). The revised name more clearly describes the parameter's purpose.
 
 !!! tip
-    If you have a pre-existing scenario database that was created with NEMO 1.9, you can upgrade it to NEMO 2.0 using the `db_v9_to_v10` function. See [https://github.com/sei-international/NemoMod.jl/blob/master/src/db_structure.jl](https://github.com/sei-international/NemoMod.jl/blob/master/src/db_structure.jl) for details.
+    If you have a pre-existing scenario database that was created with NEMO 1.9, you can upgrade it to NEMO 2.0 using the `db_v9_to_v10` function. See [https://github.com/sei-international/NemoMod.jl/blob/master/src/db_structure.jl](https://github.com/sei-international/NemoMod.jl/blob/master/src/db_structure.jl) for details. Note that `db_v9_to_v10` sets a default of 1.0 for `TransmissionAvailabilityFactor`.
 
   * **Other enhancements:** Better aligned solver invocation in NEMO's test cases with how solvers are called when using NEMO with LEAP. This change should improve performance for most LEAP-NEMO users. Added logic to mitigate database locking errors when running NEMO on multiple threads.
 

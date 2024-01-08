@@ -568,6 +568,9 @@ function db_v9_to_v10(db::SQLite.DB; quiet::Bool = false)
         # Add TransmissionAvailabilityFactor
         SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionAvailabilityFactor` ( `id` INTEGER NOT NULL UNIQUE, `tr` TEXT, `l` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`))")
 
+        # Set default for TransmissionAvailabilityFactor to 1.0 to preserve behavior in NEMO 1.9/database v. 9
+        SQLite.DBInterface.execute(db, "INSERT OR REPLACE INTO DefaultParams (tablename, val) values('TransmissionAvailabilityFactor', 1.0)")
+
         SQLite.DBInterface.execute(db, "update version set version = 10")
 
         SQLite.DBInterface.execute(db, "COMMIT")
