@@ -1064,7 +1064,7 @@ Fraction of time a [transmission line](@ref TransmissionLine) is available to op
 |:--- | :--: |:----------- |
 | `tr` | text | Transmission line |
 | `l` | text  | Time slice |
-| `y` | text  | Fuel |
+| `y` | text  | Year |
 | `val` | real  | Fraction (0 to 1) |
 
 !!! note
