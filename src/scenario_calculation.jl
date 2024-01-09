@@ -139,7 +139,7 @@ function modelscenario(
 # variable visible outside the function, prefix it with global. For JuMP constraint references,
 # create a new global variable and assign to it the constraint reference.
 
-logmsg("Started modeling scenario.")
+logmsg("Started modeling scenario. $(isnothing(pkgversion(NemoMod)) ? "S" : "NEMO version = " * string(pkgversion(NemoMod)) * ", s")olver = $(solver_name(jumpmodel)).")
 
 # BEGIN: Validate arguments.
 if !isfile(dbpath)
