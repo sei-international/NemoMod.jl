@@ -159,7 +159,7 @@ logmsg("Validated run-time arguments.", quiet)
 # BEGIN: Read config file and process calculatescenarioargs and solver blocks.
 configfile = getconfig(quiet)  # ConfParse structure for config file if one is found; otherwise nothing
 
-if configfile != nothing
+if !isnothing(configfile)
     local jumpdirectmode::Bool = (mode(jumpmodel) == JuMP.DIRECT)  # Indicates whether jumpmodel is in direct mode
     local jumpbridges::Bool = (jumpdirectmode ? false : (typeof(backend(jumpmodel).optimizer) <: MathOptInterface.Bridges.LazyBridgeOptimizer))  # Indicates whether bridging is enabled in jumpmodel
 
@@ -226,7 +226,7 @@ global csquiet = quiet
 global csrestrictyears = restrictyears
 global csinyears = inyears
 
-if configfile != nothing && haskey(configfile, "includes", "customconstraints")
+if !isnothing(configfile) && (haskey(configfile, "includes", "afterscenariocalc") || haskey(configfile, "includes", "customconstraints"))
     # Define global variable for jumpmodel
     global csjumpmodel = jumpmodel
 end
@@ -251,7 +251,7 @@ dbversion < 10 && db_v9_to_v10(db; quiet = quiet)
 # END: Update database if necessary.
 
 # BEGIN: Perform beforescenariocalc include.
-if configfile != nothing && haskey(configfile, "includes", "beforescenariocalc")
+if !isnothing(configfile) && haskey(configfile, "includes", "beforescenariocalc")
     try
         include(normpath(joinpath(pwd(), retrieve(configfile, "includes", "beforescenariocalc"))))
         logmsg("Performed beforescenariocalc include.", quiet)
@@ -6128,7 +6128,7 @@ logmsg("Added $numaddedconsarrays standard constraints to model.", quiet)
 # END: Ensure all non-custom constraints are added to model.
 
 # BEGIN: Perform customconstraints include.
-if configfile != nothing && haskey(configfile, "includes", "customconstraints")
+if !isnothing(configfile) && haskey(configfile, "includes", "customconstraints")
     try
         include(normpath(joinpath(pwd(), retrieve(configfile, "includes", "customconstraints"))))
         logmsg("Performed customconstraints include.", quiet)
@@ -6146,6 +6146,7 @@ logmsg("Defined model objective.", quiet)
 
 # BEGIN: Calculate or write model.
 local returnval  # Value returned by this function
+local saveresults::Bool = false  # Indicates whether calculation results are saved to database
 
 if writemodel
     JuMP.write_to_file(jumpmodel, writefilename; format=writefileformat)
@@ -6159,12 +6160,23 @@ else
     solvedtmstr::String = Dates.format(solvedtm, "yyyy-mm-dd HH:MM:SS.sss")  # solvedtm as a formatted string
     logmsg("Solved model. Solver status = " * string(returnval) * ".", quiet, solvedtm)
 
+    if has_values(jumpmodel)
+        if returnval == MathOptInterface.OPTIMAL
+            saveresults = true
+        end
+
+       if in(returnval, [MathOptInterface.LOCALLY_SOLVED, MathOptInterface.ALMOST_OPTIMAL, MathOptInterface.ITERATION_LIMIT, MathOptInterface.TIME_LIMIT, MathOptInterface.NODE_LIMIT, MathOptInterface.SOLUTION_LIMIT, MathOptInterface.MEMORY_LIMIT, MathOptInterface.OBJECTIVE_LIMIT, MathOptInterface.NORM_LIMIT, MathOptInterface.OTHER_LIMIT])
+            saveresults = true
+            @warn "Results that will be saved to database are for a suboptimal solution. See this function's return value for more information."
+       end
+    end
+
     # BEGIN: Save results to database.
-    if Int(returnval) == 1 && has_values(jumpmodel)  # 1 = Optimal
+    if saveresults
         savevarresults_threaded(varstosavearr, modelvarindices, db, solvedtmstr, reportzeros, quiet)
         logmsg("Finished saving results to database.", quiet)
     else
-        logmsg("Solver did not find an optimal solution for model. No results will be saved to database.")
+        logmsg("Solver did not find a solution for model. No results will be saved to database.")
     end
     # END: Save results to database.
 end
@@ -6172,6 +6184,17 @@ end
 # Drop temporary tables
 drop_temp_tables(db)
 logmsg("Dropped temporary tables.", quiet)
+
+# BEGIN: Perform afterscenariocalc include.
+if !isnothing(configfile) && haskey(configfile, "includes", "afterscenariocalc")
+    try
+        include(normpath(joinpath(pwd(), retrieve(configfile, "includes", "afterscenariocalc"))))
+        logmsg("Performed afterscenariocalc include.", quiet)
+    catch e
+        logmsg("Could not perform afterscenariocalc include. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
+    end
+end
+# END: Perform afterscenariocalc include.
 
 logmsg("Finished modeling scenario.")
 return returnval

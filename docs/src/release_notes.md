@@ -7,11 +7,15 @@ This page highlights key changes in NEMO since its initial public release. For a
 
 ## Version 2.0
 
-  * **Julia platform upgrade:** Updated NEMO to use Julia 1.9.3 and the latest releases of the Julia packages for the Cbc, CPLEX, GLPK, Gurobi, HiGHS, Mosek, and Xpress solvers. These packages add support for new versions of several solvers, including Gurobi 10.0 and 11.0, HiGHS 1.6, and Mosek 10.1.
+  * **Julia platform upgrade:** Updated NEMO to use Julia 1.9.3 and newer releases of the Julia packages for the Cbc, CPLEX, GLPK, Gurobi, HiGHS, Mosek, and Xpress solvers. These packages add support for new versions of several solvers, including Gurobi 10.0 and 11.0, HiGHS 1.6, and Mosek 10.1.
 
   * **Fuel-specific reserve margins:** Refactored NEMO's reserve margin calculations to allow a different margin for each fuel, region, and year. Added a fuel subscript to the [`ReserveMargin`](@ref ReserveMargin) parameter, the [`ReserveMarginTagTechnology`](@ref ReserveMarginTagTechnology) parameter, and the [`vtotalcapacityinreservemargin`](@ref vtotalcapacityinreservemargin) output variable. Removed the `ReserveMarginTagFuel` parameter and `vdemandneedingreservemargin` output variable.
 
   * **Availability factors for transmission lines:** Added a parameter that defines time-sliced availability factors for transmission lines ([`TransmissionAvailabilityFactor`](@ref TransmissionAvailabilityFactor)). It allows you to simulate times when lines are unavailable or at reduced capacity. This parameter must be used when modeling transmission - if you don't want to represent reduced availability for lines, set a default of 1.0 for `TransmissionAvailabilityFactor` in the [default parameters table](@ref DefaultParams) or by using the [`setparamdefault`](@ref) function.
+
+  * **After scenario calculation event:** Added an option to have NEMO run a custom Julia script after scenario calculation. To use this feature, create a NEMO [configuration file](@ref configuration_file) and specify the path to the script in the `afterscenariocalc` key (within the `include` block).
+
+  * **Saving suboptimal solutions:** Added support for saving suboptimal solutions when calculating a scenario. These include solutions where optimization results in one of the following `MathOptInterface` termination statuses: `LOCALLY_SOLVED`, `ALMOST_OPTIMAL`, `ITERATION_LIMIT`, `TIME_LIMIT`, `NODE_LIMIT`, `SOLUTION_LIMIT`, `MEMORY_LIMIT`, `OBJECTIVE_LIMIT`, `NORM_LIMIT`, `OTHER_LIMIT`. In these cases, the solution is saved to the [scenario database](@ref scenario_db), and NEMO issues a warning.
 
   * **Bug fix - warm starts:** Fixed a bug in NEMO's warm starting functionality that was caused by a recent release of the Julia SQLite package. This bug led to the following error when performing a warm start without specifying `startvalsvars`: `SQLite.SQLiteException("no such column: val")`.
 
@@ -20,7 +24,7 @@ This page highlights key changes in NEMO since its initial public release. For a
 !!! tip
     If you have a pre-existing scenario database that was created with NEMO 1.9, you can upgrade it to NEMO 2.0 using the `db_v9_to_v10` function. See [https://github.com/sei-international/NemoMod.jl/blob/master/src/db_structure.jl](https://github.com/sei-international/NemoMod.jl/blob/master/src/db_structure.jl) for details. Note that `db_v9_to_v10` sets a default of 1.0 for `TransmissionAvailabilityFactor`.
 
-  * **Other enhancements:** Better aligned solver invocation in NEMO's test cases with how solvers are called when using NEMO with LEAP. This change should improve performance for most LEAP-NEMO users. Added logic to mitigate database locking errors when running NEMO on multiple threads.
+  * **Other enhancements:** Better aligned solver invocation in NEMO's test cases with how solvers are called when using NEMO with LEAP. This change should improve performance for most LEAP-NEMO users. Added logic to mitigate database locking errors when running NEMO on multiple threads. 
 
 ## Version 1.9
 
