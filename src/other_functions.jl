@@ -403,6 +403,8 @@ function translatesetabb(a::String)
         return "NODE"
     elseif a == "tr"
         return "TransmissionLine"
+    elseif a == "rg"
+        return "REGIONGROUP"
     else
         return a
     end
