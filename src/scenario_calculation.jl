@@ -338,6 +338,8 @@ tempquery = SQLite.DBInterface.execute(db, "select min(val) from year")
 firstscenarioyear::Int64 = parse(Int, DataFrame(tempquery)[1,1])  # First year in YEAR table, even if not selected in calcyears
 tempquery = SQLite.DBInterface.execute(db, "select max(val) from year")
 lastscenarioyear::Int64 = parse(Int, DataFrame(tempquery)[1,1])  # Last year in YEAR table, even if not selected in calcyears
+firstmodeledyear::String = first(syear)  # First calculated/modeled year
+lastmodeledyear::String = last(syear)  # Last calculated/modeled year
 tempquery = SQLite.DBInterface.execute(db, "select val from TECHNOLOGY")
 stechnology::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # TECHNOLOGY dimension
 tempquery = SQLite.DBInterface.execute(db, "select val from TIMESLICE")
@@ -474,12 +476,6 @@ local modelperiodactivityupperlimits::Bool
 
 (annualactivityupperlimits, modelperiodactivityupperlimits) = checkactivityupperlimits(db, 10000.0, restrictyears, inyears)
 
-# Disable model period activity checks when modeling selected years
-if restrictyears
-    modelperiodactivityupperlimits && @warn "Model period activity upper limits for technologies (TotalTechnologyModelPeriodActivityUpperLimit parameter) are not enforced when modeling selected years."
-    modelperiodactivityupperlimits = false
-end
-
 local annualactivitylowerlimits::Bool = true
 # Indicates whether constraints for TotalTechnologyAnnualActivityLowerLimit should be added to model
 local modelperiodactivitylowerlimits::Bool = true
@@ -498,9 +494,6 @@ querymodelperiodactivitylowerlimit::SQLite.Query = SQLite.DBInterface.execute(db
     where val > 0")
 
 if SQLite.done(querymodelperiodactivitylowerlimit)
-    modelperiodactivitylowerlimits = false
-elseif restrictyears
-    @warn "Model period activity lower limits for technologies (TotalTechnologyModelPeriodActivityLowerLimit parameter) are not enforced when modeling selected years."
     modelperiodactivitylowerlimits = false
 end
 
@@ -3141,7 +3134,7 @@ t = Threads.@spawn(begin
     from REGION r, STORAGE s, YEAR y, LTsGroup ltg, TSGROUP2 tg2, TSGROUP1 tg1
     left join (select sls.r as r, sls.s as s, sls.val * rsc.val as sls
     from StorageLevelStart_def sls, ResidualStorageCapacity_def rsc
-    where sls.r = rsc.r and sls.s = rsc.s and rsc.y = " * first(syear) * ") se on se.r = r.val and se.s = s.val
+    where sls.r = rsc.r and sls.s = rsc.s and rsc.y = " * firstmodeledyear * ") se on se.r = r.val and se.s = s.val
     left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
     left join MinStorageCharge_def msc on msc.r = r.val and msc.s = s.val and msc.y = y.val
     left join (select r, s, y, val - lag(val) over (partition by r, s order by y) as delta
@@ -3165,7 +3158,7 @@ t = Threads.@spawn(begin
         local addns3::Bool = false  # Indicates whether to add to constraint ns3
         local addns4::Bool = false  #  Indicates whether to add to constraint ns4
 
-        if y == first(syear) && tg1o == 1 && tg2o == 1 && lo == 1
+        if y == firstmodeledyear && tg1o == 1 && tg2o == 1 && lo == 1
             # New endogenous storage capacity is assumed to be delivered with minimum charge
             startlevel = (ismissing(row[:sls]) ? 0 : row[:sls]) + (ismissing(row[:msc]) ? 0 : row[:msc] * vnewstoragecapacity[r,s,y])
             addns3 = true
@@ -3234,7 +3227,7 @@ if transmissionmodeling
         from nodalstorage ns, LTsGroup ltg, TSGROUP2 tg2, TSGROUP1 tg1
     	left join (select sls.r as r, sls.s as s, sls.val * rsc.val as sls
     		from StorageLevelStart_def sls, ResidualStorageCapacity_def rsc
-    		where sls.r = rsc.r and sls.s = rsc.s and rsc.y = " * first(syear) * ") se on se.r = ns.r and se.s = ns.s
+    		where sls.r = rsc.r and sls.s = rsc.s and rsc.y = " * firstmodeledyear * ") se on se.r = ns.r and se.s = ns.s
         left join MinStorageCharge_def msc on msc.r = ns.r and msc.s = ns.s and msc.y = ns.y
         left join (select r, s, y, val - lag(val) over (partition by r, s order by y) as delta
             from ResidualStorageCapacity_def $(restrictyears ? "where y in" * inyears : "")) rsc
@@ -3257,7 +3250,7 @@ if transmissionmodeling
             local addns3::Bool = false  # Indicates whether to add to constraint ns3tr
             local addns4::Bool = false  #  Indicates whether to add to constraint ns4tr
 
-            if y == first(syear) && tg1o == 1 && tg2o == 1 && lo == 1
+            if y == firstmodeledyear && tg1o == 1 && tg2o == 1 && lo == 1
                 # New endogenous storage capacity is assumed to be delivered with minimum charge
                 startlevel = (ismissing(row[:sls]) ? 0 : row[:sls]) + (ismissing(row[:msc]) ? 0 : row[:msc] * vnewstoragecapacity[r,s,y])
                 addns3 = true
@@ -3509,7 +3502,7 @@ t = Threads.@spawn(let
     from REGION r, STORAGE s, YEAR as y, YearSplit_def ys
     left join (select sls.r as r, sls.s as s, sls.val * rsc.val as sls
     from StorageLevelStart_def sls, ResidualStorageCapacity_def rsc
-    where sls.r = rsc.r and sls.s = rsc.s and rsc.y = " * first(syear) * ") se on se.r = r.val and se.s = s.val
+    where sls.r = rsc.r and sls.s = rsc.s and rsc.y = " * firstmodeledyear * ") se on se.r = r.val and se.s = s.val
     left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
     left join MinStorageCharge_def msc on msc.r = r.val and msc.s = s.val and msc.y = y.val
     left join (select r, s, y, val - lag(val) over (partition by r, s order by y) as delta
@@ -3528,7 +3521,7 @@ t = Threads.@spawn(let
             # New endogenous and exogenous storage capacity is assumed to be delivered with minimum charge
             # If exogenous capacity is retired, any charge is assumed to be transferred to other capacity existing at start of year; or lost if no capacity exists
             push!(ns8_storagelevelyearend, @build_constraint(
-                if lastkeys[3] == first(syear)
+                if lastkeys[3] == firstmodeledyear
                     lastvals[1]
                 else
                     (!restrictyears || Meta.parse(lastkeys[3])-1 in calcyears ? vstoragelevelyearendnn[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)] : 0)
@@ -3540,7 +3533,7 @@ t = Threads.@spawn(let
 
             if lastvalsint[1] == 1
                 push!(ns8a_storagelevelyearendnetzero, @build_constraint(
-                    if lastkeys[3] == first(syear)
+                    if lastkeys[3] == firstmodeledyear
                         lastvals[1]
                     else
                         (!restrictyears || Meta.parse(lastkeys[3])-1 in calcyears ? vstoragelevelyearendnn[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)] : 0)
@@ -3579,7 +3572,7 @@ t = Threads.@spawn(let
     # Create last constraint
     if isassigned(lastkeys, 1)
         push!(ns8_storagelevelyearend, @build_constraint(
-            if lastkeys[3] == first(syear)
+            if lastkeys[3] == firstmodeledyear
                 lastvals[1]
             else
                 (!restrictyears || Meta.parse(lastkeys[3])-1 in calcyears ? vstoragelevelyearendnn[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)] : 0)
@@ -3591,7 +3584,7 @@ t = Threads.@spawn(let
 
         if lastvalsint[1] == 1
             push!(ns8a_storagelevelyearendnetzero, @build_constraint(
-                if lastkeys[3] == first(syear)
+                if lastkeys[3] == firstmodeledyear
                     lastvals[1]
                 else
                     (!restrictyears || Meta.parse(lastkeys[3])-1 in calcyears ? vstoragelevelyearendnn[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)] : 0)
@@ -3632,7 +3625,7 @@ if transmissionmodeling
         from nodalstorage ns, STORAGE s, YearSplit_def ys
         left join (select sls.r as r, sls.s as s, sls.val * rsc.val as sls
     		from StorageLevelStart_def sls, ResidualStorageCapacity_def rsc
-    		where sls.r = rsc.r and sls.s = rsc.s and rsc.y = " * first(syear) * ") se on se.r = ns.r and se.s = ns.s
+    		where sls.r = rsc.r and sls.s = rsc.s and rsc.y = " * firstmodeledyear * ") se on se.r = ns.r and se.s = ns.s
         left join MinStorageCharge_def msc on msc.r = ns.r and msc.s = s.val and msc.y = ns.y
         left join (select r, s, y, val - lag(val) over (partition by r, s order by y) as delta
     		from ResidualStorageCapacity_def $(restrictyears ? "where y in" * inyears : "")) rsc
@@ -3651,7 +3644,7 @@ if transmissionmodeling
                 # New endogenous and exogenous storage capacity is assumed to be delivered with minimum charge
                 # If exogenous capacity is retired, any charge is assumed to be transferred to other capacity existing at start of year; or lost if no capacity exists
                 push!(ns8tr_storagelevelyearend, @build_constraint(
-                    if lastkeys[3] == first(syear)
+                    if lastkeys[3] == firstmodeledyear
                         lastvals[1]
                     else
                         (!restrictyears || Meta.parse(lastkeys[3])-1 in calcyears ? vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)] : 0)
@@ -3663,7 +3656,7 @@ if transmissionmodeling
 
                 if lastvalsint[1] == 1
                     push!(ns8atr_storagelevelyearendnetzero, @build_constraint(
-                        if lastkeys[3] == first(syear)
+                        if lastkeys[3] == firstmodeledyear
                             lastvals[1]
                         else
                             (!restrictyears || Meta.parse(lastkeys[3])-1 in calcyears ? vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)] : 0)
@@ -3703,7 +3696,7 @@ if transmissionmodeling
         # Create last constraint
         if isassigned(lastkeys, 1)
             push!(ns8tr_storagelevelyearend, @build_constraint(
-                if lastkeys[3] == first(syear)
+                if lastkeys[3] == firstmodeledyear
                     lastvals[1]
                 else
                     (!restrictyears || Meta.parse(lastkeys[3])-1 in calcyears ? vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)] : 0)
@@ -3715,7 +3708,7 @@ if transmissionmodeling
 
             if lastvalsint[1] == 1
                 push!(ns8atr_storagelevelyearendnetzero, @build_constraint(
-                    if lastkeys[3] == first(syear)
+                    if lastkeys[3] == firstmodeledyear
                         lastvals[1]
                     else
                         (!restrictyears || Meta.parse(lastkeys[3])-1 in calcyears ? vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)] : 0)
@@ -5395,14 +5388,52 @@ end
 if modelperiodactivitylowerlimits || modelperiodactivityupperlimits || in("vtotaltechnologymodelperiodactivity", varstosavearr)
     tac1_totalmodelhorizontechnologyactivity::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
-    t = Threads.@spawn(begin
-        for (r, t) in Base.product(sregion, stechnology)
-            push!(tac1_totalmodelhorizontechnologyactivity, @build_constraint(sum([vtotaltechnologyannualactivity[r,t,y] for y = syear]) == vtotaltechnologymodelperiodactivity[r,t]))
+    t = Threads.@spawn(let
+        local lastkeys = Array{String, 1}(undef,2)  # lastkeys[1] = r, lastkeys[2] = t
+        local sumexps = Array{AffExpr, 1}([AffExpr()]) # sumexps[1] = vtotaltechnologyannualactivity sum
+
+        for row in DataFrames.eachrow(queries["queryrtydr"])
+            local r = row[:r]
+            local t = row[:t]
+            local y = row[:y]
+
+            if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2])
+                # Create constraint
+                push!(tac1_totalmodelhorizontechnologyactivity, @build_constraint(sumexps[1] == vtotaltechnologymodelperiodactivity[lastkeys[1],lastkeys[2]]))
+                sumexps[1] = AffExpr()
+            end
+
+            if restrictyears
+                # Assume: 1) vtotaltechnologyannualactivity is constant in all years from first scenario year to first modeled year; 2) vtotaltechnologyannualactivity grows linearly between modeled years; and 3) vtotaltechnologyannualactivity is constant in all years from last modeled year to last scenario year
+                if y == firstmodeledyear
+                    add_to_expression!(sumexps[1], vtotaltechnologyannualactivity[r,t,y] * yearintervalsdict[y])
+                else
+                    local prevmodeledyear = syear[findfirst(isequal(y), syear) - 1]  # Previous modeled/calculated year
+
+                    for i=1:yearintervalsdict[y]
+                        add_to_expression!(sumexps[1], vtotaltechnologyannualactivity[r,t,prevmodeledyear] + i / yearintervalsdict[y] * (vtotaltechnologyannualactivity[r,t,y] - vtotaltechnologyannualactivity[r,t,prevmodeledyear]))
+                    end
+
+                    if y == lastmodeledyear
+                        add_to_expression!(sumexps[1], vtotaltechnologyannualactivity[r,t,y] * (lastscenarioyear - parse(Int, lastmodeledyear)))
+                    end
+                end
+            else
+                add_to_expression!(sumexps[1], vtotaltechnologyannualactivity[r,t,y])
+            end
+
+            lastkeys[1] = r
+            lastkeys[2] = t
+        end
+
+        # Create last constraint
+        if isassigned(lastkeys, 1)
+            push!(tac1_totalmodelhorizontechnologyactivity, @build_constraint(sumexps[1] == vtotaltechnologymodelperiodactivity[lastkeys[1],lastkeys[2]]))
         end
 
         put!(cons_channel, tac1_totalmodelhorizontechnologyactivity)
     end)
-
+    
     numconsarrays += 1
     logmsg("Queued constraint TAC1_TotalModelHorizonTechnologyActivity for creation.", quiet)
 end

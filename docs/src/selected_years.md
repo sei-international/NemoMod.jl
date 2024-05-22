@@ -30,8 +30,10 @@ NEMO also makes a few other changes when you turn on `calcyears`:
 
 * The [`StorageLevelStart`](@ref StorageLevelStart) parameter is interpreted as the fraction of exogenous storage capacity that is charged at the start of the first modeled year.
 
-* Model period technology activity and emission limits ([`TotalTechnologyModelPeriodActivityUpperLimit`](@ref TotalTechnologyModelPeriodActivityUpperLimit), [`TotalTechnologyModelPeriodActivityLowerLimit`](@ref TotalTechnologyModelPeriodActivityLowerLimit), and [`ModelPeriodEmissionLimit`](@ref ModelPeriodEmissionLimit)) are not enforced. NEMO warns you if your scenario database includes these parameters.
+* Activity in modeled and non-modeled years is taken into account when determining compliance with model period technology activity limits ([`TotalTechnologyModelPeriodActivityUpperLimit`](@ref TotalTechnologyModelPeriodActivityUpperLimit) and [`TotalTechnologyModelPeriodActivityLowerLimit`](@ref TotalTechnologyModelPeriodActivityLowerLimit)). Activity in non-modeled years is estimated by assuming that: 1) activity is constant in all years from the first scenario year to the first modeled year; 2) activity grows linearly between modeled years; and 3) activity is constant in all years from the last modeled year to the last scenario year. The output variable [`vtotaltechnologymodelperiodactivity`](@ref vtotaltechnologymodelperiodactivity) includes both activity in modeled years and estimated activity in non-modeled years.
 
-* The output variables [`vmodelperiodcostbyregion`](@ref vmodelperiodcostbyregion), [`vmodelperiodemissions`](@ref vmodelperiodemissions), and [`vtotaltechnologymodelperiodactivity`](@ref vtotaltechnologymodelperiodactivity) include results for modeled years only.
+* Model period emission limits ([`ModelPeriodEmissionLimit`](@ref ModelPeriodEmissionLimit)) are not enforced. NEMO warns you if your scenario database includes this parameter.
+
+* The output variables [`vmodelperiodcostbyregion`](@ref vmodelperiodcostbyregion) and [`vmodelperiodemissions`](@ref vmodelperiodemissions) include results for modeled years only.
 
 [^1]: `calcyears` also applies to [`writescenariomodel`](@ref).

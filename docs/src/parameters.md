@@ -1001,7 +1001,7 @@ Maximum nominal energy produced by a [technology](@ref technology) in a [year](@
 
 ## [Total technology model period activity lower limit](@id TotalTechnologyModelPeriodActivityLowerLimit)
 
-Minimum nominal energy produced by a [technology](@ref technology) over the modeling period (i.e., all [years](@ref year)). Nominal energy is calculated by multiplying dispatched capacity by the length of time it is dispatched. Only specify this parameter if you want to enforce a particular limit (other than 0, which NEMO assumes by default). This parameter is not used when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details.
+Minimum nominal energy produced by a [technology](@ref technology) over the modeling period (i.e., the period bounded by the first and last [years](@ref year) defined in the scenario database). Nominal energy is calculated by multiplying dispatched capacity by the length of time it is dispatched. Only specify this parameter if you want to enforce a particular limit (other than 0, which NEMO assumes by default).
 
 #### Scenario database
 
@@ -1016,7 +1016,7 @@ Minimum nominal energy produced by a [technology](@ref technology) over the mode
 
 ## [Total technology model period activity upper limit](@id TotalTechnologyModelPeriodActivityUpperLimit)
 
-Maximum nominal energy produced by a [technology](@ref technology) over the modeling period (i.e., all [years](@ref year)). Nominal energy is calculated by multiplying dispatched capacity by the length of time it is dispatched. Only specify this parameter if you want to enforce a particular limit. This parameter is not used when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details.
+Maximum nominal energy produced by a [technology](@ref technology) over the modeling period (i.e., the period bounded by the first and last [years](@ref year) defined in the scenario database). Nominal energy is calculated by multiplying dispatched capacity by the length of time it is dispatched. Only specify this parameter if you want to enforce a particular limit.
 
 #### Scenario database
 
