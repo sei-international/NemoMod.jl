@@ -9,6 +9,8 @@ This page highlights key changes in NEMO since its initial public release. For a
 
   * **Enabled model period technology activity limits when calculating selected years:** Revised NEMO to allow the use of model period technology activity limits ([`TotalTechnologyModelPeriodActivityUpperLimit`](@ref TotalTechnologyModelPeriodActivityUpperLimit) and [`TotalTechnologyModelPeriodActivityLowerLimit`](@ref TotalTechnologyModelPeriodActivityLowerLimit)) when calculating selected years. See [Calculating selected years](@ref selected_years) for details.
 
+  * **Enabled model period emission limits when calculating selected years:** Revised NEMO to allow the use of model period emission limits ([`ModelPeriodEmissionLimit`](@ref ModelPeriodEmissionLimit)) when calculating selected years. See [Calculating selected years](@ref selected_years) for details.
+
 ## Version 2.0
 
   * **Julia platform upgrade:** Updated NEMO to use Julia 1.9.3 and newer releases of the Julia packages for the Cbc, CPLEX, GLPK, Gurobi, HiGHS, Mosek, and Xpress solvers. These packages add support for new versions of several solvers, including Gurobi 10.0 and 11.0, HiGHS 1.6, and Mosek 10.1.

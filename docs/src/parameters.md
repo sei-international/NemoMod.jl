@@ -362,7 +362,7 @@ Minimum fraction of a [technology's](@ref technology) available capacity that mu
 
 ## [Model period emission limit](@id ModelPeriodEmissionLimit)
 
-Maximum emissions allowed in the modeling period (i.e., over all [years](@ref year)). This parameter is not used when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details.
+Maximum emissions allowed in the modeling period (i.e., the period bounded by the first and last [years](@ref year) defined in the scenario database).
 
 #### Scenario database
 

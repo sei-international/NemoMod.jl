@@ -5413,10 +5413,10 @@ if modelperiodactivitylowerlimits || modelperiodactivityupperlimits || in("vtota
                     for i=1:yearintervalsdict[y]
                         add_to_expression!(sumexps[1], vtotaltechnologyannualactivity[r,t,prevmodeledyear] + i / yearintervalsdict[y] * (vtotaltechnologyannualactivity[r,t,y] - vtotaltechnologyannualactivity[r,t,prevmodeledyear]))
                     end
+                end
 
-                    if y == lastmodeledyear
-                        add_to_expression!(sumexps[1], vtotaltechnologyannualactivity[r,t,y] * (lastscenarioyear - parse(Int, lastmodeledyear)))
-                    end
+                if y == lastmodeledyear
+                    add_to_expression!(sumexps[1], vtotaltechnologyannualactivity[r,t,y] * (lastscenarioyear - parse(Int, lastmodeledyear)))
                 end
             else
                 add_to_expression!(sumexps[1], vtotaltechnologyannualactivity[r,t,y])
@@ -6081,7 +6081,9 @@ logmsg("Queued constraint E6_EmissionsAccounting1 for creation.", quiet)
 # BEGIN: E7_EmissionsAccounting2.
 e7_emissionsaccounting2::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
-t = Threads.@spawn(begin
+t = Threads.@spawn(let
+    local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vannualemissions sum
+
     for row in SQLite.DBInterface.execute(db, "select r.val as r, e.val as e, cast(mpe.val as real) as mpe
     from region r, emission e
     left join ModelPeriodExogenousEmission_def mpe on mpe.r = r.val and mpe.e = e.val")
@@ -6089,7 +6091,29 @@ t = Threads.@spawn(begin
         local e = row[:e]
         local mpe = ismissing(row[:mpe]) ? 0 : row[:mpe]
 
-        push!(e7_emissionsaccounting2, @build_constraint(sum([vannualemissions[r,e,y] for y = syear]) + mpe == vmodelperiodemissions[r,e]))
+        for y in syear
+            if restrictyears
+                # Assume: 1) vannualemissions is constant in all years from first scenario year to first modeled year; 2) vannualemissions grows linearly between modeled years; and 3) vannualemissions is constant in all years from last modeled year to last scenario year
+                if y == firstmodeledyear
+                    add_to_expression!(sumexps[1], vannualemissions[r,e,y] * yearintervalsdict[y])
+                else
+                    local prevmodeledyear = syear[findfirst(isequal(y), syear) - 1]  # Previous modeled/calculated year
+
+                    for i=1:yearintervalsdict[y]
+                        add_to_expression!(sumexps[1], vannualemissions[r,e,prevmodeledyear] + i / yearintervalsdict[y] * (vannualemissions[r,e,y] - vannualemissions[r,e,prevmodeledyear]))
+                    end
+                end
+
+                if y == lastmodeledyear
+                    add_to_expression!(sumexps[1], vannualemissions[r,e,y] * (lastscenarioyear - parse(Int, lastmodeledyear)))
+                end
+            else
+                add_to_expression!(sumexps[1], vannualemissions[r,e,y])
+            end
+        end
+
+        push!(e7_emissionsaccounting2, @build_constraint(sumexps[1] + mpe == vmodelperiodemissions[r,e]))
+        sumexps[1] = AffExpr()
     end
 
     put!(cons_channel, e7_emissionsaccounting2)
@@ -6124,13 +6148,11 @@ logmsg("Queued constraint E8_AnnualEmissionsLimit for creation.", quiet)
 e9_modelperiodemissionslimit::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
 t = Threads.@spawn(begin
-    if !restrictyears
-        for row in DataFrames.eachrow(queries["queryvmodelperiodemissions"])
-            local r = row[:r]
-            local e = row[:e]
+    for row in DataFrames.eachrow(queries["queryvmodelperiodemissions"])
+        local r = row[:r]
+        local e = row[:e]
 
-            push!(e9_modelperiodemissionslimit, @build_constraint(vmodelperiodemissions[r,e] <= row[:mpl]))
-        end
+        push!(e9_modelperiodemissionslimit, @build_constraint(vmodelperiodemissions[r,e] <= row[:mpl]))
     end
 
     put!(cons_channel, e9_modelperiodemissionslimit)
@@ -6138,10 +6160,6 @@ end)
 
 numconsarrays += 1
 logmsg("Queued constraint E9_ModelPeriodEmissionsLimit for creation.", quiet)
-
-if restrictyears && size(queries["queryvmodelperiodemissions"])[1] > 0
-    @warn "Model period emission limits (ModelPeriodEmissionLimit parameter) are not enforced when modeling selected years."
-end
 # END: E9_ModelPeriodEmissionsLimit.
 
 logmsg("Queued $numconsarrays standard constraints for creation.", quiet)

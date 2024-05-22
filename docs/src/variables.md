@@ -285,7 +285,7 @@ Nominal energy produced by a [technology](@ref technology) in a [year](@ref year
 
 ### [Total technology model period activity](@id vtotaltechnologymodelperiodactivity)
 
-Nominal energy produced by a [technology](@ref technology) during all modeled [years](@ref year). Nominal energy is calculated by multiplying dispatched capacity by the length of time it is dispatched. This variable combines nominal energy due to both [nodal and non-nodal](@ref nodal_def) activity. Unit: region's energy [unit](@ref uoms).
+Nominal energy produced by a [technology](@ref technology) during the modeling period (i.e., the period bounded by the first and last [years](@ref year) defined in the scenario database). Nominal energy is calculated by multiplying dispatched capacity by the length of time it is dispatched. This variable combines nominal energy due to both [nodal and non-nodal](@ref nodal_def) activity. Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -626,7 +626,7 @@ Total emissions in a [year](@ref year). Includes any exogenously specified emiss
 
 ### [Model period emissions](@id vmodelperiodemissions)
 
-Total emissions during all modeled [years](@ref year). Includes any exogenously specified emissions ([`AnnualExogenousEmission`](@ref AnnualExogenousEmission) and [`ModelPeriodExogenousEmission`](@ref ModelPeriodExogenousEmission) parameters). Unit: scenario's emissions [unit](@ref uoms).
+Total emissions during the modeling period (i.e., the period bounded by the first and last [years](@ref year) defined in the scenario database). Includes any exogenously specified emissions ([`AnnualExogenousEmission`](@ref AnnualExogenousEmission) and [`ModelPeriodExogenousEmission`](@ref ModelPeriodExogenousEmission) parameters). Unit: scenario's emissions [unit](@ref uoms).
 
 #### Julia code
 
