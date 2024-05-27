@@ -212,53 +212,23 @@ if @isdefined GLPK
             @test isapprox(testqry[3,:val], 1611.02249720726; atol=TOL)
         end
 
-        # Test MinimumUtilization
-        @info "Running GLPK test 2 on storage_transmission_test.sqlite: minimum utilization."
-        SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.2 from TIMESLICE")
-        NemoMod.calculatescenario(dbfile; jumpmodel = jumpmodel=(reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), varstosave="vproductionbytechnologyannual", calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
-
-        if !compilation
-            testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
-
-            @test isapprox(testqry[1,:val], 16.3149963697108; atol=TOL)
-        end
-
-        SQLite.DBInterface.execute(db, "delete from MinimumUtilization")
-
-        # Test interest rates
-        @info "Running GLPK test 3 on storage_transmission_test.sqlite: interest rates."
-        SQLite.DBInterface.execute(db, "insert into InterestRateStorage select rowid, 1, 'storage1', y.val, 0.05 from year y")
-        SQLite.DBInterface.execute(db, "insert into InterestRateTechnology select rowid, 1, 'solar', y.val, 0.05 from year y")
-        SQLite.DBInterface.execute(db, "update TransmissionLine set interestrate = 0.05 where id = 2")
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
+        # Test transshipment power flow
+        @info "Running GLPK test 2 on storage_transmission_test.sqlite: transshipment power flow."
+        SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 3")
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029], continuoustransmission=true, quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
-
             @test testqry[1,:y] == "2020"
             @test testqry[2,:y] == "2025"
             @test testqry[3,:y] == "2029"
 
-            @test isapprox(testqry[1,:val], 12672.8117352623; atol=TOL)
-            @test isapprox(testqry[2,:val], 2510.44571676115; atol=TOL)
-            @test isapprox(testqry[3,:val], 1611.02249720726; atol=TOL)
+            @test isapprox(testqry[1,:val], 4303.25527192399; atol=TOL)
+            @test isapprox(testqry[2,:val], 2720.73286883008; atol=TOL)
+            @test isapprox(testqry[3,:val], 1745.96958273666; atol=TOL)
         end
 
-        SQLite.DBInterface.execute(db, "delete from InterestRateStorage")
-        SQLite.DBInterface.execute(db, "delete from InterestRateTechnology")
-        SQLite.DBInterface.execute(db, "update TransmissionLine set interestrate = null where id = 2")
-
-        # Test transmission line availability
-        @info "Running GLPK test 4 on storage_transmission_test.sqlite: transmission line availability."
-        SQLite.DBInterface.execute(db, "insert into TransmissionAvailabilityFactor values (null, 1, 'winterwe8', 2025, 0.2)")
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), varstosave="vtransmissionbyline", calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
-
-        if !compilation
-            testqry = SQLite.DBInterface.execute(db, "select * from vtransmissionbyline where tr = 1 and l = 'winterwe8' and y = 2025") |> DataFrame
-            @test abs(testqry[1,:val]) <= 50.0 + TOL
-        end
-
-        SQLite.DBInterface.execute(db, "delete from TransmissionAvailabilityFactor")
+        SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 2")
 
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
