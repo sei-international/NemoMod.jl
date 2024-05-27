@@ -204,7 +204,7 @@ if @isdefined Cbc
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
                 * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
-            restrictvars=false, calcyears=[2025], quiet = calculatescenario_quiet)
+            restrictvars=true, calcyears=[2025], quiet = calculatescenario_quiet)
 
         db = SQLite.DB(dbfile)
 
