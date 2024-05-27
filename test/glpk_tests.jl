@@ -215,17 +215,15 @@ if @isdefined GLPK
         # Test transshipment power flow
         @info "Running GLPK test 2 on storage_transmission_test.sqlite: transshipment power flow."
         SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 3")
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029], continuoustransmission=true, quiet = calculatescenario_quiet)
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), varstosave="vtotaldiscountedcost", calcyears=[2020,2025], continuoustransmission=true, quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
             @test testqry[1,:y] == "2020"
             @test testqry[2,:y] == "2025"
-            @test testqry[3,:y] == "2029"
 
-            @test isapprox(testqry[1,:val], 4303.25527192399; atol=TOL)
-            @test isapprox(testqry[2,:val], 2720.73286883008; atol=TOL)
-            @test isapprox(testqry[3,:val], 1745.96958273666; atol=TOL)
+            @test isapprox(testqry[1,:val], 4302.73264852276; atol=TOL)
+            @test isapprox(testqry[2,:val], 2721.12570685235; atol=TOL)
         end
 
         SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 2")

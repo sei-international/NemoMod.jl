@@ -204,16 +204,18 @@ if @isdefined Cbc
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
                 * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
-            calcyears=[2025], quiet = calculatescenario_quiet)
+            calcyears=[2020,2025], continuoustransmission=true, quiet = calculatescenario_quiet)
 
         db = SQLite.DB(dbfile)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
 
-            @test testqry[1,:y] == "2025"
+            @test testqry[1,:y] == "2020"
+            @test testqry[2,:y] == "2025"
 
-            @test isapprox(testqry[1,:val], 8547.93213319885; atol=TOL)
+            @test isapprox(testqry[1,:val], 4568.31598706436; atol=TOL)
+            @test isapprox(testqry[2,:val], 2879.28789042142; atol=TOL)
         end
 
         # Test transshipment power flow
