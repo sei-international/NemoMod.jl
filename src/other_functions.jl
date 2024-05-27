@@ -411,6 +411,47 @@ function translatesetabb(a::String)
 end  # translatesetabb(a::String)
 
 """
+    keydicts(df::DataFrames.DataFrame, cols::Array{Int, 1})
+
+Generates `Dicts` that can be used to restrict JuMP constraints or variables to selected indices
+(rather than all values in their dimensions) at creation. Returns an array of the generated `Dicts`.
+
+# Arguments
+- `df::DataFrames.DataFrame`: The results of a query that selects the index values.
+- `cols::Array{Int, 1}`: An array of column numbers in the query that identifies the fields included in the `Dicts`.
+    `length(cols) - 1` `Dicts` are created in total. Their keys are arrays of the values of key fields,
+    and their values are `Sets` of corresponding values in a single value field (all values are taken from `df`).
+    Key and value fields are assigned as follows:
+        > `Dict` 1: key field = first field in `cols`, value field = second field in `cols`
+        > `Dict` 2: key fields = first two fields in `cols`, value field = third field in `cols`
+        ...
+"""
+function keydicts(df::DataFrames.DataFrame, cols::Array{Int, 1})
+    local returnval = Array{Dict{Array{String,1},Set{String}},1}()  # Function's return value
+    local dictlength::Int = length(cols)-1  # Number of dictionaries in return value
+    local prealloc_cols_dict = Dict{Int, Array{Int, 1}}()  # Dictionary mapping dictionary number in return value to slice of cols identifying columns in return value dictionary's keys; defined outside row loop below to increase memory efficiency
+
+    # Set up empty dictionaries in returnval and populate prealloc_cols_dict
+    for i in 1:dictlength
+        push!(returnval, Dict{Array{String,1},Set{String}}())
+        prealloc_cols_dict[i] = cols[1:i]
+    end
+
+    # Populate dictionaries using df
+    for row in DataFrames.eachrow(df)
+        for j in 1:dictlength
+            if !haskey(returnval[j], [row[k] for k in prealloc_cols_dict[j]])
+                returnval[j][[row[k] for k in prealloc_cols_dict[j]]] = Set{String}()
+            end
+
+            push!(returnval[j][[row[k] for k in prealloc_cols_dict[j]]], row[cols[j+1]])
+        end
+    end
+
+    return returnval
+end  # keydicts(df::DataFrames.DataFrame, cols::Array{Int, 1})
+
+"""
     keydicts(df::DataFrames.DataFrame, numdicts::Int)
 
 Generates `Dicts` that can be used to restrict JuMP constraints or variables to selected indices
@@ -424,7 +465,9 @@ Generates `Dicts` that can be used to restrict JuMP constraints or variables to 
         values in the next field of the query (field #2 for the first `Dict`, field #3 for the second `Dict`, and so on).
 """
 function keydicts(df::DataFrames.DataFrame, numdicts::Int)
-    local returnval = Array{Dict{Array{String,1},Set{String}},1}()  # Function return value
+    return keydicts(df, [i for i=1:numdicts+1])
+    
+    #= local returnval = Array{Dict{Array{String,1},Set{String}},1}()  # Function return value
 
     # Set up empty dictionaries in returnval
     for i in 1:numdicts
@@ -442,71 +485,23 @@ function keydicts(df::DataFrames.DataFrame, numdicts::Int)
         end
     end
 
-    return returnval
+    return returnval =#
 end  # keydicts(df::DataFrames.DataFrame, numdicts::Int)
 
-#=
 """
-    keydicts_parallel(df::DataFrames.DataFrame, numdicts::Int,
-    targetprocs::Array{Int,1})
-
-Runs `keydicts` using parallel processes identified in `targetprocs`. If there are not at
-least 10,000 rows in `df` for each target process, resorts to running `keydicts` on process
-that called `keydicts_parallel`.
-"""
-function keydicts_parallel(df::DataFrames.DataFrame, numdicts::Int, targetprocs::Array{Int,1})
-    local returnval = Array{Dict{Array{String,1},Set{String}},1}()  # Function return value
-    local availprocs::Array{Int, 1} = intersect(procs(), targetprocs)  # Targeted processes that actually exist
-    local np::Int = length(availprocs)  # Number of targeted processes that actually exist
-    local dfrows::Int = size(df)[1]  # Number of rows in df
-
-    if np <= 1 || div(dfrows, np) < 10000
-        # Run keydicts for entire df
-        returnval = keydicts(df, numdicts)
-    else
-        # Divide operation among available processes
-        local blockdivrem = divrem(dfrows, np)  # Quotient and remainder from dividing dfrows by np; element 1 = quotient, element 2 = remainder
-        local results = Array{typeof(returnval), 1}(undef, np)  # Collection of results from async processing
-
-        # Dispatch async tasks in main process, each of which performs a remotecall_fetch on an available process. Wrap in sync block
-        #   to wait until all async processes finish before proceeding.
-        @sync begin
-            for p=1:np
-                @async begin
-                    # In each process, execute keydicts on a block of rows from df
-                    results[p] = remotecall_fetch(NemoMod.keydicts, availprocs[p], df[((p-1) * blockdivrem[1] + 1):((p) * blockdivrem[1] + (p == np ? blockdivrem[2] : 0)),:], numdicts)
-                end
-            end
-        end
-
-        # Merge results from async tasks
-        for i = 1:numdicts
-            push!(returnval, Dict{Array{String,1},Set{String}}())
-
-            for j = 1:np
-                returnval[i] = merge(union, returnval[i], results[j][i])
-            end
-        end
-    end
-
-    return returnval
-end  # keydicts_parallel(df::DataFrames.DataFrame, numdicts::Int, targetprocs::Array{Int,1})
-=#
-
-"""
-    keydicts_threaded(df::DataFrames.DataFrame, numdicts::Int)
+    keydicts_threaded(df::DataFrames.DataFrame, cols::Array{Int, 1})
 
 Runs `keydicts` on multiple threads. Uses one thread per 10,000 rows in `df`,
 subject to an overall limit of `Threads.nthreads()`.
 """
-function keydicts_threaded(df::DataFrames.DataFrame, numdicts::Int)
+function keydicts_threaded(df::DataFrames.DataFrame, cols::Array{Int, 1})
     local returnval = Array{Dict{Array{String,1},Set{String}},1}()  # Function return value
     local dfrows::Int = size(df)[1]  # Number of rows in df
     local nt::Int = min(Threads.nthreads(), div(dfrows-1, 10000) + 1)  # Number of threads on which keydicts will be run
 
     if nt == 1
         # Run keydicts for entire df
-        returnval = keydicts(df, numdicts)
+        returnval = keydicts(df, cols)
     else
         # Divide operation among multiple threads
         local blockdivrem = divrem(dfrows, nt)  # Quotient and remainder from dividing dfrows by nt; element 1 = quotient, element 2 = remainder
@@ -515,7 +510,7 @@ function keydicts_threaded(df::DataFrames.DataFrame, numdicts::Int)
         # Threads.@threads waits for all tasks to finish before proceeding
         Threads.@threads for p=1:nt
             # @info "calling keydicts for p=$p, df rows from $((p-1) * blockdivrem[1] + 1) to $((p) * blockdivrem[1] + (p == nt ? blockdivrem[2] : 0))"
-            results[p] = keydicts(deepcopy(df[((p-1) * blockdivrem[1] + 1):((p) * blockdivrem[1] + (p == nt ? blockdivrem[2] : 0)),:]), numdicts)
+            results[p] = keydicts(deepcopy(df[((p-1) * blockdivrem[1] + 1):((p) * blockdivrem[1] + (p == nt ? blockdivrem[2] : 0)),:]), cols)
             # @info "finished keydicts for p=$p"
         end
 
@@ -532,7 +527,7 @@ function keydicts_threaded(df::DataFrames.DataFrame, numdicts::Int)
         end) =#
 
         # Merge results from threaded tasks
-        for i = 1:numdicts
+        for i = 1:length(cols)-1
             push!(returnval, Dict{Array{String,1},Set{String}}())
 
             for j = 1:nt
@@ -542,6 +537,16 @@ function keydicts_threaded(df::DataFrames.DataFrame, numdicts::Int)
     end
 
     return returnval
+end  # keydicts_threaded(df::DataFrames.DataFrame, cols::Array{Int, 1})
+
+"""
+    keydicts_threaded(df::DataFrames.DataFrame, numdicts::Int)
+
+Runs `keydicts` on multiple threads. Uses one thread per 10,000 rows in `df`,
+subject to an overall limit of `Threads.nthreads()`.
+"""
+function keydicts_threaded(df::DataFrames.DataFrame, numdicts::Int)
+    return keydicts_threaded(df, [i for i=1:numdicts+1])
 end  # keydicts_threaded(df::DataFrames.DataFrame, numdicts::Int)
 
 #=

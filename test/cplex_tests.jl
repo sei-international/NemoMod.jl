@@ -297,7 +297,19 @@ if @isdefined CPLEX
         end
 
         SQLite.DBInterface.execute(db, "delete from TransmissionAvailabilityFactor")
-        
+
+        # Test minimum annual transmission between nodes
+        @info "Running CPLEX test 6 on storage_transmission_test.sqlite: minimum annual transmission between nodes."
+        SQLite.DBInterface.execute(db, "insert into MinAnnualTransmissionNodes values (null, 1, 2, 'electricity', 2024, 0.5)")
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())), varstosave="vtransmissionenergyreceived", quiet = calculatescenario_quiet)
+
+        if !compilation
+            testqry = SQLite.DBInterface.execute(db, "select sum(val) as annual_energy from vtransmissionenergyreceived where tr in (1,2) and f = 'electricity' and y = 2024 and n = 2") |> DataFrame
+            @test testqry[1,:annual_energy] >= 0.5 - TOL
+        end
+
+        SQLite.DBInterface.execute(db, "delete from MinAnnualTransmissionNodes")
+
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")

@@ -11,6 +11,8 @@ This page highlights key changes in NEMO since its initial public release. For a
 
   * **Enabled model period emission limits when calculating selected years:** Revised NEMO to allow the use of model period emission limits ([`ModelPeriodEmissionLimit`](@ref ModelPeriodEmissionLimit)) when calculating selected years. See [Calculating selected years](@ref selected_years) for details.
 
+  * **Minimum annual transmission between nodes:** Added a parameter, [`MinAnnualTransmissionNodes`](@ref MinAnnualTransmissionNodes), that allows you to specify the minimum amount of a fuel transmitted from one node to another in a year (i.e., delivered to the receiving node via transmission from the sending node). Among other things, this parameter can be used to recreate historical transmission. Also introduced a new output variable, [`vtransmissionenergyreceived`](@ref vtransmissionenergyreceived), that provides time-sliced receipts of energy via transmission.
+  
 ## Version 2.0
 
   * **Julia platform upgrade:** Updated NEMO to use Julia 1.9.3 and newer releases of the Julia packages for the Cbc, CPLEX, GLPK, Gurobi, HiGHS, Mosek, and Xpress solvers. These packages add support for new versions of several solvers, including Gurobi 10.0 and 11.0, HiGHS 1.6, and Mosek 10.1.

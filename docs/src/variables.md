@@ -858,11 +858,19 @@ Fraction of a candidate [transmission line](@ref transmissionline) built in a [y
 
 ### [Transmission by line](@id vtransmissionbyline)
 
-Flow of a [fuel](@ref fuel) through a [transmission line](@ref transmissionline) (i.e., from the line's first [node](@ref node) [`n1`] to its second node [`n2`]) in a [time slice](@ref timeslice). Unit: megawatts.
+Flow of a [fuel](@ref fuel) through a [transmission line](@ref transmissionline) (i.e., from the line's first [node](@ref node) [`n1`] to its second node [`n2`]) in a [year](@ref year) and [time slice](@ref timeslice). If this variable is negative, it means the flow was from the line's second node to its first node. The fuel dimension is determined by the transmission line but is included in the variable for reporting convenience. Unit: megawatts.
 
 #### Julia code
 
 * Variable in JuMP model: `vtransmissionbyline[tr,l,f,y]`
+
+### [Transmission energy received](@id vtransmissionenergyreceived)
+
+For a given [year](@ref year) and [time slice](@ref timeslice), energy received at the indicated [node](@ ref node) via the indicated [transmission line](@ref transmissionline). The node can be either the first or second node attached to the transmission line, and the energy received is net of any transmission losses. This variable is always >= 0 (i.e., if the node sent rather than received energy via the line in the year and time slice, `vtransmissionenergyreceived` is 0). The [fuel](@ref fuel) dimension is determined by the transmission line but is included in the variable for reporting convenience. Unit: energy [unit](@ref uoms) for region of first node attached to transmission line.
+
+#### Julia code
+
+* Variable in JuMP model: `vtransmissionenergyreceived[tr,l,f,y,n]`
 
 ### [Transmission exists](@id vtransmissionexists)
 
