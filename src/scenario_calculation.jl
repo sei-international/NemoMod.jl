@@ -724,7 +724,7 @@ if transmissionmodeling
         @variable(jumpmodel, vtransmissionbyline[tr=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[tr]], f=indexdicts[2][[tr,l]],
             y=indexdicts[3][[tr,l,f]]])
 
-        indexdicts = keydicts_threaded(filter(row -> row.vc > 0 || (row.type == 3 && row.eff < 1) || !ismissing(row.n1_mtn) || !ismissing(row.n2_mtn), queries["queryvtransmissionbyline"]), 3)
+        indexdicts = keydicts_threaded(filter(row -> row.vc > 0 || (row.type == 3 && !ismissing(row.eff) && row.eff < 1) || !ismissing(row.n1_mtn) || !ismissing(row.n2_mtn), queries["queryvtransmissionbyline"]), 3)
         @variable(jumpmodel, vtransmissionbylineneg[tr=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[tr]], f=indexdicts[2][[tr,l]],
             y=indexdicts[3][[tr,l,f]]], Bin)
 
