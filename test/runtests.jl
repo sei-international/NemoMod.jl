@@ -102,11 +102,11 @@ end  # param_default_db()
 @testset "Solving a scenario" begin
     include(joinpath(@__DIR__, "cbc_tests.jl"))
     include(joinpath(@__DIR__, "cplex_tests.jl"))
-    include(joinpath(@__DIR__, "glpk_tests.jl"))
     include(joinpath(@__DIR__, "gurobi_tests.jl"))
     include(joinpath(@__DIR__, "highs_tests.jl"))
     include(joinpath(@__DIR__, "mosek_tests.jl"))
     include(joinpath(@__DIR__, "xpress_tests.jl"))
+    include(joinpath(@__DIR__, "glpk_tests.jl"))
 end  # @testset "Solving a scenario"
 
 @testset "JuMP direct mode and bridging" begin
