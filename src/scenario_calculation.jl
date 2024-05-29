@@ -723,11 +723,14 @@ if transmissionmodeling
         indexdicts = keydicts_threaded(queries["queryvtransmissionbyline"], 3)  # Array of Dicts used to restrict indices of following variable
         @variable(jumpmodel, vtransmissionbyline[tr=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[tr]], f=indexdicts[2][[tr,l]],
             y=indexdicts[3][[tr,l,f]]])
+
+        indexdicts = keydicts_threaded(filter(row -> row.vc > 0 || (row.type == 3 && row.eff < 1) || !ismissing(row.n1_mtn) || !ismissing(row.n2_mtn), queries["queryvtransmissionbyline"]), 3)
         @variable(jumpmodel, vtransmissionbylineneg[tr=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[tr]], f=indexdicts[2][[tr,l]],
             y=indexdicts[3][[tr,l,f]]], Bin)
 
-        indexdicts1 = keydicts_threaded(queries["queryvtransmissionbyline"], [1,2,3,4,5])  # First part of array of Dicts used to restrict indices of following variable
-        indexdicts2 = keydicts_threaded(queries["queryvtransmissionbyline"], [1,2,3,4,6])  # Second part of array of Dicts used to restrict indices of following variable
+        # vtransmissionenergyreceived is limited to cases where needed to apply MinAnnualTransmissionNodes
+        indexdicts1 = keydicts_threaded(filter(row -> !ismissing(row.n1_mtn), queries["queryvtransmissionbyline"]), [1,2,3,4,5])  # First part of array of Dicts used to restrict indices of following variable
+        indexdicts2 = keydicts_threaded(filter(row -> !ismissing(row.n2_mtn), queries["queryvtransmissionbyline"]), [1,2,3,4,6])  # Second part of array of Dicts used to restrict indices of following variable
         indexdicts = [merge(union, indexdicts1[i], indexdicts2[i]) for i=1:4]
         @variable(jumpmodel, vtransmissionenergyreceived[tr=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[tr]], f=indexdicts[2][[tr,l]],
             y=indexdicts[3][[tr,l,f]], n=indexdicts[4][[tr,l,f,y]]] >= 0)
@@ -752,7 +755,7 @@ if transmissionmodeling
     # Note: n1 is from node; n2 is to node
     modelvarindices["vtransmissionbyline"] = (vtransmissionbyline, ["tr", "l", "f", "y"])
     modelvarindices["vtransmissionbylineneg"] = (vtransmissionbylineneg, ["tr", "l", "f", "y"])  # Internal variable - indicates whether corresponding vtransmissionbyline is <= 0
-    modelvarindices["vtransmissionenergyreceived"] = (vtransmissionenergyreceived, ["tr", "l", "f", "y", "n"])  # Energy received at n via tr; always >= 0; 0 if n sent energy rather than received energy
+    modelvarindices["vtransmissionenergyreceived"] = (vtransmissionenergyreceived, ["tr", "l", "f", "y", "n"])  # Internal variable - energy received at n via tr; always >= 0; 0 if n sent energy rather than received energy; only used for applying MinAnnualTransmissionNodes
     modelvarindices["vtransmissionlosses"] = (vtransmissionlosses, ["n", "tr", "l", "f", "y"])  # Internal variable - only used when transmission modeling type is 3 and efficiency < 1
 
     @variable(jumpmodel, vrateoftotalactivitynodal[snode, stechnology, stimeslice, syear] >= 0)
@@ -2289,8 +2292,11 @@ if transmissionmodeling
             # vtransmissionbyline is flow over line tr from n1 to n2; unit is MW
 
             # Constraints to populate vtransmissionbylineneg - indicates whether corresponding vtransmissionbyline <= 0
-            push!(tr7_flowneg, @build_constraint(vtransmissionbyline[tr,l,f,y] >= (-row[:maxflow] - 0.000001) * vtransmissionbylineneg[tr,l,f,y] + 0.000001))
-            push!(tr7_flowneg, @build_constraint(vtransmissionbyline[tr,l,f,y] <= row[:maxflow] * (1 - vtransmissionbylineneg[tr,l,f,y])))
+            # Creation limited to cases where vtransmissionbylineneg is necessary in order to improve performance
+            if (!ismissing(row[:eff]) && row[:eff] < 1 && type == 3) || vc > 0 || !ismissing(row[:n1_mtn]) || !ismissing(row[:n2_mtn])
+                push!(tr7_flowneg, @build_constraint(vtransmissionbyline[tr,l,f,y] >= (-row[:maxflow] - 0.000001) * vtransmissionbylineneg[tr,l,f,y] + 0.000001))
+                push!(tr7_flowneg, @build_constraint(vtransmissionbyline[tr,l,f,y] <= row[:maxflow] * (1 - vtransmissionbylineneg[tr,l,f,y])))
+            end
 
             # Constraints to populate vtransmissionbyline and vtransmissionlosses
             if type == 1  # DCOPF
@@ -2331,17 +2337,22 @@ if transmissionmodeling
             end
 
             # Constraints to populate vtransmissionenergyreceived
-            # Energy received at n1
-            push!(tr9_energyreceived, @build_constraint(-vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier <= vtransmissionenergyreceived[tr,l,f,y,n1] + 500000 * (1-vtransmissionbylineneg[tr,l,f,y])))
-            push!(tr9_energyreceived, @build_constraint(vtransmissionenergyreceived[tr,l,f,y,n1] <= -vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier + 500000 * (1-vtransmissionbylineneg[tr,l,f,y])))
-            push!(tr9_energyreceived, @build_constraint(vtransmissionenergyreceived[tr,l,f,y,n1] <= 500000 * vtransmissionbylineneg[tr,l,f,y]))
-            push!(tr9_energyreceived, @build_constraint(-500000 * vtransmissionbylineneg[tr,l,f,y] <= vtransmissionenergyreceived[tr,l,f,y,n1]))
+            # Creation limited to cases where vtransmissionenergyreceived is necessary in order to improve performance
+            if !ismissing(row[:n1_mtn])
+                # Energy received at n1
+                push!(tr9_energyreceived, @build_constraint(-vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier <= vtransmissionenergyreceived[tr,l,f,y,n1] + 500000 * (1-vtransmissionbylineneg[tr,l,f,y])))
+                push!(tr9_energyreceived, @build_constraint(vtransmissionenergyreceived[tr,l,f,y,n1] <= -vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier + 500000 * (1-vtransmissionbylineneg[tr,l,f,y])))
+                push!(tr9_energyreceived, @build_constraint(vtransmissionenergyreceived[tr,l,f,y,n1] <= 500000 * vtransmissionbylineneg[tr,l,f,y]))
+                push!(tr9_energyreceived, @build_constraint(-500000 * vtransmissionbylineneg[tr,l,f,y] <= vtransmissionenergyreceived[tr,l,f,y,n1]))
+            end
 
-            # Energy received at n2
-            push!(tr9_energyreceived, @build_constraint(vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier <= vtransmissionenergyreceived[tr,l,f,y,n2] + 500000 * (1-(1-vtransmissionbylineneg[tr,l,f,y]))))
-            push!(tr9_energyreceived, @build_constraint(vtransmissionenergyreceived[tr,l,f,y,n2] <= vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier + 500000 * (1-(1-vtransmissionbylineneg[tr,l,f,y]))))
-            push!(tr9_energyreceived, @build_constraint(vtransmissionenergyreceived[tr,l,f,y,n2] <= 500000 * (1-vtransmissionbylineneg[tr,l,f,y])))
-            push!(tr9_energyreceived, @build_constraint(-500000 * (1-vtransmissionbylineneg[tr,l,f,y]) <= vtransmissionenergyreceived[tr,l,f,y,n2]))
+            if !ismissing(row[:n2_mtn])
+                # Energy received at n2
+                push!(tr9_energyreceived, @build_constraint(vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier <= vtransmissionenergyreceived[tr,l,f,y,n2] + 500000 * (1-(1-vtransmissionbylineneg[tr,l,f,y]))))
+                push!(tr9_energyreceived, @build_constraint(vtransmissionenergyreceived[tr,l,f,y,n2] <= vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier + 500000 * (1-(1-vtransmissionbylineneg[tr,l,f,y]))))
+                push!(tr9_energyreceived, @build_constraint(vtransmissionenergyreceived[tr,l,f,y,n2] <= 500000 * (1-vtransmissionbylineneg[tr,l,f,y])))
+                push!(tr9_energyreceived, @build_constraint(-500000 * (1-vtransmissionbylineneg[tr,l,f,y]) <= vtransmissionenergyreceived[tr,l,f,y,n2]))
+            end
 
             if vc > 0
                 # Constraints to populate vvariablecosttransmissionbyts - always >= 0 and accounting for possibility that vtransmissionbyline may be negative
