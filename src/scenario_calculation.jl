@@ -2393,11 +2393,12 @@ if transmissionmodeling
     tr10_minannualtransmissionnodes::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
     t = Threads.@spawn(let
-        local lastkeys = Array{String, 1}(undef,2)  # lastkeys[1] = n, lastkeys[2] = y
+        local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = n, lastkeys[2] = from_n, lastkeys[3] = y
         local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = mtn
         local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtransmissionenergyreceived sum
 
-        for row in SQLite.DBInterface.execute(db, "select tl.id as tr, ys.l as l, tl.f as f, tme1.y as y, mtn.n2 as n, cast(mtn.val as real) as mtn
+        for row in SQLite.DBInterface.execute(db, "select tl.id as tr, ys.l as l, tl.f as f, tme1.y as y, mtn.n2 as n, mtn.n1 as from_n,
+            cast(mtn.val as real) as mtn
             from TransmissionLine tl, NODE n1, NODE n2, TransmissionModelingEnabled tme1,
             TransmissionModelingEnabled tme2, YearSplit_def ys, MinAnnualTransmissionNodes_def mtn
             where
@@ -2408,7 +2409,7 @@ if transmissionmodeling
             and ys.y = tme1.y $(restrictyears ? "and ys.y in" * inyears : "")
             and mtn.n2 = n1.val and mtn.n1 = n2.val and mtn.f = tl.f and mtn.y = tme1.y
             union
-            select tl.id as tr, ys.l as l, tl.f as f, tme1.y as y, mtn.n2 as n, cast(mtn.val as real) as mtn
+            select tl.id as tr, ys.l as l, tl.f as f, tme1.y as y, mtn.n2 as n, mtn.n1 as from_n, cast(mtn.val as real) as mtn
             from TransmissionLine tl, NODE n1, NODE n2, TransmissionModelingEnabled tme1,
             TransmissionModelingEnabled tme2, YearSplit_def ys, MinAnnualTransmissionNodes_def mtn
             where
@@ -2418,15 +2419,16 @@ if transmissionmodeling
             and tme1.y = tme2.y and tme1.type = tme2.type
             and ys.y = tme1.y $(restrictyears ? "and ys.y in" * inyears : "")
             and mtn.n2 = n2.val and mtn.n1 = n1.val and mtn.f = tl.f and mtn.y = tme1.y
-            order by n, y")
+            order by n, from_n, y")
 
             local tr = row[:tr]
             local l = row[:l]
             local f = row[:f]
             local y = row[:y]
             local n = row[:n]
+            local from_n = row[:from_n]
 
-            if isassigned(lastkeys, 1) && (n != lastkeys[1] || y != lastkeys[2])
+            if isassigned(lastkeys, 1) && (n != lastkeys[1] || from_n != lastkeys[2] || y != lastkeys[3])
                 # Create constraint
                 push!(tr10_minannualtransmissionnodes, @build_constraint(sumexps[1] >= lastvals[1]))
                 sumexps[1] = AffExpr()
@@ -2437,7 +2439,8 @@ if transmissionmodeling
             lastvals[1] = row[:mtn]
 
             lastkeys[1] = n
-            lastkeys[2] = y
+            lastkeys[2] = from_n
+            lastkeys[3] = y
         end
 
         # Create last constraint
