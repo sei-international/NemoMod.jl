@@ -1079,11 +1079,14 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
         cast(tl.fixedcost as real) as fc, cast(tcta.val as real) as tcta, cast(tl.efficiency as real) as eff,
         cast(taf.val as real) as taf,
         case when mtn.n2 = tl.n1 then cast(mtn.val as real) else null end as n1_mtn, 
-		case when mtn.n2 = tl.n2 then cast(mtn.val as real) else null end as n2_mtn
+		case when mtn.n2 = tl.n2 then cast(mtn.val as real) else null end as n2_mtn,
+		case when mxtn.n2 = tl.n1 then cast(mxtn.val as real) else null end as n1_mxtn,
+		case when mxtn.n2 = tl.n2 then cast(mxtn.val as real) else null end as n2_mxtn
         from TransmissionLine tl, NODE n1, NODE n2, TransmissionModelingEnabled tme1,
         TransmissionModelingEnabled tme2, YearSplit_def ys, TransmissionCapacityToActivityUnit_def tcta, 
         TransmissionAvailabilityFactor_def taf
         left join MinAnnualTransmissionNodes_def mtn on ((mtn.n1 = tl.n1 and mtn.n2 = tl.n2) or (mtn.n1 = tl.n2 and mtn.n2 = tl.n1)) and mtn.f = tl.f and mtn.y = tme1.y
+		left join MaxAnnualTransmissionNodes_def mxtn on ((mxtn.n1 = tl.n1 and mxtn.n2 = tl.n2) or (mxtn.n1 = tl.n2 and mxtn.n2 = tl.n1)) and mxtn.f = tl.f and mxtn.y = tme1.y
         where
         tl.n1 = n1.val and tl.n2 = n2.val
         and tme1.r = n1.r and tme1.f = tl.f

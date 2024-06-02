@@ -11,7 +11,7 @@ This page highlights key changes in NEMO since its initial public release. For a
 
   * **Enabled model period emission limits when calculating selected years:** Revised NEMO to allow the use of model period emission limits ([`ModelPeriodEmissionLimit`](@ref ModelPeriodEmissionLimit)) when calculating selected years. See [Calculating selected years](@ref selected_years) for details.
 
-  * **Minimum annual transmission between nodes:** Added a parameter, [`MinAnnualTransmissionNodes`](@ref MinAnnualTransmissionNodes), that allows you to specify the minimum amount of a fuel transmitted from one node to another in a year (i.e., delivered to the receiving node via transmission from the sending node). Among other things, this parameter can be used to recreate historical transmission.
+  * **Minimum and maximum annual transmission between nodes:** Added two parameters, [`MinAnnualTransmissionNodes`](@ref MinAnnualTransmissionNodes) and [`MaxAnnualTransmissionNodes`](@ref MaxAnnualTransmissionNodes), that allow you to specify the minimum and maximum amount of a fuel transmitted from one node to another in a year (i.e., delivered to the receiving node via transmission from the sending node). Among other things, these parameters can be used to recreate historical transmission and simulate power purchase agreements.
   
 ## Version 2.0
 

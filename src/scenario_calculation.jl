@@ -296,7 +296,7 @@ local paramsneedingdefs::Array{String, 1} = ["OutputActivityRatio", "InputActivi
 "TotalAnnualMinCapacityStorage", "TotalAnnualMaxCapacityInvestmentStorage", "TotalAnnualMinCapacityInvestmentStorage", "TransmissionAvailabilityFactor",
 "TransmissionCapacityToActivityUnit", "StorageFullLoadHours", "RampRate", "RampingReset", "NodalDistributionDemand",
 "NodalDistributionTechnologyCapacity", "NodalDistributionStorageCapacity", "MinimumUtilization", "InterestRateTechnology",
-"InterestRateStorage", "MinShareProduction", "MinAnnualTransmissionNodes"]
+"InterestRateStorage", "MinShareProduction", "MinAnnualTransmissionNodes", "MaxAnnualTransmissionNodes"]
 
 createviewwithdefaults(db, paramsneedingdefs)
 create_other_nemo_indices(db)
@@ -728,9 +728,9 @@ if transmissionmodeling
         @variable(jumpmodel, vtransmissionbylineneg[tr=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[tr]], f=indexdicts[2][[tr,l]],
             y=indexdicts[3][[tr,l,f]]], Bin)
 
-        # vtransmissionenergyreceived is limited to cases where needed to apply MinAnnualTransmissionNodes
-        indexdicts1 = keydicts_threaded(filter(row -> !ismissing(row.n1_mtn), queries["queryvtransmissionbyline"]), [1,2,3,4,5])  # First part of array of Dicts used to restrict indices of following variable
-        indexdicts2 = keydicts_threaded(filter(row -> !ismissing(row.n2_mtn), queries["queryvtransmissionbyline"]), [1,2,3,4,6])  # Second part of array of Dicts used to restrict indices of following variable
+        # vtransmissionenergyreceived is limited to cases where needed to apply MinAnnualTransmissionNodes or MaxAnnualTransmissionNodes
+        indexdicts1 = keydicts_threaded(filter(row -> !ismissing(row.n1_mtn) || !ismissing(row.n1_mxtn), queries["queryvtransmissionbyline"]), [1,2,3,4,5])  # First part of array of Dicts used to restrict indices of following variable
+        indexdicts2 = keydicts_threaded(filter(row -> !ismissing(row.n2_mtn) || !ismissing(row.n2_mxtn), queries["queryvtransmissionbyline"]), [1,2,3,4,6])  # Second part of array of Dicts used to restrict indices of following variable
         indexdicts = [merge(union, indexdicts1[i], indexdicts2[i]) for i=1:4]
         @variable(jumpmodel, vtransmissionenergyreceived[tr=[k[1] for k = keys(indexdicts[1])], l=indexdicts[1][[tr]], f=indexdicts[2][[tr,l]],
             y=indexdicts[3][[tr,l,f]], n=indexdicts[4][[tr,l,f,y]]] >= 0)
@@ -755,7 +755,7 @@ if transmissionmodeling
     # Note: n1 is from node; n2 is to node
     modelvarindices["vtransmissionbyline"] = (vtransmissionbyline, ["tr", "l", "f", "y"])
     modelvarindices["vtransmissionbylineneg"] = (vtransmissionbylineneg, ["tr", "l", "f", "y"])  # Internal variable - indicates whether corresponding vtransmissionbyline is <= 0
-    modelvarindices["vtransmissionenergyreceived"] = (vtransmissionenergyreceived, ["tr", "l", "f", "y", "n"])  # Internal variable - energy received at n via tr; always >= 0; 0 if n sent energy rather than received energy; only used for applying MinAnnualTransmissionNodes
+    modelvarindices["vtransmissionenergyreceived"] = (vtransmissionenergyreceived, ["tr", "l", "f", "y", "n"])  # Internal variable - energy received at n via tr; always >= 0; 0 if n sent energy rather than received energy; only used for applying MinAnnualTransmissionNodes and MaxAnnualTransmissionNodes
     modelvarindices["vtransmissionlosses"] = (vtransmissionlosses, ["n", "tr", "l", "f", "y"])  # Internal variable - only used when transmission modeling type is 3 and efficiency < 1
 
     @variable(jumpmodel, vrateoftotalactivitynodal[snode, stechnology, stimeslice, syear] >= 0)
@@ -2293,7 +2293,7 @@ if transmissionmodeling
 
             # Constraints to populate vtransmissionbylineneg - indicates whether corresponding vtransmissionbyline <= 0
             # Creation limited to cases where vtransmissionbylineneg is necessary in order to improve performance
-            if (!ismissing(row[:eff]) && row[:eff] < 1 && type == 3) || vc > 0 || !ismissing(row[:n1_mtn]) || !ismissing(row[:n2_mtn])
+            if (!ismissing(row[:eff]) && row[:eff] < 1 && type == 3) || vc > 0 || !ismissing(row[:n1_mtn]) || !ismissing(row[:n2_mtn]) || !ismissing(row[:n1_mxtn]) || !ismissing(row[:n2_mxtn]) 
                 push!(tr7_flowneg, @build_constraint(vtransmissionbyline[tr,l,f,y] >= (-row[:maxflow] - 0.000001) * vtransmissionbylineneg[tr,l,f,y] + 0.000001))
                 push!(tr7_flowneg, @build_constraint(vtransmissionbyline[tr,l,f,y] <= row[:maxflow] * (1 - vtransmissionbylineneg[tr,l,f,y])))
             end
@@ -2338,7 +2338,7 @@ if transmissionmodeling
 
             # Constraints to populate vtransmissionenergyreceived
             # Creation limited to cases where vtransmissionenergyreceived is necessary in order to improve performance
-            if !ismissing(row[:n1_mtn])
+            if !ismissing(row[:n1_mtn]) || !ismissing(row[:n1_mxtn])
                 # Energy received at n1
                 push!(tr9_energyreceived, @build_constraint(-vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier <= vtransmissionenergyreceived[tr,l,f,y,n1] + 500000 * (1-vtransmissionbylineneg[tr,l,f,y])))
                 push!(tr9_energyreceived, @build_constraint(vtransmissionenergyreceived[tr,l,f,y,n1] <= -vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier + 500000 * (1-vtransmissionbylineneg[tr,l,f,y])))
@@ -2346,7 +2346,7 @@ if transmissionmodeling
                 push!(tr9_energyreceived, @build_constraint(-500000 * vtransmissionbylineneg[tr,l,f,y] <= vtransmissionenergyreceived[tr,l,f,y,n1]))
             end
 
-            if !ismissing(row[:n2_mtn])
+            if !ismissing(row[:n2_mtn]) || !ismissing(row[:n2_mxtn])
                 # Energy received at n2
                 push!(tr9_energyreceived, @build_constraint(vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier <= vtransmissionenergyreceived[tr,l,f,y,n2] + 500000 * (1-(1-vtransmissionbylineneg[tr,l,f,y]))))
                 push!(tr9_energyreceived, @build_constraint(vtransmissionenergyreceived[tr,l,f,y,n2] <= vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier + 500000 * (1-(1-vtransmissionbylineneg[tr,l,f,y]))))
@@ -2393,7 +2393,7 @@ if transmissionmodeling
     tr10_minannualtransmissionnodes::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
     t = Threads.@spawn(let
-        local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = n, lastkeys[2] = from_n, lastkeys[3] = y
+        local lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = from_n, lastkeys[3] = f, lastkeys[4] = y
         local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = mtn
         local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtransmissionenergyreceived sum
 
@@ -2419,7 +2419,7 @@ if transmissionmodeling
             and tme1.y = tme2.y and tme1.type = tme2.type
             and ys.y = tme1.y $(restrictyears ? "and ys.y in" * inyears : "")
             and mtn.n2 = n2.val and mtn.n1 = n1.val and mtn.f = tl.f and mtn.y = tme1.y
-            order by n, from_n, y")
+            order by n, from_n, f, y")
 
             local tr = row[:tr]
             local l = row[:l]
@@ -2428,7 +2428,7 @@ if transmissionmodeling
             local n = row[:n]
             local from_n = row[:from_n]
 
-            if isassigned(lastkeys, 1) && (n != lastkeys[1] || from_n != lastkeys[2] || y != lastkeys[3])
+            if isassigned(lastkeys, 1) && (n != lastkeys[1] || from_n != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
                 # Create constraint
                 push!(tr10_minannualtransmissionnodes, @build_constraint(sumexps[1] >= lastvals[1]))
                 sumexps[1] = AffExpr()
@@ -2440,7 +2440,8 @@ if transmissionmodeling
 
             lastkeys[1] = n
             lastkeys[2] = from_n
-            lastkeys[3] = y
+            lastkeys[3] = f
+            lastkeys[4] = y
         end
 
         # Create last constraint
@@ -2455,6 +2456,79 @@ if transmissionmodeling
     logmsg("Queued constraint Tr10_MinAnnualTransmissionNodes for creation.", quiet)
 end
 # END: Tr10_MinAnnualTransmissionNodes.
+
+# BEGIN: Tr11_MaxAnnualTransmissionNodes.
+if transmissionmodeling
+    tr11_maxannualtransmissionnodes::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+
+    t = Threads.@spawn(let
+        local lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = from_n, lastkeys[3] = f, lastkeys[4] = y
+        local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = mxtn
+        local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtransmissionenergyreceived sum
+
+        for row in SQLite.DBInterface.execute(db, "select tl.id as tr, ys.l as l, tl.f as f, tme1.y as y, mxtn.n2 as n, mxtn.n1 as from_n,
+            cast(mxtn.val as real) as mxtn
+            from TransmissionLine tl, NODE n1, NODE n2, TransmissionModelingEnabled tme1,
+            TransmissionModelingEnabled tme2, YearSplit_def ys, MaxAnnualTransmissionNodes_def mxtn
+            where
+            tl.n1 = n1.val and tl.n2 = n2.val
+            and tme1.r = n1.r and tme1.f = tl.f
+            and tme2.r = n2.r and tme2.f = tl.f
+            and tme1.y = tme2.y and tme1.type = tme2.type
+            and ys.y = tme1.y $(restrictyears ? "and ys.y in" * inyears : "")
+            and mxtn.n2 = n1.val and mxtn.n1 = n2.val and mxtn.f = tl.f and mxtn.y = tme1.y
+            union
+            select tl.id as tr, ys.l as l, tl.f as f, tme1.y as y, mxtn.n2 as n, mxtn.n1 as from_n, cast(mxtn.val as real) as mxtn
+            from TransmissionLine tl, NODE n1, NODE n2, TransmissionModelingEnabled tme1,
+            TransmissionModelingEnabled tme2, YearSplit_def ys, MaxAnnualTransmissionNodes_def mxtn
+            where
+            tl.n1 = n1.val and tl.n2 = n2.val
+            and tme1.r = n1.r and tme1.f = tl.f
+            and tme2.r = n2.r and tme2.f = tl.f
+            and tme1.y = tme2.y and tme1.type = tme2.type
+            and ys.y = tme1.y $(restrictyears ? "and ys.y in" * inyears : "")
+            and mxtn.n2 = n2.val and mxtn.n1 = n1.val and mxtn.f = tl.f and mxtn.y = tme1.y
+            order by n, from_n, f, y")
+
+            local tr = row[:tr]
+            local l = row[:l]
+            local f = row[:f]
+            local y = row[:y]
+            local n = row[:n]
+            local from_n = row[:from_n]
+
+            if isassigned(lastkeys, 1) && (n != lastkeys[1] || from_n != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
+                # Create constraint
+                push!(tr11_maxannualtransmissionnodes, @build_constraint(sumexps[1] <= lastvals[1]))
+                sumexps[1] = AffExpr()
+                lastvals[1] = 0.0
+            end
+
+            add_to_expression!(sumexps[1], vtransmissionenergyreceived[tr,l,f,y,n])
+            lastvals[1] = row[:mxtn]
+
+            lastkeys[1] = n
+            lastkeys[2] = from_n
+            lastkeys[3] = f
+            lastkeys[4] = y
+        end
+
+        # Create last constraint
+        if isassigned(lastkeys, 1)
+            push!(tr11_maxannualtransmissionnodes, @build_constraint(sumexps[1] <= lastvals[1]))
+        end
+
+        put!(cons_channel, tr11_maxannualtransmissionnodes)
+    end)
+
+    numconsarrays += 1
+    logmsg("Queued constraint Tr11_MaxAnnualTransmissionNodes for creation.", quiet)
+end
+# END: Tr11_MaxAnnualTransmissionNodes.
+
+
+
+
 
 # BEGIN: EBa11Tr_EnergyBalanceEachTS5 and EBb4_EnergyBalanceEachYear.
 if transmissionmodeling

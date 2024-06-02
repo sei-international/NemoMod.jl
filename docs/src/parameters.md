@@ -301,9 +301,29 @@ For example, if a technology had an efficiency of 80%, the `InputActivityRatio` 
 | `y` | text  | Year |
 | `val` | real  | Factor |
 
+## [Maximum annual transmission between nodes](@id MaxAnnualTransmissionNodes)
+
+For the indicated [fuel](@ref fuel) and [year](@ref year), maximum energy that can be received at the second [node](@ref node) (`n2`) via transmission from the first node (`n1`). Energy received is net of any transmission losses.
+
+!!! note
+    To use this parameter, make sure `n1` and `n2` are in [regions](@ref region) that have the same energy [unit](@ref uoms).
+
+#### Scenario database
+
+**Table: `MaxAnnualTransmissionNodes`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `n1` | text  | Node sending energy |
+| `n2` | text  | Node receiving energy |
+| `f` | text  | Fuel |
+| `y` | text  | Year |
+| `val` | real  | Energy (energy unit for regions containing `n1` and `n2`) |
+
 ## [Minimum annual transmission between nodes](@id MinAnnualTransmissionNodes)
 
-For the indicated [fuel](@ref fuel) and [year](@ref year), minimum energy received at the second [node](@ref node) (`n2`) via transmission from the first node (`n1`). Energy received is net of any transmission losses.
+For the indicated [fuel](@ref fuel) and [year](@ref year), minimum energy that must be received at the second [node](@ref node) (`n2`) via transmission from the first node (`n1`). Energy received is net of any transmission losses.
 
 !!! note
     To use this parameter, make sure `n1` and `n2` are in [regions](@ref region) that have the same energy [unit](@ref uoms).
