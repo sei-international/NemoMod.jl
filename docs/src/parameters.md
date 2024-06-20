@@ -432,7 +432,9 @@ Exogenously specified emissions, counted toward the [model period emission limit
 
 ## [Nodal distribution demand](@id NodalDistributionDemand)
 
-For the specified [node](@ref node) and the [region](@ref region) containing it, fraction of the region's exogenously defined demand for the specified [fuel](@ref fuel) that is assigned to the node. If in a given [year](@ref year) transmission modeling is enabled for a fuel and region (see [`TransmissionModelingEnabled`](@ref TransmissionModelingEnabled)), and the fuel has exogenous demands in the region, the sum of `NodalDistributionDemand` across the nodes in the region should be 1.
+For the specified [node](@ref node) and the [region](@ref region) containing it, fraction of the region's exogenously defined demands for the specified [fuel](@ref fuel) that is assigned to the node. Exogenously defined demands include [specified annual demand](@ref SpecifiedAnnualDemand) and [accumulated annual demand](@ref AccumulatedAnnualDemand).
+
+If in a given [year](@ref year) transmission modeling is enabled for a fuel and region (see [`TransmissionModelingEnabled`](@ref TransmissionModelingEnabled)), and the fuel has exogenous demands in the region, the sum of `NodalDistributionDemand` across the nodes in the region should be 1.
 
 #### Scenario database
 
