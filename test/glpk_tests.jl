@@ -20,8 +20,7 @@ if @isdefined GLPK
     @info "Testing scenario solution with GLPK."
 
     @testset "Solving storage_test with GLPK" begin
-        dbfile = joinpath(@__DIR__, "storage_test.sqlite")
-        #dbfile = "c:/temp/storage_test.sqlite"
+        dbfile = joinpath(dbfile_path, "storage_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
@@ -188,8 +187,7 @@ if @isdefined GLPK
     end  # "Solving storage_test with GLPK"
 
     @testset "Solving storage_transmission_test with GLPK" begin
-        dbfile = joinpath(@__DIR__, "storage_transmission_test.sqlite")
-        #dbfile = "c:/temp/storage_transmission_test.sqlite"
+        dbfile = joinpath(dbfile_path, "storage_transmission_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         @info "Running GLPK test 1 on storage_transmission_test.sqlite: default outputs."

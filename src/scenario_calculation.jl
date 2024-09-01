@@ -1572,11 +1572,13 @@ if transmissionmodeling
 end
 # END: EBa2Tr_RateOfFuelProduction2 and GenerationAnnualNodal, and ReGenerationAnnualNodal.
 
-# BEGIN: EBa3_RateOfFuelProduction3.
+# BEGIN: EBa3_RateOfFuelProduction3 and EBa7_EnergyBalanceEachTS1.
 eba3_rateoffuelproduction3::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+eba7_energybalanceeachts1::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
 t = Threads.@spawn(let
     local lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
+    local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = ys
     local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofproductionbytechnologynn sum
 
     # First step: define vrateofproductionnn where technologies exist
@@ -1589,6 +1591,7 @@ t = Threads.@spawn(let
         if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
             # Create constraint
             push!(eba3_rateoffuelproduction3, @build_constraint(sumexps[1] == vrateofproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
+            push!(eba7_energybalanceeachts1, @build_constraint(vrateofproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] * lastvals[1] == vproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
             sumexps[1] = AffExpr()
         end
 
@@ -1598,11 +1601,13 @@ t = Threads.@spawn(let
         lastkeys[2] = l
         lastkeys[3] = f
         lastkeys[4] = y
+        lastvals[1] = row[:ys]
     end
 
-    # Create last constraint
+    # Create last constraints
     if isassigned(lastkeys, 1)
         push!(eba3_rateoffuelproduction3, @build_constraint(sumexps[1] == vrateofproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
+        push!(eba7_energybalanceeachts1, @build_constraint(vrateofproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] * lastvals[1] == vproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
     end
 
     # Second step: define vrateofproductionnn where technologies don't exist
@@ -1616,14 +1621,17 @@ t = Threads.@spawn(let
     $(restrictyears ? "and y.val in" * inyears : "")")
 
         push!(eba3_rateoffuelproduction3, @build_constraint(0 == vrateofproductionnn[row[:r],row[:l],row[:f],row[:y]]))
+        push!(eba7_energybalanceeachts1, @build_constraint(0 == vproductionnn[row[:r],row[:l],row[:f],row[:y]]))
     end
 
     put!(cons_channel, eba3_rateoffuelproduction3)
+    put!(cons_channel, eba7_energybalanceeachts1)
 end)
 
-numconsarrays += 1
+numconsarrays += 2
 logmsg("Queued constraint EBa3_RateOfFuelProduction3 for creation.", quiet)
-# END: EBa3_RateOfFuelProduction3.
+logmsg("Queued constraint EBa7_EnergyBalanceEachTS1 for creation.", quiet)
+# END: EBa3_RateOfFuelProduction3 and EBa7_EnergyBalanceEachTS1.
 
 # BEGIN: EBa3Tr_RateOfFuelProduction3.
 if transmissionmodeling
@@ -1668,9 +1676,7 @@ if transmissionmodeling
         select n.val as n, l.val as l, f.val as f, y.val as y
         	from node n, timeslice l, fuel f, year y, TransmissionModelingEnabled tme
         	left join ntc_oar on ntc_oar.n = n.val and ntc_oar.f = f.val and ntc_oar.y = y.val
-        	where n.r = tme.r
-        	and f.val = tme.f
-        	and y.val = tme.y
+        	where n.r = tme.r and f.val = tme.f and y.val = tme.y
         	and ntc_oar.n is null
             $(restrictyears ? "and y.val in" * inyears : "")")
 
@@ -1859,22 +1865,27 @@ if transmissionmodeling
 end
 # END: EBa5Tr_RateOfFuelUse2.
 
-# BEGIN: EBa6_RateOfFuelUse3.
+# BEGIN: EBa6_RateOfFuelUse3 and EBa8_EnergyBalanceEachTS2.
 eba6_rateoffueluse3::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+eba8_energybalanceeachts2::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
 t = Threads.@spawn(let
     local lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
+    local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = ys
     local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofusebytechnologynn sum
+    local constrained_keys = Vector{NTuple{4, String}}()  # Vector of (r, l, f, y) covered by queryvrateofusebytechnologynn
 
     for row in DataFrames.eachrow(queries["queryvrateofusebytechnologynn"])
         local r = row[:r]
         local l = row[:l]
         local f = row[:f]
         local y = row[:y]
+        push!(constrained_keys, (r, l, f, y))
 
         if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
             # Create constraint
             push!(eba6_rateoffueluse3, @build_constraint(sumexps[1] == vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
+            push!(eba8_energybalanceeachts2, @build_constraint(vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] * lastvals[1] == vusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
             sumexps[1] = AffExpr()
         end
 
@@ -1884,19 +1895,29 @@ t = Threads.@spawn(let
         lastkeys[2] = l
         lastkeys[3] = f
         lastkeys[4] = y
+        lastvals[1] = row[:ys]
     end
 
     # Create last constraint
     if isassigned(lastkeys, 1)
         push!(eba6_rateoffueluse3, @build_constraint(sumexps[1] == vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
+        push!(eba8_energybalanceeachts2, @build_constraint(vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] * lastvals[1] == vusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
+    end
+
+    # Ensure vrateofusenn and vusenn are 0 in all other cases
+    for e in setdiff(collect(Base.product(sregion, stimeslice, sfuel, syear)), constrained_keys)
+        push!(eba6_rateoffueluse3, @build_constraint(0 == vrateofusenn[e[1],e[2],e[3],e[4]]))
+        push!(eba8_energybalanceeachts2, @build_constraint(0 == vusenn[e[1],e[2],e[3],e[4]]))
     end
 
     put!(cons_channel, eba6_rateoffueluse3)
+    put!(cons_channel, eba8_energybalanceeachts2)
 end)
 
-numconsarrays += 1
+numconsarrays += 2
 logmsg("Queued constraint EBa6_RateOfFuelUse3 for creation.", quiet)
-# END: EBa6_RateOfFuelUse3.
+logmsg("Queued constraint EBa8_EnergyBalanceEachTS2 for creation.", quiet)
+# END: EBa6_RateOfFuelUse3 and EBa8_EnergyBalanceEachTS2.
 
 # BEGIN: EBa6Tr_RateOfFuelUse3.
 if transmissionmodeling
@@ -1905,12 +1926,14 @@ if transmissionmodeling
     t = Threads.@spawn(let
         local lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
         local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofusebytechnologynodal sum
+        local constrained_keys = Vector{NTuple{4, String}}()  # Vector of (n, l, f, y) covered by queryvrateofusebytechnologynodal
 
         for row in DataFrames.eachrow(queries["queryvrateofusebytechnologynodal"])
             local n = row[:n]
             local l = row[:l]
             local f = row[:f]
             local y = row[:y]
+            push!(constrained_keys, (n, l, f, y))
 
             if isassigned(lastkeys, 1) && (n != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
                 # Create constraint
@@ -1929,6 +1952,11 @@ if transmissionmodeling
         # Create last constraint
         if isassigned(lastkeys, 1)
             push!(eba6tr_rateoffueluse3, @build_constraint(sumexps[1] == vrateofusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
+        end
+
+        # Ensure vrateofusenodal is 0 in all other cases
+        for e in setdiff(collect(Base.product(snode, stimeslice, sfuel, syear)), constrained_keys)
+            push!(eba6tr_rateoffueluse3, @build_constraint(0 == vrateofusenodal[e[1],e[2],e[3],e[4]]))
         end
 
         put!(cons_channel, eba6tr_rateoffueluse3)
@@ -1959,8 +1987,8 @@ t = Threads.@spawn(let
             local y = row[:y]
 
             if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
-                # Create constraint
-                push!(vrateofuse1, @build_constraint((isequal(sumexps[1], AffExpr()) ? vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] : sumexps[1])
+                # Create constraint - nodal and non-nodal use always combined because vrateofusenn may cover consumption of nodal fuels by non-nodal technologies
+                push!(vrateofuse1, @build_constraint(vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]
                     == vrateofuse[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
                 sumexps[1] = AffExpr()
             end
@@ -1977,7 +2005,7 @@ t = Threads.@spawn(let
 
         # Create last constraint
         if isassigned(lastkeys, 1)
-            push!(vrateofuse1, @build_constraint((isequal(sumexps[1], AffExpr()) ? vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] : sumexps[1])
+            push!(vrateofuse1, @build_constraint(vrateofusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]
                 == vrateofuse[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]]))
         end
     end
@@ -1988,36 +2016,6 @@ end)
 numconsarrays += 1
 logmsg("Queued constraint VRateOfUse1 for creation.", quiet)
 # END: VRateOfUse1.
-
-# BEGIN: EBa7_EnergyBalanceEachTS1 and EBa8_EnergyBalanceEachTS2.
-eba7_energybalanceeachts1::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
-eba8_energybalanceeachts2::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
-
-t = Threads.@spawn(begin
-    for row in SQLite.DBInterface.execute(db, "select r.val as r, l.val as l, f.val as f, y.val as y, cast(ys.val as real) as ys
-    from region r, timeslice l, fuel f, year y, YearSplit_def ys
-    left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
-    where
-    ys.l = l.val and ys.y = y.val
-    $(restrictyears ? "and y.val in" * inyears : "")
-    and tme.id is null")
-        local r = row[:r]
-        local l = row[:l]
-        local f = row[:f]
-        local y = row[:y]
-
-        push!(eba7_energybalanceeachts1, @build_constraint(vrateofproductionnn[r,l,f,y] * row[:ys] == vproductionnn[r,l,f,y]))
-        push!(eba8_energybalanceeachts2, @build_constraint(vrateofusenn[r,l,f,y] * row[:ys] == vusenn[r,l,f,y]))
-    end
-
-    put!(cons_channel, eba7_energybalanceeachts1)
-    put!(cons_channel, eba8_energybalanceeachts2)
-end)
-
-numconsarrays += 2
-logmsg("Queued constraint EBa7_EnergyBalanceEachTS1 for creation.", quiet)
-logmsg("Queued constraint EBa8_EnergyBalanceEachTS2 for creation.", quiet)
-# END: EBa7_EnergyBalanceEachTS1 and EBa8_EnergyBalanceEachTS2.
 
 # BEGIN: EBa7Tr_EnergyBalanceEachTS1 and EBa8Tr_EnergyBalanceEachTS2.
 if transmissionmodeling
@@ -2104,17 +2102,6 @@ if transmissionmodeling
 end
 # END: EBa9Tr_EnergyBalanceEachTS3.
 
-#= Deprecated in NEMO 1.4
-# BEGIN: EBa10_EnergyBalanceEachTS4.
-eba10_energybalanceeachts4::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
-
-for (r, rr, l, f, y) in Base.product(sregion, sregion, stimeslice, sfuel, syear)
-    push!(eba10_energybalanceeachts4, @build_constraint(vtrade[r,rr,l,f,y] == -vtrade[rr,r,l,f,y]))
-end
-
-length(eba10_energybalanceeachts4) > 0 && logmsg("Created constraint EBa10_EnergyBalanceEachTS4.", quiet)
-# END: EBa10_EnergyBalanceEachTS4. =#
-
 # BEGIN: EBa11_EnergyBalanceEachTS5.
 eba11_energybalanceeachts5::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 t = Threads.@spawn(let
@@ -2136,6 +2123,7 @@ t = Threads.@spawn(let
 
         if isassigned(lastkeys, 1) && (r != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
             # Create constraint
+            # Note that this selection of vusenn excludes use of nodal fuels by non-nodal technologies
             push!(eba11_energybalanceeachts5, @build_constraint(vproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
                 vdemandnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]))
             sumexps[1] = AffExpr()
@@ -2526,17 +2514,14 @@ if transmissionmodeling
 end
 # END: Tr11_MaxAnnualTransmissionNodes.
 
-
-
-
-
 # BEGIN: EBa11Tr_EnergyBalanceEachTS5 and EBb4_EnergyBalanceEachYear.
 if transmissionmodeling
     eba11tr_energybalanceeachts5::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
     ebb4_energybalanceeachyear::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
     t = Threads.@spawn(let
-        local lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
+        local lastkeys = Array{String, 1}(undef,5)  # lastkeys[1] = n, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y, lastkeys[5] = r
+        local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = ndd
         local sumexps = Array{AffExpr, 1}([AffExpr(), AffExpr()])  # sumexps[1] = vtransmissionbyline sum for eba11tr_energybalanceeachts5 (aggregated by node),
             # sumexps[2] = vtransmissionbyline sum for ebb4_energybalanceeachyear (aggregated by node and timeslice)
         # sumexpsq = Array{QuadExpr, 1}([QuadExpr(), QuadExpr()])  # Quadratic version of sumexps; used if transmission modeling type = 3 and efficiency < 1
@@ -2544,11 +2529,12 @@ if transmissionmodeling
         # First query selects transmission-enabled nodes without any transmission lines, second selects transmission-enabled
         #   nodes that are n1 in a valid transmission line, third selects transmission-enabled nodes that are n2 in a
         #   valid transmission line
-        for row in SQLite.DBInterface.execute(db, "select n.val as n, ys.l as l, f.val as f, y.val as y,
+        for row in SQLite.DBInterface.execute(db, "select n.val as n, n.r as r, ys.l as l, f.val as f, y.val as y,
         cast(ys.val as real) as ys, null as tr, null as n2, null as trneg, null as n1,
-    	null as eff, tme.type as type, cast(tcta.val as real) as tcta
+    	null as eff, tme.type as type, cast(tcta.val as real) as tcta, cast(ndd.val as real) as ndd
         from NODE n, YearSplit_def ys, FUEL f, YEAR y, TransmissionModelingEnabled tme,
     	TransmissionCapacityToActivityUnit_def tcta
+		left join NodalDistributionDemand_def ndd on ndd.n = n.val and ndd.f = f.val and ndd.y = y.val
     	where ys.y = y.val $(restrictyears ? "and y.val in" * inyears : "")
         and tme.r = n.r and tme.f = f.val and tme.y = y.val
     	and tcta.r = n.r and tcta.f = f.val
@@ -2562,33 +2548,35 @@ if transmissionmodeling
     	n.val = tl.n2 and f.val = tl.f
     	and tl.n1 = n2.val
     	and n2.r = tme2.r and tl.f = tme2.f and y.val = tme2.y and tme.type = tme2.type)
-    union all
-    select n.val as n, ys.l as l, f.val as f, y.val as y,
-        cast(ys.val as real) as ys, tl.id as tr, tl.n2 as n2, null as trneg, null as n1,
-        cast(tl.efficiency as real) as eff, tme.type as type,
-    	cast(tcta.val as real) as tcta
-        from NODE n, YearSplit_def ys, FUEL f, YEAR y, TransmissionModelingEnabled tme,
-    	TransmissionLine tl, NODE n2, TransmissionModelingEnabled tme2, TransmissionCapacityToActivityUnit_def tcta
-    	where ys.y = y.val $(restrictyears ? "and y.val in" * inyears : "")
-        and tme.r = n.r and tme.f = f.val and tme.y = y.val
-    	and tcta.r = n.r and tcta.f = f.val
-    	and n.val = tl.n1 and f.val = tl.f
-    	and tl.n2 = n2.val
-    	and n2.r = tme2.r and tl.f = tme2.f and y.val = tme2.y and tme.type = tme2.type
-    union all
-    select n.val as n, ys.l as l, f.val as f, y.val as y,
-        cast(ys.val as real) as ys, null as tr, null as n2, tl.id as trneg, tl.n1 as n1,
-    	cast(tl.efficiency as real) as eff, tme.type as type,
-    	cast(tcta.val as real) as tcta
-        from NODE n, YearSplit_def ys, FUEL f, YEAR y, TransmissionModelingEnabled tme,
-    	TransmissionLine tl, NODE n2, TransmissionModelingEnabled tme2, TransmissionCapacityToActivityUnit_def tcta
-    	where ys.y = y.val $(restrictyears ? "and y.val in" * inyears : "")
-        and tme.r = n.r and tme.f = f.val and tme.y = y.val
-    	and tcta.r = n.r and tcta.f = f.val
-    	and n.val = tl.n2 and f.val = tl.f
-    	and tl.n1 = n2.val
-    	and n2.r = tme2.r and tl.f = tme2.f and y.val = tme2.y and tme.type = tme2.type
-    order by n, f, y, l")
+        union all
+        select n.val as n, n.r as r, ys.l as l, f.val as f, y.val as y,
+            cast(ys.val as real) as ys, tl.id as tr, tl.n2 as n2, null as trneg, null as n1,
+            cast(tl.efficiency as real) as eff, tme.type as type,
+            cast(tcta.val as real) as tcta, cast(ndd.val as real) as ndd
+            from NODE n, YearSplit_def ys, FUEL f, YEAR y, TransmissionModelingEnabled tme,
+            TransmissionLine tl, NODE n2, TransmissionModelingEnabled tme2, TransmissionCapacityToActivityUnit_def tcta
+            left join NodalDistributionDemand_def ndd on ndd.n = n.val and ndd.f = f.val and ndd.y = y.val
+            where ys.y = y.val $(restrictyears ? "and y.val in" * inyears : "")
+            and tme.r = n.r and tme.f = f.val and tme.y = y.val
+            and tcta.r = n.r and tcta.f = f.val
+            and n.val = tl.n1 and f.val = tl.f
+            and tl.n2 = n2.val
+            and n2.r = tme2.r and tl.f = tme2.f and y.val = tme2.y and tme.type = tme2.type
+        union all
+        select n.val as n, n.r as r, ys.l as l, f.val as f, y.val as y,
+            cast(ys.val as real) as ys, null as tr, null as n2, tl.id as trneg, tl.n1 as n1,
+            cast(tl.efficiency as real) as eff, tme.type as type,
+            cast(tcta.val as real) as tcta, cast(ndd.val as real) as ndd
+            from NODE n, YearSplit_def ys, FUEL f, YEAR y, TransmissionModelingEnabled tme,
+            TransmissionLine tl, NODE n2, TransmissionModelingEnabled tme2, TransmissionCapacityToActivityUnit_def tcta
+            left join NodalDistributionDemand_def ndd on ndd.n = n.val and ndd.f = f.val and ndd.y = y.val
+            where ys.y = y.val $(restrictyears ? "and y.val in" * inyears : "")
+            and tme.r = n.r and tme.f = f.val and tme.y = y.val
+            and tcta.r = n.r and tcta.f = f.val
+            and n.val = tl.n2 and f.val = tl.f
+            and tl.n1 = n2.val
+            and n2.r = tme2.r and tl.f = tme2.f and y.val = tme2.y and tme.type = tme2.type
+        order by n, f, y, l")
             local n = row[:n]
             local l = row[:l]
             local f = row[:f]
@@ -2601,8 +2589,10 @@ if transmissionmodeling
             if isassigned(lastkeys, 1) && (n != lastkeys[1] || l != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
                 # Create constraint
                 # May want to change this to an equality constraint
+                # Inclusion of vusenn accounts for use of nodal fuels by non-nodal technologies; this use is distributed among nodes according to NodalDistributionDemand
                 push!(eba11tr_energybalanceeachts5, @build_constraint(vproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
-                    vdemandnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]))
+                    vdemandnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]
+                    + vusenn[lastkeys[5],lastkeys[2],lastkeys[3],lastkeys[4]] * lastvals[1]))
                     #+ (length(quad_terms(sumexpsq[1])) > 0 ? sumexpsq[1] : 0)))
                 sumexps[1] = AffExpr()
                 #sumexpsq[1] = QuadExpr()
@@ -2645,12 +2635,15 @@ if transmissionmodeling
             lastkeys[2] = l
             lastkeys[3] = f
             lastkeys[4] = y
+            lastkeys[5] = row[:r]
+            lastvals[1] = ismissing(row[:ndd]) ? 0.0 : row[:ndd]
         end
 
         # Create last constraint
         if isassigned(lastkeys, 1)
             push!(eba11tr_energybalanceeachts5, @build_constraint(vproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
-                vdemandnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]))
+            vdemandnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]
+            + vusenn[lastkeys[5],lastkeys[2],lastkeys[3],lastkeys[4]] * lastvals[1]))
                 #+ (length(quad_terms(sumexpsq[1])) > 0 ? sumexpsq[1] : 0)))
             push!(ebb4_energybalanceeachyear, @build_constraint(vtransmissionannual[lastkeys[1],lastkeys[3],lastkeys[4]] == sumexps[2]))
                 #+ (length(quad_terms(sumexpsq[2])) > 0 ? sumexpsq[2] : 0)))
@@ -2824,6 +2817,7 @@ t = Threads.@spawn(let
         if isassigned(lastkeys, 1) && (r != lastkeys[1] || f != lastkeys[2] || y != lastkeys[3])
             # Create constraint
             # Inclusion of vdemandannualnn allows users to specify both timesliced and non-timesliced demands for a fuel
+            # Note that this selection of vuseannualnn excludes use of nodal fuels by non-nodal technologies
             push!(ebb5_energybalanceeachyear, @build_constraint(vproductionannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] >=
                 vdemandannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] + vuseannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] + sumexps[1] + lastvals[1]))
             sumexps[1] = AffExpr()
@@ -2869,7 +2863,7 @@ if transmissionmodeling
 
     t = Threads.@spawn(begin
         for row in SQLite.DBInterface.execute(db,
-            "select ndd.n as n, ndd.f as f, ndd.y as y, cast(ndd.val as real) as ndd, cast(aad.val as real) as aad
+            "select ndd.n as n, n.r as r, ndd.f as f, ndd.y as y, cast(ndd.val as real) as ndd, cast(aad.val as real) as aad
             from NodalDistributionDemand_def ndd, NODE n, TransmissionModelingEnabled tme, AccumulatedAnnualDemand_def aad
             where
             ndd.n = n.val
@@ -2879,9 +2873,11 @@ if transmissionmodeling
             local n = row[:n]
             local f = row[:f]
             local y = row[:y]
+            local ndd = row[:ndd]
 
             push!(ebb5tr_energybalanceeachyear, @build_constraint(vproductionannualnodal[n,f,y] >=
-                vdemandannualnodal[n,f,y] + vuseannualnodal[n,f,y] + vtransmissionannual[n,f,y] + row[:aad] * row[:ndd]))
+                vdemandannualnodal[n,f,y] + vuseannualnodal[n,f,y] + vtransmissionannual[n,f,y] 
+                + vuseannualnn[row[:r],f,y] * ndd + row[:aad] * ndd))
         end
 
         put!(cons_channel, ebb5tr_energybalanceeachyear)

@@ -12,6 +12,11 @@ This page highlights key changes in NEMO since its initial public release. For a
   * **Enabled model period emission limits when calculating selected years:** Revised NEMO to allow the use of model period emission limits ([`ModelPeriodEmissionLimit`](@ref ModelPeriodEmissionLimit)) when calculating selected years. See [Calculating selected years](@ref selected_years) for details.
 
   * **Minimum and maximum annual transmission between nodes:** Added two parameters, [`MinAnnualTransmissionNodes`](@ref MinAnnualTransmissionNodes) and [`MaxAnnualTransmissionNodes`](@ref MaxAnnualTransmissionNodes), that allow you to specify the minimum and maximum amount of a fuel transmitted from one node to another in a year (i.e., delivered to the receiving node via transmission from the sending node). Among other things, these parameters can be used to recreate historical transmission and simulate power purchase agreements.
+
+  * **Use of nodal fuels by non-nodal technologies:** Updated NEMO so technologies that are not simulated at the nodal level (i.e., that are not assigned to nodes in [`NodalDistributionTechnologyCapacity`](@ref NodalDistributionTechnologyCapacity)) can use fuels for which [transmission modeling is enabled](@ref TransmissionModelingEnabled). Any such use is distributed to nodes using [`NodalDistributionDemand`](@ref NodalDistributionDemand) and is reflected in the following variables: [vrateofusebytechnologybymodenn](@ref vrateofusebytechnologybymodenn), [vrateofusebytechnologynn](@ref vrateofusebytechnologynn), [vrateofusenn](@ref vrateofusenn), [vusenn](@ref vusenn), [vuseannualnn](@ref vuseannualnn), [vrateofuse](@ref vrateofuse), [vusebytechnology](@ref vusebytechnology), and [vusebytechnologyannual](@ref vusebytechnologyannual).
+
+!!! note
+    This enhancement is necessary for compatibility with LEAP versions 2024.1.0.1 and higher. If you are using NEMO with such a version of LEAP, you should upgrade to NEMO 2.1.
   
 ## Version 2.0
 

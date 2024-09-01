@@ -30,6 +30,10 @@ if !@isdefined calculatescenario_quiet  # quiet argument passed to calculatescen
     calculatescenario_quiet = true
 end
 
+if !@isdefined dbfile_path  # Path to database files for tests
+    dbfile_path = @__DIR__
+end
+
 """Helper function for deleting a file after Julia has been told to release it (e.g.,
     with finalize(db); db = nothing; GC.gc())."""
 function delete_file(path::String, max_del_attempts::Int)

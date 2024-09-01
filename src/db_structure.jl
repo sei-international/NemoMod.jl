@@ -632,24 +632,25 @@ function create_temp_tables(db::SQLite.DB)
         SQLite.DBInterface.execute(db, "DROP TABLE IF EXISTS nodalstorage")
 
         # nodalstorage is used as a filter in nodal and non-nodal storage modeling
+        # Selects storage in NodalDistributionStorageCapacity that has nodal charging and discharging technologies
         SQLite.DBInterface.execute(db, "create table nodalstorage as
-        select distinct n.r as r, nsc.n as n, nsc.s as s, nsc.y as y, nsc.val as val
+        select DISTINCT n.r, nsc.n, nsc.s, nsc.y, nsc.val 
         from NodalDistributionStorageCapacity_def nsc, node n,
-            NodalDistributionTechnologyCapacity_def ntc, TransmissionModelingEnabled tme,
-            (select r, t, f, m, y from OutputActivityRatio_def
-            where val <> 0
-            union
-            select r, t, f, m, y from InputActivityRatio_def
-            where val <> 0) ar,
-            (select r, t, s, m from TechnologyFromStorage_def where val = 1
-            union
-            select r, t, s, m from TechnologyToStorage_def where val = 1) ts
-        where nsc.val > 0
+        TechnologyToStorage_def tts, TechnologyFromStorage_def tfs,
+        NodalDistributionTechnologyCapacity_def charge_ntc, TransmissionModelingEnabled charge_tme,
+        NodalDistributionTechnologyCapacity_def discharge_ntc, TransmissionModelingEnabled discharge_tme,
+        OutputActivityRatio_def oar, InputActivityRatio_def iar
+        WHERE
+        nsc.val > 0
         and n.val = nsc.n
-        and ntc.val > 0 and ntc.n = nsc.n and ntc.t = ar.t and ntc.y = nsc.y
-        and tme.r = n.r and tme.f = ar.f and tme.y = nsc.y
-        and ar.r = n.r and ar.y = nsc.y
-        and ts.r = n.r and ts.t = ntc.t and ts.s = nsc.s and ts.m = ar.m")
+        and tts.r = n.r and tts.s = nsc.s and tts.val = 1
+        and tfs.r = n.r and tfs.s = nsc.s and tfs.val = 1
+        and charge_ntc.n = nsc.n and charge_ntc.y = nsc.y and charge_ntc.val > 0
+        and charge_tme.r = n.r and charge_tme.y = nsc.y and charge_tme.type = discharge_tme.type
+        and discharge_ntc.n = nsc.n and discharge_ntc.y = nsc.y and discharge_ntc.val > 0
+        and discharge_tme.r = n.r and discharge_tme.y = nsc.y
+        and iar.r = n.r and iar.t = tts.t and iar.t = charge_ntc.t and iar.f = charge_tme.f and iar.m = tts.m and iar.y = nsc.y and iar.val <> 0
+        and oar.r = n.r and oar.t = tfs.t and oar.t = discharge_ntc.t and oar.f = discharge_tme.f and oar.m = tfs.m and oar.y = nsc.y and oar.val <> 0")
 
         SQLite.DBInterface.execute(db, "COMMIT")
         # END: SQLite transaction.

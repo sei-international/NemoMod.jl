@@ -912,38 +912,56 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     return_val["queryvrateofusebytechnologybymodenn"] = (dbpath, "select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y, cast(iar.val as real) as iar
     from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, InputActivityRatio_def iar
     left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
-    where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.m = m.val and iar.y = y.val
-    and iar.val <> 0
+	left join (select n.r, ntc.t, ntc.y from NodalDistributionTechnologyCapacity_def ntc, node n where ntc.n = n.val and ntc.val > 0) ntcr 
+		on ntcr.r = r.val and ntcr.t = t.val and ntcr.y = y.val
+    where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.m = m.val and iar.y = y.val and iar.val <> 0
     and ys.y = y.val
-    and tme.id is null
+    and (tme.id is null or (tme.id is not null and ntcr.t is null))
     $(restrictyears ? "and y.val in" * inyears : "")
     order by r.val, ys.l, t.val, f.val, y.val")
 
-    return_val["queryvrateofusebytechnologynn"] = (dbpath, "select
-    r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
-    from region r, YearSplit_def ys, technology t, fuel f, year y,
-    (select distinct r, t, f, y from InputActivityRatio_def where val <> 0 $(restrictyears ? "and y in" * inyears : "")) iar
+    return_val["queryvrateofusebytechnologynn"] = (dbpath, "with iar as (select distinct r, t, f, y from InputActivityRatio_def where val <> 0 $(restrictyears ? "and y in" * inyears : ""))
+    select r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
+    from region r, YearSplit_def ys, technology t, fuel f, year y, iar
     left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
     where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
     and ys.y = y.val
     and tme.id is null
-    order by r.val, ys.l, f.val, y.val")
+	union all
+	select r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
+    from region r, YearSplit_def ys, technology t, fuel f, year y, TransmissionModelingEnabled tme, iar
+	left join (select n.r, ntc.t, ntc.y from NodalDistributionTechnologyCapacity_def ntc, node n where ntc.n = n.val and ntc.val > 0) ntcr 
+		on ntcr.r = r.val and ntcr.t = t.val and ntcr.y = y.val
+	where 
+	ys.y = y.val
+	and tme.r = r.val and tme.f = f.val and tme.y = y.val
+	and iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
+	and ntcr.t is null
+order by r.val, ys.l, f.val, y.val")
 
-    return_val["queryvusebytechnologyannual"] = (dbpath, "select * from (
-    select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l,
-    cast(ys.val as real) as ys
-    from region r, technology t, fuel f, year y, YearSplit_def ys,
-    (select distinct r, t, f, y from InputActivityRatio_def where val <> 0 $(restrictyears ? "and y in" * inyears : "")) iar
+    return_val["queryvusebytechnologyannual"] = (dbpath, "with iar as (select distinct r, t, f, y from InputActivityRatio_def where val <> 0 $(restrictyears ? "and y in" * inyears : ""))
+    select * from (
+    select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l, cast(ys.val as real) as ys
+    from region r, technology t, fuel f, year y, YearSplit_def ys, iar
     left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
     where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
     and ys.y = y.val
     and tme.id is null
+	union all
+	select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l, cast(ys.val as real) as ys
+    from region r, technology t, fuel f, year y, YearSplit_def ys, iar, TransmissionModelingEnabled tme
+	left join (select n.r, ntc.t, ntc.y from NodalDistributionTechnologyCapacity_def ntc, node n where ntc.n = n.val and ntc.val > 0) ntcr 
+		on ntcr.r = r.val and ntcr.t = t.val and ntcr.y = y.val
+	where 
+	ys.y = y.val
+	and tme.r = r.val and tme.f = f.val and tme.y = y.val
+	and iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
+	and ntcr.t is null
     union all
     select n.r as r, ntc.t as t, iar.f as f, ntc.y as y, ntc.n as n, ys.l as l,
     cast(ys.val as real) as ys
     from NodalDistributionTechnologyCapacity_def ntc, NODE n,
-    TransmissionModelingEnabled tme, YearSplit_def ys,
-    (select distinct r, t, f, y from InputActivityRatio_def where val <> 0 $(restrictyears ? "and y in" * inyears : "")) iar
+    TransmissionModelingEnabled tme, YearSplit_def ys, iar
     where ntc.val > 0
     and ntc.n = n.val
     and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y

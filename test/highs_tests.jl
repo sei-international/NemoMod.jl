@@ -20,8 +20,7 @@ if @isdefined HiGHS
     @info "Testing scenario solution with HiGHS."
 
     @testset "Solving storage_test with HiGHS" begin
-        dbfile = joinpath(@__DIR__, "storage_test.sqlite")
-        #dbfile = "c:/temp/storage_test.sqlite"
+        dbfile = joinpath(dbfile_path, "storage_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
@@ -156,8 +155,7 @@ if @isdefined HiGHS
     end  # "Solving storage_test with HiGHS"
 
     @testset "Solving storage_transmission_test with HiGHS" begin
-        dbfile = joinpath(@__DIR__, "storage_transmission_test.sqlite")
-        #dbfile = "c:/temp/storage_transmission_test.sqlite"
+        dbfile = joinpath(dbfile_path, "storage_transmission_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Disable JuMP bridging as it has an outsized performance penalty for HiGHS
@@ -269,8 +267,7 @@ if @isdefined HiGHS
     end  # "Solving storage_transmission_test with HiGHS"
 
     @testset "Solving ramp_test with HiGHS" begin
-        dbfile = joinpath(@__DIR__, "ramp_test.sqlite")
-        #dbfile = "c:/temp/ramp_test.sqlite"
+        dbfile = joinpath(dbfile_path, "ramp_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         @info "Running HiGHS test 1 on ramp_test.sqlite: default outputs."
