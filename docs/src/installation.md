@@ -82,6 +82,7 @@ When you [calculate a scenario](@ref scenario_calc) in NEMO, the tool formulates
     * Model a [transmission line](@ref transmissionline) with a non-zero variable cost (creates a MILP problem if transmission modeling is enabled)
     * Model a transmission line whose efficiency is less than 1 using [transmission modeling type 3](@ref TransmissionModelingEnabled) (creates a MILP problem)
     * Run a direct current optimized power flow simulation using [transmission modeling type 1](@ref TransmissionModelingEnabled) (creates a problem with a quadratic term)
+    * Use the [minimum annual transmission between nodes](@ref MinAnnualTransmissionNodes) parameter or [maximum annual transmission between nodes](@ref MaxAnnualTransmissionNodes) parameter (creates a MILP problem)
     * Set the `forcemip` argument for `calculatescenario` to `true` (creates a MILP problem)
 
 Optimization operations in NEMO are carried out with version 1.2.0 of the [JuMP](https://github.com/jump-dev/JuMP.jl) package. In principle, NEMO is compatible with any solver that can be called through JuMP, but you must ensure the selected solver can handle the problem you're presenting (LP/MILP/quadratic). For a list of solvers that work with JuMP, see [the JuMP documentation](https://jump.dev/JuMP.jl/v1.2.0/installation/#Supported-solvers).
