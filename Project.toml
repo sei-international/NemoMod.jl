@@ -1,7 +1,7 @@
 name = "NemoMod"
 uuid = "a3c327a0-d2f0-11e8-37fd-d12fd35c3c72"
 authors = ["Jason Veysey <jason.veysey@sei.org>"]
-version = "2.1.0"
+version = "2.2.0"
 
 [deps]
 Cbc = "9961bab8-2fa3-5c5a-9d89-47fab24efd76"

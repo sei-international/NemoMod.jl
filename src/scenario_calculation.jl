@@ -17,7 +17,7 @@
         continuoustransmission::Bool = false,
         forcemip::Bool = false, startvalsdbpath::String = "",
         startvalsvars::String = "", precalcresultspath::String = "",
-        quiet::Bool = false
+        traperrors::Bool = true, quiet::Bool = false
     )
 
 Calculates a scenario specified in a scenario database. Returns a `MathOptInterface.TerminationStatusCode` indicating
@@ -69,6 +69,8 @@ the termination status reported by the solver used for the calculation (e.g., `O
     previously calculated scenario databases, in which case NEMO copies any file in the directory
     with the same name as the `dbpath` database. The intent of the argument is to short-circuit
     calculations in situations where valid results already exist.
+- `traperrors::Bool`: Indicates whether errors should be trapped and communicated with a standard 
+    message that directs users to report the problem to the NEMO team.
 - `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to
     `STDOUT`).
 """
@@ -86,15 +88,19 @@ function calculatescenario(
     startvalsdbpath::String = "",
     startvalsvars::String = "",
     precalcresultspath::String = "",
+    traperrors::Bool = true,
     quiet::Bool = false)
 
     try
-        modelscenario(dbpath; jumpmodel=jumpmodel, calcyears=calcyears, varstosave=varstosave, restrictvars=restrictvars, reportzeros=reportzeros,
-            continuoustransmission=continuoustransmission, forcemip=forcemip, startvalsdbpath=startvalsdbpath, startvalsvars=startvalsvars,
-            precalcresultspath=precalcresultspath, quiet=quiet)
+        modelscenario(dbpath; jumpmodel=jumpmodel, calcyears=calcyears, varstosave=varstosave, 
+        restrictvars=restrictvars, reportzeros=reportzeros, continuoustransmission=continuoustransmission, forcemip=forcemip, startvalsdbpath=startvalsdbpath, startvalsvars=startvalsvars, precalcresultspath=precalcresultspath, quiet=quiet)
     catch e
-        println("NEMO encountered an error with the following message: " * sprint(showerror, e) * ".")
-        println("To report this issue to the NEMO team, please submit an error report at https://leap.sei.org/support/. Please include in the report a list of steps to reproduce the error and the error message.")
+        if traperrors
+            println("NEMO encountered an error with the following message: " * sprint(showerror, e) * ".")
+            println("To report this issue to the NEMO team, please submit an error report at https://leap.sei.org/support/. Please include in the report a list of steps to reproduce the error and the error message.")
+        else
+            rethrow()
+        end
     end
 end  # calculatescenario()
 
@@ -2281,8 +2287,8 @@ if transmissionmodeling
 
             # Constraints to populate vtransmissionbylineneg - indicates whether corresponding vtransmissionbyline <= 0
             # Creation limited to cases where vtransmissionbylineneg is necessary in order to improve performance
-            if (!ismissing(row[:eff]) && row[:eff] < 1 && type == 3) || vc > 0 || !ismissing(row[:n1_mtn]) || !ismissing(row[:n2_mtn]) || !ismissing(row[:n1_mxtn]) || !ismissing(row[:n2_mxtn]) 
-                push!(tr7_flowneg, @build_constraint(vtransmissionbyline[tr,l,f,y] >= (-row[:maxflow] - 0.000001) * vtransmissionbylineneg[tr,l,f,y] + 0.000001))
+            if (!ismissing(row[:eff]) && row[:eff] < 1 && type == 3) || vc > 0 || !ismissing(row[:n1_mtn]) || !ismissing(row[:n2_mtn]) || !ismissing(row[:n1_mxtn]) || !ismissing(row[:n2_mxtn])
+                push!(tr7_flowneg, @build_constraint(vtransmissionbyline[tr,l,f,y] >= (-row[:maxflow] - 0.0001) * vtransmissionbylineneg[tr,l,f,y] + 0.0001))
                 push!(tr7_flowneg, @build_constraint(vtransmissionbyline[tr,l,f,y] <= row[:maxflow] * (1 - vtransmissionbylineneg[tr,l,f,y])))
             end
 

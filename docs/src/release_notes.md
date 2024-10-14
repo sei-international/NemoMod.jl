@@ -5,6 +5,10 @@ CurrentModule = NemoMod
 
 This page highlights key changes in NEMO since its initial public release. For a full history of NEMO releases, including the code for each version, see the [Releases page on NEMO's GitHub site](https://github.com/sei-international/NemoMod.jl/releases).
 
+## Version 2.2
+
+  * **Full error tracing when calculating a scenario:** Added a `traperrors` argument to [`calculatescenario`](@ref scenario_calc) (and [`writescenariomodel`](@ref writescenariomodel)). By default, `traperrors` is `true`, which means any errors in `calculatescenario`/`writescenariomodel` are caught and communicated in a standard error message. The message contains an abbreviated description of the underlying problem and directs users to report the problem to the NEMO team. If `traperrors` is `false`, errors are not caught, and Julia reports them with full error tracing.
+
 ## Version 2.1
 
   * **Enabled model period technology activity limits when calculating selected years:** Revised NEMO to allow the use of model period technology activity limits ([`TotalTechnologyModelPeriodActivityUpperLimit`](@ref TotalTechnologyModelPeriodActivityUpperLimit) and [`TotalTechnologyModelPeriodActivityLowerLimit`](@ref TotalTechnologyModelPeriodActivityLowerLimit)) when calculating selected years. See [Calculating selected years](@ref selected_years) for details.

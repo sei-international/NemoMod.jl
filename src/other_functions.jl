@@ -1201,7 +1201,7 @@ end  # run_qry(qtpl::Tuple{String, String, String})
             vusenn, vtotaldiscountedcost",
         restrictvars::Bool = true, continuoustransmission::Bool = false,
         forcemip::Bool = false, startvalsdbpath::String = "",
-        startvalsvars::String = "", quiet::Bool = false,
+        startvalsvars::String = "", traperrors::Bool = true, quiet::Bool = false,
         writefilename::String = "nemomodel.bz2",
         writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS
     )
@@ -1229,6 +1229,7 @@ function writescenariomodel(
     forcemip = false,
     startvalsdbpath::String = "",
     startvalsvars::String = "",
+    traperrors::Bool = true,
     quiet::Bool = false,
     writefilename::String = "nemomodel.bz2",
     writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS
@@ -1240,8 +1241,12 @@ function writescenariomodel(
             startvalsvars=startvalsvars, quiet=quiet, writemodel=true, writefilename=writefilename,
             writefileformat=writefileformat)
     catch e
-        println("NEMO encountered an error with the following message: " * sprint(showerror, e) * ".")
-        println("To report this issue to the NEMO team, please submit an error report at https://leap.sei.org/support/. Please include in the report a list of steps to reproduce the error and the error message.")
+        if traperrors
+            println("NEMO encountered an error with the following message: " * sprint(showerror, e) * ".")
+            println("To report this issue to the NEMO team, please submit an error report at https://leap.sei.org/support/. Please include in the report a list of steps to reproduce the error and the error message.")
+        else
+            rethrow()
+        end
     end
 end  # writescenariomodel
 
