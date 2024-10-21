@@ -9,6 +9,12 @@ NEMO provides several functions intended for end users - these are documented be
 
 See [Calculating a scenario](@ref scenario_calc).
 
+## convertscenariounits
+
+```@docs
+convertscenariounits
+```
+
 ## createnemodb
 
 ```@docs

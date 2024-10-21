@@ -7,6 +7,8 @@ This page highlights key changes in NEMO since its initial public release. For a
 
 ## Version 2.2
 
+  * **Unit of measure conversions:** Added a function for converting units of measure in scenario databases ([`convertscenariounits`](@ref convertscenariounits)). 
+
   * **Full error tracing when calculating a scenario:** Added a `traperrors` argument to [`calculatescenario`](@ref scenario_calc) (and [`writescenariomodel`](@ref writescenariomodel)). By default, `traperrors` is `true`, which means any errors in `calculatescenario`/`writescenariomodel` are caught and communicated in a standard error message. The message contains an abbreviated description of the underlying problem and directs users to report the problem to the NEMO team. If `traperrors` is `false`, errors are not caught, and Julia reports them with full error tracing.
 
 ## Version 2.1

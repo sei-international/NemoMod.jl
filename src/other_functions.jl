@@ -1320,3 +1320,108 @@ function setstartvalues(jumpmodel::JuMP.Model, seeddbpath::String, quiet::Bool =
 
     logmsg("Set variable start values using values in $(normpath(seeddbpath)).", quiet)
 end  # setstartvalues(jumpmodel::JuMP.Model, seeddbpath::String, quiet::Bool = false; selectedvars::Array{String,1} = Array{String,1}())
+
+"""
+    convertscenariounits(
+        path::String; 
+        energy_multiplier::Float64 = 1.0, 
+        power_multiplier::Float64 = 1.0, 
+        cost_multiplier::Float64 = 1.0, 
+        emissions_multiplier::Float64 = 1.0, 
+        quiet::Bool = false
+    )
+
+Converts units of measure in the scenario database at `path`. Quantities denominated in energy units are
+multiplied by `energy_multiplier`, quantities denominated in power units are multiplied by `power_multiplier`, 
+quantities denominated in cost units are multiplied by `cost_multiplier`, and quantities denominated in 
+emissions units are multiplied by `emissions_multiplier`. The `quiet` argument suppresses non-essential status 
+messages.
+
+This function assumes that consistent energy and power units are used across regions, and it converts both
+parameter and variable tables. It also converts default values in the `DefaultParams` table.
+"""
+function convertscenariounits(path::String; energy_multiplier::Float64 = 1.0, power_multiplier::Float64 = 1.0, 
+    cost_multiplier::Float64 = 1.0, emissions_multiplier::Float64 = 1.0, quiet::Bool = false)
+
+    # Open SQLite database
+    local db::SQLite.DB = SQLite.DB(path)
+    logmsg("Opened database at $(path).", quiet)
+
+    # BEGIN: Define arrays of tables requiring simple unit conversions.
+    energy_tables::Array{String, 1} = ["AccumulatedAnnualDemand", "MaxAnnualTransmissionNodes", "MinAnnualTransmissionNodes", "ResidualStorageCapacity", "SpecifiedAnnualDemand", "StorageMaxChargeRate", "StorageMaxDischargeRate", "TotalAnnualMaxCapacityStorage", "TotalAnnualMaxCapacityInvestmentStorage", "TotalAnnualMinCapacityStorage", "TotalAnnualMinCapacityInvestmentStorage", "TotalTechnologyAnnualActivityLowerLimit", "TotalTechnologyAnnualActivityUpperLimit", "TotalTechnologyModelPeriodActivityLowerLimit", "TotalTechnologyModelPeriodActivityUpperLimit", "TransmissionCapacityToActivityUnit", "vaccumulatednewstoragecapacity", "vdemandannualnn", "vdemandannualnodal", "vdemandnn", "vdemandnodal", "vgenerationannualnn", "vgenerationannualnodal", "vnewstoragecapacity", "vproductionannualnn", "vproductionannualnodal", "vproductionbytechnology", "vproductionnn", "vproductionnodal", "vrateofactivity", "vrateofactivitynodal", "vrateofdemandnn", "vrateofproduction", "vrateofproductionbytechnologybymodenn", "vrateofproductionbytechnologynn", "vrateofproductionbytechnologynn", "vrateofproductionbytechnologynodal", "vrateofproductionnn", "vrateofproductionnodal", "vrateofstoragechargenn", "vrateofstoragechargenodal", "vrateofstoragedischargenn", "vrateofstoragedischargenodal", "vrateoftotalactivity", "vrateoftotalactivitynodal", "vrateofuse", "vrateofusebytechnologybymodenn", "vrateofusebytechnologynn", "vrateofusebytechnologynodal", "vrateofusenn", "vrateofusenodal", "vregenerationannualnn", "vregenerationannualnodal", "vstorageleveltsendnn", "vstorageleveltsendnodal", "vstorageleveltsgroup1endnn", "vstorageleveltsgroup1endnodal", "vstorageleveltsgroup1startnn", "vstorageleveltsgroup1startnodal", "vstorageleveltsgroup2endnn", "vstorageleveltsgroup2endnodal", "vstorageleveltsgroup2startnn", "vstorageleveltsgroup2startnodal", "vstoragelevelyearendnn", "vstoragelevelyearendnodal", "vstoragelowerlimit", "vstorageupperlimit", "vtotalcapacityinreservemargin", "vtotaltechnologyannualactivity", "vtotaltechnologyannualactivity", "vtotaltechnologymodelperiodactivity", "vtrade", "vtradeannual", "vtransmissionannual", "vtransmissionenergyreceived", "vtransmissionlosses", "vuseannualnn", "vuseannualnodal", "vusebytechnology", "vusebytechnologyannual", "vusenn", "vusenodal"]  # Tables with values in energy unit
+    power_tables::Array{String, 1} = ["CapacityOfOneTechnologyUnit", "ResidualCapacity", "TotalAnnualMaxCapacity", "TotalAnnualMaxCapacityInvestment", "TotalAnnualMinCapacity", "TotalAnnualMinCapacityInvestment", "vaccumulatednewcapacity", "vnewcapacity", "vtotalcapacityannual"]  # Tables with values in power unit
+    emissions_tables::Array{String, 1} = ["AnnualEmissionLimit", "AnnualExogenousEmission", "ModelPeriodEmissionLimit", "ModelPeriodExogenousEmission", "vannualemissions", "vannualtechnologyemission", "vannualtechnologyemissionbymode", "vmodelperiodemissions"]  # Tables with values in emissions unit
+    cost_tables::Array{String, 1} = ["vannualfixedoperatingcost", "vannualtechnologyemissionpenaltybyemission", "vannualtechnologyemissionspenalty", "vannualvariableoperatingcost", "vcapitalinvestment", "vcapitalinvestmentstorage", "vcapitalinvestmenttransmission", "vdiscountedcapitalinvestment", "vdiscountedcapitalinvestmentstorage", "vdiscountedcapitalinvestmenttransmission", "vdiscountedoperatingcost", "vdiscountedoperatingcosttransmission", "vdiscountedsalvagevalue", "vdiscountedsalvagevaluestorage", "vdiscountedsalvagevaluetransmission", "vdiscountedtechnologyemissionspenalty", "vfinancecost", "vfinancecoststorage", "vfinancecosttransmission", "vmodelperiodcostbyregion", "voperatingcost", "voperatingcosttransmission", "vsalvagevalue", "vsalvagevaluestorage", "vsalvagevaluetransmission", "vtotaldiscountedcost", "vtotaldiscountedcostbytechnology", "vtotaldiscountedstoragecost", "vtotaldiscountedtransmissioncostbyregion", "vvariablecosttransmission", "vvariablecosttransmissionbyts"]  # Tables with values in cost unit
+    # END: Define arrays of tables requiring simple unit conversions.
+
+    # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
+    try
+        # BEGIN: SQLite transaction.
+        SQLite.DBInterface.execute(db, "BEGIN")
+
+        # BEGIN: Process tables requiring simple unit conversions.
+        # Restrict operations to existing tables to avoid database version issues
+        for r in SQLite.DBInterface.execute(db,"select tbl_name from sqlite_master where type ='table' and name in (" * "'" * join(energy_tables, "','") * "'" * ")")
+            SQLite.DBInterface.execute(db, "update $(r[:tbl_name]) set val = val * $(string(energy_multiplier))")
+            SQLite.DBInterface.execute(db, "update DefaultParams set val = val * $(string(energy_multiplier)) where tablename = '$(r[:tbl_name])'")
+        end
+
+        for r in SQLite.DBInterface.execute(db,"select tbl_name from sqlite_master where type ='table' and name in (" * "'" * join(power_tables, "','") * "'" * ")")
+            SQLite.DBInterface.execute(db, "update $(r[:tbl_name]) set val = val * $(string(power_multiplier))")
+            SQLite.DBInterface.execute(db, "update DefaultParams set val = val * $(string(power_multiplier)) where tablename = '$(r[:tbl_name])'")
+        end
+
+        for r in SQLite.DBInterface.execute(db,"select tbl_name from sqlite_master where type ='table' and name in (" * "'" * join(emissions_tables, "','") * "'" * ")")
+            SQLite.DBInterface.execute(db, "update $(r[:tbl_name]) set val = val * $(string(emissions_multiplier))")
+            SQLite.DBInterface.execute(db, "update DefaultParams set val = val * $(string(emissions_multiplier)) where tablename = '$(r[:tbl_name])'")
+        end
+
+        for r in SQLite.DBInterface.execute(db,"select tbl_name from sqlite_master where type ='table' and name in (" * "'" * join(cost_tables, "','") * "'" * ")")
+            SQLite.DBInterface.execute(db, "update $(r[:tbl_name]) set val = val * $(string(cost_multiplier))")
+            SQLite.DBInterface.execute(db, "update DefaultParams set val = val * $(string(cost_multiplier)) where tablename = '$(r[:tbl_name])'")
+        end
+        # END: Process tables requiring simple unit conversions.
+
+        # BEGIN: Process tables requiring complex unit conversions.
+        # CapacityToActivityUnit: energy / (power * year)
+        if !SQLite.done(SQLite.DBInterface.execute(db, "select tbl_name from sqlite_master where type ='table' and name = 'CapacityToActivityUnit'"))
+            SQLite.DBInterface.execute(db, "update CapacityToActivityUnit set val = val * $(string(energy_multiplier / power_multiplier))")
+            SQLite.DBInterface.execute(db, "update DefaultParams set val = val * $(string(energy_multiplier / power_multiplier)) where tablename = 'CapacityToActivityUnit'")
+        end
+
+        # CapitalCost and FixedCost: cost/power
+        for r in SQLite.DBInterface.execute(db,"select tbl_name from sqlite_master where type ='table' and name in ('CapitalCost', 'FixedCost')")
+            SQLite.DBInterface.execute(db, "update $(r[:tbl_name]) set val = val * $(string(cost_multiplier / power_multiplier))")
+            SQLite.DBInterface.execute(db, "update DefaultParams set val = val * $(string(cost_multiplier / power_multiplier)) where tablename = '$(r[:tbl_name])'")
+        end
+
+        # CapitalCostStorage and VariableCost: cost/energy
+        for r in SQLite.DBInterface.execute(db,"select tbl_name from sqlite_master where type ='table' and name in ('CapitalCostStorage', 'VariableCost')")
+            SQLite.DBInterface.execute(db, "update $(r[:tbl_name]) set val = val * $(string(cost_multiplier / energy_multiplier))")
+            SQLite.DBInterface.execute(db, "update DefaultParams set val = val * $(string(cost_multiplier / energy_multiplier)) where tablename = '$(r[:tbl_name])'")
+        end
+
+        # EmissionActivityRatio: emissions/energy
+        if !SQLite.done(SQLite.DBInterface.execute(db, "select tbl_name from sqlite_master where type ='table' and name = 'EmissionActivityRatio'"))
+            SQLite.DBInterface.execute(db, "update EmissionActivityRatio set val = val * $(string(emissions_multiplier / energy_multiplier))")
+            SQLite.DBInterface.execute(db, "update DefaultParams set val = val * $(string(emissions_multiplier / energy_multiplier)) where tablename = 'EmissionActivityRatio'")
+        end
+
+        # EmissionsPenalty: cost/emissions
+        if !SQLite.done(SQLite.DBInterface.execute(db, "select tbl_name from sqlite_master where type ='table' and name = 'EmissionsPenalty'"))
+            SQLite.DBInterface.execute(db, "update EmissionsPenalty set val = val * $(string(cost_multiplier / emissions_multiplier))")
+            SQLite.DBInterface.execute(db, "update DefaultParams set val = val * $(string(cost_multiplier / emissions_multiplier)) where tablename = 'EmissionsPenalty'")
+        end
+        # END: Process tables requiring complex unit conversions.
+
+        SQLite.DBInterface.execute(db, "COMMIT")
+        # END: SQLite transaction.
+
+        logmsg("Converted units in database at $(path).", quiet)
+    catch
+        # Rollback transaction and rethrow error
+        SQLite.DBInterface.execute(db, "ROLLBACK")
+        rethrow()
+    end
+    # END: Wrap database operations in try-catch block to allow rollback on error.
+end  # convertscenariounits(path::String; energy_multiplier::Float64 = 1.0, power_multiplier::Float64 = 1.0, cost_multiplier::Float64 = 1.0, emissions_multiplier::Float64 = 1.0, quiet::Bool = false)

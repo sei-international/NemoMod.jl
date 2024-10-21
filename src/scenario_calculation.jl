@@ -872,7 +872,7 @@ if transmissionmodeling
     @variable(jumpmodel, vdiscountedcapitalinvestmenttransmission[stransmission, syear] >= 0)
     modelvarindices["vdiscountedcapitalinvestmenttransmission"] = (vdiscountedcapitalinvestmenttransmission, ["tr","y"])
     @variable(jumpmodel, vsalvagevaluetransmission[stransmission, syear] >= 0)
-    modelvarindices["vsalvagevaluetransmissionvsalvagevaluetransmission"] = (vsalvagevaluetransmission, ["tr","y"])
+    modelvarindices["vsalvagevaluetransmission"] = (vsalvagevaluetransmission, ["tr","y"])
     @variable(jumpmodel, vdiscountedsalvagevaluetransmission[stransmission, syear] >= 0)
     modelvarindices["vdiscountedsalvagevaluetransmission"] = (vdiscountedsalvagevaluetransmission, ["tr","y"])
 
