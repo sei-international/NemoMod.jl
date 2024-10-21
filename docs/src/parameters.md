@@ -1096,7 +1096,7 @@ Indicator of whether [region](@ref region) `r` can trade a [fuel](@ref fuel) wit
 
 ## [Transmission availability factor](@id TransmissionAvailabilityFactor)
 
-Fraction of time a [transmission line](@ref TransmissionLine) is available to operate.
+Fraction of time a [transmission line](@ref transmissionline) is available to operate.
 
 #### Scenario database
 
