@@ -2315,16 +2315,16 @@ if transmissionmodeling
                 if !ismissing(row[:eff]) && row[:eff] < 1
                     # Constraints to populate vtransmissionlosses - losses (as a negative number, in model's energy unit) from perspective of node receiving energy (0 for nodes sending energy)
                     push!(tr8_losses, @build_constraint(vtransmissionlosses[n1,tr,l,f,y] - vtransmissionbyline[tr,l,f,y] * ys * tcta * (1 - row[:eff])
-                        <= (1 - vtransmissionbylineneg[tr,l,f,y]) * 500000))
+                        <= (1 - vtransmissionbylineneg[tr,l,f,y]) * 50000))
                     push!(tr8_losses, @build_constraint(vtransmissionlosses[n1,tr,l,f,y] - vtransmissionbyline[tr,l,f,y] * ys * tcta * (1 - row[:eff])
-                        >= (vtransmissionbylineneg[tr,l,f,y] - 1) * 500000))
+                        >= (vtransmissionbylineneg[tr,l,f,y] - 1) * 50000))
                     push!(tr8_losses, @build_constraint(vtransmissionlosses[n1,tr,l,f,y] <= vtransmissionbylineneg[tr,l,f,y] * row[:maxflow] * ys * tcta * (1 - row[:eff])))
                     push!(tr8_losses, @build_constraint(vtransmissionlosses[n1,tr,l,f,y] >= -vtransmissionbylineneg[tr,l,f,y] * row[:maxflow] * ys * tcta * (1 - row[:eff])))
 
                     push!(tr8_losses, @build_constraint(-vtransmissionlosses[n2,tr,l,f,y] - vtransmissionbyline[tr,l,f,y] * ys * tcta * (1 - row[:eff])
-                        <= (1 - (1-vtransmissionbylineneg[tr,l,f,y])) * 500000))
+                        <= (1 - (1-vtransmissionbylineneg[tr,l,f,y])) * 50000))
                     push!(tr8_losses, @build_constraint(-vtransmissionlosses[n2,tr,l,f,y] - vtransmissionbyline[tr,l,f,y] * ys * tcta * (1 - row[:eff])
-                        >= ((1-vtransmissionbylineneg[tr,l,f,y]) - 1) * 500000))
+                        >= ((1-vtransmissionbylineneg[tr,l,f,y]) - 1) * 50000))
                     push!(tr8_losses, @build_constraint(vtransmissionlosses[n2,tr,l,f,y] <= (1-vtransmissionbylineneg[tr,l,f,y]) * row[:maxflow] * ys * tcta * (1 - row[:eff])))
                     push!(tr8_losses, @build_constraint(vtransmissionlosses[n2,tr,l,f,y] >= -(1-vtransmissionbylineneg[tr,l,f,y]) * row[:maxflow] * ys * tcta * (1 - row[:eff])))
                 end
@@ -2334,26 +2334,26 @@ if transmissionmodeling
             # Creation limited to cases where vtransmissionenergyreceived is necessary in order to improve performance
             if !ismissing(row[:n1_mtn]) || !ismissing(row[:n1_mxtn])
                 # Energy received at n1
-                push!(tr9_energyreceived, @build_constraint(-vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier <= vtransmissionenergyreceived[tr,l,f,y,n1] + 500000 * (1-vtransmissionbylineneg[tr,l,f,y])))
-                push!(tr9_energyreceived, @build_constraint(vtransmissionenergyreceived[tr,l,f,y,n1] <= -vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier + 500000 * (1-vtransmissionbylineneg[tr,l,f,y])))
-                push!(tr9_energyreceived, @build_constraint(vtransmissionenergyreceived[tr,l,f,y,n1] <= 500000 * vtransmissionbylineneg[tr,l,f,y]))
-                push!(tr9_energyreceived, @build_constraint(-500000 * vtransmissionbylineneg[tr,l,f,y] <= vtransmissionenergyreceived[tr,l,f,y,n1]))
+                push!(tr9_energyreceived, @build_constraint(-vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier <= vtransmissionenergyreceived[tr,l,f,y,n1] + 50000 * (1-vtransmissionbylineneg[tr,l,f,y])))
+                push!(tr9_energyreceived, @build_constraint(vtransmissionenergyreceived[tr,l,f,y,n1] <= -vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier + 50000 * (1-vtransmissionbylineneg[tr,l,f,y])))
+                push!(tr9_energyreceived, @build_constraint(vtransmissionenergyreceived[tr,l,f,y,n1] <= 50000 * vtransmissionbylineneg[tr,l,f,y]))
+                push!(tr9_energyreceived, @build_constraint(-50000 * vtransmissionbylineneg[tr,l,f,y] <= vtransmissionenergyreceived[tr,l,f,y,n1]))
             end
 
             if !ismissing(row[:n2_mtn]) || !ismissing(row[:n2_mxtn])
                 # Energy received at n2
-                push!(tr9_energyreceived, @build_constraint(vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier <= vtransmissionenergyreceived[tr,l,f,y,n2] + 500000 * (1-(1-vtransmissionbylineneg[tr,l,f,y]))))
-                push!(tr9_energyreceived, @build_constraint(vtransmissionenergyreceived[tr,l,f,y,n2] <= vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier + 500000 * (1-(1-vtransmissionbylineneg[tr,l,f,y]))))
-                push!(tr9_energyreceived, @build_constraint(vtransmissionenergyreceived[tr,l,f,y,n2] <= 500000 * (1-vtransmissionbylineneg[tr,l,f,y])))
-                push!(tr9_energyreceived, @build_constraint(-500000 * (1-vtransmissionbylineneg[tr,l,f,y]) <= vtransmissionenergyreceived[tr,l,f,y,n2]))
+                push!(tr9_energyreceived, @build_constraint(vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier <= vtransmissionenergyreceived[tr,l,f,y,n2] + 50000 * (1-(1-vtransmissionbylineneg[tr,l,f,y]))))
+                push!(tr9_energyreceived, @build_constraint(vtransmissionenergyreceived[tr,l,f,y,n2] <= vtransmissionbyline[tr,l,f,y] * ys * tcta * eff_multiplier + 50000 * (1-(1-vtransmissionbylineneg[tr,l,f,y]))))
+                push!(tr9_energyreceived, @build_constraint(vtransmissionenergyreceived[tr,l,f,y,n2] <= 50000 * (1-vtransmissionbylineneg[tr,l,f,y])))
+                push!(tr9_energyreceived, @build_constraint(-50000 * (1-vtransmissionbylineneg[tr,l,f,y]) <= vtransmissionenergyreceived[tr,l,f,y,n2]))
             end
 
             if vc > 0
                 # Constraints to populate vvariablecosttransmissionbyts - always >= 0 and accounting for possibility that vtransmissionbyline may be negative
                 push!(tr6_variablecost, @build_constraint(vvariablecosttransmissionbyts[tr,l,f,y] + vtransmissionbyline[tr,l,f,y] * ys * tcta * vc
-                    <= (1 - vtransmissionbylineneg[tr,l,f,y]) * 500000))
+                    <= (1 - vtransmissionbylineneg[tr,l,f,y]) * 50000))
                 push!(tr6_variablecost, @build_constraint(vvariablecosttransmissionbyts[tr,l,f,y] + vtransmissionbyline[tr,l,f,y] * ys * tcta * vc
-                    >= (vtransmissionbylineneg[tr,l,f,y] - 1) * 500000))
+                    >= (vtransmissionbylineneg[tr,l,f,y] - 1) * 50000))
                 push!(tr6_variablecost, @build_constraint(vvariablecosttransmissionbyts[tr,l,f,y] - vtransmissionbyline[tr,l,f,y] * ys * tcta * vc
                     >= -2 * vtransmissionbylineneg[tr,l,f,y] * row[:maxflow] * ys * tcta * vc))
                 push!(tr6_variablecost, @build_constraint(vvariablecosttransmissionbyts[tr,l,f,y] - vtransmissionbyline[tr,l,f,y] * ys * tcta * vc
