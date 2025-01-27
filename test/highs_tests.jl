@@ -241,9 +241,9 @@ if @isdefined HiGHS
             @test testqry[2,:y] == "2025"
             @test testqry[3,:y] == "2029"
 
-            @test isapprox(testqry[1,:val], 4649.69119946267; atol=TOL)
-            @test isapprox(testqry[2,:val], 2586.91004106252; atol=TOL)
-            @test isapprox(testqry[3,:val], 1673.92988604328; atol=TOL)
+            @test isapprox(testqry[1,:val], 4649.69120037856; atol=TOL)
+            @test isapprox(testqry[2,:val], 2932.95937663091; atol=TOL)
+            @test isapprox(testqry[3,:val], 1882.16120651412; atol=TOL)
         end
 
         SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 2")
@@ -260,6 +260,23 @@ if @isdefined HiGHS
         end
 
         SQLite.DBInterface.execute(db, "delete from TransmissionAvailabilityFactor")
+
+        # Test limited foresight optimization
+        @info "Running HiGHS test 6 on storage_transmission_test.sqlite: limited foresight optimization."
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer, add_bridges=false) : direct_model(HiGHS.Optimizer())), varstosave="vtotaldiscountedcost", calcyears=[[2020,2022],[2025,2029]], quiet = calculatescenario_quiet)
+
+        if !compilation
+            testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+            @test testqry[1,:y] == "2021"
+            @test testqry[2,:y] == "2022"
+            @test testqry[3,:y] == "2025"
+            @test testqry[4,:y] == "2029"
+
+            @test isapprox(testqry[1,:val], 9422.95248735086; atol=TOL)
+            @test isapprox(testqry[2,:val], 316.607655831574; atol=TOL)
+            @test isapprox(testqry[3,:val], 1394.15679690081; atol=TOL)
+            @test isapprox(testqry[4,:val], 1882.16120651412; atol=TOL)
+        end
 
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)

@@ -277,9 +277,9 @@ if @isdefined Xpress
             @test testqry[2,:y] == "2025"
             @test testqry[3,:y] == "2029"
 
-            @test isapprox(testqry[1,:val], 4855.79076447287; atol=TOL)
-            @test isapprox(testqry[2,:val], 2687.29032799192; atol=TOL)
-            @test isapprox(testqry[3,:val], 1738.34669443912; atol=TOL)
+            @test isapprox(testqry[1,:val], 4855.79076572018; atol=TOL)
+            @test isapprox(testqry[2,:val], 3033.3396635128; atol=TOL)
+            @test isapprox(testqry[3,:val], 1946.57801484839; atol=TOL)
         end
 
         SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 2")
@@ -305,6 +305,23 @@ if @isdefined Xpress
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select sum(val) as annual_energy from vtransmissionenergyreceived where tr in (1,2) and f = 'electricity' and y = 2024 and n = 2") |> DataFrame
             @test testqry[1,:annual_energy] >= 0.5 - TOL
+        end
+
+        # Test limited foresight optimization
+        @info "Running Xpress test 7 on storage_transmission_test.sqlite: limited foresight optimization."
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(Xpress.Optimizer) : direct_model(Xpress.Optimizer())), varstosave="vtotaldiscountedcost", calcyears=[[2020,2022],[2025,2029]], quiet = calculatescenario_quiet)
+
+        if !compilation
+            testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+            @test testqry[1,:y] == "2021"
+            @test testqry[2,:y] == "2022"
+            @test testqry[3,:y] == "2025"
+            @test testqry[4,:y] == "2029"
+
+            @test isapprox(testqry[1,:val], 9422.95248735086; atol=TOL)
+            @test isapprox(testqry[2,:val], 316.607655831574; atol=TOL)
+            @test isapprox(testqry[3,:val], 1394.15679690081; atol=TOL)
+            @test isapprox(testqry[4,:val], 1882.16120651412; atol=TOL)
         end
 
         # Delete test results and re-compact test database

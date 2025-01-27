@@ -278,9 +278,9 @@ if @isdefined MosekTools
             @test testqry[2,:y] == "2025"
             @test testqry[3,:y] == "2029"
 
-            @test isapprox(testqry[1,:val], 4649.69120037856; atol=TOL)
-            @test isapprox(testqry[2,:val], 2586.91004106252; atol=TOL)
-            @test isapprox(testqry[3,:val], 1673.92988604328; atol=TOL)
+            @test isapprox(testqry[1,:val], 4649.69110419447; atol=TOL)
+            @test isapprox(testqry[2,:val], 2932.95931815835; atol=TOL)
+            @test isapprox(testqry[3,:val], 1882.16116899065; atol=TOL)
         end
 
         SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 2")
@@ -297,7 +297,24 @@ if @isdefined MosekTools
         end
 
         SQLite.DBInterface.execute(db, "delete from TransmissionAvailabilityFactor")
-        
+
+        # Test limited foresight optimization
+        @info "Running Mosek test 6 on storage_transmission_test.sqlite: limited foresight optimization."
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[[2020,2022],[2025,2029]], continuoustransmission = true, quiet = calculatescenario_quiet)
+
+        if !compilation
+            testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+            @test testqry[1,:y] == "2021"
+            @test testqry[2,:y] == "2022"
+            @test testqry[3,:y] == "2025"
+            @test testqry[4,:y] == "2029"
+
+            @test isapprox(testqry[1,:val], 4846.62588143849; atol=TOL)
+            @test isapprox(testqry[2,:val], 305.484279868528; atol=TOL)
+            @test isapprox(testqry[3,:val], 1363.8650852295; atol=TOL)
+            @test isapprox(testqry[4,:val], 1848.0889114236; atol=TOL)
+        end        
+
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")

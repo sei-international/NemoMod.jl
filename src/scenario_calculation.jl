@@ -28,13 +28,20 @@ the termination status reported by the solver used for the calculation (e.g., `O
     implements NEMO's scenario database structure. See NEMO's documentation on scenario databases
     for details. Empty scenario databases can be generated with NEMO's `createnemodb` function.
 - `jumpmodel::JuMP.Model`: [JuMP](https://github.com/jump-dev/JuMP.jl) model object
-    specifying the solver to be used for the calculation.
-    Examples: `Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))`,
-    `Model(CPLEX.Optimizer)`, `Model(optimizer_with_attributes(Gurobi.Optimizer, "NumericFocus" => 1))`.
-    Note that the solver's Julia package (Julia wrapper) must be installed. See the
-    documentation for JuMP for information on how to specify a solver and set solver options.
-- `calcyears::Array{Int, 1}`: Years to include in the calculation (a subset of the years specified in
-    the scenario database). All years in the database are included if this argument is omitted.
+    specifying the solver to be used for the calculation. Examples: 
+    `Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))`,
+    `Model(CPLEX.Optimizer)`, `Model(optimizer_with_attributes(Gurobi.Optimizer, "NumericFocus" => 1))`,
+    `direct_model(Gurobi.Optimizer())`. Note that the solver's Julia package (Julia wrapper) must 
+    be installed. See the documentation for JuMP for information on how to specify a solver and set 
+    solver options.
+- `calcyears::Union{Vector{Int}, Vector{Vector{Int}}}`: Years to include in the calculation (a subset of 
+    the years defined in the scenario database). If a single vector of years is provided, NEMO calculates
+    the scenario for those years with perfect foresight. If multiple vectors of years are provided,
+    NEMO performs a limited foresight calculation for the scenario: it calculates the first group of years 
+    with perfect foresight, takes the results as the starting point for the second group of years, 
+    calculates the second group with perfect foresight, and so on through the last group. In this case, the
+    vectors of years should not overlap and should be in chronological order. If this argument is omitted,
+    all years in the scenario database are calculated with perfect foresight.
 - `varstosave::String`: Comma-delimited list of output variables whose results should be
     saved in the scenario database when the scenario is calculated. See NEMO's documentation on
     outputs for information on the variables that are available.
@@ -77,10 +84,8 @@ the termination status reported by the solver used for the calculation (e.g., `O
 function calculatescenario(
     dbpath::String;
     jumpmodel::JuMP.Model = Model(Cbc.Optimizer),
-    calcyears::Array{Int, 1} = Array{Int, 1}(),
+    calcyears::Union{Vector{Int}, Vector{Vector{Int}}} = [Vector{Int}()],
     varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
-    numprocs::Int = 0,
-    targetprocs::Array{Int, 1} = Array{Int, 1}(),
     restrictvars::Bool = true,
     reportzeros::Bool = false,
     continuoustransmission::Bool = false,
@@ -91,9 +96,184 @@ function calculatescenario(
     traperrors::Bool = true,
     quiet::Bool = false)
 
+    logmsg("Started modeling scenario. $(isnothing(pkgversion(NemoMod)) ? "S" : "NEMO version = " * string(pkgversion(NemoMod)) * ", s")olver = $(solver_name(jumpmodel)).")
+
     try
-        modelscenario(dbpath; jumpmodel=jumpmodel, calcyears=calcyears, varstosave=varstosave, 
-        restrictvars=restrictvars, reportzeros=reportzeros, continuoustransmission=continuoustransmission, forcemip=forcemip, startvalsdbpath=startvalsdbpath, startvalsvars=startvalsvars, precalcresultspath=precalcresultspath, quiet=quiet)
+        # BEGIN: Regularize some inputs.
+        if isa(calcyears, Vector{Int})
+            # Convert calcyears to a Vector{Vector{Int}} if necessary; a simple vector is old syntax that's still supported for backward compatibility
+            calcyears = [calcyears]
+        elseif calcyears == Vector{Vector{Int}}()
+            # Put one element in calcyears
+            calcyears = [Vector{Int}()]
+        end
+
+        # Convert varstosave into an array of strings with no empty values
+        local varstosavearr = String.(split(replace(varstosave, " " => ""), ","; keepempty = false))
+        # END: Regularize some inputs.
+
+        # BEGIN: Read config file and process calculatescenarioargs and solver blocks.
+        configfile = getconfig(quiet)  # ConfParse structure for config file if one is found; otherwise nothing
+
+        if !isnothing(configfile)
+            (jumpdirectmode, jumpbridges) = getjumpmodelproperties(jumpmodel)
+
+            # Arrays of Boolean and string arguments for calculatescenario(); necessary in order to have mutable objects for getconfigargs! call
+            local boolargs::Array{Bool,1} = [restrictvars,reportzeros,continuoustransmission,forcemip,quiet,jumpdirectmode,jumpbridges]
+            local stringargs::Array{String,1} = [startvalsdbpath,startvalsvars,precalcresultspath]
+
+            getconfigargs!(configfile, calcyears, varstosavearr, boolargs, stringargs, quiet)
+
+            (restrictvars, reportzeros, continuoustransmission, forcemip, quiet) = collect(boolargs)  # Ignores last two elements of boolargs
+            (startvalsdbpath, startvalsvars, precalcresultspath) = collect(stringargs)
+
+            if jumpdirectmode != boolargs[6] || jumpbridges != boolargs[7]
+                reset_jumpmodel(jumpmodel; direct=boolargs[6], bridges=boolargs[7])
+            end
+
+            setsolverparamsfromcfg(configfile, jumpmodel, quiet)
+        end
+        # END: Read config file and process calculatescenarioargs and solver blocks.
+
+        # BEGIN: Validate arguments.
+        if !isfile(dbpath)
+            error("dbpath argument must refer to a file.")
+        end
+
+        # check_calcyears ensures that: 1) if calcyears contains an empty vector, it's the only element in calcyears; 2) otherwise, vectors in calcyears do not overlap and are in chronological order. Throws an error if validation fails.
+        check_calcyears(calcyears)
+
+        logmsg("Validated run-time arguments.", quiet)
+        # END: Validate arguments.
+
+        # BEGIN: Check precalcresultspath and return pre-calculated scenario database if appropriate.
+        if length(precalcresultspath) > 0
+            local precalcfilepath::String = ""  # Full path to pre-calculated scenario database, if precalcresultspath identifies one
+
+            if isfile(precalcresultspath)
+                precalcfilepath = normpath(precalcresultspath)
+            elseif isdir(precalcresultspath)
+                local testpcf::String = normpath(joinpath(precalcresultspath, basename(realpath(dbpath))))
+
+                if isfile(testpcf)
+                    precalcfilepath = testpcf
+                end
+            end
+
+            if length(precalcfilepath) > 0
+                cp(precalcfilepath, dbpath; force=true, follow_symlinks=true)
+                logmsg("Copied pre-calculated results file $precalcfilepath to $(realpath(dbpath)). Finished modeling scenario." )
+                return termination_status(jumpmodel)
+            end
+
+            logmsg("Could not identify a pre-calculated results file using precalcresultspath argument. Continuing with NEMO." )
+        end
+        # END: Check precalcresultspath and return pre-calculated scenario database if appropriate.
+
+        # BEGIN: Define module global variables.
+        global csdbpath = dbpath
+        global csquiet = quiet
+        # END: Define module global variables.
+
+        # BEGIN: Connect to SQLite database.
+        db = SQLite.DB(dbpath)
+        logmsg("Connected to scenario database. Path = " * normpath(dbpath) * ".", quiet)
+        # END: Connect to SQLite database.
+
+        # BEGIN: Update database if necessary.
+        dbversion::Int64 = DataFrame(SQLite.DBInterface.execute(db, "select version from version"))[1, :version]
+
+        dbversion == 2 && db_v2_to_v3(db; quiet = quiet)
+        dbversion < 4 && db_v3_to_v4(db; quiet = quiet)
+        dbversion < 5 && db_v4_to_v5(db; quiet = quiet)
+        dbversion < 6 && db_v5_to_v6(db; quiet = quiet)
+        dbversion < 7 && db_v6_to_v7(db; quiet = quiet)
+        dbversion < 8 && db_v7_to_v8(db; quiet = quiet)
+        dbversion < 9 && db_v8_to_v9(db; quiet = quiet)
+        dbversion < 10 && db_v9_to_v10(db; quiet = quiet)
+        dbversion < 11 && db_v10_to_v11(db; quiet = quiet)
+        # END: Update database if necessary.
+
+        # BEGIN: Perform beforescenariocalc include.
+        if !isnothing(configfile) && haskey(configfile, "includes", "beforescenariocalc")
+            try
+                include(normpath(joinpath(pwd(), retrieve(configfile, "includes", "beforescenariocalc"))))
+                logmsg("Performed beforescenariocalc include.", quiet)
+            catch e
+                logmsg("Could not perform beforescenariocalc include. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
+            end
+        end
+        # END: Perform beforescenariocalc include.
+
+        # BEGIN: Drop any pre-existing result tables.
+        dropresulttables(db, true)
+        logmsg("Dropped pre-existing result tables from database.", quiet)
+        # END: Drop any pre-existing result tables.
+
+        # BEGIN: Create parameter views showing default values and parameter indices.
+        # Array of parameter tables needing default views in scenario database
+        local paramsneedingdefs::Array{String, 1} = ["OutputActivityRatio", "InputActivityRatio", "ResidualCapacity", "OperationalLife",
+        "FixedCost", "YearSplit", "SpecifiedAnnualDemand", "SpecifiedDemandProfile", "VariableCost", "DiscountRate", "CapitalCost",
+        "CapitalCostStorage", "CapacityToActivityUnit", "CapacityOfOneTechnologyUnit", "AvailabilityFactor",
+        "TradeRoute", "TechnologyToStorage", "TechnologyFromStorage", "StorageLevelStart", "StorageMaxChargeRate", "StorageMaxDischargeRate",
+        "ResidualStorageCapacity", "MinStorageCharge", "OperationalLifeStorage", "DepreciationMethod", "TotalAnnualMaxCapacity",
+        "TotalAnnualMinCapacity", "TotalAnnualMaxCapacityInvestment", "TotalAnnualMinCapacityInvestment",
+        "TotalTechnologyAnnualActivityUpperLimit", "TotalTechnologyAnnualActivityLowerLimit", "TotalTechnologyModelPeriodActivityUpperLimit",
+        "TotalTechnologyModelPeriodActivityLowerLimit", "ReserveMarginTagTechnology", "ReserveMargin", "RETagTechnology",
+        "REMinProductionTarget", "REMinProductionTargetRG", "EmissionActivityRatio", "EmissionsPenalty", "ModelPeriodExogenousEmission",
+        "AnnualExogenousEmission", "AnnualEmissionLimit", "ModelPeriodEmissionLimit", "AccumulatedAnnualDemand", "TotalAnnualMaxCapacityStorage",
+        "TotalAnnualMinCapacityStorage", "TotalAnnualMaxCapacityInvestmentStorage", "TotalAnnualMinCapacityInvestmentStorage", "TransmissionAvailabilityFactor",
+        "TransmissionCapacityToActivityUnit", "StorageFullLoadHours", "RampRate", "RampingReset", "NodalDistributionDemand",
+        "NodalDistributionTechnologyCapacity", "NodalDistributionStorageCapacity", "MinimumUtilization", "InterestRateTechnology",
+        "InterestRateStorage", "MinShareProduction", "MinAnnualTransmissionNodes", "MaxAnnualTransmissionNodes"]
+
+        createviewwithdefaults(db, paramsneedingdefs)
+        create_other_nemo_indices(db)
+
+        logmsg("Created parameter views and indices.", quiet)
+        # END: Create parameter views showing default values and parameter indices.
+
+        # BEGIN: Create temporary tables.
+        # These tables are created as ordinary tables, not SQLite temporary tables, in order to make them simultaneously visible to multiple Julia processes
+        create_temp_tables(db, calcyears)
+        logmsg("Created temporary tables.", quiet)
+        # END: Create temporary tables.
+
+        # BEGIN: Call modelscenario for each element in calcyears.
+        for i in eachindex(calcyears)
+            empty!(jumpmodel)
+
+            rv = modelscenario(dbpath; jumpmodel=jumpmodel, calcyears=calcyears[i], limitedforesight=(length(calcyears) > 1), finalgroupyears=(i==length(calcyears)), lastyearprevgroupyears=(i > 1 ? maximum(calcyears[i-1]) : nothing), varstosavearr=varstosavearr, restrictvars=restrictvars, reportzeros=reportzeros, continuoustransmission=continuoustransmission, forcemip=forcemip, startvalsdbpath=startvalsdbpath, startvalsvars=startvalsvars, precalcresultspath=precalcresultspath, quiet=quiet, configfile=configfile)
+
+            if !in(rv, [MathOptInterface.OPTIMAL, MathOptInterface.LOCALLY_SOLVED, MathOptInterface.ALMOST_OPTIMAL, MathOptInterface.ITERATION_LIMIT, MathOptInterface.TIME_LIMIT, MathOptInterface.NODE_LIMIT, MathOptInterface.SOLUTION_LIMIT, MathOptInterface.MEMORY_LIMIT, MathOptInterface.OBJECTIVE_LIMIT, MathOptInterface.NORM_LIMIT, MathOptInterface.OTHER_LIMIT]) && i < length(calcyears)
+                logmsg("Halting limited foresight optimization because no solution was found for last group of years.", quiet)
+                break
+            end
+        end
+        # END: Call modelscenario for each element in calcyears.
+
+        # Drop temporary tables
+        drop_temp_tables(db)
+        logmsg("Dropped temporary tables.", quiet)
+
+        # BEGIN: Perform afterscenariocalc include.
+        if !isnothing(configfile) && haskey(configfile, "includes", "afterscenariocalc")
+            try
+                include(normpath(joinpath(pwd(), retrieve(configfile, "includes", "afterscenariocalc"))))
+                logmsg("Performed afterscenariocalc include.", quiet)
+            catch e
+                logmsg("Could not perform afterscenariocalc include. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
+            end
+        end
+        # END: Perform afterscenariocalc include.
+
+        # BEGIN: Delete result tables that are needed for limited foresight optimization but were not requested in varstosave.
+        if length(calcyears) > 1
+            droptables(db, setdiff(["vtotaltechnologyannualactivity", "vannualemissions", "vnewcapacity", "vtotaldiscountedcost", "vstoragelevelyearendnn", "vnewstoragecapacity", "vtotalannualtechnologyactivitybymode", "vtotalcapacityannual", "vannualtechnologyemissionspenalty", "vtransmissionbuilt", "vstoragelevelyearendnodal", "vtransmissionexists", "vvariablecosttransmission"], varstosavearr), true)
+
+            logmsg("Deleted result tables needed for limited foresight optimization but not requested in varstosave.", quiet)
+        end
+        # END: Delete result tables that are needed for limited foresight optimization but were not requested in varstosave.
     catch e
         if traperrors
             println("NEMO encountered an error with the following message: " * sprint(showerror, e) * ".")
@@ -102,33 +282,42 @@ function calculatescenario(
             rethrow()
         end
     end
+
+    logmsg("Finished modeling scenario.")
 end  # calculatescenario()
 
 """
     modelscenario(dbpath::String;
         jumpmodel::JuMP.Model = Model(Cbc.Optimizer),
-        calcyears::Array{Int, 1} = Array{Int, 1}(),
-        varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual,
-            vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
-            vusenn, vtotaldiscountedcost",
+        calcyears::Vector{Int} = Vector{Int}(),
+        limitedforesight::Bool = false,
+        finalgroupyears::Bool = false,
+        lastyearprevgroupyears = nothing,
+        varstosavearr::Vector{String} = Vector{String}(),
         restrictvars::Bool = true,
-        reportzeros::Bool = false, continuoustransmission::Bool = false,
+        reportzeros::Bool = false, 
+        continuoustransmission::Bool = false,
         forcemip::Bool = false,
         startvalsdbpath::String = "",
         startvalsvars::String = "",
         precalcresultspath::String = "",
         quiet::Bool = false,
-        writemodel::Bool = false, writefilename::String = "",
+        configfile = nothing,
+        writemodel::Bool = false,
+        writefilename::String = "",
         writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS
     )
 
-Implements scenario modeling logic for calculatescenario() and writescenariomodel().
+Implements scenario modeling logic for `calculatescenario()` and `writescenariomodel()`. `limitedforesight` indicates whether `modelscenario` is being invoked in series for limited foresight optimization. If `limitedforesight` is `true`: 1) `finalgroupyears` indicates whether the last group of years in the limited foresight calculation is being modeled; 2) `lastyearprevgroupyears` is the last year modeled in the previous group of years (an `Int` or `nothing`).
 """
 function modelscenario(
     dbpath::String;
     jumpmodel::JuMP.Model = Model(Cbc.Optimizer),
-    calcyears::Array{Int, 1} = Array{Int, 1}(),
-    varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
+    calcyears::Vector{Int} = Vector{Int}(),
+    limitedforesight::Bool = false,
+    finalgroupyears::Bool = false,
+    lastyearprevgroupyears = nothing,
+    varstosavearr::Vector{String} = Vector{String}(),
     restrictvars::Bool = true,
     reportzeros::Bool = false,
     continuoustransmission::Bool = false,
@@ -137,6 +326,7 @@ function modelscenario(
     startvalsvars::String = "",
     precalcresultspath::String = "",
     quiet::Bool = false,
+    configfile = nothing,
     writemodel::Bool = false,
     writefilename::String = "",
     writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS
@@ -145,140 +335,42 @@ function modelscenario(
 # variable visible outside the function, prefix it with global. For JuMP constraint references,
 # create a new global variable and assign to it the constraint reference.
 
-logmsg("Started modeling scenario. $(isnothing(pkgversion(NemoMod)) ? "S" : "NEMO version = " * string(pkgversion(NemoMod)) * ", s")olver = $(solver_name(jumpmodel)).")
+logmsg("Started optimizing $(calcyears==Vector{Int}() ? "all years for scenario" : "following years: " * string(calcyears)).")
 
-# BEGIN: Validate arguments.
-if !isfile(dbpath)
-    error("dbpath argument must refer to a file.")
-end
-
-# Convert varstosave into an array of strings with no empty values
-local varstosavearr = String.(split(replace(varstosave, " " => ""), ","; keepempty = false))
-
+# BEGIN: Validate arguments. - move to writescenariomodel
 if writemodel && length(writefilename) == 0
     error("writefilename argument must be specified if writemodel is true.")
 end
-
-logmsg("Validated run-time arguments.", quiet)
 # END: Validate arguments.
 
-# BEGIN: Read config file and process calculatescenarioargs and solver blocks.
-configfile = getconfig(quiet)  # ConfParse structure for config file if one is found; otherwise nothing
-
-if !isnothing(configfile)
-    local jumpdirectmode::Bool = (mode(jumpmodel) == JuMP.DIRECT)  # Indicates whether jumpmodel is in direct mode
-    local jumpbridges::Bool = (jumpdirectmode ? false : (typeof(backend(jumpmodel).optimizer) <: MathOptInterface.Bridges.LazyBridgeOptimizer))  # Indicates whether bridging is enabled in jumpmodel
-
-    # Arrays of Boolean and string arguments for calculatescenario(); necessary in order to have mutable objects for getconfigargs! call
-    local boolargs::Array{Bool,1} = [restrictvars,reportzeros,continuoustransmission,forcemip,quiet,jumpdirectmode,jumpbridges]
-    local stringargs::Array{String,1} = [startvalsdbpath,startvalsvars,precalcresultspath]
-
-    getconfigargs!(configfile, calcyears, varstosavearr, boolargs, stringargs, quiet)
-
-    restrictvars = boolargs[1]
-    reportzeros = boolargs[2]
-    continuoustransmission = boolargs[3]
-    forcemip = boolargs[4]
-    quiet = boolargs[5]
-
-    startvalsdbpath = stringargs[1]
-    startvalsvars = stringargs[2]
-    precalcresultspath = stringargs[3]
-
-    if jumpdirectmode != boolargs[6] || jumpbridges != boolargs[7]
-        reset_jumpmodel(jumpmodel; direct=boolargs[6], bridges=boolargs[7])
-    end
-
-    setsolverparamsfromcfg(configfile, jumpmodel, quiet)
-end
-# END: Read config file and process calculatescenarioargs and solver blocks.
-
-# BEGIN: Check precalcresultspath and return pre-calculated scenario database if appropriate.
-if length(precalcresultspath) > 0
-    local precalcfilepath::String = ""  # Full path to pre-calculated scenario database, if precalcresultspath identifies one
-
-    if isfile(precalcresultspath)
-        precalcfilepath = normpath(precalcresultspath)
-    elseif isdir(precalcresultspath)
-        local testpcf::String = normpath(joinpath(precalcresultspath, basename(realpath(dbpath))))
-
-        if isfile(testpcf)
-            precalcfilepath = testpcf
-        end
-    end
-
-    if length(precalcfilepath) > 0
-        cp(precalcfilepath, dbpath; force=true, follow_symlinks=true)
-        logmsg("Copied pre-calculated results file $precalcfilepath to $(realpath(dbpath)). Finished modeling scenario." )
-        return termination_status(jumpmodel)
-    end
-
-    logmsg("Could not identify a pre-calculated results file using precalcresultspath argument. Continuing with NEMO." )
-end
-# END: Check precalcresultspath and return pre-calculated scenario database if appropriate.
-
 # BEGIN: Check whether modeling is for selected years only.
-local restrictyears::Bool = (calcyears == Array{Int, 1}() ? false : true)  # Indicates whether scenario modeling is for a selected set of years
-local inyears::String = ""  # SQL in clause predicate indicating which years are selected for modeling
+local restrictyears::Bool = (calcyears == Array{Int, 1}() ? false : true)  # Indicates whether this invocation of modelscenario is for a selected set of years
+local inyears::String = ""  # SQL in clause predicate for years being modeled (in this invocation of modelscenario)
 
 if restrictyears
     inyears = " (" * join(calcyears, ",") * ") "
 end
 # END: Check whether modeling is for selected years only.
 
-# BEGIN: Set module global variables that depend on arguments.
-global csdbpath = dbpath
-global csquiet = quiet
+# BEGIN: Set module global variables that depend on arguments in this invocation of modelscenario.
 global csrestrictyears = restrictyears
 global csinyears = inyears
 
-if !isnothing(configfile) && (haskey(configfile, "includes", "afterscenariocalc") || haskey(configfile, "includes", "customconstraints"))
+if !isnothing(configfile) && haskey(configfile, "includes", "customconstraints")
     # Define global variable for jumpmodel
     global csjumpmodel = jumpmodel
 end
-# END: Set module global variables that depend on arguments.
+# END: Set module global variables that depend on arguments in this invocation of modelscenario.
 
-# BEGIN: Connect to SQLite database.
+# Connect to scenario database
 db = SQLite.DB(dbpath)
-logmsg("Connected to scenario database. Path = " * normpath(dbpath) * ".", quiet)
-# END: Connect to SQLite database.
-
-# BEGIN: Update database if necessary.
-dbversion::Int64 = DataFrame(SQLite.DBInterface.execute(db, "select version from version"))[1, :version]
-
-dbversion == 2 && db_v2_to_v3(db; quiet = quiet)
-dbversion < 4 && db_v3_to_v4(db; quiet = quiet)
-dbversion < 5 && db_v4_to_v5(db; quiet = quiet)
-dbversion < 6 && db_v5_to_v6(db; quiet = quiet)
-dbversion < 7 && db_v6_to_v7(db; quiet = quiet)
-dbversion < 8 && db_v7_to_v8(db; quiet = quiet)
-dbversion < 9 && db_v8_to_v9(db; quiet = quiet)
-dbversion < 10 && db_v9_to_v10(db; quiet = quiet)
-dbversion < 11 && db_v10_to_v11(db; quiet = quiet)
-# END: Update database if necessary.
-
-# BEGIN: Perform beforescenariocalc include.
-if !isnothing(configfile) && haskey(configfile, "includes", "beforescenariocalc")
-    try
-        include(normpath(joinpath(pwd(), retrieve(configfile, "includes", "beforescenariocalc"))))
-        logmsg("Performed beforescenariocalc include.", quiet)
-    catch e
-        logmsg("Could not perform beforescenariocalc include. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
-    end
-end
-# END: Perform beforescenariocalc include.
-
-# BEGIN: Drop any pre-existing result tables.
-dropresulttables(db, true)
-logmsg("Dropped pre-existing result tables from database.", quiet)
-# END: Drop any pre-existing result tables.
 
 # BEGIN: Check if transmission modeling is required.
-local transmissionmodeling::Bool = false  # Indicates whether scenario involves transmission modeling
+local transmissionmodeling::Bool = false  # Indicates whether current calculation involves transmission modeling
 local tempquery::SQLite.Query = SQLite.DBInterface.execute(db,
     "select distinct type from TransmissionModelingEnabled $(restrictyears ? " where y in" * inyears : "")")  # Temporary SQLite.Query object
 local transmissionmodelingtypes::Array{Int64, 1} = SQLite.done(tempquery) ? Array{Int64, 1}() : collect(skipmissing(DataFrame(tempquery)[!, :type]))
-    # Array of transmission modeling types requested for scenario
+    # Array of transmission modeling types requested for current calculation
 
 if length(transmissionmodelingtypes) > 0
     transmissionmodeling = true
@@ -287,56 +379,15 @@ end
 logmsg("Verified that transmission modeling " * (transmissionmodeling ? "is" : "is not") * " enabled.", quiet)
 # END: Check if transmission modeling is required.
 
-# BEGIN: Create parameter views showing default values and parameter indices.
-# Array of parameter tables needing default views in scenario database
-local paramsneedingdefs::Array{String, 1} = ["OutputActivityRatio", "InputActivityRatio", "ResidualCapacity", "OperationalLife",
-"FixedCost", "YearSplit", "SpecifiedAnnualDemand", "SpecifiedDemandProfile", "VariableCost", "DiscountRate", "CapitalCost",
-"CapitalCostStorage", "CapacityToActivityUnit", "CapacityOfOneTechnologyUnit", "AvailabilityFactor",
-"TradeRoute", "TechnologyToStorage", "TechnologyFromStorage", "StorageLevelStart", "StorageMaxChargeRate", "StorageMaxDischargeRate",
-"ResidualStorageCapacity", "MinStorageCharge", "OperationalLifeStorage", "DepreciationMethod", "TotalAnnualMaxCapacity",
-"TotalAnnualMinCapacity", "TotalAnnualMaxCapacityInvestment", "TotalAnnualMinCapacityInvestment",
-"TotalTechnologyAnnualActivityUpperLimit", "TotalTechnologyAnnualActivityLowerLimit", "TotalTechnologyModelPeriodActivityUpperLimit",
-"TotalTechnologyModelPeriodActivityLowerLimit", "ReserveMarginTagTechnology", "ReserveMargin", "RETagTechnology",
-"REMinProductionTarget", "REMinProductionTargetRG", "EmissionActivityRatio", "EmissionsPenalty", "ModelPeriodExogenousEmission",
-"AnnualExogenousEmission", "AnnualEmissionLimit", "ModelPeriodEmissionLimit", "AccumulatedAnnualDemand", "TotalAnnualMaxCapacityStorage",
-"TotalAnnualMinCapacityStorage", "TotalAnnualMaxCapacityInvestmentStorage", "TotalAnnualMinCapacityInvestmentStorage", "TransmissionAvailabilityFactor",
-"TransmissionCapacityToActivityUnit", "StorageFullLoadHours", "RampRate", "RampingReset", "NodalDistributionDemand",
-"NodalDistributionTechnologyCapacity", "NodalDistributionStorageCapacity", "MinimumUtilization", "InterestRateTechnology",
-"InterestRateStorage", "MinShareProduction", "MinAnnualTransmissionNodes", "MaxAnnualTransmissionNodes"]
+# BEGIN: If performing limited foresight optimization, add stock variables to varstosavearr.
+if limitedforesight 
+    varstosavearr = union(varstosavearr, ["vtotaltechnologyannualactivity", "vannualemissions", "vnewcapacity", "vtotaldiscountedcost", "vstoragelevelyearendnn", "vnewstoragecapacity", "vtotalannualtechnologyactivitybymode", "vtotalcapacityannual", "vannualtechnologyemissionspenalty"])
 
-createviewwithdefaults(db, paramsneedingdefs)
-create_other_nemo_indices(db)
-
-logmsg("Created parameter views and indices.", quiet)
-# END: Create parameter views showing default values and parameter indices.
-
-# BEGIN: Create temporary tables.
-# These tables are created as ordinary tables, not SQLite temporary tables, in order to make them simultaneously visible to multiple Julia processes
-create_temp_tables(db)
-logmsg("Created temporary tables.", quiet)
-# END: Create temporary tables.
-
-# BEGIN: Execute database queries in parallel.
-querycommands::Dict{String, Tuple{String, String}} = scenario_calc_queries(dbpath, transmissionmodeling,
-    in("vproductionbytechnology", varstosavearr), in("vusebytechnology", varstosavearr), restrictyears, inyears)
-
-local queries::Dict{String, DataFrame}
-
-try
-    queries = run_queries(querycommands)
-catch ex
-    if contains(lowercase(sprint(showerror, ex)), "database is locked")
-        # Synchronization problem among Julia threads; collect garbage and retry
-        logmsg("Could not execute core database queries due to a database locking problem. Retrying...", quiet)
-        GC.gc()
-        queries = run_queries(querycommands)
-    else
-        rethrow()
+    if transmissionmodeling
+        varstosavearr = union(varstosavearr, ["vtransmissionbuilt", "vstoragelevelyearendnodal", "vtransmissionexists", "vvariablecosttransmission"])
     end
 end
-
-logmsg("Executed core database queries.", quiet)
-# END: Execute database queries in parallel.
+# END: If performing limited foresight optimization, add stock variables to varstosavearr.
 
 # BEGIN: Define dimensions.
 tempquery = SQLite.DBInterface.execute(db, "select val from YEAR $(restrictyears ? "where val in" * inyears : "") order by val")
@@ -345,8 +396,8 @@ tempquery = SQLite.DBInterface.execute(db, "select min(val) from year")
 firstscenarioyear::Int64 = parse(Int, DataFrame(tempquery)[1,1])  # First year in YEAR table, even if not selected in calcyears
 tempquery = SQLite.DBInterface.execute(db, "select max(val) from year")
 lastscenarioyear::Int64 = parse(Int, DataFrame(tempquery)[1,1])  # Last year in YEAR table, even if not selected in calcyears
-firstmodeledyear::String = first(syear)  # First calculated/modeled year
-lastmodeledyear::String = last(syear)  # Last calculated/modeled year
+firstmodeledyear::String = first(syear)  # First calculated/modeled year (for this invocation of modelscenario)
+lastmodeledyear::String = last(syear)  # Last calculated/modeled year (for this invocation of modelscenario)
 tempquery = SQLite.DBInterface.execute(db, "select val from TECHNOLOGY")
 stechnology::Array{String,1} = SQLite.done(tempquery) ? Array{String,1}() : collect(skipmissing(DataFrame(tempquery)[!, :val]))  # TECHNOLOGY dimension
 tempquery = SQLite.DBInterface.execute(db, "select val from TIMESLICE")
@@ -385,20 +436,36 @@ ltsgroupdict::Dict{Tuple{Int, Int, Int}, String} = Dict{Tuple{Int, Int, Int}, St
     where
     ltg.tg2 = tg2.name
     and ltg.tg1 = tg1.name"))  # Dictionary of LTsGroup table mapping tuples of (tsgroup1 order, tsgroup2 order, time slice order) to time slice vals
-yearintervalsdict::Dict{String, Int} = Dict{String,Int}()  # A dictionary mapping years that are being modeled to the number of years in the intervals they represent. For a given modeled year, the corresponding interval contains years that are <= modeled year and > prior modeled year or first year in YEAR - 1, whichever is later.
-
-for row in SQLite.DBInterface.execute(db, "select y, intv + case when rn = 1 then 1 else 0 end as intv from (
-	select y, ifnull(lag_calc, 0) as intv, row_number() over (order by y) as rn from (
-		select val as y, val - lag(val) over (order by val) as lag_calc
-			from year
-            $(restrictyears ? "where val = (select min(val) from year) or val in" * inyears : "")
-	) $(restrictyears ? "where y in" * inyears : "")
-)")
+yearintervalsdict::Dict{String, Int} = Dict{String,Int}()  # A dictionary mapping years that are being modeled to the number of years in the intervals they represent. yearintervals is a temporary table.
+for row in SQLite.DBInterface.execute(db, "select y, intv from yearintervals $(restrictyears ? "where y in" * inyears : "")")
     yearintervalsdict[row[:y]] = row[:intv]
 end
 
 logmsg("Defined dimensions.", quiet)
 # END: Define dimensions.
+
+# BEGIN: Execute database queries in parallel.
+querycommands::Dict{String, Tuple{String, String}} = scenario_calc_queries(dbpath, transmissionmodeling,
+    in("vproductionbytechnology", varstosavearr), in("vusebytechnology", varstosavearr), restrictyears, inyears, limitedforesight,
+    lastyearprevgroupyears, firstmodeledyear)
+
+local queries::Dict{String, DataFrame}
+
+try
+    queries = run_queries(querycommands)
+catch ex
+    if contains(lowercase(sprint(showerror, ex)), "database is locked")
+        # Synchronization problem among Julia threads; collect garbage and retry
+        logmsg("Could not execute core database queries due to a database locking problem. Retrying...", quiet)
+        GC.gc()
+        queries = run_queries(querycommands)
+    else
+        rethrow()
+    end
+end
+
+logmsg("Executed core database queries.", quiet)
+# END: Execute database queries in parallel.
 
 # BEGIN: Define model variables.
 modelvarindices::Dict{String, Tuple{AbstractArray,Array{String,1}}} = Dict{String, Tuple{AbstractArray,Array{String,1}}}()
@@ -476,17 +543,25 @@ logmsg("Defined capacity variables.", quiet)
 
 # Activity
 # First, perform some checks to see which variables are needed
-local annualactivityupperlimits::Bool
-# Indicates whether constraints for TotalTechnologyAnnualActivityUpperLimit should be added to model
-local modelperiodactivityupperlimits::Bool
-# Indicates whether constraints for TotalTechnologyModelPeriodActivityUpperLimit should be added to model
+local annualactivityupperlimits::Bool = true  # Indicates whether constraints for TotalTechnologyAnnualActivityUpperLimit should be added to model
+local modelperiodactivityupperlimits::Bool = true  # Indicates whether constraints for TotalTechnologyModelPeriodActivityUpperLimit should be added to model
 
-(annualactivityupperlimits, modelperiodactivityupperlimits) = checkactivityupperlimits(db, 10000.0, restrictyears, inyears)
+queryannualactivityupperlimit::SQLite.Query = SQLite.DBInterface.execute(db, "select r, t, y, cast(val as real) as amx
+    from TotalTechnologyAnnualActivityUpperLimit_def $(restrictyears ? "where y in" * inyears : "")")
 
-local annualactivitylowerlimits::Bool = true
-# Indicates whether constraints for TotalTechnologyAnnualActivityLowerLimit should be added to model
-local modelperiodactivitylowerlimits::Bool = true
-# Indicates whether constraints for TotalTechnologyModelPeriodActivityLowerLimit should be added to model
+if SQLite.done(queryannualactivityupperlimit)
+    annualactivityupperlimits = false
+end
+
+querymodelperiodactivityupperlimit::SQLite.Query = SQLite.DBInterface.execute(db, "select r, t, cast(val as real) as mmx
+    from TotalTechnologyModelPeriodActivityUpperLimit_def")
+
+if SQLite.done(querymodelperiodactivityupperlimit)
+    modelperiodactivityupperlimits = false
+end
+
+local annualactivitylowerlimits::Bool = true  # Indicates whether constraints for TotalTechnologyAnnualActivityLowerLimit should be added to model
+local modelperiodactivitylowerlimits::Bool = true  # Indicates whether constraints for TotalTechnologyModelPeriodActivityLowerLimit should be added to model
 
 queryannualactivitylowerlimit::SQLite.Query = SQLite.DBInterface.execute(db, "select r, t, y, cast(val as real) as amn
     from TotalTechnologyAnnualActivityLowerLimit_def
@@ -999,13 +1074,19 @@ t = Threads.@spawn(let
     local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = y
     local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vnewcapacity sum
 
-    for row in SQLite.DBInterface.execute(db,"select r.val as r, t.val as t, y.val as y, yy.val as yy
+    for row in SQLite.DBInterface.execute(db,"select r.val as r, t.val as t, y.val as y, yy.val as yy, null as prevcalcval
     from REGION r, TECHNOLOGY t, YEAR y, OperationalLife_def ol, YEAR yy
     where ol.r = r.val and ol.t = t.val
     and y.val - yy.val < ol.val and y.val - yy.val >=0
     $(restrictyears ? "and y.val in" * inyears : "")
-    $(restrictyears ? "and yy.val in" * inyears : "")
-    order by r.val, t.val, y.val")
+    $(restrictyears ? "and yy.val in" * inyears : "")"
+    * (limitedforesight && !isnothing(lastyearprevgroupyears) ? "union all
+        select v.r, v.t, y.val as y, v.y as yy, v.val as prevcalcval
+        from vnewcapacity v, YEAR y, OperationalLife_def ol
+        where v.r = ol.r and v.t = ol.t
+        and y.val - v.y < ol.val and y.val - v.y >= 0
+        $(restrictyears ? "and y.val in" * inyears : "")" : "")
+    * " order by r, t, y")
         local r = row[:r]
         local t = row[:t]
         local y = row[:y]
@@ -1016,7 +1097,11 @@ t = Threads.@spawn(let
             sumexps[1] = AffExpr()
         end
 
-        add_to_expression!(sumexps[1], vnewcapacity[r,t,row[:yy]])
+        if ismissing(row[:prevcalcval])
+            add_to_expression!(sumexps[1], vnewcapacity[r,t,row[:yy]])    
+        else
+            add_to_expression!(sumexps[1], row[:prevcalcval])
+        end
 
         lastkeys[1] = r
         lastkeys[2] = t
@@ -1028,7 +1113,7 @@ t = Threads.@spawn(let
         push!(caa1_totalnewcapacity, @build_constraint(sumexps[1] == vaccumulatednewcapacity[lastkeys[1],lastkeys[2],lastkeys[3]]))
     end
 
-    put!(cons_channel, caa1_totalnewcapacity)
+    put!(cons_channel, caa1_totalnewcapacity)    
 end)
 
 numconsarrays += 1
@@ -2170,8 +2255,14 @@ if transmissionmodeling
     tr1_sumbuilt::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
     t = Threads.@spawn(begin
-        for tr in stransmission
-            push!(tr1_sumbuilt, @build_constraint(sum([vtransmissionbuilt[tr,y] for y in syear]) <= 1))
+        for row in SQLite.DBInterface.execute(db, "select tr, sum(prevcalcval) as prevcalcval from (
+            select tl.id as tr, 0 as prevcalcval from transmissionline tl"
+            * (limitedforesight && !isnothing(lastyearprevgroupyears) ? " union all
+                select v.tr, sum(v.val) as prevcalcval from vtransmissionbuilt v group by v.tr" : "")
+            * ") group by tr")
+           local tr = row[:tr]
+
+           push!(tr1_sumbuilt, @build_constraint(sum([vtransmissionbuilt[tr,y] for y in syear]) + row[:prevcalcval] <= 1))
         end
 
         put!(cons_channel, tr1_sumbuilt)
@@ -2191,22 +2282,31 @@ if transmissionmodeling
         local lastvalsint = Array{Int64, 1}(undef,2)  # lastvalsint[1] = yconstruction, lastvalsint[2] = operationallife
         local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vtransmissionbuilt sum
 
-        for row in SQLite.DBInterface.execute(db, "select tl.id as tr, tl.yconstruction, tl.operationallife, y.val as y, null as yy
+        for row in SQLite.DBInterface.execute(db, "select tl.id as tr, tl.yconstruction, tl.operationallife, y.val as y, null as yy, null as prevcalcval
         from TransmissionLine tl, YEAR y
         where tl.yconstruction is not null
         $(restrictyears ? "and y.val in" * inyears : "")
         union all
-        select tl.id as tr, tl.yconstruction, tl.operationallife, y.val as y, yy.val as yy
+        select tl.id as tr, tl.yconstruction, tl.operationallife, y.val as y, yy.val as yy, null as prevcalcval
         from TransmissionLine tl, YEAR y, YEAR yy
         where tl.yconstruction is null
         and yy.val + tl.operationallife > y.val
         and yy.val <= y.val
-        $(restrictyears ? "and y.val in" * inyears : "") $(restrictyears ? "and yy.val in" * inyears : "")
-        order by tr, y")
+        $(restrictyears ? "and y.val in" * inyears : "") $(restrictyears ? "and yy.val in" * inyears : "")"
+        * (limitedforesight && !isnothing(lastyearprevgroupyears) ? " union all select tl.id as tr, tl.yconstruction, tl.operationallife, y.val as y, null as yy, sum(v.val) as prevcalcval
+        from TransmissionLine tl, YEAR y, vtransmissionbuilt v 
+        where tl.yconstruction is null
+        and tl.id = v.tr
+        and v.y + tl.operationallife > y.val
+        and v.y <= y.val
+        $(restrictyears ? "and y.val in" * inyears : "")
+        group by tl.id, y.val" : "")
+        * " order by tr, y")
             local tr = row[:tr]
             local y = row[:y]
             local yy = row[:yy]
             local yconstruction = ismissing(row[:yconstruction]) ? 0 : row[:yconstruction]
+            local prevcalcval = row[:prevcalcval]
 
             if isassigned(lastkeys, 1) && (tr != lastkeys[1] || y != lastkeys[2])
                 # Create constraint
@@ -2225,9 +2325,8 @@ if transmissionmodeling
                 sumexps[1] = AffExpr()
             end
 
-            if !ismissing(yy)
-                add_to_expression!(sumexps[1], vtransmissionbuilt[tr,yy])
-            end
+            !ismissing(yy) && add_to_expression!(sumexps[1], vtransmissionbuilt[tr,yy])
+            !ismissing(prevcalcval) && add_to_expression!(sumexps[1], prevcalcval)
 
             lastkeys[1] = tr
             lastkeys[2] = y
@@ -2531,7 +2630,6 @@ if transmissionmodeling
         local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = ndd
         local sumexps = Array{AffExpr, 1}([AffExpr(), AffExpr()])  # sumexps[1] = vtransmissionbyline sum for eba11tr_energybalanceeachts5 (aggregated by node),
             # sumexps[2] = vtransmissionbyline sum for ebb4_energybalanceeachyear (aggregated by node and timeslice)
-        # sumexpsq = Array{QuadExpr, 1}([QuadExpr(), QuadExpr()])  # Quadratic version of sumexps; used if transmission modeling type = 3 and efficiency < 1
 
         # First query selects transmission-enabled nodes without any transmission lines, second selects transmission-enabled
         #   nodes that are n1 in a valid transmission line, third selects transmission-enabled nodes that are n2 in a
@@ -2600,18 +2698,14 @@ if transmissionmodeling
                 push!(eba11tr_energybalanceeachts5, @build_constraint(vproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
                     vdemandnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]
                     + vusenn[lastkeys[5],lastkeys[2],lastkeys[3],lastkeys[4]] * lastvals[1]))
-                    #+ (length(quad_terms(sumexpsq[1])) > 0 ? sumexpsq[1] : 0)))
                 sumexps[1] = AffExpr()
-                #sumexpsq[1] = QuadExpr()
             end
 
             if isassigned(lastkeys, 1) && (n != lastkeys[1] || f != lastkeys[3] || y != lastkeys[4])
                 # Create constraint
                 # vtransmissionannual is net annual transmission from n in energy terms
                 push!(ebb4_energybalanceeachyear, @build_constraint(vtransmissionannual[lastkeys[1],lastkeys[3],lastkeys[4]] == sumexps[2]))
-                    #+ (length(quad_terms(sumexpsq[2])) > 0 ? sumexpsq[2] : 0)))
                 sumexps[2] = AffExpr()
-                #sumexpsq[2] = QuadExpr()
             end
 
             if !ismissing(tr)
@@ -2621,8 +2715,6 @@ if transmissionmodeling
                 elseif trtype == 3 && eff < 1  # Incorporate efficiency in pipeline flow; vtransmissionlosses are losses (as a negative number, in model's energy unit) from perspective of node receiving energy (0 for nodes sending energy)
                     add_to_expression!(sumexps[1], vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta] - vtransmissionlosses[n,tr,l,f,y])
                     add_to_expression!(sumexps[2], vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta] - vtransmissionlosses[n,tr,l,f,y])
-                    #sumexpsq[1] = @expression(jumpmodel, sumexpsq[1] + vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta] * (vtransmissionbylineneg[tr,l,f,y] * (eff-1) + 1))
-                    #sumexpsq[2] = @expression(jumpmodel, sumexpsq[2] + vtransmissionbyline[tr,l,f,y] * row[:ys] * row[:tcta] * (vtransmissionbylineneg[tr,l,f,y] * (eff-1) + 1))
                 end
             end
 
@@ -2633,8 +2725,6 @@ if transmissionmodeling
                 elseif trtype == 3 && eff < 1  # Incorporate efficiency for to node in pipeline flow; vtransmissionlosses are losses (as a negative number, in model's energy unit) from perspective of node receiving energy (0 for nodes sending energy)
                     add_to_expression!(sumexps[1], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta] - vtransmissionlosses[n,trneg,l,f,y])
                     add_to_expression!(sumexps[2], -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta] - vtransmissionlosses[n,trneg,l,f,y])
-                    #sumexpsq[1] = @expression(jumpmodel, sumexpsq[1] + -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta] * (eff + vtransmissionbylineneg[trneg,l,f,y] * (1-eff)))
-                    #sumexpsq[2] = @expression(jumpmodel, sumexpsq[2] + -vtransmissionbyline[trneg,l,f,y] * row[:ys] * row[:tcta] * (eff + vtransmissionbylineneg[trneg,l,f,y] * (1-eff)))
                 end
             end
 
@@ -2651,9 +2741,8 @@ if transmissionmodeling
             push!(eba11tr_energybalanceeachts5, @build_constraint(vproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
             vdemandnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]
             + vusenn[lastkeys[5],lastkeys[2],lastkeys[3],lastkeys[4]] * lastvals[1]))
-                #+ (length(quad_terms(sumexpsq[1])) > 0 ? sumexpsq[1] : 0)))
+
             push!(ebb4_energybalanceeachyear, @build_constraint(vtransmissionannual[lastkeys[1],lastkeys[3],lastkeys[4]] == sumexps[2]))
-                #+ (length(quad_terms(sumexpsq[2])) > 0 ? sumexpsq[2] : 0)))
         end
 
         put!(cons_channel, eba11tr_energybalanceeachts5)
@@ -3065,8 +3154,13 @@ if in("vmodelperiodcostbyregion", varstosavearr)
     acc4_modelperiodcostbyregion::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
     t = Threads.@spawn(begin
-        for r in sregion
-            push!(acc4_modelperiodcostbyregion, @build_constraint(sum([vtotaldiscountedcost[r,y] for y in syear]) == vmodelperiodcostbyregion[r]))
+        for row in SQLite.DBInterface.execute(db, "select r.val as r, $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "v.val" : "null") as prevcalcval
+        from region r
+        $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "left join (select r, sum(val) as val from vtotaldiscountedcost group by r) v on r.val = v.r" : "")")
+            local r = row[:r]
+            local prevcalcval = ismissing(row[:prevcalcval]) ? 0 : row[:prevcalcval]
+
+            push!(acc4_modelperiodcostbyregion, @build_constraint(sum([vtotaldiscountedcost[r,y] for y in syear]) + prevcalcval == vmodelperiodcostbyregion[r]))
         end
 
         put!(cons_channel, acc4_modelperiodcostbyregion)
@@ -3312,7 +3406,8 @@ ns5_storageleveltimesliceend::Array{AbstractConstraint, 1} = Array{AbstractConst
 t = Threads.@spawn(begin
     for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, ltg.l as l, y.val as y, ltg.lorder as lo,
         ltg.tg2 as tg2, tg2.[order] as tg2o, ltg.tg1 as tg1, tg1.[order] as tg1o, cast(se.sls as real) as sls,
-        cast(msc.val as real) as msc, cast(rsc.delta as real) as rsc_delta
+        cast(msc.val as real) as msc, cast(rsc.delta as real) as rsc_delta,
+        $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "cast(v.val as real)" : "null") as prevcalcsl
     from REGION r, STORAGE s, YEAR y, LTsGroup ltg, TSGROUP2 tg2, TSGROUP1 tg1
     left join (select sls.r as r, sls.s as s, sls.val * rsc.val as sls
     from StorageLevelStart_def sls, ResidualStorageCapacity_def rsc
@@ -3320,8 +3415,9 @@ t = Threads.@spawn(begin
     left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
     left join MinStorageCharge_def msc on msc.r = r.val and msc.s = s.val and msc.y = y.val
     left join (select r, s, y, val - lag(val) over (partition by r, s order by y) as delta
-        from ResidualStorageCapacity_def $(restrictyears ? "where y in" * inyears : "")) rsc
+        from ResidualStorageCapacity_def) rsc
         on rsc.r = r.val and rsc.s = s.val and rsc.y = y.val
+    $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "left join vstoragelevelyearendnn v on v.r = r.val and v.s = s.val and v.y = (y.val - 1)" : "")
     where
     ltg.tg2 = tg2.name
     and ltg.tg1 = tg1.name
@@ -3342,7 +3438,21 @@ t = Threads.@spawn(begin
 
         if y == firstmodeledyear && tg1o == 1 && tg2o == 1 && lo == 1
             # New endogenous storage capacity is assumed to be delivered with minimum charge
-            startlevel = (ismissing(row[:sls]) ? 0 : row[:sls]) + (ismissing(row[:msc]) ? 0 : row[:msc] * vnewstoragecapacity[r,s,y])
+            startlevel = (ismissing(row[:msc]) ? 0 : row[:msc] * vnewstoragecapacity[r,s,y])
+
+            if !limitedforesight || (limitedforesight && isnothing(lastyearprevgroupyears))
+                # Apply storage start level to residual capacity in first year modeled for scenario
+                startlevel += (ismissing(row[:sls]) ? 0 : row[:sls])
+            else
+                # For limited foresight calculations for the second and subsequent groups of years, take start level from vstoragelevelyearendnn for the prior year, if it was calculated and saved; no carryover of energy for non-contiguous years
+                startlevel += (ismissing(row[:prevcalcsl]) ? 0 : row[:prevcalcsl])
+
+                # Add minimum charge in new exogenous storage capacity
+                if !ismissing(row[:msc]) && !ismissing(row[:rsc_delta]) && row[:rsc_delta] > 0
+                    startlevel += row[:msc] * row[:rsc_delta]
+                end
+            end
+
             addns3 = true
             addns4 = true
         elseif tg1o == 1 && tg2o == 1 && lo == 1
@@ -3402,18 +3512,20 @@ if transmissionmodeling
     ns5tr_storageleveltimesliceend::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
     t = Threads.@spawn(begin
-        # Note that this query distributes StorageLevelStart, MinStorageCharge, and ResidualStorageCapacity according to NodalDistributionStorageCapacity
+        # Note that this query distributes StorageLevelStart and MinStorageCharge according to NodalDistributionStorageCapacity
         for row in SQLite.DBInterface.execute(db, "select ns.r as r, ns.n as n, ns.s as s, ltg.l as l, ns.y as y, ltg.lorder as lo,
             ltg.tg2 as tg2, tg2.[order] as tg2o, ltg.tg1 as tg1, tg1.[order] as tg1o,
-        	cast(se.sls * ns.val as real) as sls, cast(msc.val * ns.val as real) as msc, cast(rsc.delta as real) as rsc_delta
+        	cast(se.sls * ns.val as real) as sls, cast(msc.val * ns.val as real) as msc, cast(rsc.delta as real) as rsc_delta,
+            $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "cast(v.val as real)" : "null") as prevcalcsl
         from nodalstorage ns, LTsGroup ltg, TSGROUP2 tg2, TSGROUP1 tg1
     	left join (select sls.r as r, sls.s as s, sls.val * rsc.val as sls
     		from StorageLevelStart_def sls, ResidualStorageCapacity_def rsc
     		where sls.r = rsc.r and sls.s = rsc.s and rsc.y = " * firstmodeledyear * ") se on se.r = ns.r and se.s = ns.s
         left join MinStorageCharge_def msc on msc.r = ns.r and msc.s = ns.s and msc.y = ns.y
         left join (select r, s, y, val - lag(val) over (partition by r, s order by y) as delta
-            from ResidualStorageCapacity_def $(restrictyears ? "where y in" * inyears : "")) rsc
+            from ResidualStorageCapacity_def) rsc
             on rsc.r = ns.r and rsc.s = ns.s and rsc.y = ns.y
+        $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "left join vstoragelevelyearendnodal v on v.n = ns.n and v.s = ns.s and v.y = (ns.y - 1)" : "")
         where
         ltg.tg2 = tg2.name
         and ltg.tg1 = tg1.name
@@ -3434,7 +3546,21 @@ if transmissionmodeling
 
             if y == firstmodeledyear && tg1o == 1 && tg2o == 1 && lo == 1
                 # New endogenous storage capacity is assumed to be delivered with minimum charge
-                startlevel = (ismissing(row[:sls]) ? 0 : row[:sls]) + (ismissing(row[:msc]) ? 0 : row[:msc] * vnewstoragecapacity[r,s,y])
+                startlevel = (ismissing(row[:msc]) ? 0 : row[:msc] * vnewstoragecapacity[r,s,y])
+
+                if !limitedforesight || (limitedforesight && isnothing(lastyearprevgroupyears))
+                    # Apply storage start level to residual capacity in first year modeled for scenario
+                    startlevel += (ismissing(row[:sls]) ? 0 : row[:sls])
+                else
+                    # For limited foresight calculations for the second and subsequent groups of years, take start level from vstoragelevelyearendnodal for the prior year, if it was calculated and saved; no carryover of energy for non-contiguous years
+                    startlevel += (ismissing(row[:prevcalcsl]) ? 0 : row[:prevcalcsl])
+
+                    # Add minimum charge in new exogenous storage capacity
+                    if !ismissing(row[:msc]) && !ismissing(row[:rsc_delta]) && row[:rsc_delta] > 0
+                        startlevel += row[:msc] * row[:rsc_delta]
+                    end
+                end
+
                 addns3 = true
                 addns4 = true
             elseif tg1o == 1 && tg2o == 1 && lo == 1
@@ -3673,14 +3799,15 @@ ns8a_storagelevelyearendnetzero::Array{AbstractConstraint, 1} = Array{AbstractCo
 
 t = Threads.@spawn(let
     local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = s, lastkeys[3] = y
-    local lastvals = Array{Float64, 1}([0.0, 0.0, 0.0])  # lastvals[1] = sls, lastvals[2] = msc, lastvals[3] = rsc_delta
+    local lastvals = Array{Float64, 1}([0.0, 0.0, 0.0, 0.0])  # lastvals[1] = sls, lastvals[2] = msc, lastvals[3] = rsc_delta, lastvals[4] = prevcalcsl
     local lastvalsint = Array{Int64, 1}(undef,1)  # lastvalsint[1] = ynz
     local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofstoragechargenn and vrateofstoragedischargenn sum
 
     for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s,
     case s.netzerotg2 when 1 then 0 else case s.netzerotg1 when 1 then 0 else s.netzeroyear end end as ynz,
     y.val as y, ys.l as l, cast(ys.val as real) as ys,
-    cast(se.sls as real) as sls, cast(msc.val as real) as msc, cast(rsc.delta as real) as rsc_delta
+    cast(se.sls as real) as sls, cast(msc.val as real) as msc, cast(rsc.delta as real) as rsc_delta,
+    $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "cast(v.val as real)" : "null") as prevcalcsl
     from REGION r, STORAGE s, YEAR as y, YearSplit_def ys
     left join (select sls.r as r, sls.s as s, sls.val * rsc.val as sls
     from StorageLevelStart_def sls, ResidualStorageCapacity_def rsc
@@ -3688,8 +3815,9 @@ t = Threads.@spawn(let
     left join nodalstorage ns on ns.r = r.val and ns.s = s.val and ns.y = y.val
     left join MinStorageCharge_def msc on msc.r = r.val and msc.s = s.val and msc.y = y.val
     left join (select r, s, y, val - lag(val) over (partition by r, s order by y) as delta
-        from ResidualStorageCapacity_def $(restrictyears ? "where y in" * inyears : "")) rsc on rsc.r = r.val and rsc.s = s.val and rsc.y = y.val
-    where y.val = ys.y
+        from ResidualStorageCapacity_def) rsc on rsc.r = r.val and rsc.s = s.val and rsc.y = y.val
+    $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "left join vstoragelevelyearendnn v on v.r = r.val and v.s = s.val and v.y = (y.val - 1)" : "")
+        where y.val = ys.y
     and ns.r is null
     $(restrictyears ? "and y.val in" * inyears : "")
     order by r.val, s.val, y.val")
@@ -3703,8 +3831,14 @@ t = Threads.@spawn(let
             # New endogenous and exogenous storage capacity is assumed to be delivered with minimum charge
             # If exogenous capacity is retired, any charge is assumed to be transferred to other capacity existing at start of year; or lost if no capacity exists
             push!(ns8_storagelevelyearend, @build_constraint(
-                if lastkeys[3] == firstmodeledyear
-                    lastvals[1]
+                if lastkeys[3] == firstmodeledyear 
+                    if (!limitedforesight || (limitedforesight && isnothing(lastyearprevgroupyears)))
+                        # Apply storage start level to residual capacity in first year modeled for scenario
+                        lastvals[1]
+                    else
+                        # For limited foresight calculations for the second and subsequent groups of years, take start level from vstoragelevelyearendnn for the prior year, if it was calculated and saved; no carryover of energy for non-contiguous years
+                        lastvals[4]
+                    end
                 else
                     (!restrictyears || Meta.parse(lastkeys[3])-1 in calcyears ? vstoragelevelyearendnn[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)] : 0)
                 end
@@ -3716,7 +3850,13 @@ t = Threads.@spawn(let
             if lastvalsint[1] == 1
                 push!(ns8a_storagelevelyearendnetzero, @build_constraint(
                     if lastkeys[3] == firstmodeledyear
-                        lastvals[1]
+                        if (!limitedforesight || (limitedforesight && isnothing(lastyearprevgroupyears)))
+                            # Apply storage start level to residual capacity in first year modeled for scenario
+                            lastvals[1]
+                        else
+                            # For limited foresight calculations for the second and subsequent groups of years, take start level from vstoragelevelyearendnn for the prior year, if it was calculated and saved; no carryover of energy for non-contiguous years
+                            lastvals[4]
+                        end
                     else
                         (!restrictyears || Meta.parse(lastkeys[3])-1 in calcyears ? vstoragelevelyearendnn[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)] : 0)
                     end
@@ -3727,7 +3867,7 @@ t = Threads.@spawn(let
             end
 
             sumexps[1] = AffExpr()
-            lastvals = [0.0, 0.0, 0.0]
+            lastvals = [0.0, 0.0, 0.0, 0.0]
             lastvalsint[1] = 0
         end
 
@@ -3745,6 +3885,10 @@ t = Threads.@spawn(let
             lastvals[3] = row[:rsc_delta]
         end
 
+        if !ismissing(row[:prevcalcsl])
+            lastvals[4] = row[:prevcalcsl]
+        end
+
         lastvalsint[1] = ynz
         lastkeys[1] = r
         lastkeys[2] = s
@@ -3754,8 +3898,14 @@ t = Threads.@spawn(let
     # Create last constraint
     if isassigned(lastkeys, 1)
         push!(ns8_storagelevelyearend, @build_constraint(
-            if lastkeys[3] == firstmodeledyear
-                lastvals[1]
+            if lastkeys[3] == firstmodeledyear 
+                if (!limitedforesight || (limitedforesight && isnothing(lastyearprevgroupyears)))
+                    # Apply storage start level to residual capacity in first year modeled for scenario
+                    lastvals[1]
+                else
+                    # For limited foresight calculations for the second and subsequent groups of years, take start level from vstoragelevelyearendnn for the prior year, if it was calculated and saved; no carryover of energy for non-contiguous years
+                    lastvals[4]
+                end
             else
                 (!restrictyears || Meta.parse(lastkeys[3])-1 in calcyears ? vstoragelevelyearendnn[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)] : 0)
             end
@@ -3766,8 +3916,14 @@ t = Threads.@spawn(let
 
         if lastvalsint[1] == 1
             push!(ns8a_storagelevelyearendnetzero, @build_constraint(
-                if lastkeys[3] == firstmodeledyear
-                    lastvals[1]
+                if lastkeys[3] == firstmodeledyear 
+                    if (!limitedforesight || (limitedforesight && isnothing(lastyearprevgroupyears)))
+                        # Apply storage start level to residual capacity in first year modeled for scenario
+                        lastvals[1]
+                    else
+                        # For limited foresight calculations for the second and subsequent groups of years, take start level from vstoragelevelyearendnn for the prior year, if it was calculated and saved; no carryover of energy for non-contiguous years
+                        lastvals[4]
+                    end
                 else
                     (!restrictyears || Meta.parse(lastkeys[3])-1 in calcyears ? vstoragelevelyearendnn[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)] : 0)
                 end
@@ -3794,7 +3950,7 @@ if transmissionmodeling
 
     t = Threads.@spawn(let
         local lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = n, lastkeys[2] = s, lastkeys[3] = y, lastkeys[4] = r
-        local lastvals = Array{Float64, 1}([0.0, 0.0, 0.0])  # lastvals[1] = sls, lastvals[2] = msc, lastvals[3] = rsc_delta
+        local lastvals = Array{Float64, 1}([0.0, 0.0, 0.0, 0.0])  # lastvals[1] = sls, lastvals[2] = msc, lastvals[3] = rsc_delta, lastvals[4] = prevcalcsl
         local lastvalsint = Array{Int64, 1}(undef,1)  # lastvalsint[1] = ynz
         local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vrateofstoragechargenodal and vrateofstoragedischargenodal sum
 
@@ -3803,15 +3959,17 @@ if transmissionmodeling
         case s.netzerotg2 when 1 then 0 else case s.netzerotg1 when 1 then 0 else s.netzeroyear end end as ynz,
         ns.y as y, ys.l as l, cast(ys.val as real) as ys,
         cast(se.sls * ns.val as real) as sls, cast(msc.val * ns.val as real) as msc,
-        cast(rsc.delta as real) as rsc_delta
+        cast(rsc.delta as real) as rsc_delta,
+        $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "cast(v.val as real)" : "null") as prevcalcsl
         from nodalstorage ns, STORAGE s, YearSplit_def ys
         left join (select sls.r as r, sls.s as s, sls.val * rsc.val as sls
     		from StorageLevelStart_def sls, ResidualStorageCapacity_def rsc
     		where sls.r = rsc.r and sls.s = rsc.s and rsc.y = " * firstmodeledyear * ") se on se.r = ns.r and se.s = ns.s
         left join MinStorageCharge_def msc on msc.r = ns.r and msc.s = s.val and msc.y = ns.y
         left join (select r, s, y, val - lag(val) over (partition by r, s order by y) as delta
-    		from ResidualStorageCapacity_def $(restrictyears ? "where y in" * inyears : "")) rsc
+    		from ResidualStorageCapacity_def) rsc
             on rsc.r = ns.r and rsc.s = s.val and rsc.y = ns.y
+        $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "left join vstoragelevelyearendnodal v on v.n = ns.n and v.s = ns.s and v.y = (ns.y - 1)" : "")
         where ns.s = s.val
     	and ns.y = ys.y
         $(restrictyears ? "and ns.y in" * inyears : "")
@@ -3827,7 +3985,13 @@ if transmissionmodeling
                 # If exogenous capacity is retired, any charge is assumed to be transferred to other capacity existing at start of year; or lost if no capacity exists
                 push!(ns8tr_storagelevelyearend, @build_constraint(
                     if lastkeys[3] == firstmodeledyear
-                        lastvals[1]
+                        if (!limitedforesight || (limitedforesight && isnothing(lastyearprevgroupyears)))
+                            # Apply storage start level to residual capacity in first year modeled for scenario
+                            lastvals[1]
+                        else
+                            # For limited foresight calculations for the second and subsequent groups of years, take start level from vstoragelevelyearendnn for the prior year, if it was calculated and saved; no carryover of energy for non-contiguous years
+                            lastvals[4]
+                        end
                     else
                         (!restrictyears || Meta.parse(lastkeys[3])-1 in calcyears ? vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)] : 0)
                     end
@@ -3839,7 +4003,13 @@ if transmissionmodeling
                 if lastvalsint[1] == 1
                     push!(ns8atr_storagelevelyearendnetzero, @build_constraint(
                         if lastkeys[3] == firstmodeledyear
-                            lastvals[1]
+                            if (!limitedforesight || (limitedforesight && isnothing(lastyearprevgroupyears)))
+                                # Apply storage start level to residual capacity in first year modeled for scenario
+                                lastvals[1]
+                            else
+                                # For limited foresight calculations for the second and subsequent groups of years, take start level from vstoragelevelyearendnn for the prior year, if it was calculated and saved; no carryover of energy for non-contiguous years
+                                lastvals[4]
+                            end
                         else
                             (!restrictyears || Meta.parse(lastkeys[3])-1 in calcyears ? vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)] : 0)
                         end
@@ -3850,7 +4020,7 @@ if transmissionmodeling
                 end
 
                 sumexps[1] = AffExpr()
-                lastvals = [0.0, 0.0, 0.0]
+                lastvals = [0.0, 0.0, 0.0, 0.0]
                 lastvalsint[1] = 0
             end
 
@@ -3868,6 +4038,10 @@ if transmissionmodeling
                 lastvals[3] = row[:rsc_delta]
             end
 
+            if !ismissing(row[:prevcalcsl])
+                lastvals[4] = row[:prevcalcsl]
+            end
+
             lastvalsint[1] = ynz
             lastkeys[1] = n
             lastkeys[2] = s
@@ -3879,7 +4053,13 @@ if transmissionmodeling
         if isassigned(lastkeys, 1)
             push!(ns8tr_storagelevelyearend, @build_constraint(
                 if lastkeys[3] == firstmodeledyear
-                    lastvals[1]
+                    if (!limitedforesight || (limitedforesight && isnothing(lastyearprevgroupyears)))
+                        # Apply storage start level to residual capacity in first year modeled for scenario
+                        lastvals[1]
+                    else
+                        # For limited foresight calculations for the second and subsequent groups of years, take start level from vstoragelevelyearendnn for the prior year, if it was calculated and saved; no carryover of energy for non-contiguous years
+                        lastvals[4]
+                    end
                 else
                     (!restrictyears || Meta.parse(lastkeys[3])-1 in calcyears ? vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)] : 0)
                 end
@@ -3891,7 +4071,13 @@ if transmissionmodeling
             if lastvalsint[1] == 1
                 push!(ns8atr_storagelevelyearendnetzero, @build_constraint(
                     if lastkeys[3] == firstmodeledyear
-                        lastvals[1]
+                        if (!limitedforesight || (limitedforesight && isnothing(lastyearprevgroupyears)))
+                            # Apply storage start level to residual capacity in first year modeled for scenario
+                            lastvals[1]
+                        else
+                            # For limited foresight calculations for the second and subsequent groups of years, take start level from vstoragelevelyearendnn for the prior year, if it was calculated and saved; no carryover of energy for non-contiguous years
+                            lastvals[4]
+                        end
                     else
                         (!restrictyears || Meta.parse(lastkeys[3])-1 in calcyears ? vstoragelevelyearendnodal[lastkeys[1], lastkeys[2], string(Meta.parse(lastkeys[3])-1)] : 0)
                     end
@@ -3962,12 +4148,18 @@ t = Threads.@spawn(let
     local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = s, lastkeys[3] = y
     local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vnewstoragecapacity sum
 
-    for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, cast(ols.val as real) as ols, yy.val as yy
+    for row in SQLite.DBInterface.execute(db, "select r.val as r, s.val as s, y.val as y, yy.val as yy, null as prevcalcval
     from region r, storage s, year y, OperationalLifeStorage_def ols, year yy
     where ols.r = r.val and ols.s = s.val
     and y.val - yy.val < ols.val and y.val - yy.val >= 0
-    $(restrictyears ? "and y.val in" * inyears : "") $(restrictyears ? "and yy.val in" * inyears : "")
-    order by r.val, s.val, y.val")
+    $(restrictyears ? "and y.val in" * inyears : "") $(restrictyears ? "and yy.val in" * inyears : "")"
+    * (limitedforesight && !isnothing(lastyearprevgroupyears) ? "union all
+        select v.r, v.s, y.val as y, v.y as yy, v.val as prevcalcval
+        from vnewstoragecapacity v, YEAR y, OperationalLifeStorage_def ols
+        where v.r = ols.r and v.s = ols.s
+        and y.val - v.y < ols.val and y.val - v.y >= 0
+        $(restrictyears ? "and y.val in" * inyears : "")" : "")
+    * " order by r, s, y")
         local r = row[:r]
         local s = row[:s]
         local y = row[:y]
@@ -3979,7 +4171,11 @@ t = Threads.@spawn(let
             sumexps[1] = AffExpr()
         end
 
-        add_to_expression!(sumexps[1], vnewstoragecapacity[r,s,row[:yy]])
+        if ismissing(row[:prevcalcval])
+            add_to_expression!(sumexps[1], vnewstoragecapacity[r,s,row[:yy]])
+        else
+            add_to_expression!(sumexps[1], row[:prevcalcval])
+        end
 
         lastkeys[1] = r
         lastkeys[2] = s
@@ -5114,48 +5310,63 @@ oc4_discountedoperatingcoststotalannual::Array{AbstractConstraint, 1} = Array{Ab
 
 t = Threads.@spawn(let
     local sumexps = Array{AffExpr, 1}([AffExpr(), AffExpr()])  # sumexps[1] = sum of estimated fixed costs in non-modeled years, sumexps[2] = sum of estimated variable costs in non-modeled years
-    local lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = y, lastkeys[4] = prev_y
-    local lastvals = Array{Float64, 1}(undef,3)  # lastvals[1] = dr, lastvals[2] = fsy_rtc, lastvals[3] = fc
+    local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = y
+    local lastvals = Array{Float64, 1}(undef,1)  # lastvals[1] = dr
     local lastvalsint = Array{Int64, 1}(undef,2)  # lastvalsint[1] = yint, lastvalsint[2] = nyears
+    local lastvalsm = Array{Any, 1}(undef,3)  # lastvalsm[1] = fsy_rtc, lastvalsm[2] = fc, lastvalsm[3] = prevcalcval2 (vtotalcapacityannual calculated in a previous iteration for limited foresight optimization)
 
-    for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, vc.m as m, y.prev_y,
+    for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, vc.m as m,
     cast(dr.val as real) as dr, cast(rtc.val as real) as fsy_rtc, cast(fc.val as real) as fc,
-    cast(vc.val as real) as vc
-    from region r, TECHNOLOGY t,
-    	(select y.val, lag(y.val) over (order by y.val) as prev_y from year y
-            $(restrictyears ? "where y.val in" * inyears : "")
-    	) as y, DiscountRate_def dr
+    cast(vc.val as real) as vc, 
+    $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "cast(v.val as real)" : "null") as prevcalcval,
+    $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "cast(v2.val as real)" : "null") as prevcalcval2
+    from region r, TECHNOLOGY t, YEAR y, DiscountRate_def dr, yearintervals yi
     left join ResidualCapacity_def rtc on rtc.r = r.val and rtc.t = t.val and rtc.y = $firstscenarioyear
     left join FixedCost_def fc on fc.r = r.val and fc.t = t.val and fc.y = y.val
     left join VariableCost_def vc on vc.r = r.val and vc.t = t.val and vc.y = y.val and vc.val <> 0
+    $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "left join vtotalannualtechnologyactivitybymode v on v.r = r.val and v.t = t.val and v.m = vc.m and v.y = (y.val - yi.intv)" : "")
+    $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "left join vtotalcapacityannual v2 on v2.r = r.val and v2.t = t.val and v2.y = (y.val - yi.intv)" : "")
     WHERE dr.r = r.val
+    and y.val = yi.y
+    $(restrictyears ? "and y.val in" * inyears : "")
     order by r.val, t.val, y.val")
         local r = row[:r]
         local t = row[:t]
         local y = row[:y]
         local yint::Int64 = Meta.parse(y)
-        local prev_y = row[:prev_y]
         local dr = row[:dr]
-        local nyears::Int64 = (ismissing(prev_y) ? yint - firstscenarioyear : yint - Meta.parse(prev_y) - 1)  # Number of years in y's interval, excluding y
+        local nyears::Int64 = yearintervalsdict[y] - 1  # Number of years in y's interval, excluding y
 
         if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2] || y != lastkeys[3])
             # Create constraint
-            local pcapacity  # Capacity for r & t at start of y's interval
+            local pcapacity  # Capacity for r & t at start of interval for lastkeys[3]
 
-            # When selected years are modeled, add estimated fixed costs in non-modeled years to discounted operating costs. Assume linear deployment of capacity over modeled intervals.
-            if !ismissing(lastvals[3])
-                if lastkeys[4] == ""
-                    # Residual capacity at start of scenario period
-                    pcapacity = (ismissing(lastvals[2]) ? 0 : lastvals[2])
+            # When selected years are modeled, add estimated fixed costs in non-modeled years to discounted operating costs. Assume linear deployment of capacity over modeled intervals. Hold fixed costs constant in all years from last year modeled for scenario to last year in scenario database.
+            if !ismissing(lastvalsm[2])
+                if !ismissing(lastvalsm[3])
+                    # First year in a second or later iteration for limited foresight optimization
+                    pcapacity = lastvalsm[3]
+                elseif in(lastvalsint[1] - yearintervalsdict[lastkeys[3]], calcyears)
+                    pcapacity = vtotalcapacityannual[lastkeys[1], lastkeys[2], string(lastvalsint[1] - yearintervalsdict[lastkeys[3]])]
                 else
-                    # Capacity in previous modeled year
-                    pcapacity = vtotalcapacityannual[lastkeys[1], lastkeys[2], lastkeys[4]]
+                    if limitedforesight && !isnothing(lastyearprevgroupyears)
+                        pcapacity = 0.0
+                    else
+                        # Residual capacity at start of scenario period
+                        pcapacity = (ismissing(lastvalsm[1]) ? 0 : lastvalsm[1])
+                    end
                 end
 
                 for i = 1:lastvalsint[2]
                     # Processing all years in interval before y; fixed costs for y itself are already included in voperatingcost
                     add_to_expression!(sumexps[1], (pcapacity + (vtotalcapacityannual[lastkeys[1],lastkeys[2],lastkeys[3]] - pcapacity) / (lastvalsint[2] + 1) * (lastvalsint[2] + 1 - i))
-                        * lastvals[3] / ((1 + lastvals[1])^(lastvalsint[1] - i - firstscenarioyear + 0.5)))
+                        * lastvalsm[2] / ((1 + lastvals[1])^(lastvalsint[1] - i - firstscenarioyear + 0.5)))
+                end
+
+                if lastkeys[3] == lastmodeledyear && (!limitedforesight || (limitedforesight && finalgroupyears))
+                    for i = (lastvalsint[1] + 1):lastscenarioyear
+                        add_to_expression!(sumexps[1], vtotalcapacityannual[lastkeys[1],lastkeys[2],lastkeys[3]] * lastvalsm[2] / ((1 + lastvals[1])^(i - firstscenarioyear + 0.5)))
+                    end
                 end
             end
 
@@ -5167,14 +5378,24 @@ t = Threads.@spawn(let
             sumexps[2] = AffExpr()
         end
 
-        # When selected years are modeled, add estimated variable costs in non-modeled years to discounted operating costs. Assume linear scaling of activity over modeled intervals (for years before first modeled year, assume constant activity).
+        # When selected years are modeled, add estimated variable costs in non-modeled years to discounted operating costs. Assume: 1) constant activity in all years from first year in scenario database to first year modeled for scenario; 2) linear scaling of activity between years modeled for scenario; and 3) constant activity in all years from last year modeled for scenario to last year in scenario database.
         if !ismissing(row[:vc])
             local pactivity  # Activity for r, t, & m at start of y's interval
 
-            if ismissing(prev_y)
-                pactivity = vtotalannualtechnologyactivitybymode[r,t,row[:m],y]
+            if !ismissing(row[:prevcalcval])
+                # First year in a second or later iteration for limited foresight optimization
+                pactivity = row[:prevcalcval]
+            elseif in(yint - yearintervalsdict[y], calcyears)
+                # Second or later year in calcyears
+                pactivity = vtotalannualtechnologyactivitybymode[r,t,row[:m],string(yint - yearintervalsdict[y])]
             else
-                pactivity = vtotalannualtechnologyactivitybymode[r,t,row[:m],prev_y]
+                if limitedforesight && !isnothing(lastyearprevgroupyears)
+                    # First year in a second or later iteration for limited foresight optimization - prior activity was 0
+                    pactivity = 0.0
+                else
+                    # First year modeled for scenario
+                    pactivity = vtotalannualtechnologyactivitybymode[r,t,row[:m],y]
+                end
             end
 
             for i = 1:nyears
@@ -5182,38 +5403,55 @@ t = Threads.@spawn(let
                 add_to_expression!(sumexps[2], (pactivity + (vtotalannualtechnologyactivitybymode[r,t,row[:m],y] - pactivity) / (nyears + 1) * (nyears + 1 - i))
                     * row[:vc] / ((1 + dr)^(yint - i - firstscenarioyear + 0.5)))
             end
+
+            if y == lastmodeledyear && (!limitedforesight || (limitedforesight && finalgroupyears))
+                for i = (yint + 1):lastscenarioyear
+                    add_to_expression!(sumexps[2], vtotalannualtechnologyactivitybymode[r,t,row[:m],y] * row[:vc] / ((1 + dr)^(i - firstscenarioyear + 0.5)))
+                end
+            end
         end
 
         lastkeys[1] = r
         lastkeys[2] = t
         lastkeys[3] = y
-        lastkeys[4] = (ismissing(prev_y) ? "" : prev_y)
         lastvals[1] = dr
-        lastvals[2] = row[:fsy_rtc]
-        lastvals[3] = row[:fc]
+        lastvalsm[1] = row[:fsy_rtc]
+        lastvalsm[2] = row[:fc]
         lastvalsint[1] = yint
         lastvalsint[2] = nyears
+        lastvalsm[3] = row[:prevcalcval2]
     end
 
     # Create last constraint
     if isassigned(lastkeys, 1)
-        # Create constraint
-        local pcapacity  # Capacity for r & t at start of y's interval
+        local pcapacity  # Capacity for r & t at start of interval for lastkeys[3]
 
-        # When selected years are modeled, add estimated fixed costs in non-modeled years to discounted operating costs. Assume linear deployment of capacity over modeled intervals.
-        if !ismissing(lastvals[3])
-            if lastkeys[4] == ""
-                # Residual capacity at start of scenario period
-                pcapacity = (ismissing(lastvals[2]) ? 0 : lastvals[2])
+        # When selected years are modeled, add estimated fixed costs in non-modeled years to discounted operating costs. Assume linear deployment of capacity over modeled intervals. Hold fixed costs constant in all years from last year modeled for scenario to last year in scenario database.
+        if !ismissing(lastvalsm[2])
+            if !ismissing(lastvalsm[3])
+                # First year in a second or later iteration for limited foresight optimization
+                pcapacity = lastvalsm[3]
+            elseif in(lastvalsint[1] - yearintervalsdict[lastkeys[3]], calcyears)
+                pcapacity = vtotalcapacityannual[lastkeys[1], lastkeys[2], string(lastvalsint[1] - yearintervalsdict[lastkeys[3]])]
             else
-                # Capacity in previous modeled year
-                pcapacity = vtotalcapacityannual[lastkeys[1], lastkeys[2], lastkeys[4]]
+                if limitedforesight && !isnothing(lastyearprevgroupyears)
+                    pcapacity = 0.0
+                else
+                    # Residual capacity at start of scenario period
+                    pcapacity = (ismissing(lastvalsm[1]) ? 0 : lastvalsm[1])
+                end
             end
 
             for i = 1:lastvalsint[2]
                 # Processing all years in interval before y; fixed costs for y itself are already included in voperatingcost
                 add_to_expression!(sumexps[1], (pcapacity + (vtotalcapacityannual[lastkeys[1],lastkeys[2],lastkeys[3]] - pcapacity) / (lastvalsint[2] + 1) * (lastvalsint[2] + 1 - i))
-                    * lastvals[3] / ((1 + lastvals[1])^(lastvalsint[1] - i - firstscenarioyear + 0.5)))
+                    * lastvalsm[2] / ((1 + lastvals[1])^(lastvalsint[1] - i - firstscenarioyear + 0.5)))
+            end
+
+            if lastkeys[3] == lastmodeledyear && (!limitedforesight || (limitedforesight && finalgroupyears))
+                for i = (lastvalsint[1] + 1):lastscenarioyear
+                    add_to_expression!(sumexps[1], vtotalcapacityannual[lastkeys[1],lastkeys[2],lastkeys[3]] * lastvalsm[2] / ((1 + lastvals[1])^(i - firstscenarioyear + 0.5)))
+                end
             end
         end
 
@@ -5236,14 +5474,16 @@ if transmissionmodeling
     t = Threads.@spawn(let
         local sumexps = Array{AffExpr, 1}([AffExpr(), AffExpr()])  # sumexps[1] = sum of estimated fixed costs in non-modeled years, sumexps[2] = sum of estimated variable costs in non-modeled years
 
-        for row in SQLite.DBInterface.execute(db, "select tl.id as tr, tl.f as f, tme1.y as y, y.prev_y,
+        for row in SQLite.DBInterface.execute(db, "select tl.id as tr, tl.f as f, tme1.y as y,
             cast(tl.VariableCost as real) as vc, cast(tl.fixedcost as real) as fc, tl.yconstruction, tl.operationallife as ol,
-    		cast(dr.val as real) as dr
+    		cast(dr.val as real) as dr,
+            $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "cast(v.val as real)" : "null") as prevcalcval,
+            $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "cast(v2.val as real)" : "null") as prevcalcval2
             from TransmissionLine tl, NODE n1, NODE n2, TransmissionModelingEnabled tme1,
             TransmissionModelingEnabled tme2, TransmissionCapacityToActivityUnit_def tcta,
-    		(select y.val, lag(y.val) over (order by y.val) as prev_y from year y
-    			$(restrictyears ? "where y.val in" * inyears : "")
-    		) as y, DiscountRate_def dr
+    		DiscountRate_def dr, yearintervals yi
+            $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "left join vtransmissionexists v on v.tr = tl.id and v.y = (tme1.y - yi.intv)" : "")
+            $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "left join vvariablecosttransmission v2 on v2.tr = tl.id and v2.y = (tme1.y - yi.intv)" : "")
             where
             tl.n1 = n1.val and tl.n2 = n2.val
             and tme1.r = n1.r and tme1.f = tl.f
@@ -5251,22 +5491,22 @@ if transmissionmodeling
             and tme1.y = tme2.y and tme1.type = tme2.type
         	and exists (select 1 from YearSplit_def ys where ys.y = tme1.y)
         	and tcta.r = n1.r and tl.f = tcta.f
-    		and tme1.y = y.val
-            and dr.r = n1.r")
+            $(restrictyears ? "and tme1.y in" * inyears : "")
+            and dr.r = n1.r
+            and yi.y = tme1.y")
 
             local tr = row[:tr]
             local f = row[:f]
             local y = row[:y]
             local yint::Int64 = Meta.parse(y)
-            local prev_y = row[:prev_y]
             local vc = ismissing(row[:vc]) ? 0.0 : row[:vc]
             local fc = ismissing(row[:fc]) ? 0.0 : row[:fc]
             local yconstruction = row[:yconstruction]
             local ol = row[:ol]
             local dr = row[:dr]
-            local nyears::Int64 = (ismissing(prev_y) ? yint - firstscenarioyear : yint - Meta.parse(prev_y) - 1)  # Number of years in y's interval, excluding y
+            local nyears::Int64 = yearintervalsdict[y] - 1  # Number of years in y's interval, excluding y
 
-            # Add estimated fixed costs in non-modeled years to discounted operating costs; fixed costs for y itself are already included in voperatingcosttransmission
+            # Add estimated fixed costs in non-modeled years to discounted operating costs; fixed costs for y itself are already included in voperatingcosttransmission. Hold fixed costs constant in all years from last year modeled for scenario to last year in scenario database.
             if !ismissing(yconstruction)
                 # Exogenously specified line
                 for i = 1:nyears
@@ -5274,29 +5514,77 @@ if transmissionmodeling
                         add_to_expression!(sumexps[1], fc / ((1 + dr)^(yint - i - firstscenarioyear + 0.5)))
                     end
                 end
-            elseif continuoustransmission
-                # Endogenously built line - assume linear deployment of capacity over modeled intervals
-                local pexists = (ismissing(prev_y) ? 0 : vtransmissionexists[tr, prev_y])  # Fraction of tr existing at start of y's interval
 
-                for i = 1:nyears
-                    add_to_expression!(sumexps[1], (pexists + (vtransmissionexists[tr,y] - pexists) / (nyears + 1) * (nyears + 1 - i))
-                        * fc / ((1 + dr)^(yint - i - firstscenarioyear + 0.5)))
+                if y == lastmodeledyear && (!limitedforesight || (limitedforesight && finalgroupyears))
+                    for i = (yint + 1):lastscenarioyear
+                        if (yconstruction + ol) > i
+                            add_to_expression!(sumexps[1], fc / ((1 + dr)^(i - firstscenarioyear + 0.5)))
+                        end
+                    end
+                end
+            else
+                # Endogenously built line
+                local pexists  # Fraction of tr existing at start of y's interval
+
+                if !ismissing(row[:prevcalcval])
+                    # First year in a second or later iteration for limited foresight optimization
+                    pexists = row[:prevcalcval]
+                elseif in(yint - yearintervalsdict[y], calcyears)
+                    # Second or later year in calcyears
+                    pexists = vtransmissionexists[tr,string(yint - yearintervalsdict[y])]
+                else
+                    pexists = 0.0
+                end
+
+                if continuoustransmission
+                    # Assume linear deployment of capacity over modeled intervals
+                    for i = 1:nyears
+                        add_to_expression!(sumexps[1], (pexists + (vtransmissionexists[tr,y] - pexists) / (nyears + 1) * (nyears + 1 - i))
+                            * fc / ((1 + dr)^(yint - i - firstscenarioyear + 0.5)))
+                    end
+                else
+                    # Count fixed costs in non-modeled years
+                    for i = 1:nyears
+                        add_to_expression!(sumexps[1], pexists * fc / ((1 + dr)^(yint - i - firstscenarioyear + 0.5)))
+                    end
+                end
+
+                if y == lastmodeledyear && (!limitedforesight || (limitedforesight && finalgroupyears))
+                    for i = (yint + 1):lastscenarioyear
+                        add_to_expression!(sumexps[1], vtransmissionexists[tr,y] * fc / ((1 + dr)^(i - firstscenarioyear + 0.5)))
+                    end
                 end
             end
 
-            # Add estimated variable costs in non-modeled years to discounted operating costs; variable costs for y itself are already included in voperatingcosttransmission. Assume linear scaling of activity over modeled intervals (for years before first modeled year, assume constant activity).
+            # Add estimated variable costs in non-modeled years to discounted operating costs; variable costs for y itself are already included in voperatingcosttransmission. Assume: 1) constant activity in all years from first year in scenario database to first year modeled for scenario; 2) linear scaling of activity between years modeled for scenario; and 3) constant activity in all years from last year modeled for scenario to last year in scenario database.
             if vc > 0
-                local pactivity  # Activity for tr & f at start of y's interval
+                local pcost  # Variable costs for tr at start of y's interval
 
-                if ismissing(prev_y)
-                    pactivity = vvariablecosttransmission[tr,y] / vc
+                if !ismissing(row[:prevcalcval2])
+                    # First year in a second or later iteration for limited foresight optimization
+                    pcost = row[:prevcalcval2]
+                elseif in(yint - yearintervalsdict[y], calcyears)
+                    # Second or later year in calcyears
+                    pcost = vvariablecosttransmission[tr,string(yint - yearintervalsdict[y])]
                 else
-                    pactivity = vvariablecosttransmission[tr,prev_y] / vc
+                    if limitedforesight && !isnothing(lastyearprevgroupyears)
+                        # First year in a second or later iteration for limited foresight optimization - previous activity was 0
+                        pcost = 0.0
+                    else
+                        # First year modeled for scenario
+                        pcost = vvariablecosttransmission[tr,y]
+                    end
                 end
 
                 for i = 1:nyears
-                    add_to_expression!(sumexps[2], (pactivity + (vvariablecosttransmission[tr,y] / vc - pactivity) / (nyears + 1) * (nyears + 1 - i))
-                        * vc / ((1 + dr)^(yint - i - firstscenarioyear + 0.5)))
+                    add_to_expression!(sumexps[2], (pcost + (vvariablecosttransmission[tr,y] - pcost) / (nyears + 1) * (nyears + 1 - i))
+                        / ((1 + dr)^(yint - i - firstscenarioyear + 0.5)))
+                end
+
+                if y == lastmodeledyear && (!limitedforesight || (limitedforesight && finalgroupyears))
+                    for i = (yint + 1):lastscenarioyear
+                        add_to_expression!(sumexps[2], vvariablecosttransmission[tr,y] / ((1 + dr)^(i - firstscenarioyear + 0.5)))
+                    end
                 end
             end
 
@@ -5528,8 +5816,7 @@ if annualactivityupperlimits
     aac2_totalannualtechnologyactivityupperlimit::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
     t = Threads.@spawn(begin
-        for row in SQLite.DBInterface.execute(db, "select r, t, y, cast(val as real) as amx
-        from TotalTechnologyAnnualActivityUpperLimit_def $(restrictyears ? "where y in" * inyears : "")")
+        for row in queryannualactivityupperlimit
             local r = row[:r]
             local t = row[:t]
             local y = row[:y]
@@ -5577,7 +5864,7 @@ if modelperiodactivitylowerlimits || modelperiodactivityupperlimits || in("vtota
         for row in DataFrames.eachrow(queries["queryrtydr"])
             local r = row[:r]
             local t = row[:t]
-            local y = row[:y]
+            local y = string(row[:y])  # string() call necessary because outerjoin may change y's type
 
             if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2])
                 # Create constraint
@@ -5586,9 +5873,17 @@ if modelperiodactivitylowerlimits || modelperiodactivityupperlimits || in("vtota
             end
 
             if restrictyears
-                # Assume: 1) vtotaltechnologyannualactivity is constant in all years from first scenario year to first modeled year; 2) vtotaltechnologyannualactivity grows linearly between modeled years; and 3) vtotaltechnologyannualactivity is constant in all years from last modeled year to last scenario year
+                # Assume: 1) vtotaltechnologyannualactivity is constant in all years from first year in scenario database to first year modeled for scenario; 2) vtotaltechnologyannualactivity grows linearly between years modeled for scenario; and 3) vtotaltechnologyannualactivity is constant in all years from last year modeled for scenario to last year in scenario database
                 if y == firstmodeledyear
-                    add_to_expression!(sumexps[1], vtotaltechnologyannualactivity[r,t,y] * yearintervalsdict[y])
+                    if limitedforesight && !isnothing(lastyearprevgroupyears)
+                        prevval = ismissing(row[:prevcalcval]) ? 0 : row[:prevcalcval]
+
+                        for i=1:yearintervalsdict[y]
+                            add_to_expression!(sumexps[1], prevval + i / yearintervalsdict[y] * (vtotaltechnologyannualactivity[r,t,y] - prevval))
+                        end
+                    else
+                        add_to_expression!(sumexps[1], vtotaltechnologyannualactivity[r,t,y] * yearintervalsdict[y])
+                    end
                 else
                     local prevmodeledyear = syear[findfirst(isequal(y), syear) - 1]  # Previous modeled/calculated year
 
@@ -5597,7 +5892,7 @@ if modelperiodactivitylowerlimits || modelperiodactivityupperlimits || in("vtota
                     end
                 end
 
-                if y == lastmodeledyear
+                if y == lastmodeledyear && (!limitedforesight || (limitedforesight && finalgroupyears))
                     add_to_expression!(sumexps[1], vtotaltechnologyannualactivity[r,t,y] * (lastscenarioyear - parse(Int, lastmodeledyear)))
                 end
             else
@@ -5626,8 +5921,7 @@ if modelperiodactivityupperlimits
     tac2_totalmodelhorizontechnologyactivityupperlimit::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
     t = Threads.@spawn(begin
-        for row in SQLite.DBInterface.execute(db, "select r, t, cast(val as real) as mmx
-        from TotalTechnologyModelPeriodActivityUpperLimit_def")
+        for row in querymodelperiodactivityupperlimit
             local r = row[:r]
             local t = row[:t]
 
@@ -5726,7 +6020,7 @@ rm2_reservemargin::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
 t = Threads.@spawn(begin
     for row in SQLite.DBInterface.execute(db, "select rm.r, l.val as l, rm.f, rm.y, cast(rm.val as real) as rm 
-        from ReserveMargin rm, TIMESLICE l
+        from ReserveMargin_def rm, TIMESLICE l
         where 1 = 1
         $(restrictyears ? "and rm.y in" * inyears : "")")
         local r = row[:r]
@@ -6169,36 +6463,53 @@ e5_discountedemissionspenaltybytechnology::Array{AbstractConstraint, 1} = Array{
 t = Threads.@spawn(let
     local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = sum of estimated emission penalties in non-modeled years
 
-    for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, y.prev_y, cast(dr.val as real) as dr
-    from region r, technology t,
-    (select y.val, lag(y.val) over (order by y.val) as prev_y from year y
-        $(restrictyears ? "where y.val in" * inyears : "")
-    ) as y
-    left join DiscountRate_def dr on dr.r = r.val")
+    for row in SQLite.DBInterface.execute(db, "select r.val as r, t.val as t, y.val as y, cast(dr.val as real) as dr,
+        $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "cast(v.val as real)" : "null") as prevcalcval
+    from region r, technology t, year y, yearintervals yi
+    left join DiscountRate_def dr on dr.r = r.val
+    $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "left join vannualtechnologyemissionspenalty v on v.r = r.val and v.t = t.val and v.y = (y.val - yi.intv)" : "")
+    where y.val = yi.y
+    $(restrictyears ? "and y.val in" * inyears : "")")
         local r = row[:r]
         local t = row[:t]
         local y = row[:y]
         local yint::Int64 = Meta.parse(y)
-        local prev_y = row[:prev_y]
         local dr = row[:dr]
-        local nyears::Int64 = (ismissing(prev_y) ? yint - firstscenarioyear : yint - Meta.parse(prev_y) - 1)  # Number of years in y's interval, excluding y
+        local nyears::Int64 = yearintervalsdict[y] - 1  # Number of years in y's interval, excluding y
 
         if ismissing(dr) || size(semission,1) == 0
             # Ensure vdiscountedtechnologyemissionspenalty isn't made negative
             push!(e5_discountedemissionspenaltybytechnology, @build_constraint(0 == vdiscountedtechnologyemissionspenalty[r,t,y]))
         else
-            # Add estimated emission penalties in non-modeled years to discounted penalties. Assume linear scaling of penalties over modeled intervals (for years before first modeled year, assume constant penalties).
+            # Add estimated emission penalties in non-modeled years to discounted penalties. Assume: 1) constant penalties in all years from first year in scenario database to first year modeled for scenario; 2) linear scaling of penalties between years modeled for scenario; and 3) constant penalties in all years from last year modeled for scenario to last year in scenario database.
             local ppenalty  # Penalty for r & t at start of y's interval
 
-            if ismissing(prev_y)
-                ppenalty = vannualtechnologyemissionspenalty[r,t,y]
+            if !ismissing(row[:prevcalcval])
+                # First year in a second or later iteration for limited foresight optimization
+                ppenalty = row[:prevcalcval]
+            elseif in(yint - yearintervalsdict[y], calcyears)
+                # Second or later year in calcyears
+                ppenalty = vannualtechnologyemissionspenalty[r,t,string(yint - yearintervalsdict[y])]
             else
-                ppenalty = vannualtechnologyemissionspenalty[r,t,prev_y]
+                if limitedforesight && !isnothing(lastyearprevgroupyears)
+                    # First year in a second or later iteration for limited foresight optimization - prior activity was 0
+                    ppenalty = 0.0
+                else
+                    # First year modeled for scenario
+                    ppenalty = vannualtechnologyemissionspenalty[r,t,y]
+                end
             end
 
             for i = 1:nyears
+                # Processing all years in interval before y; penalties for y itself are handled separately
                 add_to_expression!(sumexps[1], (ppenalty + (vannualtechnologyemissionspenalty[r,t,y] - ppenalty) / (nyears + 1) * (nyears + 1 - i))
                     / ((1 + dr)^(yint - i - firstscenarioyear + 0.5)))
+            end
+
+            if y == lastmodeledyear && (!limitedforesight || (limitedforesight && finalgroupyears))
+                for i = (yint + 1):lastscenarioyear
+                    add_to_expression!(sumexps[1], vannualtechnologyemissionspenalty[r,t,y] / ((1 + dr)^(i - firstscenarioyear + 0.5)))
+                end
             end
 
             push!(e5_discountedemissionspenaltybytechnology, @build_constraint(sumexps[1]
@@ -6264,38 +6575,56 @@ logmsg("Queued constraint E6_EmissionsAccounting1 for creation.", quiet)
 e7_emissionsaccounting2::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
 t = Threads.@spawn(let
+    local lastkeys = Array{String, 1}(undef,2)  # lastkeys[1] = r, lastkeys[2] = e
+    local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = mpe
     local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = vannualemissions sum
 
-    for row in SQLite.DBInterface.execute(db, "select r.val as r, e.val as e, cast(mpe.val as real) as mpe
-    from region r, emission e
-    left join ModelPeriodExogenousEmission_def mpe on mpe.r = r.val and mpe.e = e.val")
+    for row in DataFrames.eachrow(queries["queryrempe"])
         local r = row[:r]
         local e = row[:e]
-        local mpe = ismissing(row[:mpe]) ? 0 : row[:mpe]
+        local y = row[:y]
 
-        for y in syear
-            if restrictyears
-                # Assume: 1) vannualemissions is constant in all years from first scenario year to first modeled year; 2) vannualemissions grows linearly between modeled years; and 3) vannualemissions is constant in all years from last modeled year to last scenario year
-                if y == firstmodeledyear
-                    add_to_expression!(sumexps[1], vannualemissions[r,e,y] * yearintervalsdict[y])
-                else
-                    local prevmodeledyear = syear[findfirst(isequal(y), syear) - 1]  # Previous modeled/calculated year
-
-                    for i=1:yearintervalsdict[y]
-                        add_to_expression!(sumexps[1], vannualemissions[r,e,prevmodeledyear] + i / yearintervalsdict[y] * (vannualemissions[r,e,y] - vannualemissions[r,e,prevmodeledyear]))
-                    end
-                end
-
-                if y == lastmodeledyear
-                    add_to_expression!(sumexps[1], vannualemissions[r,e,y] * (lastscenarioyear - parse(Int, lastmodeledyear)))
-                end
-            else
-                add_to_expression!(sumexps[1], vannualemissions[r,e,y])
-            end
+        if isassigned(lastkeys, 1) && (r != lastkeys[1] || e != lastkeys[2])
+            # Create constraint
+            push!(e7_emissionsaccounting2, @build_constraint(sumexps[1] + lastvals[1] == vmodelperiodemissions[lastkeys[1],lastkeys[2]]))
+            sumexps[1] = AffExpr()
         end
 
-        push!(e7_emissionsaccounting2, @build_constraint(sumexps[1] + mpe == vmodelperiodemissions[r,e]))
-        sumexps[1] = AffExpr()
+        if restrictyears
+            # Assume: 1) vannualemissions is constant in all years from first year in scenario database to first year modeled for scenario; 2) vannualemissions grows linearly between years modeled for scenario; and 3) vannualemissions is constant in all years from last year modeled for scenario to last year in scenario database
+            if y == firstmodeledyear
+                if limitedforesight && !isnothing(lastyearprevgroupyears)
+                    prevval = ismissing(row[:prevcalcval]) ? 0 : row[:prevcalcval]
+
+                    for i=1:yearintervalsdict[y]
+                        add_to_expression!(sumexps[1], prevval + i / yearintervalsdict[y] * (vannualemissions[r,e,y] - prevval))
+                    end
+                else
+                    add_to_expression!(sumexps[1], vannualemissions[r,e,y] * yearintervalsdict[y])
+                end
+            else
+                local prevmodeledyear = syear[findfirst(isequal(y), syear) - 1]  # Previous modeled/calculated year
+
+                for i=1:yearintervalsdict[y]
+                    add_to_expression!(sumexps[1], vannualemissions[r,e,prevmodeledyear] + i / yearintervalsdict[y] * (vannualemissions[r,e,y] - vannualemissions[r,e,prevmodeledyear]))
+                end
+            end
+
+            if y == lastmodeledyear && (!limitedforesight || (limitedforesight && finalgroupyears))
+                add_to_expression!(sumexps[1], vannualemissions[r,e,y] * (lastscenarioyear - parse(Int, lastmodeledyear)))
+            end
+        else
+            add_to_expression!(sumexps[1], vannualemissions[r,e,y])
+        end
+
+        lastkeys[1] = r
+        lastkeys[2] = e
+        lastvals[1] = (ismissing(row[:mpe]) ? 0 : row[:mpe])
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        push!(e7_emissionsaccounting2, @build_constraint(sumexps[1] + lastvals[1] == vmodelperiodemissions[lastkeys[1],lastkeys[2]]))
     end
 
     put!(cons_channel, e7_emissionsaccounting2)
@@ -6398,7 +6727,7 @@ else
 
        if in(returnval, [MathOptInterface.LOCALLY_SOLVED, MathOptInterface.ALMOST_OPTIMAL, MathOptInterface.ITERATION_LIMIT, MathOptInterface.TIME_LIMIT, MathOptInterface.NODE_LIMIT, MathOptInterface.SOLUTION_LIMIT, MathOptInterface.MEMORY_LIMIT, MathOptInterface.OBJECTIVE_LIMIT, MathOptInterface.NORM_LIMIT, MathOptInterface.OTHER_LIMIT])
             saveresults = true
-            @warn "Results that will be saved to database are for a suboptimal solution. See this function's return value for more information."
+            @warn "Results that will be saved to database are for a suboptimal solution. Optimization returned status code $(returnval). Continuing with NEMO."
        end
     end
 
@@ -6407,26 +6736,12 @@ else
         savevarresults_threaded(varstosavearr, modelvarindices, db, solvedtmstr, reportzeros, quiet)
         logmsg("Finished saving results to database.", quiet)
     else
-        logmsg("Solver did not find a solution for model. No results will be saved to database.")
+        logmsg("Solver did not find a solution for model. No results will be saved to database.", quiet)
     end
     # END: Save results to database.
 end
 
-# Drop temporary tables
-drop_temp_tables(db)
-logmsg("Dropped temporary tables.", quiet)
+logmsg("Finished optimizing $(calcyears==Vector{Int}() ? "all years for scenario" : "following years: " * string(calcyears)).")
 
-# BEGIN: Perform afterscenariocalc include.
-if !isnothing(configfile) && haskey(configfile, "includes", "afterscenariocalc")
-    try
-        include(normpath(joinpath(pwd(), retrieve(configfile, "includes", "afterscenariocalc"))))
-        logmsg("Performed afterscenariocalc include.", quiet)
-    catch e
-        logmsg("Could not perform afterscenariocalc include. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
-    end
-end
-# END: Perform afterscenariocalc include.
-
-logmsg("Finished modeling scenario.")
 return returnval
 end  # modelscenario()

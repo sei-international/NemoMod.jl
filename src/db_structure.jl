@@ -624,7 +624,7 @@ end  # db_v10_to_v11(db::SQLite.DB; quiet::Bool = false)
 
 Creates temporary tables needed when NEMO is calculating a scenario. These tables are not created as SQLite temporary tables
     in order to make them simultaneously visible to multiple Julia processes."""
-function create_temp_tables(db::SQLite.DB)
+function create_temp_tables(db::SQLite.DB, calcyears::Vector{Vector{Int}})
     try
         # BEGIN: SQLite transaction.
         SQLite.DBInterface.execute(db, "BEGIN")
@@ -652,6 +652,26 @@ function create_temp_tables(db::SQLite.DB)
         and iar.r = n.r and iar.t = tts.t and iar.t = charge_ntc.t and iar.f = charge_tme.f and iar.m = tts.m and iar.y = nsc.y and iar.val <> 0
         and oar.r = n.r and oar.t = tfs.t and oar.t = discharge_ntc.t and oar.f = discharge_tme.f and oar.m = tfs.m and oar.y = nsc.y and oar.val <> 0")
 
+        SQLite.DBInterface.execute(db, "CREATE UNIQUE INDEX nodalstorage_fks_unique on nodalstorage (r, n, s, y)")
+
+        SQLite.DBInterface.execute(db, "DROP TABLE IF EXISTS yearintervals")
+
+        local allyears_perfectforesight::Bool = (length(calcyears) == 1 && length(calcyears[1]) == 0)  # Indicates whether all years are being calculated in calculatescenario with perfect foresight
+
+        # yearintervals maps years included in calculation to the number of years in the intervals they represent. Interval sizes are calculated as follows:
+        #   - First calculated year covers interval from first scenario year (first year in YEAR table) through calculated year, including first scenario year
+        #   - Subsequent calculated years cover intervals from prior calculated year through calculated year, excluding prior calculated year
+        SQLite.DBInterface.execute(db, "create table yearintervals as
+        select y, intv + case when rn = 1 then 1 else 0 end as intv from (
+            select y, ifnull(lag_calc, 0) as intv, row_number() over (order by y) as rn from (
+                select val as y, val - lag(val) over (order by val) as lag_calc
+                    from year
+                    $(!allyears_perfectforesight ? "where val = (select min(val) from year) or val in (" * join(collect(Iterators.flatten(calcyears)), ",") * ")" : "")
+            ) $(!allyears_perfectforesight ? "where y in (" * join(collect(Iterators.flatten(calcyears)), ",") * ")" : "")
+        )")
+
+        SQLite.DBInterface.execute(db, "CREATE UNIQUE INDEX yearintervals_fks_unique on yearintervals (y)")
+
         SQLite.DBInterface.execute(db, "COMMIT")
         # END: SQLite transaction.
     catch
@@ -670,6 +690,8 @@ function drop_temp_tables(db::SQLite.DB)
     SQLite.DBInterface.execute(db, "BEGIN")
 
     SQLite.DBInterface.execute(db, "DROP TABLE IF EXISTS nodalstorage")
+
+    SQLite.DBInterface.execute(db, "DROP TABLE IF EXISTS yearintervals")
 
     SQLite.DBInterface.execute(db, "COMMIT")
     # END: SQLite transaction.
@@ -879,4 +901,34 @@ function dropresulttables(db::SQLite.DB, quiet::Bool = true)
         rethrow()
     end
     # END: Wrap database operations in try-catch block to allow rollback on error.
-end  # dropresulttables(db::SQLite.DB)
+end  # dropresulttables(db::SQLite.DB, quiet::Bool = true)
+
+"""
+    droptables(db::SQLite.DB, tables::Vector{String}, quiet::Bool = true)
+
+Drops tables in `db` whose names are in `tables`. The `quiet` parameter determines whether most status messages are suppressed.
+"""
+function droptables(db::SQLite.DB, tables::Vector{String}, quiet::Bool = true)
+    # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
+    try
+        # Begin SQLite transaction
+        SQLite.DBInterface.execute(db, "BEGIN")
+
+        local existingtables::Vector{String} = [t.name for t in SQLite.tables(db)]  # Names of all tables existing in db when this function was called
+
+        for tn in intersect(tables, existingtables)
+            SQLite.DBInterface.execute(db, "drop table $(tn)")
+            logmsg("Dropped table $(tn).", quiet)
+        end
+
+        # Complete SQLite transaction
+        SQLite.DBInterface.execute(db, "COMMIT")
+    catch
+        # Rollback db transaction
+        SQLite.DBInterface.execute(db, "ROLLBACK")
+
+        # Proceed with normal Julia error sequence
+        rethrow()
+    end
+    # END: Wrap database operations in try-catch block to allow rollback on error.
+end  # droptables(db::SQLite.DB, tables::Vector{String}, quiet::Bool = true)

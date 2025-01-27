@@ -11,6 +11,8 @@ This page highlights key changes in NEMO since its initial public release. For a
 
   * **Full error tracing when calculating a scenario:** Added a `traperrors` argument to [`calculatescenario`](@ref scenario_calc) (and [`writescenariomodel`](@ref writescenariomodel)). By default, `traperrors` is `true`, which means any errors in `calculatescenario`/`writescenariomodel` are caught and communicated in a standard error message. The message contains an abbreviated description of the underlying problem and directs users to report the problem to the NEMO team. If `traperrors` is `false`, errors are not caught, and Julia reports them with full error tracing.
 
+  * **Other changes:** Deprecated the `numprocs` and `targetprocs` arguments for `calculatescenario`. Fixed a bug that was preventing NEMO from properly applying [default values](@ref DefaultParams) for the [ReserveMargin](@ref ReserveMargin) parameter.
+
 ## Version 2.1
 
   * **Enabled model period technology activity limits when calculating selected years:** Revised NEMO to allow the use of model period technology activity limits ([`TotalTechnologyModelPeriodActivityUpperLimit`](@ref TotalTechnologyModelPeriodActivityUpperLimit) and [`TotalTechnologyModelPeriodActivityLowerLimit`](@ref TotalTechnologyModelPeriodActivityLowerLimit)) when calculating selected years. See [Calculating selected years](@ref selected_years) for details.

@@ -220,11 +220,28 @@ if @isdefined GLPK
             @test testqry[1,:y] == "2020"
             @test testqry[2,:y] == "2025"
 
-            @test isapprox(testqry[1,:val], 4302.73264852276; atol=TOL)
-            @test isapprox(testqry[2,:val], 2721.12570685235; atol=TOL)
+            @test isapprox(testqry[1,:val], 4303.25529145678; atol=TOL)
+            @test isapprox(testqry[2,:val], 4466.70246046607; atol=TOL)
         end
 
         SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 2")
+
+        # Test limited foresight optimization
+        @info "Running GLPK test 3 on storage_transmission_test.sqlite: limited foresight optimization."
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), varstosave="vtotaldiscountedcost", calcyears=[[2020,2022],[2025,2029]], continuoustransmission=true, quiet = calculatescenario_quiet)
+
+        if !compilation
+            testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+            @test testqry[1,:y] == "2021"
+            @test testqry[2,:y] == "2022"
+            @test testqry[3,:y] == "2025"
+            @test testqry[4,:y] == "2029"
+
+            @test isapprox(testqry[1,:val], 4846.62588182009; atol=TOL)
+            @test isapprox(testqry[2,:val], 305.484279868535; atol=TOL)
+            @test isapprox(testqry[3,:val], 1363.86508522952; atol=TOL)
+            @test isapprox(testqry[4,:val], 1848.08891142363; atol=TOL)
+        end
 
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)

@@ -192,4 +192,4 @@ NEMO includes a number of features and options, so it's worth familiarizing your
    !!! tip
        To change which results are saved and set other run-time options, see [Calculating a scenario](@ref scenario_calc).
 
-For a better understanding of what happens in scenario calculations - and guidance on building your own model - look through the rest of the documentation, particularly [Model concept](@ref model_concept) and the sections on Inputs and Outputs.
+For a better understanding of what happens in scenario calculations - and guidance on building your own model - look through the rest of the documentation, particularly [Modeling concept](@ref modeling_concept) and the sections on Inputs and Outputs.
