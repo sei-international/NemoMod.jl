@@ -124,7 +124,7 @@ if @isdefined GLPK
         # Test with storage net zero constraints
         @info "Running GLPK test 4 on storage_test.sqlite: storage net zero constraints."
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
-        NemoMod.calculatescenario(dbfile; jumpmodel=(reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), restrictvars=false, quiet = calculatescenario_quiet)
+        NemoMod.calculatescenario(dbfile; jumpmodel=(reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
