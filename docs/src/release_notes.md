@@ -7,9 +7,13 @@ This page highlights key changes in NEMO since its initial public release. For a
 
 ## Version 2.2
 
+  * **Limited foresight optimization:** Enabled limited foresight optimization - see [Perfect foresight vs. limited foresight](@ref foresight) for details.
+
   * **Unit of measure conversions:** Added a function for converting units of measure in scenario databases ([`convertscenariounits`](@ref convertscenariounits)). 
 
-  * **Full error tracing when calculating a scenario:** Added a `traperrors` argument to [`calculatescenario`](@ref scenario_calc) (and [`writescenariomodel`](@ref writescenariomodel)). By default, `traperrors` is `true`, which means any errors in `calculatescenario`/`writescenariomodel` are caught and communicated in a standard error message. The message contains an abbreviated description of the underlying problem and directs users to report the problem to the NEMO team. If `traperrors` is `false`, errors are not caught, and Julia reports them with full error tracing.
+  * **Full error tracing when calculating a scenario:** Added a `traperrors` argument to [`calculatescenario`](@ref scenario_calc). By default, `traperrors` is `true`, which means any errors in `calculatescenario` are caught and communicated in a standard error message. The message contains an abbreviated description of the underlying problem and directs users to report the problem to the NEMO team. If `traperrors` is `false`, errors are not caught, and Julia reports them with full error tracing.
+
+  * **Other changes:** Deprecated the `numprocs` and `targetprocs` arguments for `calculatescenario`. Fixed a bug that was preventing NEMO from properly applying [default values](@ref DefaultParams) for the [ReserveMargin](@ref ReserveMargin) parameter. Removed the `writescenariomodel` function (to write the optimization problem for a scenario, use `calculatescenario` with the `writefilename` and `writefileformat` arguments).
 
 ## Version 2.1
 
