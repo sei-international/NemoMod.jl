@@ -8,20 +8,27 @@
 =#
 
 """
-    calculatescenario(dbpath::String; jumpmodel::JuMP.Model = Model(Cbc.Optimizer),
+    calculatescenario(
+        dbpath::String;
+        jumpmodel::JuMP.Model = Model(Cbc.Optimizer),
         calcyears::Array{Int, 1} = Array{Int, 1}(),
         varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual,
             vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
             vusenn, vtotaldiscountedcost",
-        restrictvars::Bool = true, reportzeros::Bool = false,
+        restrictvars::Bool = true,
+        reportzeros::Bool = false,
         continuoustransmission::Bool = false,
-        forcemip::Bool = false, startvalsdbpath::String = "",
-        startvalsvars::String = "", precalcresultspath::String = "",
-        traperrors::Bool = true, quiet::Bool = false
-    )
+        forcemip::Bool = false,
+        startvalsdbpath::String = "",
+        startvalsvars::String = "",
+        precalcresultspath::String = "",
+        writefilename::String = "",
+        writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS,
+        traperrors::Bool = true,
+        quiet::Bool = false)
 
 Calculates a scenario specified in a scenario database. Returns a `MathOptInterface.TerminationStatusCode` indicating
-the termination status reported by the solver used for the calculation (e.g., `OPTIMAL::TerminationStatusCode = 1`).
+the termination status of the `JuMP` model used for the calculation (e.g., `OPTIMAL::TerminationStatusCode = 1`).
 
 # Arguments
 - `dbpath::String`: Path to the scenario database, which must be a SQLite version 3 database that
@@ -76,6 +83,17 @@ the termination status reported by the solver used for the calculation (e.g., `O
     previously calculated scenario databases, in which case NEMO copies any file in the directory
     with the same name as the `dbpath` database. The intent of the argument is to short-circuit
     calculations in situations where valid results already exist.
+- `writefilename::String`: Instructs NEMO to write the optimization problem for the scenario
+    to the specified file (without solving the problem). In limited foresight calculations, one
+    file is written for each group of years being optimized (an integer suffix is added to each
+    file's name to ensure uniqueness). If a path is not included in `writefilename`, the file(s)
+    is/are written to the Julia working directory. If `writefilename` ends in `.gz` or `.bz2`, 
+    the file(s) is/are compressed with Gzip or BZip2, respectively. If both `precalcresultspath`
+    and `writefilename` are specified, `writefilename` is ignored.
+- `writefileformat::MathOptInterface.FileFormats.FileFormat`: Data format used for the file named
+    in `writefilename`. Common formats include `MathOptInterface.FileFormats.FORMAT_MPS` (MPS format) and
+    `MathOptInterface.FileFormats.FORMAT_LP` (LP format). See the documentation for
+    [`MathOptInterface`](https://github.com/jump-dev/MathOptInterface.jl) for additional options.
 - `traperrors::Bool`: Indicates whether errors should be trapped and communicated with a standard 
     message that directs users to report the problem to the NEMO team.
 - `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to
@@ -93,6 +111,8 @@ function calculatescenario(
     startvalsdbpath::String = "",
     startvalsvars::String = "",
     precalcresultspath::String = "",
+    writefilename::String = "",
+    writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS,
     traperrors::Bool = true,
     quiet::Bool = false)
 
@@ -240,12 +260,14 @@ function calculatescenario(
         # END: Create temporary tables.
 
         # BEGIN: Call modelscenario for each element in calcyears.
+        local returnval  # Value returned by this function
+
         for i in eachindex(calcyears)
             empty!(jumpmodel)
 
-            rv = modelscenario(dbpath; jumpmodel=jumpmodel, calcyears=calcyears[i], limitedforesight=(length(calcyears) > 1), finalgroupyears=(i==length(calcyears)), lastyearprevgroupyears=(i > 1 ? maximum(calcyears[i-1]) : nothing), varstosavearr=varstosavearr, restrictvars=restrictvars, reportzeros=reportzeros, continuoustransmission=continuoustransmission, forcemip=forcemip, startvalsdbpath=startvalsdbpath, startvalsvars=startvalsvars, precalcresultspath=precalcresultspath, quiet=quiet, configfile=configfile)
+            returnval = modelscenario(dbpath; jumpmodel=jumpmodel, calcyears=calcyears[i], limitedforesight=(length(calcyears) > 1), finalgroupyears=(i==length(calcyears)), lastyearprevgroupyears=(i > 1 ? maximum(calcyears[i-1]) : nothing), varstosavearr=varstosavearr, restrictvars=restrictvars, reportzeros=reportzeros, continuoustransmission=continuoustransmission, forcemip=forcemip, startvalsdbpath=startvalsdbpath, startvalsvars=startvalsvars, precalcresultspath=precalcresultspath, writefilename=writefilename, writefileformat=writefileformat, quiet=quiet, configfile=configfile)
 
-            if !in(rv, [MathOptInterface.OPTIMAL, MathOptInterface.LOCALLY_SOLVED, MathOptInterface.ALMOST_OPTIMAL, MathOptInterface.ITERATION_LIMIT, MathOptInterface.TIME_LIMIT, MathOptInterface.NODE_LIMIT, MathOptInterface.SOLUTION_LIMIT, MathOptInterface.MEMORY_LIMIT, MathOptInterface.OBJECTIVE_LIMIT, MathOptInterface.NORM_LIMIT, MathOptInterface.OTHER_LIMIT]) && i < length(calcyears)
+            if writefilename == "" && !in(returnval, [MathOptInterface.OPTIMAL, MathOptInterface.LOCALLY_SOLVED, MathOptInterface.ALMOST_OPTIMAL, MathOptInterface.ITERATION_LIMIT, MathOptInterface.TIME_LIMIT, MathOptInterface.NODE_LIMIT, MathOptInterface.SOLUTION_LIMIT, MathOptInterface.MEMORY_LIMIT, MathOptInterface.OBJECTIVE_LIMIT, MathOptInterface.NORM_LIMIT, MathOptInterface.OTHER_LIMIT]) && i < length(calcyears)
                 logmsg("Halting limited foresight optimization because no solution was found for last group of years.", quiet)
                 break
             end
@@ -274,6 +296,8 @@ function calculatescenario(
             logmsg("Deleted result tables needed for limited foresight optimization but not requested in varstosave.", quiet)
         end
         # END: Delete result tables that are needed for limited foresight optimization but were not requested in varstosave.
+
+        return returnval
     catch e
         if traperrors
             println("NEMO encountered an error with the following message: " * sprint(showerror, e) * ".")
@@ -301,14 +325,12 @@ end  # calculatescenario()
         startvalsdbpath::String = "",
         startvalsvars::String = "",
         precalcresultspath::String = "",
-        quiet::Bool = false,
-        configfile = nothing,
-        writemodel::Bool = false,
         writefilename::String = "",
-        writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS
-    )
+        writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS,
+        quiet::Bool = false,
+        configfile = nothing)
 
-Implements scenario modeling logic for `calculatescenario()` and `writescenariomodel()`. `limitedforesight` indicates whether `modelscenario` is being invoked in series for limited foresight optimization. If `limitedforesight` is `true`: 1) `finalgroupyears` indicates whether the last group of years in the limited foresight calculation is being modeled; 2) `lastyearprevgroupyears` is the last year modeled in the previous group of years (an `Int` or `nothing`).
+Implements scenario modeling logic for `calculatescenario()`. `limitedforesight` indicates whether `modelscenario` is being invoked in series for limited foresight optimization. If `limitedforesight` is `true`: 1) `finalgroupyears` indicates whether the last group of years in the limited foresight calculation is being modeled; 2) `lastyearprevgroupyears` is the last year modeled in the previous group of years (an `Int` or `nothing`).
 """
 function modelscenario(
     dbpath::String;
@@ -325,23 +347,15 @@ function modelscenario(
     startvalsdbpath::String = "",
     startvalsvars::String = "",
     precalcresultspath::String = "",
-    quiet::Bool = false,
-    configfile = nothing,
-    writemodel::Bool = false,
     writefilename::String = "",
-    writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS
-    )
+    writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS,
+    quiet::Bool = false,
+    configfile = nothing)
 # Lines within modelscenario() are not indented since the function is so lengthy. To make an otherwise local
 # variable visible outside the function, prefix it with global. For JuMP constraint references,
 # create a new global variable and assign to it the constraint reference.
 
 logmsg("Started optimizing $(calcyears==Vector{Int}() ? "all years for scenario" : "following years: " * string(calcyears)).")
-
-# BEGIN: Validate arguments. - move to writescenariomodel
-if writemodel && length(writefilename) == 0
-    error("writefilename argument must be specified if writemodel is true.")
-end
-# END: Validate arguments.
 
 # BEGIN: Check whether modeling is for selected years only.
 local restrictyears::Bool = (calcyears == Array{Int, 1}() ? false : true)  # Indicates whether this invocation of modelscenario is for a selected set of years
@@ -6708,10 +6722,22 @@ logmsg("Defined model objective.", quiet)
 local returnval  # Value returned by this function
 local saveresults::Bool = false  # Indicates whether calculation results are saved to database
 
-if writemodel
-    JuMP.write_to_file(jumpmodel, writefilename; format=writefileformat)
-    returnval = writefilename
-    logmsg("Wrote model to " * writefilename * ".")
+if writefilename != ""
+    local target_filename::String = writefilename  # Name of optimization problem file that will be written
+
+    if limitedforesight
+        local i::Int = 0  # Counter for file name suffix
+
+        while isfile(target_filename)
+            i += 1
+            se = splitext(basename(target_filename))  # target_filename split into file name and extension
+            target_filename = normpath(joinpath(dirname(writefilename), se[1] * string(i) * se[2]))
+        end
+    end
+
+    JuMP.write_to_file(jumpmodel, target_filename; format=writefileformat)
+    logmsg("Wrote model to " * target_filename * ".")
+    returnval = termination_status(jumpmodel)
 else
     # Calculate model
     optimize!(jumpmodel)

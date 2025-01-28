@@ -899,7 +899,7 @@ Maximum capacity for a [technology](@ref technology) in a [year](@ref year) (inc
 
 ## [Total annual maximum capacity investment](@id TotalAnnualMaxCapacityInvestment)
 
-Maximum addition of endogenously determined capacity for a [technology](@ref technology) in a [year](@ref year). Only specify this parameter if you want to enforce a particular limit. This parameter is scaled up to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details.
+Maximum addition of endogenously determined capacity for a [technology](@ref technology) in a [year](@ref year). Only specify this parameter if you want to enforce a particular limit. This parameter is scaled up to account for non-modeled years when [selected years are calculated](@ref selected_years).
 
 #### Scenario database
 
@@ -931,7 +931,7 @@ Maximum capacity for a [storage](@ref storage) in a [year](@ref year) (including
 
 ## [Total annual maximum capacity investment storage](@id TotalAnnualMaxCapacityInvestmentStorage)
 
-Maximum addition of endogenously determined capacity for a [storage](@ref storage) in a [year](@ref year). Only specify this parameter if you want to enforce a particular limit. This parameter is scaled up to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details.
+Maximum addition of endogenously determined capacity for a [storage](@ref storage) in a [year](@ref year). Only specify this parameter if you want to enforce a particular limit. This parameter is scaled up to account for non-modeled years when [selected years are calculated](@ref selected_years).
 
 #### Scenario database
 
@@ -963,7 +963,7 @@ Minimum capacity for a [technology](@ref technology) in a [year](@ref year) (inc
 
 ## [Total annual minimum capacity investment](@id TotalAnnualMinCapacityInvestment)
 
-Minimum addition of endogenously determined capacity for a [technology](@ref technology) in a [year](@ref year). Only specify this parameter if you want to enforce a particular limit (other than 0, which NEMO assumes by default). This parameter is scaled up to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details.
+Minimum addition of endogenously determined capacity for a [technology](@ref technology) in a [year](@ref year). Only specify this parameter if you want to enforce a particular limit (other than 0, which NEMO assumes by default). This parameter is scaled up to account for non-modeled years when [selected years are calculated](@ref selected_years).
 
 #### Scenario database
 
@@ -979,7 +979,7 @@ Minimum addition of endogenously determined capacity for a [technology](@ref tec
 
 ## [Total annual minimum capacity storage](@id TotalAnnualMinCapacityStorage)
 
-Minimum capacity for a [storage](@ref storage) in a [year](@ref year) (including both exogenous and endogenous capacity). Only specify this parameter if you want to enforce a particular limit (other than 0, which NEMO assumes by default). This parameter is scaled up to account for non-modeled years when the `calcyears` argument of [`calculatescenario`](@ref scenario_calc) or [`writescenariomodel`](@ref) is invoked. See [Calculating selected years](@ref selected_years) for details.
+Minimum capacity for a [storage](@ref storage) in a [year](@ref year) (including both exogenous and endogenous capacity). Only specify this parameter if you want to enforce a particular limit (other than 0, which NEMO assumes by default). This parameter is scaled up to account for non-modeled years when [selected years are calculated](@ref selected_years).
 
 #### Scenario database
 

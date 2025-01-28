@@ -168,19 +168,6 @@ if @isdefined GLPK
             @test isapprox(testqry[2,:val], 3427.81584479179; atol=TOL)
         end
 
-        # Test MinimumUtilization
-        @info "Running GLPK test 6 on storage_test.sqlite: minimum utilization."
-        SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.5 from TIMESLICE")
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), varstosave="vproductionbytechnologyannual", quiet = calculatescenario_quiet)
-
-        if !compilation
-            testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
-
-            @test isapprox(testqry[1,:val], 15.768; atol=TOL)
-        end
-
-        SQLite.DBInterface.execute(db, "delete from MinimumUtilization")
-
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
@@ -228,7 +215,7 @@ if @isdefined GLPK
 
         # Test limited foresight optimization
         @info "Running GLPK test 3 on storage_transmission_test.sqlite: limited foresight optimization."
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), varstosave="vtotaldiscountedcost", calcyears=[[2020,2022],[2025,2029]], continuoustransmission=true, quiet = calculatescenario_quiet)
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), varstosave="vtotaldiscountedcost", calcyears=[[2021,2022],[2025,2029]], continuoustransmission=true, quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame

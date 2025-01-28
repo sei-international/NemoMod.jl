@@ -300,7 +300,7 @@ if @isdefined MosekTools
 
         # Test limited foresight optimization
         @info "Running Mosek test 6 on storage_transmission_test.sqlite: limited foresight optimization."
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[[2020,2022],[2025,2029]], continuoustransmission = true, quiet = calculatescenario_quiet)
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[[2021,2022],[2025,2029]], continuoustransmission = true, quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame

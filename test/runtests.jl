@@ -58,7 +58,7 @@ function write_opt_prob(optprobfile::String)
     chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
     # Write output file for optimization problem
-    NemoMod.writescenariomodel(dbfile; restrictvars=true, quiet = false, writefilename = optprobfile)
+    NemoMod.calculatescenario(dbfile; restrictvars=true, quiet = false, writefilename = optprobfile)
 
     # Clean up scenario database
     db = SQLite.DB(dbfile)

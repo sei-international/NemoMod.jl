@@ -1212,63 +1212,6 @@ function run_qry(qtpl::Tuple{String, String})
 end  # run_qry(qtpl::Tuple{String, String, String})
 
 """
-    writescenariomodel(dbpath::String;
-        calcyears::Array{Int, 1} = Array{Int, 1}(),
-        varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual,
-            vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
-            vusenn, vtotaldiscountedcost",
-        restrictvars::Bool = true, continuoustransmission::Bool = false,
-        forcemip::Bool = false, startvalsdbpath::String = "",
-        startvalsvars::String = "", traperrors::Bool = true, quiet::Bool = false,
-        writefilename::String = "nemomodel.bz2",
-        writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS
-    )
-
-Writes a file representing the optimization problem for a NEMO scenario. Returns the name of the file.
-All arguments except `writefilename` and `writefileformat` function as in
-[`calculatescenario`](@ref). `writefilename` and `writefileformat` are described below.
-
-# Arguments
-
-- `writefilename::String`: Name of the output file. If a path is not included in the name,
-    the file is written to the Julia working directory. If the name ends in `.gz`, the file
-    is compressed with Gzip. If the name ends in `.bz2`, the file is compressed with BZip2.
-- `writefileformat::MathOptInterface.FileFormats.FileFormat`: Data format used in the output
-    file. Common formats include `MathOptInterface.FileFormats.FORMAT_MPS` (MPS format) and
-    `MathOptInterface.FileFormats.FORMAT_LP` (LP format). See the documentation for
-    [`MathOptInterface`](https://github.com/jump-dev/MathOptInterface.jl) for additional options.
-"""
-function writescenariomodel(
-    dbpath::String;
-    calcyears::Array{Int, 1} = Array{Int, 1}(),
-    varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
-    restrictvars::Bool = true,
-    continuoustransmission::Bool = false,
-    forcemip = false,
-    startvalsdbpath::String = "",
-    startvalsvars::String = "",
-    traperrors::Bool = true,
-    quiet::Bool = false,
-    writefilename::String = "nemomodel.bz2",
-    writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS
-    )
-
-    try
-        modelscenario(dbpath; calcyears=calcyears, varstosave=varstosave, restrictvars=restrictvars,
-            continuoustransmission=continuoustransmission, forcemip=forcemip, startvalsdbpath=startvalsdbpath,
-            startvalsvars=startvalsvars, quiet=quiet, writemodel=true, writefilename=writefilename,
-            writefileformat=writefileformat)
-    catch e
-        if traperrors
-            println("NEMO encountered an error with the following message: " * sprint(showerror, e) * ".")
-            println("To report this issue to the NEMO team, please submit an error report at https://leap.sei.org/support/. Please include in the report a list of steps to reproduce the error and the error message.")
-        else
-            rethrow()
-        end
-    end
-end  # writescenariomodel
-
-"""
     setstartvalues(jumpmodel::JuMP.Model,
         seeddbpath::String,
         quiet::Bool = false;

@@ -310,7 +310,7 @@ if @isdefined CPLEX
 
         # Test limited foresight optimization
         @info "Running CPLEX test 7 on storage_transmission_test.sqlite: limited foresight optimization."
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())), varstosave="vtotaldiscountedcost", calcyears=[[2020,2022],[2025,2029]], quiet = calculatescenario_quiet)
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())), varstosave="vtotaldiscountedcost", calcyears=[[2021,2022],[2025,2029]], quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
