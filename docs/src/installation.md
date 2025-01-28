@@ -105,7 +105,7 @@ NEMO has been tested for compatibility with the following solver packages (which
 | [Gurobi](https://github.com/jump-dev/Gurobi.jl) | 1.2.1 | 9.0 - 11.0.0 |
 | [HiGHS](https://github.com/jump-dev/HiGHS.jl) | 1.7.4 | 1.6.0 |
 | [Mosek](https://github.com/jump-dev/MosekTools.jl) | 10.1.3 | 10.1.15 |
-| [Xpress](https://github.com/jump-dev/Xpress.jl) | 0.16.1 | 8.4 - 8.13 |
+| [Xpress](https://github.com/jump-dev/Xpress.jl) | 0.16.1 | 8.4 - 9.5 |
 
 !!! tip
     Older versions of NEMO may be compatible with older versions of these solvers. For example, [NEMO 1.2](https://github.com/sei-international/NemoMod.jl/releases/tag/v1.2) is compatible with CPLEX 12.8 - 12.9 and Gurobi 7 - 8.
