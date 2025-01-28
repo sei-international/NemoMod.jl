@@ -123,36 +123,39 @@ if @isdefined GLPK
 
         # Test with storage net zero constraints
         @info "Running GLPK test 4 on storage_test.sqlite: storage net zero constraints."
-        SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
-        NemoMod.calculatescenario(dbfile; jumpmodel=(reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), quiet = calculatescenario_quiet)
 
-        if !compilation
-            testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
-
-            @test testqry[1,:y] == "2020"
-            @test testqry[2,:y] == "2021"
-            @test testqry[3,:y] == "2022"
-            @test testqry[4,:y] == "2023"
-            @test testqry[5,:y] == "2024"
-            @test testqry[6,:y] == "2025"
-            @test testqry[7,:y] == "2026"
-            @test testqry[8,:y] == "2027"
-            @test testqry[9,:y] == "2028"
-            @test testqry[10,:y] == "2029"
-
-            @test isapprox(testqry[1,:val], 3840.94032304097; atol=TOL)
-            @test isapprox(testqry[2,:val], 459.294966842956; atol=TOL)
-            @test isapprox(testqry[3,:val], 437.423777945669; atol=TOL)
-            @test isapprox(testqry[4,:val], 416.594074233972; atol=TOL)
-            @test isapprox(testqry[5,:val], 396.756261175212; atol=TOL)
-            @test isapprox(testqry[6,:val], 377.863105881154; atol=TOL)
-            @test isapprox(testqry[7,:val], 359.869624648718; atol=TOL)
-            @test isapprox(testqry[8,:val], 342.732975855922; atol=TOL)
-            @test isapprox(testqry[9,:val], 326.412357958021; atol=TOL)
-            @test isapprox(testqry[10,:val], 310.868912340972; atol=TOL)
+        try
+            SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
+            NemoMod.calculatescenario(dbfile; jumpmodel=(reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), quiet = calculatescenario_quiet)
+    
+            if !compilation
+                testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+    
+                @test testqry[1,:y] == "2020"
+                @test testqry[2,:y] == "2021"
+                @test testqry[3,:y] == "2022"
+                @test testqry[4,:y] == "2023"
+                @test testqry[5,:y] == "2024"
+                @test testqry[6,:y] == "2025"
+                @test testqry[7,:y] == "2026"
+                @test testqry[8,:y] == "2027"
+                @test testqry[9,:y] == "2028"
+                @test testqry[10,:y] == "2029"
+    
+                @test isapprox(testqry[1,:val], 3840.94032304097; atol=TOL)
+                @test isapprox(testqry[2,:val], 459.294966842956; atol=TOL)
+                @test isapprox(testqry[3,:val], 437.423777945669; atol=TOL)
+                @test isapprox(testqry[4,:val], 416.594074233972; atol=TOL)
+                @test isapprox(testqry[5,:val], 396.756261175212; atol=TOL)
+                @test isapprox(testqry[6,:val], 377.863105881154; atol=TOL)
+                @test isapprox(testqry[7,:val], 359.869624648718; atol=TOL)
+                @test isapprox(testqry[8,:val], 342.732975855922; atol=TOL)
+                @test isapprox(testqry[9,:val], 326.412357958021; atol=TOL)
+                @test isapprox(testqry[10,:val], 310.868912340972; atol=TOL)
+            end
+        finally
+            SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 0")        
         end
-
-        SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 0")
 
         # Test with calcyears
         @info "Running GLPK test 5 on storage_test.sqlite: calcyears."
@@ -199,19 +202,22 @@ if @isdefined GLPK
 
         # Test transshipment power flow
         @info "Running GLPK test 2 on storage_transmission_test.sqlite: transshipment power flow."
-        SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 3")
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), varstosave="vtotaldiscountedcost", calcyears=[2020,2025], continuoustransmission=true, quiet = calculatescenario_quiet)
 
-        if !compilation
-            testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
-            @test testqry[1,:y] == "2020"
-            @test testqry[2,:y] == "2025"
-
-            @test isapprox(testqry[1,:val], 4303.25529145678; atol=TOL)
-            @test isapprox(testqry[2,:val], 4466.70246046607; atol=TOL)
+        try
+            SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 3")
+            NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), varstosave="vtotaldiscountedcost", calcyears=[2020,2025], continuoustransmission=true, quiet = calculatescenario_quiet)
+    
+            if !compilation
+                testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+                @test testqry[1,:y] == "2020"
+                @test testqry[2,:y] == "2025"
+    
+                @test isapprox(testqry[1,:val], 4303.25529145678; atol=TOL)
+                @test isapprox(testqry[2,:val], 4466.70246046607; atol=TOL)
+            end
+        finally
+            SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 2")        
         end
-
-        SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 2")
 
         # Test limited foresight optimization
         @info "Running GLPK test 3 on storage_transmission_test.sqlite: limited foresight optimization."

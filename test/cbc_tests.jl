@@ -130,36 +130,39 @@ if @isdefined Cbc
 
         # Test with storage net zero constraints
         @info "Running Cbc test 4 on storage_test.sqlite: storage net zero constraints."
-        SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(optimizer_with_attributes(Cbc.Optimizer, "presolve" => "on", "logLevel" => 1), add_bridges=reg_jumpmode), restrictvars=false, quiet = calculatescenario_quiet)
 
-        if !compilation
-            testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
-
-            @test testqry[1,:y] == "2020"
-            @test testqry[2,:y] == "2021"
-            @test testqry[3,:y] == "2022"
-            @test testqry[4,:y] == "2023"
-            @test testqry[5,:y] == "2024"
-            @test testqry[6,:y] == "2025"
-            @test testqry[7,:y] == "2026"
-            @test testqry[8,:y] == "2027"
-            @test testqry[9,:y] == "2028"
-            @test testqry[10,:y] == "2029"
-
-            @test isapprox(testqry[1,:val], 3840.94023817782; atol=TOL)
-            @test isapprox(testqry[2,:val], 459.29493842479; atol=TOL)
-            @test isapprox(testqry[3,:val], 437.423750880753; atol=TOL)
-            @test isapprox(testqry[4,:val], 416.59404845786; atol=TOL)
-            @test isapprox(testqry[5,:val], 396.756236626533; atol=TOL)
-            @test isapprox(testqry[6,:val], 377.86308250146; atol=TOL)
-            @test isapprox(testqry[7,:val], 359.8696023823438; atol=TOL)
-            @test isapprox(testqry[8,:val], 342.73295464985; atol=TOL)
-            @test isapprox(testqry[9,:val], 326.412337761762; atol=TOL)
-            @test isapprox(testqry[10,:val], 310.86889310644; atol=TOL)
+        try
+            SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
+            NemoMod.calculatescenario(dbfile; jumpmodel = Model(optimizer_with_attributes(Cbc.Optimizer, "presolve" => "on", "logLevel" => 1), add_bridges=reg_jumpmode), restrictvars=false, quiet = calculatescenario_quiet)
+    
+            if !compilation
+                testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+    
+                @test testqry[1,:y] == "2020"
+                @test testqry[2,:y] == "2021"
+                @test testqry[3,:y] == "2022"
+                @test testqry[4,:y] == "2023"
+                @test testqry[5,:y] == "2024"
+                @test testqry[6,:y] == "2025"
+                @test testqry[7,:y] == "2026"
+                @test testqry[8,:y] == "2027"
+                @test testqry[9,:y] == "2028"
+                @test testqry[10,:y] == "2029"
+    
+                @test isapprox(testqry[1,:val], 3840.94023817782; atol=TOL)
+                @test isapprox(testqry[2,:val], 459.29493842479; atol=TOL)
+                @test isapprox(testqry[3,:val], 437.423750880753; atol=TOL)
+                @test isapprox(testqry[4,:val], 416.59404845786; atol=TOL)
+                @test isapprox(testqry[5,:val], 396.756236626533; atol=TOL)
+                @test isapprox(testqry[6,:val], 377.86308250146; atol=TOL)
+                @test isapprox(testqry[7,:val], 359.8696023823438; atol=TOL)
+                @test isapprox(testqry[8,:val], 342.73295464985; atol=TOL)
+                @test isapprox(testqry[9,:val], 326.412337761762; atol=TOL)
+                @test isapprox(testqry[10,:val], 310.86889310644; atol=TOL)
+            end
+        finally
+            SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 0")
         end
-
-        SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 0")
 
         # Test with calcyears
         @info "Running Cbc test 5 on storage_test.sqlite: calcyears."
@@ -178,16 +181,19 @@ if @isdefined Cbc
 
         # Test MinimumUtilization
         @info "Running Cbc test 6 on storage_test.sqlite: minimum utilization."
-        SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.5 from TIMESLICE")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Cbc.Optimizer, add_bridges=reg_jumpmode), varstosave="vproductionbytechnologyannual", quiet = calculatescenario_quiet)
-
-        if !compilation
-            testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
-
-            @test isapprox(testqry[1,:val], 15.768; atol=TOL)
+        
+        try
+            SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.5 from TIMESLICE")
+            NemoMod.calculatescenario(dbfile; jumpmodel = Model(Cbc.Optimizer, add_bridges=reg_jumpmode), varstosave="vproductionbytechnologyannual", quiet = calculatescenario_quiet)
+    
+            if !compilation
+                testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
+    
+                @test isapprox(testqry[1,:val], 15.768; atol=TOL)
+            end
+        finally
+            SQLite.DBInterface.execute(db, "delete from MinimumUtilization")
         end
-
-        SQLite.DBInterface.execute(db, "delete from MinimumUtilization")
 
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
@@ -219,21 +225,24 @@ if @isdefined Cbc
 
         # Test transshipment power flow
         @info "Running Cbc test 2 on storage_transmission_test.sqlite: transshipment power flow."
-        SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 3")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Cbc.Optimizer, add_bridges=reg_jumpmode), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029], continuoustransmission=true, quiet = calculatescenario_quiet)
-
-        if !compilation
-            testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
-            @test testqry[1,:y] == "2020"
-            @test testqry[2,:y] == "2025"
-            @test testqry[3,:y] == "2029"
-
-            @test isapprox(testqry[1,:val], 4303.25529142096; atol=TOL)
-            @test isapprox(testqry[2,:val], 2720.73287425466; atol=TOL)
-            @test isapprox(testqry[3,:val], 1745.96958622336; atol=TOL)
+        
+        try
+            SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 3")
+            NemoMod.calculatescenario(dbfile; jumpmodel = Model(Cbc.Optimizer, add_bridges=reg_jumpmode), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029], continuoustransmission=true, quiet = calculatescenario_quiet)
+    
+            if !compilation
+                testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+                @test testqry[1,:y] == "2020"
+                @test testqry[2,:y] == "2025"
+                @test testqry[3,:y] == "2029"
+    
+                @test isapprox(testqry[1,:val], 4303.25529142096; atol=TOL)
+                @test isapprox(testqry[2,:val], 2720.73287425466; atol=TOL)
+                @test isapprox(testqry[3,:val], 1745.96958622336; atol=TOL)
+            end
+        finally
+            SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 2")
         end
-
-        SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 2")
 
         # Test limited foresight optimization
         @info "Running Cbc test 3 on storage_transmission_test.sqlite: limited foresight optimization."

@@ -126,36 +126,39 @@ if @isdefined MosekTools
 
         # Test with storage net zero constraints
         @info "Running Mosek test 4 on storage_test.sqlite: storage net zero constraints."
-        SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), restrictvars=false, quiet = calculatescenario_quiet)
 
-        if !compilation
-            testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
-
-            @test testqry[1,:y] == "2020"
-            @test testqry[2,:y] == "2021"
-            @test testqry[3,:y] == "2022"
-            @test testqry[4,:y] == "2023"
-            @test testqry[5,:y] == "2024"
-            @test testqry[6,:y] == "2025"
-            @test testqry[7,:y] == "2026"
-            @test testqry[8,:y] == "2027"
-            @test testqry[9,:y] == "2028"
-            @test testqry[10,:y] == "2029"
-
-            @test isapprox(testqry[1,:val], 3840.94023817785; atol=TOL)
-            @test isapprox(testqry[2,:val], 459.294938424824; atol=TOL)
-            @test isapprox(testqry[3,:val], 437.423750880721; atol=TOL)
-            @test isapprox(testqry[4,:val], 416.59194032216; atol=TOL)
-            @test isapprox(testqry[5,:val], 396.756236626635; atol=TOL)
-            @test isapprox(testqry[6,:val], 377.863082501456; atol=TOL)
-            @test isapprox(testqry[7,:val], 359.869602382347; atol=TOL)
-            @test isapprox(testqry[8,:val], 342.732954649844; atol=TOL)
-            @test isapprox(testqry[9,:val], 326.412337761761; atol=TOL)
-            @test isapprox(testqry[10,:val], 310.868893106428; atol=TOL)
+        try
+            SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
+            NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), restrictvars=false, quiet = calculatescenario_quiet)
+    
+            if !compilation
+                testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+    
+                @test testqry[1,:y] == "2020"
+                @test testqry[2,:y] == "2021"
+                @test testqry[3,:y] == "2022"
+                @test testqry[4,:y] == "2023"
+                @test testqry[5,:y] == "2024"
+                @test testqry[6,:y] == "2025"
+                @test testqry[7,:y] == "2026"
+                @test testqry[8,:y] == "2027"
+                @test testqry[9,:y] == "2028"
+                @test testqry[10,:y] == "2029"
+    
+                @test isapprox(testqry[1,:val], 3840.94023817785; atol=TOL)
+                @test isapprox(testqry[2,:val], 459.294938424824; atol=TOL)
+                @test isapprox(testqry[3,:val], 437.423750880721; atol=TOL)
+                @test isapprox(testqry[4,:val], 416.59194032216; atol=TOL)
+                @test isapprox(testqry[5,:val], 396.756236626635; atol=TOL)
+                @test isapprox(testqry[6,:val], 377.863082501456; atol=TOL)
+                @test isapprox(testqry[7,:val], 359.869602382347; atol=TOL)
+                @test isapprox(testqry[8,:val], 342.732954649844; atol=TOL)
+                @test isapprox(testqry[9,:val], 326.412337761761; atol=TOL)
+                @test isapprox(testqry[10,:val], 310.868893106428; atol=TOL)
+            end
+        finally
+            SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 0")        
         end
-
-        SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 0")
 
         # Test with calcyears
         @info "Running Mosek test 5 on storage_test.sqlite: calcyears."
@@ -174,16 +177,19 @@ if @isdefined MosekTools
 
         # Test MinimumUtilization
         @info "Running Mosek test 6 on storage_test.sqlite: minimum utilization."
-        SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.5 from TIMESLICE")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), varstosave="vproductionbytechnologyannual", forcemip=true, quiet = calculatescenario_quiet)
 
-        if !compilation
-            testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
-
-            @test isapprox(testqry[1,:val], 15.768; atol=TOL)
+        try
+            SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.5 from TIMESLICE")
+            NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), varstosave="vproductionbytechnologyannual", forcemip=true, quiet = calculatescenario_quiet)
+    
+            if !compilation
+                testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
+    
+                @test isapprox(testqry[1,:val], 15.768; atol=TOL)
+            end
+        finally
+            SQLite.DBInterface.execute(db, "delete from MinimumUtilization")        
         end
-
-        SQLite.DBInterface.execute(db, "delete from MinimumUtilization")
 
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
@@ -231,72 +237,84 @@ if @isdefined MosekTools
 
         # Test MinimumUtilization
         @info "Running Mosek test 2 on storage_transmission_test.sqlite: minimum utilization."
-        SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.2 from TIMESLICE")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), varstosave="vproductionbytechnologyannual", calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
 
-        if !compilation
-            testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
-
-            @test isapprox(testqry[1,:val], 16.3149963697108; atol=TOL)
+        try
+            SQLite.DBInterface.execute(db, "insert into MinimumUtilization select ROWID, '1', 'gas', val, 2025, 0.2 from TIMESLICE")
+            NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), varstosave="vproductionbytechnologyannual", calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
+    
+            if !compilation
+                testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where t = 'gas' and y = 2025") |> DataFrame
+    
+                @test isapprox(testqry[1,:val], 16.3149963697108; atol=TOL)
+            end
+        finally
+            SQLite.DBInterface.execute(db, "delete from MinimumUtilization")
         end
-
-        SQLite.DBInterface.execute(db, "delete from MinimumUtilization")
 
         # Test interest rates
         @info "Running Mosek test 3 on storage_transmission_test.sqlite: interest rates."
-        SQLite.DBInterface.execute(db, "insert into InterestRateStorage select rowid, 1, 'storage1', y.val, 0.05 from year y")
-        SQLite.DBInterface.execute(db, "insert into InterestRateTechnology select rowid, 1, 'solar', y.val, 0.05 from year y")
-        SQLite.DBInterface.execute(db, "update TransmissionLine set interestrate = 0.05 where id = 2")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
 
-        if !compilation
-            testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
-
-            @test testqry[1,:y] == "2020"
-            @test testqry[2,:y] == "2025"
-            @test testqry[3,:y] == "2029"
-
-            @test isapprox(testqry[1,:val], 12672.8114730171; atol=TOL)
-            @test isapprox(testqry[2,:val], 2510.44589185654; atol=TOL)
-            @test isapprox(testqry[3,:val], 1611.02255483292; atol=TOL)
+        try
+            SQLite.DBInterface.execute(db, "insert into InterestRateStorage select rowid, 1, 'storage1', y.val, 0.05 from year y")
+            SQLite.DBInterface.execute(db, "insert into InterestRateTechnology select rowid, 1, 'solar', y.val, 0.05 from year y")
+            SQLite.DBInterface.execute(db, "update TransmissionLine set interestrate = 0.05 where id = 2")
+            NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
+    
+            if !compilation
+                testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+    
+                @test testqry[1,:y] == "2020"
+                @test testqry[2,:y] == "2025"
+                @test testqry[3,:y] == "2029"
+    
+                @test isapprox(testqry[1,:val], 12672.8114730171; atol=TOL)
+                @test isapprox(testqry[2,:val], 2510.44589185654; atol=TOL)
+                @test isapprox(testqry[3,:val], 1611.02255483292; atol=TOL)
+            end
+        finally
+            SQLite.DBInterface.execute(db, "delete from InterestRateStorage")
+            SQLite.DBInterface.execute(db, "delete from InterestRateTechnology")
+            SQLite.DBInterface.execute(db, "update TransmissionLine set interestrate = null where id = 2")
         end
-
-        SQLite.DBInterface.execute(db, "delete from InterestRateStorage")
-        SQLite.DBInterface.execute(db, "delete from InterestRateTechnology")
-        SQLite.DBInterface.execute(db, "update TransmissionLine set interestrate = null where id = 2")
 
         # Test transshipment power flow
         @info "Running Mosek test 4 on storage_transmission_test.sqlite: transshipment power flow."
-        SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 3")
-        SQLite.DBInterface.execute(db, "update TransmissionLine set efficiency = 1.0")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
 
-        if !compilation
-            testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
-
-            @test testqry[1,:y] == "2020"
-            @test testqry[2,:y] == "2025"
-            @test testqry[3,:y] == "2029"
-
-            @test isapprox(testqry[1,:val], 4649.69110419447; atol=TOL)
-            @test isapprox(testqry[2,:val], 2932.95931815835; atol=TOL)
-            @test isapprox(testqry[3,:val], 1882.16116899065; atol=TOL)
+        try
+            SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 3")
+            SQLite.DBInterface.execute(db, "update TransmissionLine set efficiency = 1.0")
+            NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
+    
+            if !compilation
+                testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+    
+                @test testqry[1,:y] == "2020"
+                @test testqry[2,:y] == "2025"
+                @test testqry[3,:y] == "2029"
+    
+                @test isapprox(testqry[1,:val], 4649.69110419447; atol=TOL)
+                @test isapprox(testqry[2,:val], 2932.95931815835; atol=TOL)
+                @test isapprox(testqry[3,:val], 1882.16116899065; atol=TOL)
+            end
+        finally
+            SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 2")
+            SQLite.DBInterface.execute(db, "update TransmissionLine set efficiency = null")
         end
-
-        SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 2")
-        SQLite.DBInterface.execute(db, "update TransmissionLine set efficiency = null")
 
         # Test transmission line availability
         @info "Running Mosek test 5 on storage_transmission_test.sqlite: transmission line availability."
-        SQLite.DBInterface.execute(db, "insert into TransmissionAvailabilityFactor values (null, 1, 'winterwe8', 2025, 0.2)")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), varstosave="vtransmissionbyline", calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
 
-        if !compilation
-            testqry = SQLite.DBInterface.execute(db, "select * from vtransmissionbyline where tr = 1 and l = 'winterwe8' and y = 2025") |> DataFrame
-            @test abs(testqry[1,:val]) <= 50.0 + TOL
+        try
+            SQLite.DBInterface.execute(db, "insert into TransmissionAvailabilityFactor values (null, 1, 'winterwe8', 2025, 0.2)")
+            NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), varstosave="vtransmissionbyline", calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
+    
+            if !compilation
+                testqry = SQLite.DBInterface.execute(db, "select * from vtransmissionbyline where tr = 1 and l = 'winterwe8' and y = 2025") |> DataFrame
+                @test abs(testqry[1,:val]) <= 50.0 + TOL
+            end
+        finally
+            SQLite.DBInterface.execute(db, "delete from TransmissionAvailabilityFactor")
         end
-
-        SQLite.DBInterface.execute(db, "delete from TransmissionAvailabilityFactor")
 
         # Test limited foresight optimization
         @info "Running Mosek test 6 on storage_transmission_test.sqlite: limited foresight optimization."
