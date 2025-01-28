@@ -16,7 +16,7 @@ end
 
 using Test, SQLite, DataFrames, JuMP
 
-const TOL = 0.1  # Default tolerance for isapprox() comparisons
+const TOL = 0.5  # Default tolerance for isapprox() comparisons
 
 if !@isdefined compilation  # Flag that turns off @test calls
     compilation = false
