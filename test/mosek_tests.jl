@@ -127,7 +127,7 @@ if @isdefined MosekTools
         # Test with storage net zero constraints
         @info "Running Mosek test 4 on storage_test.sqlite: storage net zero constraints."
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), restrictvars=false, forcemip=true, quiet = calculatescenario_quiet)
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), restrictvars=false, quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -143,16 +143,16 @@ if @isdefined MosekTools
             @test testqry[9,:y] == "2028"
             @test testqry[10,:y] == "2029"
 
-            @test isapprox(testqry[1,:val], 3840.94023817774; atol=TOL)
-            @test isapprox(testqry[2,:val], 459.292614204884; atol=TOL)
-            @test isapprox(testqry[3,:val], 437.421537337638; atol=TOL)
+            @test isapprox(testqry[1,:val], 3840.94023817785; atol=TOL)
+            @test isapprox(testqry[2,:val], 459.294938424824; atol=TOL)
+            @test isapprox(testqry[3,:val], 437.423750880721; atol=TOL)
             @test isapprox(testqry[4,:val], 416.59194032216; atol=TOL)
-            @test isapprox(testqry[5,:val], 396.754228877952; atol=TOL)
-            @test isapprox(testqry[6,:val], 377.861170359965; atol=TOL)
-            @test isapprox(testqry[7,:val], 359.867781295205; atol=TOL)
-            @test isapprox(testqry[8,:val], 342.731220281158; atol=TOL)
-            @test isapprox(testqry[9,:val], 326.410685982046; atol=TOL)
-            @test isapprox(testqry[10,:val], 310.8673199829; atol=TOL)
+            @test isapprox(testqry[5,:val], 396.756236626635; atol=TOL)
+            @test isapprox(testqry[6,:val], 377.863082501456; atol=TOL)
+            @test isapprox(testqry[7,:val], 359.869602382347; atol=TOL)
+            @test isapprox(testqry[8,:val], 342.732954649844; atol=TOL)
+            @test isapprox(testqry[9,:val], 326.412337761761; atol=TOL)
+            @test isapprox(testqry[10,:val], 310.868893106428; atol=TOL)
         end
 
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 0")
