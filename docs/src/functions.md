@@ -44,9 +44,3 @@ logmsg
 ```@docs
 setparamdefault
 ```
-
-## writescenariomodel
-
-```@docs
-writescenariomodel
-```

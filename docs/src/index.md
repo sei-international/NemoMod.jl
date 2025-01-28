@@ -9,14 +9,15 @@ This documentation explains how to use **NEMO**: the **Next Energy Modeling syst
 NEMO is a high-performance, open-source energy system optimization modeling tool. It is intended for users who seek substantial optimization capabilities without the financial burden of proprietary software or the performance bottlenecks of common open-source alternatives. Key features of NEMO include:
 
 - Least-cost optimization of energy supply and demand
-- Support for multiple regions and regional trade
+- Support for regional models with endogenously simulated trade
 - Modeling of energy storage
 - Nodal network simulations and modeling of power and pipeline flow
 - Modeling of emissions and emission constraints (including carbon prices and pollutant externalities)
 - Modeling of renewable energy targets
+- Optimization with perfect foresight or limited foresight
 - Support for simulating selected years in a modeling period
 - Parallel processing
-- Support for multiple solvers: [Cbc](https://github.com/coin-or/Cbc), [CPLEX](https://www.ibm.com/analytics/cplex-optimizer), [GLPK](https://www.gnu.org/software/glpk/), [Gurobi](https://www.gurobi.com/), [HiGHS](https://highs.dev/), [Mosek](https://www.mosek.com/), and [Xpress](https://www.fico.com/en/products/fico-xpress-optimization)
+- Verified compatibility with multiple solvers: [Cbc](https://github.com/coin-or/Cbc), [CPLEX](https://www.ibm.com/analytics/cplex-optimizer), [GLPK](https://www.gnu.org/software/glpk/), [Gurobi](https://www.gurobi.com/), [HiGHS](https://highs.dev/), [Mosek](https://www.mosek.com/), and [Xpress](https://www.fico.com/en/products/fico-xpress-optimization)
 - Optimization warm starts
 - [SQLite](https://www.sqlite.org/) data store
 - Numerous performance tuning options

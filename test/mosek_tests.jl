@@ -127,7 +127,7 @@ if @isdefined MosekTools
         # Test with storage net zero constraints
         @info "Running Mosek test 4 on storage_test.sqlite: storage net zero constraints."
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
-        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), restrictvars=false, forcemip=true, quiet = calculatescenario_quiet)
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), restrictvars=false, quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
@@ -143,16 +143,16 @@ if @isdefined MosekTools
             @test testqry[9,:y] == "2028"
             @test testqry[10,:y] == "2029"
 
-            @test isapprox(testqry[1,:val], 3840.94023817774; atol=TOL)
-            @test isapprox(testqry[2,:val], 459.292614204884; atol=TOL)
-            @test isapprox(testqry[3,:val], 437.421537337638; atol=TOL)
+            @test isapprox(testqry[1,:val], 3840.94023817785; atol=TOL)
+            @test isapprox(testqry[2,:val], 459.294938424824; atol=TOL)
+            @test isapprox(testqry[3,:val], 437.423750880721; atol=TOL)
             @test isapprox(testqry[4,:val], 416.59194032216; atol=TOL)
-            @test isapprox(testqry[5,:val], 396.754228877952; atol=TOL)
-            @test isapprox(testqry[6,:val], 377.861170359965; atol=TOL)
-            @test isapprox(testqry[7,:val], 359.867781295205; atol=TOL)
-            @test isapprox(testqry[8,:val], 342.731220281158; atol=TOL)
-            @test isapprox(testqry[9,:val], 326.410685982046; atol=TOL)
-            @test isapprox(testqry[10,:val], 310.8673199829; atol=TOL)
+            @test isapprox(testqry[5,:val], 396.756236626635; atol=TOL)
+            @test isapprox(testqry[6,:val], 377.863082501456; atol=TOL)
+            @test isapprox(testqry[7,:val], 359.869602382347; atol=TOL)
+            @test isapprox(testqry[8,:val], 342.732954649844; atol=TOL)
+            @test isapprox(testqry[9,:val], 326.412337761761; atol=TOL)
+            @test isapprox(testqry[10,:val], 310.868893106428; atol=TOL)
         end
 
         SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 0")
@@ -278,9 +278,9 @@ if @isdefined MosekTools
             @test testqry[2,:y] == "2025"
             @test testqry[3,:y] == "2029"
 
-            @test isapprox(testqry[1,:val], 4649.69120037856; atol=TOL)
-            @test isapprox(testqry[2,:val], 2586.91004106252; atol=TOL)
-            @test isapprox(testqry[3,:val], 1673.92988604328; atol=TOL)
+            @test isapprox(testqry[1,:val], 4649.69110419447; atol=TOL)
+            @test isapprox(testqry[2,:val], 2932.95931815835; atol=TOL)
+            @test isapprox(testqry[3,:val], 1882.16116899065; atol=TOL)
         end
 
         SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 2")
@@ -297,7 +297,24 @@ if @isdefined MosekTools
         end
 
         SQLite.DBInterface.execute(db, "delete from TransmissionAvailabilityFactor")
-        
+
+        # Test limited foresight optimization
+        @info "Running Mosek test 6 on storage_transmission_test.sqlite: limited foresight optimization."
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), varstosave="vtotaldiscountedcost", calcyears=[[2021,2022],[2025,2029]], continuoustransmission = true, quiet = calculatescenario_quiet)
+
+        if !compilation
+            testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+            @test testqry[1,:y] == "2021"
+            @test testqry[2,:y] == "2022"
+            @test testqry[3,:y] == "2025"
+            @test testqry[4,:y] == "2029"
+
+            @test isapprox(testqry[1,:val], 4846.62588143849; atol=TOL)
+            @test isapprox(testqry[2,:val], 305.484279868528; atol=TOL)
+            @test isapprox(testqry[3,:val], 1363.8650852295; atol=TOL)
+            @test isapprox(testqry[4,:val], 1848.0889114236; atol=TOL)
+        end        
+
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")

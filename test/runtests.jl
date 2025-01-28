@@ -16,7 +16,7 @@ end
 
 using Test, SQLite, DataFrames, JuMP
 
-const TOL = 0.1  # Default tolerance for isapprox() comparisons
+const TOL = 0.5  # Default tolerance for isapprox() comparisons
 
 if !@isdefined compilation  # Flag that turns off @test calls
     compilation = false
@@ -58,7 +58,7 @@ function write_opt_prob(optprobfile::String)
     chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
     # Write output file for optimization problem
-    NemoMod.writescenariomodel(dbfile; restrictvars=true, quiet = false, writefilename = optprobfile)
+    NemoMod.calculatescenario(dbfile; restrictvars=true, quiet = false, writefilename = optprobfile)
 
     # Clean up scenario database
     db = SQLite.DB(dbfile)

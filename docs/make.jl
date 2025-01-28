@@ -29,7 +29,7 @@ makedocs(
         "Introduction" => "index.md"
         "Quick start" => "quick_start.md"
         "Installation" => "installation.md"
-        "Model concept" => "model_concept.md"
+        "Modeling concept" => "modeling_concept.md"
         "Inputs" => [
             "Dimensions" => "dimensions.md"
             "Parameters" => "parameters.md"
@@ -43,6 +43,7 @@ makedocs(
         "Scenario databases" => "scenario_db.md"
         "Calculating a scenario" => [
             "Julia syntax" => "calculatescenario.md"
+            "Perfect foresight vs. limited foresight" => "foresight.md"
             "Calculating selected years" => "selected_years.md"
             "Configuration files" => "configuration_file.md"
             "Performance tips" => "performance_tips.md"

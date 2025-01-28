@@ -87,8 +87,22 @@ function getconfig(quiet::Bool = false)
 end  # getconfig(quiet::Bool = false)
 
 """
+    getjumpmodelproperties(jumpmodel::JuMP.Model)
+
+    Returns a `Tuple` of `Bool` indicating whether `jumpmodel`:
+        1) In in direct mode;
+        2) Has bridging enabled.
+"""
+function getjumpmodelproperties(jumpmodel::JuMP.Model)
+    local jumpdirectmode::Bool = (mode(jumpmodel) == JuMP.DIRECT)  # Indicates whether jumpmodel is in direct mode
+    local jumpbridges::Bool = (jumpdirectmode ? false : (typeof(backend(jumpmodel).optimizer) <: MathOptInterface.Bridges.LazyBridgeOptimizer))  # Indicates whether bridging is enabled in jumpmodel
+
+    return (jumpdirectmode, jumpbridges)
+end  # getjumpmodelproperties(jumpmodel::JuMP.Model)
+
+"""
     getconfigargs!(configfile::ConfParse,
-        calcyears::Array{Int,1},
+        calcyears::Vector{Vector{Int}},
         varstosavearr::Array{String,1},
         bools::Array{Bool,1},
         quiet::Bool)
@@ -97,7 +111,7 @@ Loads run-time arguments for `calculatescenario()` from a configuration file.
 
 # Arguments
 - `configfile::ConfParse`: Configuration file. This argument is not changed by the function.
-- `calcyears::Array{Int,1}`: `calculatescenario()` `calcyears` argument. Values specified
+- `calcyears::Vector{Vector{Int}}`: `calculatescenario()` `calcyears` argument. Values specified
     in the configuration file for `[calculatescenarioargs]/calcyears` (including an empty or null value)
     replace what is in this array.
 - `varstosavearr::Array{String,1}`: Array representation of `calculatescenario()` `varstosave` argument.
@@ -110,19 +124,26 @@ Loads run-time arguments for `calculatescenario()` from a configuration file.
 - `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to `STDOUT`).
     This argument is not changed by the function.
 """
-function getconfigargs!(configfile::ConfParse, calcyears::Array{Int,1}, varstosavearr::Array{String,1},
+function getconfigargs!(configfile::ConfParse, calcyears::Vector{Vector{Int}}, varstosavearr::Array{String,1},
     bools::Array{Bool,1}, strings::Array{String,1}, quiet::Bool)
 
     if haskey(configfile, "calculatescenarioargs", "calcyears")
         try
             calcyearsconfig = retrieve(configfile, "calculatescenarioargs", "calcyears")
-            calcyearsconfigarr::Array{Int,1} = Array{Int,1}()  # calcyearsconfig converted to an Int array
+            calcyearsconfigarr::Vector{Vector{Int}} = Vector{Vector{Int}}()  # calcyearsconfig converted to an array of arrays of years
 
-            if typeof(calcyearsconfig) == String
-                calcyearsconfigarr = [Meta.parse(calcyearsconfig)]
+            if isa(calcyearsconfig, String)
+                # Should be a single year
+                push!(calcyearsconfigarr, [Meta.parse(calcyearsconfig)])
             else
-                # calcyearsconfig should be an array of strings
-                calcyearsconfigarr = [Meta.parse(v) for v in calcyearsconfig]
+                # calcyearsconfig should be an array of strings - value in configuration file split on commas
+                if length(calcyearsconfig) == 0
+                    push!(calcyearsconfigarr, Vector{Int}())
+                else
+                    for e in calcyearsconfig
+                        push!(calcyearsconfigarr, [Meta.parse(v) for v in split(e, "|")])  # Vertical bars delimit years in groups that are calculated together with perfect foresight
+                    end
+                end
             end
 
             # This separate operation is necessary in order to modify calcyears
@@ -265,6 +286,23 @@ function getconfigargs!(configfile::ConfParse, calcyears::Array{Int,1}, varstosa
         end
     end
 end  # getconfigargs!(configfile::ConfParse, calcyears::Array{Int,1}, varstosavearr::Array{String,1}, bools::Array{Bool,1}, quiet::Bool)
+
+"""
+    check_calcyears(calcyears::Vector{Vector{Int}})
+
+Throws an error if: 1) `calcyears` has more than one element, and one or more of them are empty; or 2) the vectors in `calcyears` overlap or are not in chronological order.
+"""
+function check_calcyears(calcyears::Vector{Vector{Int}})
+    for i = 2:length(calcyears)
+        if (i == 2 && length(calcyears[1]) == 0) || length(calcyears[i]) == 0
+            error("If calcyears argument includes an empty vector/group of years (which means all years should be calculated), it must be only element in calcyears.")
+        end
+
+        for y in calcyears[i]
+            y <= maximum(calcyears[i-1]) && error("If calcyears argument includes multiple vectors/groups of years, they must not overlap and must be in chronological order.")
+        end
+    end
+end  # check_calcyears(calcyears::Vector{Vector{Int}})
 
 """
     reset_jumpmodel(jumpmodel::JuMP.Model; direct::Bool=false, bridges::Bool=true,
@@ -666,9 +704,12 @@ function savevarresults_threaded(vars::Array{String,1}, modelvarindices::Dict{St
             SQLite.DBInterface.execute(db, "BEGIN")
 
             # Create target table for v (drop any existing table for v)
-            SQLite.DBInterface.execute(db,"drop table if exists " * vname)
+            if !in("y", modelvarindices[vname][2])
+                # Replace pre-existing result tables that are not year-specific
+                SQLite.DBInterface.execute(db,"drop table if exists " * vname)
+            end
 
-            SQLite.DBInterface.execute(db, "create table '" * vname * "' ('" * join(modelvarindices[vname][2], "' text, '") * "' text, 'val' real, 'solvedtm' text)")
+            SQLite.DBInterface.execute(db, "create table if not exists '" * vname * "' ('" * join(modelvarindices[vname][2], "' text, '") * "' text, 'val' real, 'solvedtm' text)")
 
             # Insert data from indices and vals
             for t=1:nt
@@ -745,53 +786,6 @@ function savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tup
 end  # savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{AbstractArray,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String) =#
 
 """
-    checkactivityupperlimits(db::SQLite.DB, tolerance::Float64, restrictyears::Bool, inyears::String)
-
-For the scenario specified in `db`, checks whether there are:
-    1) Any TotalTechnologyAnnualActivityUpperLimit values that are <= tolerance times the maximum
-        annual demand
-    2) Any TotalTechnologyModelPeriodActivityUpperLimit values that are <= tolerance times the maximum
-        annual demand times the number of years in the scenario
-If `restrictyears` is true, the maximum annual demand and the TotalTechnologyAnnualActivityUpperLimit values
-are selected from the years in `inyears`. `inyears` should be a comma-delimited list of years in
-parentheses, with a space at the beginning and end of the string.
-
-Returns a `Tuple` of Booleans whose first value is the result of the first check, and whose second
-    value is the result of the second.
-"""
-function checkactivityupperlimits(db::SQLite.DB, tolerance::Float64, restrictyears::Bool, inyears::String)
-    local annual::Bool = true  # Return value indicating whether there are any TotalTechnologyAnnualActivityUpperLimit
-        # values that are <= tolerance x maximum annual demand
-    local modelperiod::Bool = true  # Return value indicating whether there are any TotalTechnologyModelPeriodActivityUpperLimit
-        # values that are <= tolerance x maximum annual demand x # of years in scenario
-    local qry::DataFrame  # Working query
-    local maxdemand::Float64  # Maximum annual demand
-
-    qry = SQLite.DBInterface.execute(db, "select max(mv) as mv from
-    (select max(val) as mv from AccumulatedAnnualDemand_def $(restrictyears ? "where y in" * inyears : "")
-    union
-    select max(val) as mv from SpecifiedAnnualDemand_def $(restrictyears ? "where y in" * inyears : ""))") |> DataFrame
-
-    maxdemand = qry[!,1][1]
-
-    qry = SQLite.DBInterface.execute(db, "select tau.val from TotalTechnologyAnnualActivityUpperLimit_def tau
-        where tau.val / :v1 <= :v2 $(restrictyears ? "and y in" * inyears : "")", [maxdemand, tolerance]) |> DataFrame
-
-    if size(qry)[1] == 0
-        annual = false
-    end
-
-    qry = SQLite.DBInterface.execute(db, "select tmu.val from TotalTechnologyModelPeriodActivityUpperLimit_def tmu
-      where tmu.val / (:v1 * (select count(val) from year)) <= :v2", [maxdemand, tolerance]) |> DataFrame
-
-    if size(qry)[1] == 0
-      modelperiod = false
-    end
-
-    return (annual, modelperiod)
-end  # checkactivityupperlimits(db::SQLite.DB, tolerance::Float64, restrictyears::Bool, inyears::String)
-
-"""
     scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vproductionbytechnologysaved::Bool,
         vusebytechnologysaved::Bool, restrictyears::Bool, inyears::String)
 
@@ -813,9 +807,17 @@ Returns a `Dict` of query commands used in NEMO's `modelscenario` function. Each
     and `transmissionmodeling` are `true`.
 - `restrictyears::Bool`: Indicates whether `modelscenario` is running for selected years only.
 - `inyears::String`: SQL IN clause predicate for years selected for `modelscenario`. When `restrictvars`
-    is `true`, this argument is used to include filtering by year in query commands."""
+    is `true`, this argument is used to include filtering by year in query commands.
+- `limitedforesight::Bool`: Indicates whether `modelscenario` is executing part of a limited foresight optimization.
+- `lastyearprevgroupyears`: If `modelscenario` is executing part of a limited foresight optimization, the last year 
+    modeled in the previous step of the optimization (i.e., the previous invocation of `modelscenario`). `nothing`
+    if the current step is the first step of the optimization. Additional query commands are included in results 
+    when `limitedforesight` is `true` and this argument is not `nothing`.
+- `firstmodeledyear::String`: The first year being modeled in the current invocation of `modelscenario`. Only used
+    `limitedforesight` is `true` and `lastyearprevgroupyears` is not `nothing`."""
 function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vproductionbytechnologysaved::Bool,
-    vusebytechnologysaved::Bool, restrictyears::Bool, inyears::String)
+    vusebytechnologysaved::Bool, restrictyears::Bool, inyears::String, limitedforesight::Bool, lastyearprevgroupyears,
+    firstmodeledyear::String)
 
     return_val::Dict{String, Tuple{String, String}} = Dict{String, Tuple{String, String}}()  # Return value for this function; map of query names
     #   to tuples of (DB path, SQL command)
@@ -973,9 +975,12 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     return_val["querycaa5_totalnewcapacity"] = (dbpath, "select cot.r as r, cot.t as t, cot.y as y, cast(cot.val as real) as cot
     from CapacityOfOneTechnologyUnit_def cot where cot.val <> 0 $(restrictyears ? "and cot.y in" * inyears : "")")
 
-    return_val["queryrtydr"] = (dbpath, "select r.val as r, t.val as t, y.val as y, cast(dr.val as real) as dr
-    from region r, technology t, year y, DiscountRate_def dr
+    return_val["queryrtydr"] = (dbpath, "select r.val as r, t.val as t, y.val as y, cast(dr.val as real) as dr,
+    $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "cast(v.val as real)" : "null") as prevcalcval
+    from region r, technology t, year y, DiscountRate_def dr, yearintervals yi
+    $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "left join vtotaltechnologyannualactivity v on v.r = r.val and v.t = t.val and v.y = (y.val - yi.intv)" : "")
     where dr.r = r.val $(restrictyears ? "and y.val in" * inyears : "")
+    and yi.y = y.val
     order by r.val, t.val")
 
     return_val["queryvannualtechnologyemissionbymode"] = (dbpath, "select r, t, e, y, m, cast(val as real) as ear
@@ -991,6 +996,14 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     return_val["queryvmodelperiodemissions"] = (dbpath, "select r.val as r, e.val as e, cast(mpl.val as real) as mpl
     from region r, emission e, ModelPeriodEmissionLimit_def mpl
     where mpl.r = r.val and mpl.e = e.val")
+
+    return_val["queryrempe"] = (dbpath, "select r.val as r, e.val as e, y.val as y, cast(mpe.val as real) as mpe,
+    $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "cast(v.val as real)" : "null") as prevcalcval
+    from region r, emission e, year y, yearintervals yi
+    left join ModelPeriodExogenousEmission_def mpe on mpe.r = r.val and mpe.e = e.val
+    $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "left join vannualemissions v on v.r = r.val and v.e = e.val and v.y = (y.val - yi.intv)" : "")
+    where yi.y = y.val $(restrictyears ? "and y.val in" * inyears : "")
+    order by r.val, e.val, y.val")
 
     if transmissionmodeling
         return_val["queryvrateofactivitynodal"] = (dbpath, "select ntc.n as n, l.val as l, ntc.t as t, ar.m as m, ntc.y as y
@@ -1151,6 +1164,11 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     	$(restrictyears ? "and y.val in" * inyears : "")")
     end  # transmissionmodeling
 
+    if limitedforesight && !isnothing(lastyearprevgroupyears)
+        return_val["vannualemissions"] = (dbpath, "select r as vr, e as ve, y as vy, cast(val as real) as vval
+        from vannualemissions where y = $(string(lastyearprevgroupyears))")
+    end  # limitedforesight && !isnothing(lastyearprevgroupyears)
+
     return return_val
 end  # scenario_calc_queries()
 
@@ -1192,63 +1210,6 @@ Runs the SQLite database query specified in `qtpl` and returns the result as a D
 function run_qry(qtpl::Tuple{String, String})
     return SQLite.DBInterface.execute(SQLite.DB(qtpl[1]), qtpl[2]) |> DataFrame
 end  # run_qry(qtpl::Tuple{String, String, String})
-
-"""
-    writescenariomodel(dbpath::String;
-        calcyears::Array{Int, 1} = Array{Int, 1}(),
-        varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual,
-            vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
-            vusenn, vtotaldiscountedcost",
-        restrictvars::Bool = true, continuoustransmission::Bool = false,
-        forcemip::Bool = false, startvalsdbpath::String = "",
-        startvalsvars::String = "", traperrors::Bool = true, quiet::Bool = false,
-        writefilename::String = "nemomodel.bz2",
-        writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS
-    )
-
-Writes a file representing the optimization problem for a NEMO scenario. Returns the name of the file.
-All arguments except `writefilename` and `writefileformat` function as in
-[`calculatescenario`](@ref). `writefilename` and `writefileformat` are described below.
-
-# Arguments
-
-- `writefilename::String`: Name of the output file. If a path is not included in the name,
-    the file is written to the Julia working directory. If the name ends in `.gz`, the file
-    is compressed with Gzip. If the name ends in `.bz2`, the file is compressed with BZip2.
-- `writefileformat::MathOptInterface.FileFormats.FileFormat`: Data format used in the output
-    file. Common formats include `MathOptInterface.FileFormats.FORMAT_MPS` (MPS format) and
-    `MathOptInterface.FileFormats.FORMAT_LP` (LP format). See the documentation for
-    [`MathOptInterface`](https://github.com/jump-dev/MathOptInterface.jl) for additional options.
-"""
-function writescenariomodel(
-    dbpath::String;
-    calcyears::Array{Int, 1} = Array{Int, 1}(),
-    varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost",
-    restrictvars::Bool = true,
-    continuoustransmission::Bool = false,
-    forcemip = false,
-    startvalsdbpath::String = "",
-    startvalsvars::String = "",
-    traperrors::Bool = true,
-    quiet::Bool = false,
-    writefilename::String = "nemomodel.bz2",
-    writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS
-    )
-
-    try
-        modelscenario(dbpath; calcyears=calcyears, varstosave=varstosave, restrictvars=restrictvars,
-            continuoustransmission=continuoustransmission, forcemip=forcemip, startvalsdbpath=startvalsdbpath,
-            startvalsvars=startvalsvars, quiet=quiet, writemodel=true, writefilename=writefilename,
-            writefileformat=writefileformat)
-    catch e
-        if traperrors
-            println("NEMO encountered an error with the following message: " * sprint(showerror, e) * ".")
-            println("To report this issue to the NEMO team, please submit an error report at https://leap.sei.org/support/. Please include in the report a list of steps to reproduce the error and the error message.")
-        else
-            rethrow()
-        end
-    end
-end  # writescenariomodel
 
 """
     setstartvalues(jumpmodel::JuMP.Model,

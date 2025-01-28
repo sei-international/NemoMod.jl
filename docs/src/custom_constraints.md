@@ -3,7 +3,7 @@ CurrentModule = NemoMod
 ```
 # [Custom constraints](@id custom_constraints)
 
-NEMO includes a mechanism for defining custom constraints that are added to a model when a scenario is calculated. To take advantage of this feature, you must write a Julia script that creates the constraints and point to the script in NEMO's [configuration file](@ref configuration_file). Use the `customconstraints` key in the configuration file's `includes` block to specify the path to your custom constraints script.
+NEMO includes a mechanism for defining custom constraints that are added to a model when a scenario is calculated. To take advantage of this feature, you must write a Julia script that creates the constraints and point to the script in your model's NEMO [configuration file](@ref configuration_file). Use the `customconstraints` key in the configuration file's `includes` block to specify the path to your custom constraints script.
 
 Custom constraints scripts typically consist of a function that builds constraints and a call to the function. The function's arguments generally include several global variables that NEMO makes available for custom constraints:
 
@@ -63,6 +63,9 @@ build_constraints(SQLite.DB(csdbpath), csjumpmodel, csquiet, csrestrictyears, cs
 Note how the script uses the global variables, and also how it refers to NEMO [output variables](@ref variables) with the JuMP function `variable_by_name`. The calls to `variable_by_name` are necessary because the output variables are not in scope.
 
 Another good practice in this script is that it writes a message to `STDOUT` if it creates any new constraints. NEMO's [`logmsg`](@ref) function is invoked for this purpose.
+
+!!! note
+    If you define a custom constraints script for a model and optimize the model with [limited foresight](@ref foresight), NEMO executes the script for each group of years in the limited foresight calculation. You must make sure your code is compatible with this procedure.
 
 ## Custom constraints in LEAP-NEMO models
 
