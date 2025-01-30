@@ -41,14 +41,16 @@ the termination status of the `JuMP` model used for the calculation (e.g., `OPTI
     `direct_model(Gurobi.Optimizer())`. Note that the solver's Julia package (Julia wrapper) must 
     be installed. See the documentation for JuMP for information on how to specify a solver and set 
     solver options.
-- `calcyears::Union{Vector{Int}, Vector{Vector{Int}}}`: Years to include in the calculation (a subset of 
-    the years defined in the scenario database). If a single vector of years is provided, NEMO calculates
-    the scenario for those years with perfect foresight. If multiple vectors of years are provided,
-    NEMO performs a limited foresight calculation for the scenario: it calculates the first group of years 
-    with perfect foresight, takes the results as the starting point for the second group of years, 
-    calculates the second group with perfect foresight, and so on through the last group. In this case, the
-    vectors of years should not overlap and should be in chronological order. If this argument is omitted,
-    all years in the scenario database are calculated with perfect foresight.
+- `calcyears::Union{Vector{Int}, Vector{Vector{Int}}}`: Years to include in the calculation (should be a 
+    subset of the years defined in the scenario database). If a single vector of years is provided, NEMO 
+    calculates the scenario for those years with perfect foresight. If multiple vectors of years are 
+    provided, NEMO performs a limited foresight calculation for the scenario: it calculates the first 
+    group of years with perfect foresight, takes the results as the starting point for the second group 
+    of years, calculates the second group with perfect foresight, and so on through the last group. In 
+    this case, the vectors of years should not overlap and should be in chronological order. If this 
+    argument is omitted (or an empty vector is provided), all years in the scenario database are calculated
+    with perfect foresight. If a vector of years is provided that does not intersect with the years in the
+    scenario database, it is ignored.
 - `varstosave::String`: Comma-delimited list of output variables whose results should be
     saved in the scenario database when the scenario is calculated. See NEMO's documentation on
     outputs for information on the variables that are available.
@@ -224,6 +226,10 @@ function calculatescenario(
             end
         end
         # END: Perform beforescenariocalc include.
+
+        # BEGIN: Filter out elements in calcyears that do not request any valid years in scenario database.
+        filter_calcyears!(db, calcyears)
+        # END: Filter out elements in calcyears that do not request any valid years in scenario database.
 
         # BEGIN: Drop any pre-existing result tables.
         dropresulttables(db, true)

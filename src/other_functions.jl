@@ -305,6 +305,20 @@ function check_calcyears(calcyears::Vector{Vector{Int}})
 end  # check_calcyears(calcyears::Vector{Vector{Int}})
 
 """
+    filter_calcyears!(db::SQLite.DB, calcyears::Vector{Vector{Int}})
+
+Removes elements from `calcyears` that do not contain any years in the `year` table of `db`.
+"""
+function filter_calcyears!(db::SQLite.DB, calcyears::Vector{Vector{Int}})
+    local all_yrs::Vector{Int} = DataFrame(SQLite.DBInterface.execute(db, "select cast(val as int) as y from year"))[!,:y]  # All years in year table
+    filter!(g -> !isdisjoint(g, all_yrs), calcyears)
+
+    if length(calcyears) == 0
+        push!(calcyears, Vector{Int}())
+    end
+end  # filter_calcyears!(db::SQLite.DB, calcyears::Vector{Vector{Int}})
+
+"""
     reset_jumpmodel(jumpmodel::JuMP.Model; direct::Bool=false, bridges::Bool=true,
         quiet::Bool=false)
 
