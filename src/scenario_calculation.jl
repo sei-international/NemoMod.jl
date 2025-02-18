@@ -1044,7 +1044,6 @@ addconstask::Task = @task begin
             local a = take!(cons_channel)
             #@info "Performed take for numconsarrays = " * string(numconsarrays)
             JuMP.add_constraint.(jumpmodel, a)
-            #createconstraints(jumpmodel, a)
             #@info "Created constraints for numconsarrays = " * string(numconsarrays)
             numaddedconsarrays += 1
             #@info "In while loop. numaddedconsarrays = " * string(numaddedconsarrays)

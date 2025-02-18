@@ -292,17 +292,6 @@ function keydicts_threaded(df::DataFrames.DataFrame, numdicts::Int)
 end  # keydicts_threaded(df::DataFrames.DataFrame, numdicts::Int)
 
 """
-    createconstraints(jumpmodel::JuMP.Model, cons::Array{AbstractConstraint, 1})
-
-Adds the constraints in `cons` to `jumpmodel` using `JuMP.add_constraint()`.
-"""
-function createconstraints(jumpmodel::JuMP.Model, cons::Array{AbstractConstraint, 1})
-    for c in cons
-        add_constraint(jumpmodel, c)
-    end
-end  # createconstraints(jumpmodel::JuMP.Model, cons::Array{AbstractConstraint, 1})
-
-"""
     savevarresults_threaded(vars::Array{String,1},
     modelvarindices::Dict{String, Tuple{AbstractArray,Array{String,1}}},
     db::SQLite.DB, solvedtmstr::String, reportzeros::Bool = false, quiet::Bool = false)
