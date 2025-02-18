@@ -40,4 +40,4 @@ The initial versions of NEMO were informed by version 2017_11_08 of the [Open So
 
 # For more information
 
-The NEMO team includes several SEI staff: [Jason Veysey](https://www.sei.org/people/jason-veysey/), [Charlie Heaps](https://www.sei.org/people/charles-heaps/), [Eric Kemp-Benedict](https://www.sei.org/people/eric-kemp-benedict/), and [Taylor Binnington](https://www.sei.org/people/taylor-binnington/). Please feel free to contact any of us for more information or if you have questions.
+The NEMO team includes several SEI staff: [Jason Veysey](https://www.sei.org/people/jason-veysey/), [Charlie Heaps](https://www.sei.org/people/charles-heaps/), and [Taylor Binnington](https://www.sei.org/people/taylor-binnington/). Please feel free to contact any of us for more information or if you have questions.

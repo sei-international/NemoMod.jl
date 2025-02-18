@@ -47,6 +47,7 @@ makedocs(
             "Calculating selected years" => "selected_years.md"
             "Configuration files" => "configuration_file.md"
             "Performance tips" => "performance_tips.md"
+            "Troubleshooting infeasibility" => "infeasibility.md"
         ]
         "Custom constraints" => "custom_constraints.md"
         "FAQs" => "faqs.md"

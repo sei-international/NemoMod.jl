@@ -27,66 +27,6 @@ function logmsg(msg::String, suppress=false, dtm=now()::DateTime)
 end  # logmsg(msg::String)
 
 """
-    ConfParser.parse_line(line::String)
-
-Overload of ConfParser.parse_line() in which quoted key values are returned as-is in their
-entirety.
-"""
-function ConfParser.parse_line(line::String)
-    parsed = String[]
-    splitted = split(line, ",")
-
-    # BEGIN: Code added to standard parse_line function.
-    if occursin(r"^\".*\"$", line)
-        m = match(r"^\"(.*)\"$", line)
-        push!(parsed, m.captures[1])
-        return parsed
-    end
-    # END: Code added to standard parse_line function.
-
-    for raw = splitted
-        if occursin(r"\S+", raw)
-            clean = match(r"\S+", raw)
-            push!(parsed, clean.match)
-        end
-    end
-    parsed
-end
-
-"""
-    getconfig(quiet::Bool = false)
-
-Reads in NEMO's configuration file, which should be in the Julia working directory,
-in `ini` format, and named `nemo.ini` or `nemo.cfg`. See the sample file in the NEMO
-package's `utils` directory for more information.
-
-# Arguments
-- `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to STDOUT).
-"""
-function getconfig(quiet::Bool = false)
-    configpathini::String = joinpath(pwd(), "nemo.ini")
-    configpathcfg::String = joinpath(pwd(), "nemo.cfg")
-    configpath::String = ""
-
-    if isfile(configpathini)
-        configpath = configpathini
-    elseif isfile(configpathcfg)
-        configpath = configpathcfg
-    else
-        return nothing
-    end
-
-    try
-        local conffile::ConfParse = ConfParse(configpath)
-        parse_conf!(conffile)
-        logmsg("Read NEMO configuration file at " * configpath * ".", quiet)
-        return conffile
-    catch
-        logmsg("Could not parse NEMO configuration file at " * configpath * ". Please verify format.", quiet)
-    end
-end  # getconfig(quiet::Bool = false)
-
-"""
     getjumpmodelproperties(jumpmodel::JuMP.Model)
 
     Returns a `Tuple` of `Bool` indicating whether `jumpmodel`:
@@ -99,193 +39,6 @@ function getjumpmodelproperties(jumpmodel::JuMP.Model)
 
     return (jumpdirectmode, jumpbridges)
 end  # getjumpmodelproperties(jumpmodel::JuMP.Model)
-
-"""
-    getconfigargs!(configfile::ConfParse,
-        calcyears::Vector{Vector{Int}},
-        varstosavearr::Array{String,1},
-        bools::Array{Bool,1},
-        quiet::Bool)
-
-Loads run-time arguments for `calculatescenario()` from a configuration file.
-
-# Arguments
-- `configfile::ConfParse`: Configuration file. This argument is not changed by the function.
-- `calcyears::Vector{Vector{Int}}`: `calculatescenario()` `calcyears` argument. Values specified
-    in the configuration file for `[calculatescenarioargs]/calcyears` (including an empty or null value)
-    replace what is in this array.
-- `varstosavearr::Array{String,1}`: Array representation of `calculatescenario()` `varstosave` argument.
-    Values specified in the configuration file for `[calculatescenarioargs]/varstosave` are added to this array.
-- `bools::Array{Bool,1}`: Array of Boolean arguments for `calculatescenario()`: `restrictvars`, `reportzeros`,
-    `continuoustransmission`, `forcemip`, and `quiet`, in that order. Values specified in the configuration file
-    for `[calculatescenarioargs]/restrictvars`, `[calculatescenarioargs]/reportzeros`,
-    `[calculatescenarioargs]/continuoustransmission`, `[calculatescenarioargs]/forcemip`, and `[calculatescenarioargs]/quiet`
-    overwrite what is in this array (provided the values can be parsed as `Bool`).
-- `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to `STDOUT`).
-    This argument is not changed by the function.
-"""
-function getconfigargs!(configfile::ConfParse, calcyears::Vector{Vector{Int}}, varstosavearr::Array{String,1},
-    bools::Array{Bool,1}, strings::Array{String,1}, quiet::Bool)
-
-    if haskey(configfile, "calculatescenarioargs", "calcyears")
-        try
-            calcyearsconfig = retrieve(configfile, "calculatescenarioargs", "calcyears")
-            calcyearsconfigarr::Vector{Vector{Int}} = Vector{Vector{Int}}()  # calcyearsconfig converted to an array of arrays of years
-
-            if isa(calcyearsconfig, String)
-                # Should be a single year
-                push!(calcyearsconfigarr, [Meta.parse(calcyearsconfig)])
-            else
-                # calcyearsconfig should be an array of strings - value in configuration file split on commas
-                if length(calcyearsconfig) == 0
-                    push!(calcyearsconfigarr, Vector{Int}())
-                else
-                    for e in calcyearsconfig
-                        push!(calcyearsconfigarr, [Meta.parse(v) for v in split(e, "|")])  # Vertical bars delimit years in groups that are calculated together with perfect foresight
-                    end
-                end
-            end
-
-            # This separate operation is necessary in order to modify calcyears
-            empty!(calcyears)
-            append!(calcyears, calcyearsconfigarr)
-            logmsg("Read calcyears argument from configuration file.", quiet)
-        catch e
-            logmsg("Could not read calcyears argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
-        end
-    end
-
-    if haskey(configfile, "calculatescenarioargs", "varstosave")
-        try
-            varstosaveconfig = retrieve(configfile, "calculatescenarioargs", "varstosave")
-
-            if typeof(varstosaveconfig) == String
-                union!(varstosavearr, [lowercase(varstosaveconfig)])
-            else
-                # varstosaveconfig should be an array of strings
-                union!(varstosavearr, [lowercase(v) for v in varstosaveconfig])
-            end
-
-            logmsg("Read varstosave argument from configuration file.", quiet)
-        catch e
-            logmsg("Could not read varstosave argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
-        end
-    end
-
-    if haskey(configfile, "calculatescenarioargs", "restrictvars")
-        try
-            bools[1] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "restrictvars")))
-            logmsg("Read restrictvars argument from configuration file.", quiet)
-        catch e
-            logmsg("Could not read restrictvars argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
-        end
-    end
-
-    if haskey(configfile, "calculatescenarioargs", "reportzeros")
-        try
-            bools[2] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "reportzeros")))
-            logmsg("Read reportzeros argument from configuration file.", quiet)
-        catch e
-            logmsg("Could not read reportzeros argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
-        end
-    end
-
-    if haskey(configfile, "calculatescenarioargs", "continuoustransmission")
-        try
-            bools[3] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "continuoustransmission")))
-            logmsg("Read continuoustransmission argument from configuration file.", quiet)
-        catch e
-            logmsg("Could not read continuoustransmission argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
-        end
-    end
-
-    if haskey(configfile, "calculatescenarioargs", "forcemip")
-        try
-            bools[4] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "forcemip")))
-            logmsg("Read forcemip argument from configuration file.", quiet)
-        catch e
-            logmsg("Could not read forcemip argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
-        end
-    end
-
-    if haskey(configfile, "calculatescenarioargs", "startvalsdbpath")
-        try
-            startvalsdbpathconfig = retrieve(configfile, "calculatescenarioargs", "startvalsdbpath")
-
-            if typeof(startvalsdbpathconfig) == String
-                strings[1] = startvalsdbpathconfig
-            else
-                # startvalsdbpathconfig should be an array of strings
-                strings[1] = join(startvalsdbpathconfig, ",")
-            end
-
-            logmsg("Read startvalsdbpath argument from configuration file.", quiet)
-        catch e
-            logmsg("Could not read startvalsdbpath argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
-        end
-    end
-
-    if haskey(configfile, "calculatescenarioargs", "startvalsvars")
-        try
-            startvalsvarsconfig = retrieve(configfile, "calculatescenarioargs", "startvalsvars")
-
-            if typeof(startvalsvarsconfig) == String
-                strings[2] = startvalsvarsconfig
-            else
-                # startvalsdbpathconfig should be an array of strings
-                strings[2] = join(startvalsvarsconfig, ",")
-            end
-
-            logmsg("Read startvalsvars argument from configuration file.", quiet)
-        catch e
-            logmsg("Could not read startvalsvars argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
-        end
-    end
-
-    if haskey(configfile, "calculatescenarioargs", "precalcresultspath")
-        try
-            precalcresultspathconfig = retrieve(configfile, "calculatescenarioargs", "precalcresultspath")
-
-            if typeof(precalcresultspathconfig) == String
-                strings[3] = precalcresultspathconfig
-            else
-                # startvalsdbpathconfig should be an array of strings
-                strings[3] = join(precalcresultspathconfig, ",")
-            end
-
-            logmsg("Read precalcresultspath argument from configuration file.", quiet)
-        catch e
-            logmsg("Could not read precalcresultspath argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
-        end
-    end
-
-    if haskey(configfile, "calculatescenarioargs", "quiet")
-        try
-            bools[5] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "quiet")))
-            logmsg("Read quiet argument from configuration file. Value in configuration file will be used from this point forward.", quiet)
-        catch e
-            logmsg("Could not read quiet argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
-        end
-    end
-
-    if haskey(configfile, "calculatescenarioargs", "jumpdirectmode")
-        try
-            bools[6] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "jumpdirectmode")))
-            logmsg("Read jumpdirectmode argument from configuration file.", quiet)
-        catch e
-            logmsg("Could not read jumpdirectmode argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
-        end
-    end
-
-    if haskey(configfile, "calculatescenarioargs", "jumpbridges")
-        try
-            bools[7] = Meta.parse(lowercase(retrieve(configfile, "calculatescenarioargs", "jumpbridges")))
-            logmsg("Read jumpbridges argument from configuration file.", quiet)
-        catch e
-            logmsg("Could not read jumpbridges argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
-        end
-    end
-end  # getconfigargs!(configfile::ConfParse, calcyears::Array{Int,1}, varstosavearr::Array{String,1}, bools::Array{Bool,1}, quiet::Bool)
 
 """
     check_calcyears(calcyears::Vector{Vector{Int}})
@@ -349,69 +102,6 @@ function reset_jumpmodel(jumpmodel::JuMP.Model; direct::Bool=false, bridges::Boo
 
     return returnval
 end  # reset_jumpmodel(jumpmodel::JuMP.Model; direct::Bool=false, bridges::Bool=false)
-
-"""
-    setsolverparamsfromcfg(configfile::ConfParse, jumpmodel::JuMP.Model, quiet::Bool)
-
-Sets solver parameters specified in a configuration file. Reports which parameters were and were not successfully set.
-
-# Arguments
-- `configfile::ConfParse`: Configuration file. Solver parameters should be in `parameters` key within `solver` block,
-    specified as follows: `parameter1=value1`, `parameter2=value2`, ...
-- `jumpmodel::JuMP.Model`: JuMP model in which solver parameters will be set.
-- `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to `STDOUT`).
-"""
-function setsolverparamsfromcfg(configfile::ConfParse, jumpmodel::JuMP.Model, quiet::Bool)
-    if haskey(configfile, "solver", "parameters")
-        local retrieved_params = retrieve(configfile, "solver", "parameters")  # May be a string (if there's one parameter-value pair) or an array of strings (if there are more than one, comma-delimited parameter-value pairs)
-        local params_set::String = ""  # List of parameters that were successfully set; used in status message
-
-        # Add singleton parameters to an array to facilitate processing
-        if typeof(retrieved_params) == String
-            retrieved_params = [retrieved_params]
-        end
-
-        # BEGIN: Process each parameter-value pair in retrieved_params.
-        for e in retrieved_params
-            local split_p::Array{String,1} = [strip(pp) for pp = split(e, "="; keepempty=false)]  # Current parameter specification split on =; split_p[1] = parameter name, split_p[2] = parameter value
-
-            if length(split_p) != 2
-                logmsg("Could not set solver parameter specified in configuration file as " * e * ". Continuing with NEMO.", quiet)
-                continue
-            end
-
-            local val  # Parsed value for current parameter
-
-            # Int, float, and Boolean values - order is important since an integer value will parse to a float
-            for t in [Int, Float64, Bool]
-                val = tryparse(t, split_p[2])
-
-                if val != nothing
-                    break
-                end
-            end
-
-            if val == nothing
-                # String value
-                val = split_p[2]
-            end
-
-            # Call set_optimizer_attribute for parameter and value
-            try
-                set_optimizer_attribute(jumpmodel, split_p[1], val)
-                params_set *= split_p[1] * ", "
-            catch
-                logmsg("Could not set solver parameter specified in configuration file as " * e * ". Continuing with NEMO.", quiet)
-            end
-        end
-        # END: Process each parameter-value pair in retrieved_params.
-
-        # Report parameters that were set
-        if length(params_set) != 0
-            logmsg("Set following solver parameters using values in configuration file: " * params_set[1:prevind(params_set, lastindex(params_set), 2)] * ".", quiet)
-        end
-    end  # haskey(configfile, "solver", "parameters")
-end  # setsolverparamsfromcfg(configfile::ConfParse, jumpmodel::JuMP.Model, quiet::Bool)
 
 """
     translatesetabb(a::String)
@@ -601,42 +291,6 @@ function keydicts_threaded(df::DataFrames.DataFrame, numdicts::Int)
     return keydicts_threaded(df, [i for i=1:numdicts+1])
 end  # keydicts_threaded(df::DataFrames.DataFrame, numdicts::Int)
 
-#=
-"""
-    threadexecute(expr)
-
-If `NemoMod.csmultithreaded` is true, passes `expr` to `Threads.@spawn`.
-Otherwise returns `expr`.
-"""
-macro threadexecute(expr)
-    return quote
-        if NemoMod.csmultithreaded
-            Threads.@spawn $(esc(expr))
-        else
-            $(esc(expr))
-        end
-    end
-end  # threadexecute(expr) =#
-
-#=
-"""
-    lockexecute(lck, expr)
-
-If `NemoMod.csmultithreaded` is true, returns `expr` wrapped in a `do` block
-that locks and unlocks `lck`. Otherwise returns `expr`.
-"""
-macro lockexecute(lck, expr)
-    return quote
-        if NemoMod.csmultithreaded
-            lock($(esc(lck))) do
-                $(esc(expr))
-            end
-        else
-            $(esc(expr))
-        end
-    end
-end  # lockexecute(lck, expr) =#
-
 """
     createconstraints(jumpmodel::JuMP.Model, cons::Array{AbstractConstraint, 1})
 
@@ -798,432 +452,6 @@ function savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tup
         # END: Wrap database operations in try-catch block to allow rollback on error.
     end
 end  # savevarresults(vars::Array{String,1}, modelvarindices::Dict{String, Tuple{AbstractArray,Array{String,1}}}, db::SQLite.DB, solvedtmstr::String) =#
-
-"""
-    scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vproductionbytechnologysaved::Bool,
-        vusebytechnologysaved::Bool, restrictyears::Bool, inyears::String)
-
-Returns a `Dict` of query commands used in NEMO's `modelscenario` function. Each key in the return value is
-    a query name, and each value is a `Tuple` where:
-        - Element 1 = path to NEMO scenario database in which to execute query (taken from `dbpath` argument)
-        - Element 2 = query's SQL statement
-    The function's arguments other than `dbpath` delimit the set of returned query commands as noted below.
-
-# Arguments
-- `dbpath::String`: Path to NEMO scenario database in which query commands should be executed.
-- `transmissionmodeling::Bool`: Indicates whether transmission modeling is enabled in `modelscenario`.
-    Additional query commands are included in results when transmission modeling is enabled.
-- `vproductionbytechnologysaved::Bool`: Indicates whether output variable `vproductionbytechnology`
-    will be saved in `modelscenario`. Additional query commands are included in results when this argument
-    and `transmissionmodeling` are `true`.
-- `vusebytechnologysaved::Bool`: Indicates whether output variable `vusebytechnology`
-    will be saved in `modelscenario`. Additional query commands are included in results when this argument
-    and `transmissionmodeling` are `true`.
-- `restrictyears::Bool`: Indicates whether `modelscenario` is running for selected years only.
-- `inyears::String`: SQL IN clause predicate for years selected for `modelscenario`. When `restrictvars`
-    is `true`, this argument is used to include filtering by year in query commands.
-- `limitedforesight::Bool`: Indicates whether `modelscenario` is executing part of a limited foresight optimization.
-- `lastyearprevgroupyears`: If `modelscenario` is executing part of a limited foresight optimization, the last year 
-    modeled in the previous step of the optimization (i.e., the previous invocation of `modelscenario`). `nothing`
-    if the current step is the first step of the optimization. Additional query commands are included in results 
-    when `limitedforesight` is `true` and this argument is not `nothing`.
-- `firstmodeledyear::String`: The first year being modeled in the current invocation of `modelscenario`. Only used
-    `limitedforesight` is `true` and `lastyearprevgroupyears` is not `nothing`."""
-function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vproductionbytechnologysaved::Bool,
-    vusebytechnologysaved::Bool, restrictyears::Bool, inyears::String, limitedforesight::Bool, lastyearprevgroupyears,
-    firstmodeledyear::String)
-
-    return_val::Dict{String, Tuple{String, String}} = Dict{String, Tuple{String, String}}()  # Return value for this function; map of query names
-    #   to tuples of (DB path, SQL command)
-
-    return_val["queryvrateofdemandnn"] = (dbpath, "select sdp.r as r, sdp.f as f, sdp.l as l, sdp.y as y,
-    cast(sdp.val as real) as specifieddemandprofile, cast(sad.val as real) as specifiedannualdemand,
-    cast(ys.val as real) as ys
-    from SpecifiedDemandProfile_def sdp, SpecifiedAnnualDemand_def sad, YearSplit_def ys
-    left join TransmissionModelingEnabled tme on tme.r = sad.r and tme.f = sad.f and tme.y = sad.y
-    where sad.r = sdp.r and sad.f = sdp.f and sad.y = sdp.y
-    and ys.l = sdp.l and ys.y = sdp.y
-    and sdp.val <> 0 and sad.val <> 0 and ys.val <> 0
-    $(restrictyears ? "and sdp.y in" * inyears : "")
-    and tme.id is null")
-
-    return_val["queryvrateofactivityvar"] = (dbpath, "with ar as (select r, t, m, y from OutputActivityRatio_def
-    where val <> 0 $(restrictyears ? "and y in" * inyears : "")
-    union
-    select r, t, m, y from InputActivityRatio_def
-    where val <> 0 $(restrictyears ? "and y in" * inyears : ""))
-    select r.val as r, l.val as l, t.val as t, m.val as m, y.val as y
-    from REGION r, TIMESLICE l, TECHNOLOGY t, MODE_OF_OPERATION m, YEAR y, ar
-    where ar.r = r.val and ar.t = t.val and ar.m = m.val and ar.y = y.val
-    order by r.val, t.val, l.val, y.val")
-
-    return_val["queryvtrade"] = (dbpath, "select r.val as r, rr.val as rr, l.val as l, f.val as f, y.val as y
-    from region r, region rr, TIMESLICE l, FUEL f, year y, TradeRoute_def tr
-    WHERE
-    r.val = tr.r and rr.val = tr.rr and f.val = tr.f and y.val = tr.y
-    and tr.r <> tr.rr and tr.val = 1 $(restrictyears ? "and tr.y in" * inyears : "")
-    order by r.val, rr.val, f.val, y.val")
-
-    return_val["queryvtradeannual"] = (dbpath, "select r.val as r, rr.val as rr, f.val as f, y.val as y
-    from region r, region rr, FUEL f, year y, TradeRoute_def tr
-    WHERE
-    r.val = tr.r and rr.val = tr.rr and f.val = tr.f and y.val = tr.y
-    and tr.r <> tr.rr and tr.val = 1 $(restrictyears ? "and tr.y in" * inyears : "")")
-
-    # fs_t is populated if t produces from storage
-    return_val["queryvrateofproductionbytechnologybymodenn"] = (dbpath, "select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y,
-    cast(oar.val as real) as oar, cast(ys.val as real) as ys, fs.t as fs_t, cast(ret.val as real) as ret
-    from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, OutputActivityRatio_def oar
-    left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
-	left join (select DISTINCT tfs.r, tfs.t, tfs.m, y.val as y from TechnologyFromStorage_def tfs, year y
-		left join nodalstorage ns on ns.r = tfs.r and ns.s = tfs.s and ns.y = y.val
-		where tfs.val > 0 $(restrictyears ? "and y.val in" * inyears : "")
-		and ns.r is null) fs on fs.r = r.val and fs.t = t.val and fs.m = m.val and fs.y = y.val
-    left join RETagTechnology_def ret on ret.r = r.val and ret.t = t.val and ret.y = y.val
-    where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.m = m.val and oar.y = y.val
-    and oar.val <> 0
-    and ys.y = y.val
-    and tme.id is null
-    $(restrictyears ? "and y.val in" * inyears : "")
-	order by r.val, f.val, y.val, ys.l, t.val")
-
-    return_val["queryvrateofproductionbytechnologynn"] = (dbpath, "select r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
-    from region r, YearSplit_def ys, technology t, fuel f, year y,
-    (select distinct r, t, f, y
-    from OutputActivityRatio_def
-    where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar
-    left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
-    where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val
-    and ys.y = y.val
-    and tme.id is null
-    order by r.val, ys.l, f.val, y.val")
-
-    return_val["queryvproductionbytechnologyannual"] = (dbpath, "select * from (
-    select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l,
-    cast(ys.val as real) as ys
-    from region r, technology t, fuel f, year y, YearSplit_def ys,
-    (select distinct r, t, f, y
-    from OutputActivityRatio_def
-    where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar
-    left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
-    where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val
-    and ys.y = y.val
-    and tme.id is null
-    union all
-    select n.r as r, ntc.t as t, oar.f as f, ntc.y as y, ntc.n as n, ys.l as l,
-    cast(ys.val as real) as ys
-    from NodalDistributionTechnologyCapacity_def ntc, NODE n,
-    TransmissionModelingEnabled tme, YearSplit_def ys,
-    (select distinct r, t, f, y
-    from OutputActivityRatio_def
-    where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar
-    where ntc.val > 0
-    and ntc.n = n.val
-    and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
-    and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
-    and ntc.y = ys.y
-    )
-    order by r, t, f, y")
-
-    return_val["queryvrateofusebytechnologybymodenn"] = (dbpath, "select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y, cast(iar.val as real) as iar
-    from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, InputActivityRatio_def iar
-    left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
-	left join (select distinct n.r, ntc.t, ntc.y from NodalDistributionTechnologyCapacity_def ntc, node n where ntc.n = n.val and ntc.val > 0) ntcr 
-		on ntcr.r = r.val and ntcr.t = t.val and ntcr.y = y.val
-    where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.m = m.val and iar.y = y.val and iar.val <> 0
-    and ys.y = y.val
-    and (tme.id is null or (tme.id is not null and ntcr.t is null))
-    $(restrictyears ? "and y.val in" * inyears : "")
-    order by r.val, ys.l, t.val, f.val, y.val")
-
-    return_val["queryvrateofusebytechnologynn"] = (dbpath, "with iar as (select distinct r, t, f, y from InputActivityRatio_def where val <> 0 $(restrictyears ? "and y in" * inyears : ""))
-    select r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
-    from region r, YearSplit_def ys, technology t, fuel f, year y, iar
-    left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
-    where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
-    and ys.y = y.val
-    and tme.id is null
-	union all
-	select r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
-    from region r, YearSplit_def ys, technology t, fuel f, year y, TransmissionModelingEnabled tme, iar
-	left join (select distinct n.r, ntc.t, ntc.y from NodalDistributionTechnologyCapacity_def ntc, node n where ntc.n = n.val and ntc.val > 0) ntcr 
-		on ntcr.r = r.val and ntcr.t = t.val and ntcr.y = y.val
-	where 
-	ys.y = y.val
-	and tme.r = r.val and tme.f = f.val and tme.y = y.val
-	and iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
-	and ntcr.t is null
-    order by r.val, ys.l, f.val, y.val")
-
-    return_val["queryvusebytechnologyannual"] = (dbpath, "with iar as (select distinct r, t, f, y from InputActivityRatio_def where val <> 0 $(restrictyears ? "and y in" * inyears : ""))
-    select * from (
-    select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l, cast(ys.val as real) as ys
-    from region r, technology t, fuel f, year y, YearSplit_def ys, iar
-    left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
-    where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
-    and ys.y = y.val
-    and tme.id is null
-	union all
-	select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l, cast(ys.val as real) as ys
-    from region r, technology t, fuel f, year y, YearSplit_def ys, iar, TransmissionModelingEnabled tme
-	left join (select distinct n.r, ntc.t, ntc.y from NodalDistributionTechnologyCapacity_def ntc, node n where ntc.n = n.val and ntc.val > 0) ntcr 
-		on ntcr.r = r.val and ntcr.t = t.val and ntcr.y = y.val
-	where 
-	ys.y = y.val
-	and tme.r = r.val and tme.f = f.val and tme.y = y.val
-	and iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
-	and ntcr.t is null
-    union all
-    select n.r as r, ntc.t as t, iar.f as f, ntc.y as y, ntc.n as n, ys.l as l,
-    cast(ys.val as real) as ys
-    from NodalDistributionTechnologyCapacity_def ntc, NODE n,
-    TransmissionModelingEnabled tme, YearSplit_def ys, iar
-    where ntc.val > 0
-    and ntc.n = n.val
-    and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
-    and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
-    and ntc.y = ys.y
-    )
-    order by r, t, f, y")
-
-    return_val["querycaa5_totalnewcapacity"] = (dbpath, "select cot.r as r, cot.t as t, cot.y as y, cast(cot.val as real) as cot
-    from CapacityOfOneTechnologyUnit_def cot where cot.val <> 0 $(restrictyears ? "and cot.y in" * inyears : "")")
-
-    return_val["queryrtydr"] = (dbpath, "select r.val as r, t.val as t, y.val as y, cast(dr.val as real) as dr,
-    $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "cast(v.val as real)" : "null") as prevcalcval
-    from region r, technology t, year y, DiscountRate_def dr, yearintervals yi
-    $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "left join vtotaltechnologyannualactivity v on v.r = r.val and v.t = t.val and v.y = (y.val - yi.intv)" : "")
-    where dr.r = r.val $(restrictyears ? "and y.val in" * inyears : "")
-    and yi.y = y.val
-    order by r.val, t.val")
-
-    return_val["queryvannualtechnologyemissionbymode"] = (dbpath, "select r, t, e, y, m, cast(val as real) as ear
-    from EmissionActivityRatio_def ear $(restrictyears ? "where y in" * inyears : "")
-    order by r, t, e, y")
-
-    return_val["queryvannualtechnologyemissionpenaltybyemission"] = (dbpath, "select r.val as r, t.val as t, y.val as y, e.val as e, cast(ep.val as real) as ep
-    from REGION r, TECHNOLOGY t, EMISSION e, YEAR y
-    left join EmissionsPenalty_def ep on ep.r = r.val and ep.e = e.val and ep.y = y.val and ep.val <> 0
-    $(restrictyears ? "where y.val in" * inyears : "")
-    order by r.val, t.val, y.val")
-
-    return_val["queryvmodelperiodemissions"] = (dbpath, "select r.val as r, e.val as e, cast(mpl.val as real) as mpl
-    from region r, emission e, ModelPeriodEmissionLimit_def mpl
-    where mpl.r = r.val and mpl.e = e.val")
-
-    return_val["queryrempe"] = (dbpath, "select r.val as r, e.val as e, y.val as y, cast(mpe.val as real) as mpe,
-    $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "cast(v.val as real)" : "null") as prevcalcval
-    from region r, emission e, year y, yearintervals yi
-    left join ModelPeriodExogenousEmission_def mpe on mpe.r = r.val and mpe.e = e.val
-    $(limitedforesight && !isnothing(lastyearprevgroupyears) ? "left join vannualemissions v on v.r = r.val and v.e = e.val and v.y = (y.val - yi.intv)" : "")
-    where yi.y = y.val $(restrictyears ? "and y.val in" * inyears : "")
-    order by r.val, e.val, y.val")
-
-    if transmissionmodeling
-        return_val["queryvrateofactivitynodal"] = (dbpath, "select ntc.n as n, l.val as l, ntc.t as t, ar.m as m, ntc.y as y
-        from NodalDistributionTechnologyCapacity_def ntc, node n,
-        	TransmissionModelingEnabled tme, TIMESLICE l,
-        (select r, t, f, m, y from OutputActivityRatio_def
-        where val <> 0 $(restrictyears ? "and y in" * inyears : "")
-        union
-        select r, t, f, m, y from InputActivityRatio_def
-        where val <> 0 $(restrictyears ? "and y in" * inyears : "")) ar
-        where ntc.val > 0
-        and ntc.n = n.val
-        and tme.r = n.r and tme.f = ar.f and tme.y = ntc.y
-        and ar.r = n.r and ar.t = ntc.t and ar.y = ntc.y
-        order by ntc.n, ntc.t, l.val, ntc.y")
-
-        return_val["queryvrateofproductionbytechnologynodal"] = (dbpath, "select ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y,
-        	cast(ys.val as real) as ys
-        from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
-    	TransmissionModelingEnabled tme,
-        (select distinct r, t, f, y
-        from OutputActivityRatio_def
-        where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar
-        where ntc.val > 0
-        and ntc.y = ys.y
-        and ntc.n = n.val
-        and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
-    	and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
-        order by ntc.n, ys.l, oar.f, ntc.y")
-
-        return_val["queryvrateofusebytechnologynodal"] = (dbpath, "select ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y,
-        	cast(ys.val as real) as ys
-        from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
-    	TransmissionModelingEnabled tme,
-        (select distinct r, t, f, y
-        from InputActivityRatio_def
-        where val <> 0 $(restrictyears ? "and y in" * inyears : "")) iar
-        where ntc.val > 0
-        and ntc.y = ys.y
-        and ntc.n = n.val
-        and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
-    	and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
-        order by ntc.n, ys.l, iar.f, ntc.y")
-
-        if vproductionbytechnologysaved
-            return_val["queryvproductionbytechnologyindices_nodalpart"] = (dbpath, "select distinct n.r as r, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y, null as ys
-            from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
-            TransmissionModelingEnabled tme,
-            (select distinct r, t, f, y
-            from OutputActivityRatio_def
-            where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar
-            where ntc.val > 0
-            and ntc.y = ys.y
-            and ntc.n = n.val
-            and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
-            and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y")
-
-            return_val["queryvproductionbytechnologynodal"] = (dbpath, "select n.r as r, ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y,
-                cast(ys.val as real) as ys
-            from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
-            TransmissionModelingEnabled tme,
-            (select distinct r, t, f, y
-            from OutputActivityRatio_def
-            where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar
-            where ntc.val > 0
-            and ntc.y = ys.y
-            and ntc.n = n.val
-            and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
-            and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
-            order by n.r, ys.l, ntc.t, oar.f, ntc.y")
-        end
-
-        if vusebytechnologysaved
-            return_val["queryvusebytechnologyindices_nodalpart"] = (dbpath, "select distinct n.r as r, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y, null as ys
-            from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
-            TransmissionModelingEnabled tme,
-            (select distinct r, t, f, y
-            from InputActivityRatio_def
-            where val <> 0 $(restrictyears ? "and y in" * inyears : "")) iar
-            where ntc.val > 0
-            and ntc.y = ys.y
-            and ntc.n = n.val
-            and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
-            and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y")
-
-            return_val["queryvusebytechnologynodal"] = (dbpath, "select n.r as r, ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y,
-                cast(ys.val as real) as ys
-            from NodalDistributionTechnologyCapacity_def ntc, YearSplit_def ys, NODE n,
-            TransmissionModelingEnabled tme,
-            (select distinct r, t, f, y
-            from InputActivityRatio_def
-            where val <> 0 $(restrictyears ? "and y in" * inyears : "")) iar
-            where ntc.val > 0
-            and ntc.y = ys.y
-            and ntc.n = n.val
-            and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
-            and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
-            order by n.r, ys.l, ntc.t, iar.f, ntc.y")
-        end
-
-        return_val["queryvtransmissionbyline"] = (dbpath, "select tl.id as tr, ys.l as l, tl.f as f, tme1.y as y, tl.n1 as n1, tl.n2 as n2,
-    	tl.reactance as reactance, tme1.type as type, tl.maxflow as maxflow,
-        cast(tl.VariableCost as real) as vc, cast(ys.val as real) as ys,
-        cast(tl.fixedcost as real) as fc, cast(tcta.val as real) as tcta, cast(tl.efficiency as real) as eff,
-        cast(taf.val as real) as taf,
-        case when mtn.n2 = tl.n1 then cast(mtn.val as real) else null end as n1_mtn, 
-		case when mtn.n2 = tl.n2 then cast(mtn.val as real) else null end as n2_mtn,
-		case when mxtn.n2 = tl.n1 then cast(mxtn.val as real) else null end as n1_mxtn,
-		case when mxtn.n2 = tl.n2 then cast(mxtn.val as real) else null end as n2_mxtn
-        from TransmissionLine tl, NODE n1, NODE n2, TransmissionModelingEnabled tme1,
-        TransmissionModelingEnabled tme2, YearSplit_def ys, TransmissionCapacityToActivityUnit_def tcta, 
-        TransmissionAvailabilityFactor_def taf
-        left join MinAnnualTransmissionNodes_def mtn on ((mtn.n1 = tl.n1 and mtn.n2 = tl.n2) or (mtn.n1 = tl.n2 and mtn.n2 = tl.n1)) and mtn.f = tl.f and mtn.y = tme1.y
-		left join MaxAnnualTransmissionNodes_def mxtn on ((mxtn.n1 = tl.n1 and mxtn.n2 = tl.n2) or (mxtn.n1 = tl.n2 and mxtn.n2 = tl.n1)) and mxtn.f = tl.f and mxtn.y = tme1.y
-        where
-        tl.n1 = n1.val and tl.n2 = n2.val
-        and tme1.r = n1.r and tme1.f = tl.f
-        and tme2.r = n2.r and tme2.f = tl.f
-        and tme1.y = tme2.y and tme1.type = tme2.type
-    	and ys.y = tme1.y $(restrictyears ? "and ys.y in" * inyears : "")
-    	and tcta.r = n1.r and tl.f = tcta.f
-        and taf.tr = tl.id and taf.l = ys.l and taf.y = tme1.y
-        order by tl.id, tme1.y")
-
-        return_val["queryvtransmissionlosses"] = (dbpath, "select tl.id as tr, tl.n1, tl.n2, ys.l as l, tl.f as f, tme1.y as y
-        from TransmissionLine tl, NODE n1, NODE n2, TransmissionModelingEnabled tme1,
-        TransmissionModelingEnabled tme2, YearSplit_def ys
-        where
-        tl.efficiency < 1
-        and tl.n1 = n1.val and tl.n2 = n2.val
-        and tme1.r = n1.r and tme1.f = tl.f
-        and tme2.r = n2.r and tme2.f = tl.f
-        and tme1.y = tme2.y and tme1.type = tme2.type and tme1.type = 3
-    	and ys.y = tme1.y $(restrictyears ? "and ys.y in" * inyears : "")")
-
-        return_val["queryvstorageleveltsgroup1"] = (dbpath, "select ns.n as n, ns.s as s, tg1.name as tg1, ns.y as y
-        from nodalstorage ns, TSGROUP1 tg1 $(restrictyears ? "where ns.y in" * inyears : "")")
-
-        return_val["queryvstorageleveltsgroup2"] = (dbpath, "select ns.n as n, ns.s as s, tg1.name as tg1, tg2.name as tg2, ns.y as y
-        from nodalstorage ns, TSGROUP1 tg1, TSGROUP2 tg2 $(restrictyears ? "where ns.y in" * inyears : "")")
-
-        return_val["queryvstoragelevelts"] = (dbpath, "select ns.n as n, ns.s as s, l.val as l, ns.y as y
-        from nodalstorage ns, TIMESLICE l $(restrictyears ? "where ns.y in" * inyears : "")")
-
-        return_val["queryvrateofproduse"] = (dbpath, "select r.val as r, l.val as l, f.val as f, y.val as y, tme.id as tme, n.val as n
-        from region r, timeslice l, fuel f, year y, YearSplit_def ys
-        left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
-        left join NODE n on n.r = r.val
-        where
-        ys.l = l.val and ys.y = y.val
-        $(restrictyears ? "and y.val in" * inyears : "")
-        order by r.val, l.val, f.val, y.val")
-
-        return_val["querytrydr"] = (dbpath, "select tl.id as tr, y.val as y, cast(dr.val as real) as dr
-    	from TransmissionLine tl, NODE n, YEAR y, DiscountRate_def dr
-        where tl.n1 = n.val
-        and dr.r = n.r
-    	$(restrictyears ? "and y.val in" * inyears : "")")
-    end  # transmissionmodeling
-
-    if limitedforesight && !isnothing(lastyearprevgroupyears)
-        return_val["vannualemissions"] = (dbpath, "select r as vr, e as ve, y as vy, cast(val as real) as vval
-        from vannualemissions where y = $(string(lastyearprevgroupyears))")
-    end  # limitedforesight && !isnothing(lastyearprevgroupyears)
-
-    return return_val
-end  # scenario_calc_queries()
-
-"""
-    run_queries(querycommands::Dict{String, Tuple{String, String}})
-
-Runs the SQLite database queries specified in `querycommands` and returns a `Dict` that
-    maps each query's name to a `DataFrame` of the query's results. Designed to work with
-    the output of `scenario_calc_queries`. Uses multiple threads if they are available.
-"""
-function run_queries(querycommands::Dict{String, Tuple{String, String}})
-    return_val = Dict{String, DataFrame}()
-    lck = Base.ReentrantLock()
-
-    Threads.@threads for q in collect(keys(querycommands))
-        local df::DataFrame = run_qry(querycommands[q])
-
-        lock(lck) do
-            return_val[q] = df
-        end
-    end
-
-    # Code for running queries without multi-threading; no longer used
-    # return_val = Dict{String, DataFrame}(keys(querycommands) .=> map(run_qry, values(querycommands)))
-
-    # Code for running queries in distributed processes; no longer used
-    # Omitting process 1 from WorkerPool improves performance
-    # queries = Dict{String, DataFrame}(keys(querycommands) .=> pmap(run_qry, WorkerPool(setdiff(targetprocs, [1])), values(querycommands)))
-
-    return return_val
-end  # run_queries(querycommands::Dict{String, Tuple{String, String}})
-
-"""
-    run_qry(qtpl::Tuple{String, String})
-
-Runs the SQLite database query specified in `qtpl` and returns the result as a DataFrame.
-    Element 1 in `qtpl` should be the path to the SQLite database, and element 2 should be the query's
-    SQL command. Designed to work with the output of `scenario_calc_queries`."""
-function run_qry(qtpl::Tuple{String, String})
-    return SQLite.DBInterface.execute(SQLite.DB(qtpl[1]), qtpl[2]) |> DataFrame
-end  # run_qry(qtpl::Tuple{String, String, String})
 
 """
     setstartvalues(jumpmodel::JuMP.Model,
@@ -1400,3 +628,163 @@ function convertscenariounits(path::String; energy_multiplier::Float64 = 1.0, po
     end
     # END: Wrap database operations in try-catch block to allow rollback on error.
 end  # convertscenariounits(path::String; energy_multiplier::Float64 = 1.0, power_multiplier::Float64 = 1.0, cost_multiplier::Float64 = 1.0, emissions_multiplier::Float64 = 1.0, quiet::Bool = false)
+
+"""
+    find_infeasibilities(m::JuMP.Model,
+        silent_solver::Bool=false
+    )
+
+Returns a `Vector` of constraint data for constraints in `m` that cause infeasibility.
+`silent_solver` suppresses output from the solver for `m`.
+
+# Arguments
+
+- `m::JuMP.Model`: Model to check for infeasibility. Should be a NEMO model created with
+    `calculatescenario`.
+- `silent_solver::Bool = false`: Suppresses output from the solver for `m`.
+"""
+function find_infeasibilities(m::JuMP.Model, silent_solver::Bool=false)
+    # Declare set of termination status that are considered infeasible
+    local infeasible_statuses::Vector{MOI.TerminationStatusCode} = [MOI.INFEASIBLE, MOI.INFEASIBLE_OR_UNBOUNDED, MOI.DUAL_INFEASIBLE, MOI.LOCALLY_INFEASIBLE]
+
+    # BEGIN: Record model's silent attribute and set_silent if silent_sover is true.
+    local m_original_silent::Bool = get_attribute(m, MOI.Silent())  # Model's silent attribute when this function was called
+    !m_original_silent && silent_solver && set_silent(m)
+    # END: Record model's silent attribute and set_silent if silent_sover is true.
+
+    # BEGIN: Check whether m is infeasible.
+    @info "Verifying that model is infeasible."
+
+    optimize!(m)
+
+    if !in(termination_status(m), infeasible_statuses)
+        @warn "Model is not infeasible. Exiting..."
+        !m_original_silent && silent_solver && unset_silent(m)
+        return []
+    end
+    # END: Check whether m is infeasible.
+
+    # BEGIN: Declare additional top-level variables.
+    m_total_num_constraints::Int = lastindex(all_constraints(m; include_variable_in_set_constraints=false))  # Total number of constraints originally in m (excluding variable bounds); some constraints may be transferred to constraint_reserve in operations below
+    @info "Model contains $(m_total_num_constraints) constraints that will be evaluated for infeasibilities."
+
+    constraint_reserve = []  # Array of constraints that have been temporarily removed from m (populated with constraint data, not ConstraintRef)
+    last_ts::MOI.TerminationStatusCode = termination_status(m)  # Termination status from last optimization of m
+    last_known_good_ci::Int = 0  # Highest-known constraint index that doesn't lead to infeasibility (i.e., m can be optimized with all constraints originally in m from 1 to last_known_good_ci)
+    last_known_inf_ci::Int = m_total_num_constraints  # Highest-known constraint index that leads to infeasibility (i.e., m is infeasible when optimized with all constraints originally in m from 1 to last_known_inf_ci)
+    last_ci_in_m::Int = last_known_inf_ci  # Highest constraint index currently in m
+    num_cons_to_move::Int = 0  # Number of constraints that will be moved between m and constraint_reserve in next move
+    search_complete::Bool = false  # Indicates whether search for infeasibility-causing constraints is complete
+    infeasible_constraints = []  # Return value - constraints that cause infeasibility (populated with constraint data, not ConstraintRef)
+    # END: Declare additional top-level variables.
+
+    # BEGIN: Change bounds for vtotaldiscountedcost so it's >= 0.
+    @info "Changing bounds for vtotaldiscountedcost."
+
+    for vtdc in filter(v -> first(name(v), 21) == "vtotaldiscountedcost[", all_variables(m))
+        set_lower_bound(vtdc, 0)
+    end
+    # END: Change bounds for vtotaldiscountedcost so it's >= 0.
+
+    @info "Beginning infeasibility search."
+
+    while !search_complete
+        # BEGIN: Remove constraints from m/add constraints to m until a constraint causing infeasibility is identified.
+        while last_known_inf_ci != last_known_good_ci + 1
+            num_cons_to_move = ceil(Int, (last_known_inf_ci-last_known_good_ci)/2)  # Number of constraints that will be moved between m and constraint_reserve
+    
+            if in(last_ts, infeasible_statuses)
+                # Remove constraints from m to try to find a feasible point
+                remove_constraints!(m, num_cons_to_move, constraint_reserve)
+                @info "Temporarily removed $(num_cons_to_move) constraints from model."
+                last_ci_in_m = last_ci_in_m - num_cons_to_move
+            elseif last_ts == MOI.OPTIMAL
+                # Add constraints to m to try to find an infeasible point
+                add_constraints!(m, num_cons_to_move, constraint_reserve)
+                @info "Added $(num_cons_to_move) constraints back to model."
+                last_ci_in_m = last_ci_in_m + num_cons_to_move
+            end
+            
+            # Recalculate m
+            optimize!(m)
+            last_ts = termination_status(m)
+    
+            if in(last_ts, infeasible_statuses)
+                last_known_inf_ci = last_ci_in_m
+            elseif last_ts == MOI.OPTIMAL
+                last_known_good_ci = last_ci_in_m
+            else
+                @warn "While searching for infeasibilities, found a combination of constraints that could not be optimized or proven infeasible. Solver reported following termination status when trying to optimize model with this combination of constraints: $(last_ts). Any infeasibilities found to this point are in return value. Exiting..."
+                !m_original_silent && silent_solver && unset_silent(m)
+                return infeasible_constraints
+            end       
+        end
+    
+        if in(last_ts, infeasible_statuses)
+            target_cons::ConstraintRef = last(all_constraints(m; include_variable_in_set_constraints=false))  # Constraint causing infeasibility
+            push!(infeasible_constraints, constraint_object(target_cons))
+            delete(m, target_cons)
+        elseif last_ts == MOI.OPTIMAL
+           push!(infeasible_constraints, popfirst!(constraint_reserve))
+        end
+
+        @info "Found an infeasibility: $(last(infeasible_constraints)). Saving and continuing search."
+        # END: Remove constraints from m/add constraints to m until a constraint causing infeasibility is identified.
+        
+        # Return all constraints to m and see if entire model is still infeasible
+        num_cons_to_move = length(constraint_reserve)
+        add_constraints!(m, num_cons_to_move, constraint_reserve)
+        @info "Added $(num_cons_to_move) constraints back to model."
+
+        optimize!(m)
+        last_ts = termination_status(m)
+    
+        if in(last_ts, infeasible_statuses)
+            # Reset for another iteration
+            m_total_num_constraints = lastindex(all_constraints(m; include_variable_in_set_constraints=false))
+            last_known_good_ci = 0
+            last_known_inf_ci = m_total_num_constraints
+            last_ci_in_m = last_known_inf_ci
+        elseif last_ts == MOI.OPTIMAL
+            search_complete = true
+        else
+            @warn "While searching for infeasibilities, found a combination of constraints that could not be optimized or proven infeasible. Solver reported following termination status when trying to optimize model with this combination of constraints: $(last_ts). Any infeasibilities found to this point are in return value. Exiting..."
+            !m_original_silent && silent_solver && unset_silent(m)
+            return infeasible_constraints
+        end
+    end  # !search_complete
+
+    @info "Finished infeasibility search."
+    !m_original_silent && silent_solver && unset_silent(m)
+    return infeasible_constraints
+end  # find_infeasibilities(m::JuMP.Model, silent_solver::Bool=false)
+
+"""
+    remove_constraints!(m::JuMP.Model,
+        num_to_remove::Int,
+        constraint_reserve::Array{Any, 1}
+    )
+
+Removes the last `num_to_remove` constraints from model `m` and puts their data in `constraint_reserve`. Determines which are the last `num_to_remove` constraints in `m` using the order in JuMP's `all_constraints` function. Preserves this constraint order in `constraint_reserve`. Ignores constraints that are variable bounds."""
+function remove_constraints!(m::JuMP.Model, num_to_remove::Int, constraint_reserve::Array{Any, 1})
+    ac::Vector{ConstraintRef} = all_constraints(m; include_variable_in_set_constraints=false)  # Array of all constraints in m excluding variable bounds
+    c_to_move::Vector{ConstraintRef} = ac[lastindex(ac)-num_to_remove+1:lastindex(ac)]  # Constraints to remove from m
+
+    prepend!(constraint_reserve, [constraint_object(c) for c in c_to_move])  # Add constraints to be removed to constraint_reserve
+    delete(m, c_to_move)  # Remove constraints from m
+end  # remove_constraints!(m::JuMP.Model, num::Int, constraint_reserve::Array{Any, 1})
+
+"""
+    add_constraints!(m::JuMP.Model,
+        num_to_add::Int,
+        constraint_reserve::Array{Any, 1}
+    )
+
+Adds the first `num_to_add` constraints in `constraint_reserve` to model `m`. Removes the constraints from `constraint_reserve`."""
+function add_constraints!(m::JuMP.Model, num_to_add::Int, constraint_reserve::Array{Any, 1})
+    JuMP.add_constraint.(m, splice!(constraint_reserve, 1:num_to_add))
+
+    # Other patterns for adding multiple constraints at once
+    # MOI.add_constraints(m.moi_backend, [moi_function(cr) for cr in constraint_reserve], [cr.set for cr in constraint_reserve])
+    # broadcast!(JuMP.add_constraint, similar(constraint_reserve), m, constraint_reserve);
+end  # add_constraints!(m::JuMP.Model, num::Int, constraint_reserve::Array{Any, 1})

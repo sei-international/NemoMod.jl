@@ -44,3 +44,9 @@ logmsg
 ```@docs
 setparamdefault
 ```
+
+## find_infeasibilities
+
+```@docs
+find_infeasibilities
+```

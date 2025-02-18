@@ -8,7 +8,7 @@
 =#
 
 module NemoMod
-export calculatescenario, createnemodb, dropdefaultviews, dropresulttables, logmsg, setparamdefault, convertscenariounits
+export calculatescenario, createnemodb, dropdefaultviews, dropresulttables, logmsg, setparamdefault, convertscenariounits, find_infeasibilities
 
 #= List of module global variables.
     • csdbpath - dbpath argument in most recent invocation of calculatescenario() or modelscenario()
@@ -22,7 +22,9 @@ export calculatescenario, createnemodb, dropdefaultviews, dropresulttables, logm
 using JuMP, SQLite, DataFrames, Dates, ConfParser, MathOptInterface
 using Cbc  # Open-source solvers
 
+include("config_functions.jl")  # Functions for using NEMO configuration files
 include("db_structure.jl")  # Functions for manipulating structure of scenario databases
+include("db_queries.jl")  # Functions for querying the scenario database when calculating a scenario
 include("other_functions.jl")  # Core NEMO functions
 include("scenario_calculation.jl")  # Functions for calculating a scenario with NEMO
 # END: Access other modules and code files.
