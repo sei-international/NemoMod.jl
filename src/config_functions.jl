@@ -306,7 +306,7 @@ function setsolverparamsfromcfg(configfile::ConfParse, jumpmodel::JuMP.Model, qu
                 params_set *= split_p[1] * ", "
             catch
                 # Remove attribute from jumpmodel to prevent errors if jumpmodel later needs to be emptied
-                delete!(m.moi_backend.params, split_p[1])
+                delete!(jumpmodel.moi_backend.params, split_p[1])
                 logmsg("Could not set solver parameter specified in configuration file as " * e * ". Continuing with NEMO.", quiet)
             end
         end
