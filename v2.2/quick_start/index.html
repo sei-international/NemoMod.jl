@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Quick start · NEMO</title><!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-9GTNP1Q3KY"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-9GTNP1Q3KY');
+</script><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.0/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.0/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.0/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.11.1/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../"><img src="../assets/logo.png" alt="NEMO logo"/></a><div class="docs-package-name"><span class="docs-autofit">NEMO</span></div><form class="docs-search" action="../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../">Introduction</a></li><li class="is-active"><a class="tocitem" href>Quick start</a></li><li><a class="tocitem" href="../installation/">Installation</a></li><li><a class="tocitem" href="../modeling_concept/">Modeling concept</a></li><li><span class="tocitem">Inputs</span><ul><li><a class="tocitem" href="../dimensions/">Dimensions</a></li><li><a class="tocitem" href="../parameters/">Parameters</a></li><li><a class="tocitem" href="../time_slicing/">Time slicing</a></li><li><a class="tocitem" href="../units/">Units of measure</a></li></ul></li><li><span class="tocitem">Outputs</span><ul><li><a class="tocitem" href="../variables/">Variables</a></li></ul></li><li><a class="tocitem" href="../scenario_db/">Scenario databases</a></li><li><span class="tocitem">Calculating a scenario</span><ul><li><a class="tocitem" href="../calculatescenario/">Julia syntax</a></li><li><a class="tocitem" href="../foresight/">Perfect foresight vs. limited foresight</a></li><li><a class="tocitem" href="../selected_years/">Calculating selected years</a></li><li><a class="tocitem" href="../configuration_file/">Configuration files</a></li><li><a class="tocitem" href="../performance_tips/">Performance tips</a></li><li><a class="tocitem" href="../infeasibility/">Troubleshooting infeasibility</a></li></ul></li><li><a class="tocitem" href="../custom_constraints/">Custom constraints</a></li><li><a class="tocitem" href="../faqs/">FAQs</a></li><li><a class="tocitem" href="../functions/">Function reference</a></li><li><a class="tocitem" href="../release_notes/">Release notes</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li class="is-active"><a href>Quick start</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Quick start</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/sei-international/NemoMod.jl/blob/master/docs/src/quick_start.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="Quick-start"><a class="docs-heading-anchor" href="#Quick-start">Quick start</a><a id="Quick-start-1"></a><a class="docs-heading-anchor-permalink" href="#Quick-start" title="Permalink"></a></h1><p>NEMO includes a number of features and options, so it&#39;s worth familiarizing yourself with the documentation before starting to work with it. To set up NEMO and run it through a first test, however, you can follow these steps.</p><ol><li><p>Install NEMO using the instructions in <a href="../installation/#installation">Installation</a>.</p></li><li><p>Try calculating a test scenario distributed with the tool. This scenario simulates a simple energy system with electricity demand, generation, and storage. Open a Julia prompt and enter the following commands:</p><pre><code class="language-julia">julia&gt; using NemoMod, JuMP, Cbc
+
+julia&gt; dbpath = normpath(joinpath(pathof(NemoMod), &quot;..&quot;, &quot;..&quot;, &quot;test&quot;, &quot;storage_test.sqlite&quot;))
+
+julia&gt; chmod(dbpath, 0o777)
+
+julia&gt; NemoMod.calculatescenario(dbpath; jumpmodel=Model(Cbc.Optimizer))</code></pre><p>The first command activates the Julia packages for NEMO, JuMP (an optimization toolkit that NEMO uses), and Cbc (a solver). The next two commands locate the test scenario&#39;s <a href="../scenario_db/#scenario_db">database</a> and ensure this file is writable (so NEMO can save scenario results). The final command calculates the scenario. You should see output like the following:</p><pre><code class="language-none">2025-27-Jan 17:25:09.319 Started modeling scenario. NEMO version = 2.2.0, solver = COIN Branch-and-Cut (Cbc).
+2025-27-Jan 17:25:09.319 Validated run-time arguments.
+2025-27-Jan 17:25:09.319 Connected to scenario database. Path = C:\ProgramData\NEMO\depot\packages\NemoMod\e8Kos\test\storage_test.sqlite.
+2025-27-Jan 17:25:09.876 Dropped pre-existing result tables from database.
+2025-27-Jan 17:25:10.108 Created parameter views and indices.
+2025-27-Jan 17:25:10.109 Created temporary tables.
+2025-27-Jan 17:25:14.892 Started optimizing all years for scenario.
+2025-27-Jan 17:25:14.899 Verified that transmission modeling is not enabled.
+2025-27-Jan 17:25:15.125 Defined dimensions.
+2025-27-Jan 17:25:16.026 Executed core database queries.
+2025-27-Jan 17:25:17.043 Defined demand variables.
+2025-27-Jan 17:25:17.453 Defined storage variables.
+2025-27-Jan 17:25:17.512 Defined capacity variables.
+2025-27-Jan 17:25:19.077 Defined activity variables.
+2025-27-Jan 17:25:19.277 Defined costing variables.
+2025-27-Jan 17:25:19.299 Defined reserve margin variables.
+2025-27-Jan 17:25:19.402 Defined emissions variables.
+2025-27-Jan 17:25:19.402 Defined combined nodal and non-nodal variables.
+2025-27-Jan 17:25:19.402 Finished defining model variables.
+2025-27-Jan 17:25:19.402 Scheduled task to add constraints to model.
+2025-27-Jan 17:25:19.467 Queued constraint CAa1_TotalNewCapacity for creation.
+2025-27-Jan 17:25:19.469 Queued constraint CAa2_TotalAnnualCapacity for creation.
+2025-27-Jan 17:25:19.469 Queued constraint VRateOfActivity1 for creation.
+2025-27-Jan 17:25:19.469 Queued constraint RampRate for creation.
+2025-27-Jan 17:25:19.471 Queued constraint CAa3_TotalActivityOfEachTechnology for creation.
+2025-27-Jan 17:25:19.473 Queued constraint CAa4_Constraint_Capacity for creation.
+2025-27-Jan 17:25:19.473 Queued constraint MinimumTechnologyUtilization for creation.
+2025-27-Jan 17:25:19.474 Queued constraint EBa2_RateOfFuelProduction2 for creation.
+2025-27-Jan 17:25:19.474 Queued constraint GenerationAnnualNN for creation.
+2025-27-Jan 17:25:19.474 Queued constraint ReGenerationAnnualNN for creation.
+2025-27-Jan 17:25:19.475 Queued constraint EBa3_RateOfFuelProduction3 for creation.
+2025-27-Jan 17:25:19.476 Queued constraint EBa7_EnergyBalanceEachTS1 for creation.
+2025-27-Jan 17:25:19.477 Queued constraint VRateOfProduction1 for creation.
+2025-27-Jan 17:25:19.478 Queued constraint EBa5_RateOfFuelUse2 for creation.
+2025-27-Jan 17:25:19.479 Queued constraint EBa6_RateOfFuelUse3 for creation.
+2025-27-Jan 17:25:19.480 Queued constraint EBa8_EnergyBalanceEachTS2 for creation.
+2025-27-Jan 17:25:19.480 Queued constraint VRateOfUse1 for creation.
+2025-27-Jan 17:25:20.901 Queued constraint EBa9_EnergyBalanceEachTS3 for creation.
+2025-27-Jan 17:25:20.901 Queued constraint EBa11_EnergyBalanceEachTS5 for creation.
+2025-27-Jan 17:25:20.901 Queued constraint EBb0_EnergyBalanceEachYear for creation.
+2025-27-Jan 17:25:20.901 Queued constraint EBb1_EnergyBalanceEachYear for creation.
+2025-27-Jan 17:25:20.901 Queued constraint EBb2_EnergyBalanceEachYear for creation.
+2025-27-Jan 17:25:21.524 Queued constraint EBb3_EnergyBalanceEachYear for creation.
+2025-27-Jan 17:25:21.524 Queued constraint EBb5_EnergyBalanceEachYear for creation.
+2025-27-Jan 17:25:21.524 Queued constraint Acc3_AverageAnnualRateOfActivity for creation.
+2025-27-Jan 17:25:21.524 Queued constraint NS1_RateOfStorageCharge for creation.
+2025-27-Jan 17:25:21.539 Queued constraint NS2_RateOfStorageDischarge for creation.
+2025-27-Jan 17:25:21.539 Queued constraint NS3_StorageLevelTsGroup1Start for creation.
+2025-27-Jan 17:25:21.539 Queued constraint NS4_StorageLevelTsGroup2Start for creation.
+2025-27-Jan 17:25:21.539 Queued constraint NS5_StorageLevelTimesliceEnd for creation.
+2025-27-Jan 17:25:21.539 Queued constraint NS6_StorageLevelTsGroup2End for creation.
+2025-27-Jan 17:25:21.540 Queued constraint NS6a_StorageLevelTsGroup2NetZero for creation.
+2025-27-Jan 17:25:21.540 Queued constraint NS7_StorageLevelTsGroup1End for creation.
+2025-27-Jan 17:25:21.540 Queued constraint NS7a_StorageLevelTsGroup1NetZero for creation.
+2025-27-Jan 17:25:21.540 Queued constraint NS8_StorageLevelYearEnd for creation.
+2025-27-Jan 17:25:22.176 Queued constraint NS8a_StorageLevelYearEndNetZero for creation.
+2025-27-Jan 17:25:22.176 Queued constraint SI1_StorageUpperLimit for creation.
+2025-27-Jan 17:25:22.176 Queued constraint SI2_StorageLowerLimit for creation.
+2025-27-Jan 17:25:22.176 Queued constraint SI3_TotalNewStorage for creation.
+2025-27-Jan 17:25:22.176 Queued constraint NS9a_StorageLevelTsLowerLimit for creation.
+2025-27-Jan 17:25:22.176 Queued constraint NS9b_StorageLevelTsUpperLimit for creation.
+2025-27-Jan 17:25:22.191 Queued constraint NS10_StorageChargeLimit for creation.
+2025-27-Jan 17:25:22.191 Queued constraint NS11_StorageDischargeLimit for creation.
+2025-27-Jan 17:25:22.191 Queued constraint NS12a_StorageLevelTsGroup2LowerLimit for creation.
+2025-27-Jan 17:25:22.191 Queued constraint NS12b_StorageLevelTsGroup2UpperLimit for creation.
+2025-27-Jan 17:25:22.191 Queued constraint NS13a_StorageLevelTsGroup1LowerLimit for creation.
+2025-27-Jan 17:25:22.191 Queued constraint NS13b_StorageLevelTsGroup1UpperLimit for creation.
+2025-27-Jan 17:25:22.191 Queued constraint NS14_MaxStorageCapacity for creation.
+2025-27-Jan 17:25:22.191 Queued constraint NS15_MinStorageCapacity for creation.
+2025-27-Jan 17:25:22.326 Queued constraint NS16_MaxStorageCapacityInvestment for creation.
+2025-27-Jan 17:25:22.326 Queued constraint NS17_MinStorageCapacityInvestment for creation.
+2025-27-Jan 17:25:22.326 Queued constraint NS18_FullLoadHours for creation.
+2025-27-Jan 17:25:22.326 Queued constraint SI4a_FinancingStorage for creation.
+2025-27-Jan 17:25:22.326 Queued constraint SI4_UndiscountedCapitalInvestmentStorage for creation.
+2025-27-Jan 17:25:22.326 Queued constraint SI5_DiscountingCapitalInvestmentStorage for creation.
+2025-27-Jan 17:25:22.326 Queued constraint SI6_SalvageValueStorageAtEndOfPeriod1 for creation.
+2025-27-Jan 17:25:22.326 Queued constraint SI7_SalvageValueStorageAtEndOfPeriod2 for creation.
+2025-27-Jan 17:25:22.328 Queued constraint SI8_SalvageValueStorageAtEndOfPeriod3 for creation.
+2025-27-Jan 17:25:22.328 Queued constraint SI9_SalvageValueStorageDiscountedToStartYear for creation.
+2025-27-Jan 17:25:22.328 Queued constraint SI10_TotalDiscountedCostByStorage for creation.
+2025-27-Jan 17:25:22.457 Queued constraint CC1a_FinancingTechnology for creation.
+2025-27-Jan 17:25:22.457 Queued constraint CC1_UndiscountedCapitalInvestment for creation.
+2025-27-Jan 17:25:22.457 Queued constraint CC2_DiscountingCapitalInvestment for creation.
+2025-27-Jan 17:25:22.457 Queued constraint SV1_SalvageValueAtEndOfPeriod1 for creation.
+2025-27-Jan 17:25:22.457 Queued constraint SV2_SalvageValueAtEndOfPeriod2 for creation.
+2025-27-Jan 17:25:22.565 Queued constraint SV3_SalvageValueAtEndOfPeriod3 for creation.
+2025-27-Jan 17:25:22.565 Queued constraint SV4_SalvageValueDiscountedToStartYear for creation.
+2025-27-Jan 17:25:22.565 Queued constraint OC1_OperatingCostsVariable for creation.
+2025-27-Jan 17:25:22.565 Queued constraint OC2_OperatingCostsFixedAnnual for creation.
+2025-27-Jan 17:25:22.565 Queued constraint OC3_OperatingCostsTotalAnnual for creation.
+2025-27-Jan 17:25:22.758 Queued constraint OC4_DiscountedOperatingCostsTotalAnnual for creation.
+2025-27-Jan 17:25:22.758 Queued constraint TDC1_TotalDiscountedCostByTechnology for creation.
+2025-27-Jan 17:25:22.760 Queued constraint TDC2_TotalDiscountedCost for creation.
+2025-27-Jan 17:25:23.116 Queued constraint TCC1_TotalAnnualMaxCapacityConstraint for creation.
+2025-27-Jan 17:25:23.116 Queued constraint TCC2_TotalAnnualMinCapacityConstraint for creation.
+2025-27-Jan 17:25:23.116 Queued constraint NCC1_TotalAnnualMaxNewCapacityConstraint for creation.
+2025-27-Jan 17:25:23.116 Queued constraint NCC2_TotalAnnualMinNewCapacityConstraint for creation.
+2025-27-Jan 17:25:23.116 Queued constraint AAC1_TotalAnnualTechnologyActivity for creation.
+2025-27-Jan 17:25:23.119 Queued constraint AAC2_TotalAnnualTechnologyActivityUpperLimit for creation.
+2025-27-Jan 17:25:23.119 Queued constraint TAC1_TotalModelHorizonTechnologyActivity for creation.
+2025-27-Jan 17:25:23.121 Queued constraint TAC2_TotalModelHorizonTechnologyActivityUpperLimit for creation.
+2025-27-Jan 17:25:23.121 Queued constraint RM1_TotalCapacityInReserveMargin for creation.
+2025-27-Jan 17:25:23.240 Queued constraint RM2_ReserveMargin for creation.
+2025-27-Jan 17:25:23.242 Queued constraint RE1_FuelProductionByTechnologyAnnual for creation.
+2025-27-Jan 17:25:23.242 Queued constraint FuelUseByTechnologyAnnual for creation.
+2025-27-Jan 17:25:23.619 Queued constraint RE2_ProductionTarget for creation.
+2025-27-Jan 17:25:23.619 Queued constraint RE3_ProductionTargetRG for creation.
+2025-27-Jan 17:25:23.619 Queued constraint MinShareProduction for creation.
+2025-27-Jan 17:25:23.619 Queued constraint E2a_AnnualEmissionProduction for creation.
+2025-27-Jan 17:25:23.619 Queued constraint E2b_AnnualEmissionProduction for creation.
+2025-27-Jan 17:25:23.619 Queued constraint E4_EmissionsPenaltyByTechnology for creation.
+2025-27-Jan 17:25:23.629 Queued constraint E5_DiscountedEmissionsPenaltyByTechnology for creation.
+2025-27-Jan 17:25:23.629 Queued constraint E6_EmissionsAccounting1 for creation.
+2025-27-Jan 17:25:23.629 Queued constraint E7_EmissionsAccounting2 for creation.
+2025-27-Jan 17:25:23.629 Queued constraint E8_AnnualEmissionsLimit for creation.
+2025-27-Jan 17:25:23.631 Queued constraint E9_ModelPeriodEmissionsLimit for creation.
+2025-27-Jan 17:25:23.631 Queued 96 standard constraints for creation.
+2025-27-Jan 17:25:24.123 Finished scheduled task to add constraints to model.
+2025-27-Jan 17:25:24.123 Added 96 standard constraints to model.
+2025-27-Jan 17:25:24.633 Defined model objective.
+Presolve 10228 (-37342) rows, 6820 (-35865) columns and 39688 (-92498) elements
+0  Obj 0 Primal inf 6487.7369 (970) Dual inf 8.5145975e+13 (1650)
+Perturbing problem by 0.001% of 3.6447106e+08 - largest nonzero change 0.38417053 ( 0.15875796%) - largest zero change 0
+276  Obj 186.27609 Primal inf 6046.4562 (1002) Dual inf 9.4640788e+13 (1670)
+552  Obj 475.87217 Primal inf 5222.1136 (997) Dual inf 2.586304e+08 (2463)
+828  Obj 1063.8873 Primal inf 4148.1789 (974) Dual inf 1.6838158e+08 (2317)
+1104  Obj 1458.7195 Primal inf 3500.5169 (975) Dual inf 1.3598288e+08 (2455)
+1380  Obj 1458.7195 Primal inf 3500.3187 (974) Dual inf 1.2080351e+08 (2780)
+1656  Obj 7202.321 Primal inf 3113.9073 (904) Dual inf 3.1519397e+08 (2867)
+1932  Obj 7202.321 Primal inf 3104.3759 (851) Dual inf 3.1039866e+08 (2838)
+2208  Obj 11808.89 Primal inf 2889.8035 (739) Dual inf 69595534 (1803)
+2484  Obj 13485.971 Primal inf 2578.8605 (653) Dual inf 64776935 (1726)
+2760  Obj 16272.205 Primal inf 2227.0354 (597) Dual inf 60934379 (1836)
+3037  Obj 18242.759 Primal inf 1504.3665 (526) Dual inf 1.5731063e+08 (1709)
+3313  Obj 19824.654 Primal inf 723.86728 (485) Dual inf 35439596 (1929)
+3589  Obj 19832.872 Primal inf 527.79549 (381) Dual inf 47961935 (1548)
+3874  Obj 22169.16 Primal inf 279.05023 (288) Dual inf 1.0149285e+08 (1556)
+4156  Obj 21364.089 Primal inf 72.536748 (148) Dual inf 1.1626931e+08 (1484)
+4435  Obj 20744.822 Primal inf 4.8251511 (37) Dual inf 1806070.3 (1200)
+4711  Obj 16683.758 Dual inf 22642.601 (732)
+4987  Obj 8374.4102 Dual inf 13305.05 (662)
+5194  Obj 8276.7194 Dual inf 20792.502 (753)
+5422  Obj 6311.8798 Dual inf 23387.805 (687)
+5601  Obj 5459.6061 Dual inf 32254.725 (601)
+5799  Obj 5136.3211 Dual inf 67681.878 (395)
+6001  Obj 4952.6229 Dual inf 7914.4501 (383)
+6277  Obj 4939.5663 Dual inf 2235.8158 (260)
+6497  Obj 4939.5569
+6497  Obj 4938.908 Primal inf 0.00012448052 (22)
+6634  Obj 4938.9081
+Optimal - objective value 4938.9081
+After Postsolve, objective 4938.9081, infeasibilities - dual 0 (0), primal 8.6351389e-06 (10)
+Presolved model was optimal, full model needs cleaning up
+0  Obj 4938.9081 Primal inf 168.12036 (28)
+18  Obj 4938.9081
+Optimal - objective value 4938.9081
+Optimal objective 4938.908111 - 6652 iterations time 0.442, Presolve 0.05
+2025-27-Jan 17:25:26.446 Solved model. Solver status = OPTIMAL.
+2025-27-Jan 17:25:26.677 Saved results for vdemandnn to database.
+2025-27-Jan 17:25:26.717 Saved results for vnewcapacity to database.
+2025-27-Jan 17:25:26.717 Saved results for vtotalcapacityannual to database.
+2025-27-Jan 17:25:26.811 Saved results for vproductionbytechnologyannual to database.
+2025-27-Jan 17:25:26.825 Saved results for vproductionnn to database.
+2025-27-Jan 17:25:26.827 Saved results for vusebytechnologyannual to database.
+2025-27-Jan 17:25:26.869 Saved results for vusenn to database.
+2025-27-Jan 17:25:26.896 Saved results for vtotaldiscountedcost to database.
+2025-27-Jan 17:25:26.896 Finished saving results to database.
+2025-27-Jan 17:25:26.896 Finished optimizing all years for scenario.
+2025-27-Jan 17:25:26.900 Dropped temporary tables.
+2025-27-Jan 17:25:26.900 Finished modeling scenario.</code></pre><p>Selected results are now saved in the database.</p><div class="admonition is-success"><header class="admonition-header">Tip</header><div class="admonition-body"><p>To change which results are saved and set other run-time options, see <a href="../calculatescenario/#scenario_calc">Calculating a scenario</a>.</p></div></div></li></ol><p>For a better understanding of what happens in scenario calculations - and guidance on building your own model - look through the rest of the documentation, particularly <a href="../modeling_concept/#modeling_concept">Modeling concept</a> and the sections on Inputs and Outputs.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Introduction</a><a class="docs-footer-nextpage" href="../installation/">Installation »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Thursday 3 April 2025 15:48">Thursday 3 April 2025</span>. Using Julia version 1.7.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

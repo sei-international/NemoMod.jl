@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Troubleshooting infeasibility · NEMO</title><!-- Global site tag (gtag.js) - Google Analytics -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-9GTNP1Q3KY"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-9GTNP1Q3KY');
+</script><link href="https://fonts.googleapis.com/css?family=Lato|Roboto+Mono" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.0/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.0/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.0/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.11.1/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../"><img src="../assets/logo.png" alt="NEMO logo"/></a><div class="docs-package-name"><span class="docs-autofit">NEMO</span></div><form class="docs-search" action="../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../">Introduction</a></li><li><a class="tocitem" href="../quick_start/">Quick start</a></li><li><a class="tocitem" href="../installation/">Installation</a></li><li><a class="tocitem" href="../modeling_concept/">Modeling concept</a></li><li><span class="tocitem">Inputs</span><ul><li><a class="tocitem" href="../dimensions/">Dimensions</a></li><li><a class="tocitem" href="../parameters/">Parameters</a></li><li><a class="tocitem" href="../time_slicing/">Time slicing</a></li><li><a class="tocitem" href="../units/">Units of measure</a></li></ul></li><li><span class="tocitem">Outputs</span><ul><li><a class="tocitem" href="../variables/">Variables</a></li></ul></li><li><a class="tocitem" href="../scenario_db/">Scenario databases</a></li><li><span class="tocitem">Calculating a scenario</span><ul><li><a class="tocitem" href="../calculatescenario/">Julia syntax</a></li><li><a class="tocitem" href="../foresight/">Perfect foresight vs. limited foresight</a></li><li><a class="tocitem" href="../selected_years/">Calculating selected years</a></li><li><a class="tocitem" href="../configuration_file/">Configuration files</a></li><li><a class="tocitem" href="../performance_tips/">Performance tips</a></li><li class="is-active"><a class="tocitem" href>Troubleshooting infeasibility</a><ul class="internal"><li><a class="tocitem" href="#Using-find_infeasibilities"><span>Using <code>find_infeasibilities</code></span></a></li><li><a class="tocitem" href="#Solver-specific-tools"><span>Solver-specific tools</span></a></li></ul></li></ul></li><li><a class="tocitem" href="../custom_constraints/">Custom constraints</a></li><li><a class="tocitem" href="../faqs/">FAQs</a></li><li><a class="tocitem" href="../functions/">Function reference</a></li><li><a class="tocitem" href="../release_notes/">Release notes</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Calculating a scenario</a></li><li class="is-active"><a href>Troubleshooting infeasibility</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Troubleshooting infeasibility</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/sei-international/NemoMod.jl/blob/master/docs/src/infeasibility.md" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="infeasibility"><a class="docs-heading-anchor" href="#infeasibility">Troubleshooting infeasibility</a><a id="infeasibility-1"></a><a class="docs-heading-anchor-permalink" href="#infeasibility" title="Permalink"></a></h1><p>NEMO models can be complicated, involving many interrelated parameters, decision variables, and constraints. Because of this complexity, it&#39;s not hard to define a NEMO scenario that&#39;s infeasible - for which an optimal solution can&#39;t be found. For example, you might inadvertently specify that a <a href="../dimensions/#technology">technology&#39;s</a> <a href="../parameters/#TotalAnnualMinCapacity">minimum capacity</a> is greater than its <a href="../parameters/#TotalAnnualMaxCapacity">maximum capacity</a>, or that <a href="../parameters/#AnnualExogenousEmission">annual exogenous emissions</a> of a pollutant exceed the pollutant&#39;s <a href="../parameters/#AnnualEmissionLimit">annual emission limit</a>. A scenario with these inputs doesn&#39;t have a solution, and if you try to calculate it, the solver will report that the problem is infeasible.</p><p>Identifying the source(s) of infeasibility in a NEMO model (or any large optimization model) can be daunting, potentially requiring the evaluation of thousands or millions of inputs to find which are problematic. If your NEMO model is infeasible, it&#39;s best to start by thinking through the scenario you&#39;re modeling. Did you change a parameter that might have triggered the problem? What case or situation is the scenario testing - is it logically coherent? Questions like these may help you to recognize and rectify the issue.</p><h2 id="Using-find_infeasibilities"><a class="docs-heading-anchor" href="#Using-find_infeasibilities">Using <code>find_infeasibilities</code></a><a id="Using-find_infeasibilities-1"></a><a class="docs-heading-anchor-permalink" href="#Using-find_infeasibilities" title="Permalink"></a></h2><p>Often, however, the source of infeasibility isn&#39;t clear. In this case, it can be helpful to use a tool that looks for causes of infeasibility in your model. NEMO provides such a tool in its <a href="@ref find_infeasbilities"><code>find_infeasibilities</code></a> function. Given an infeasible <code>JuMP</code> model created by calculating a NEMO scenario (with the <a href="../functions/#calculatescenario"><code>calculatescenario</code></a> function), <code>find_infeasibilities</code> returns an array of constraints that make the model infeasible (i.e., the model becomes feasible when these constraints are removed). You can use this information to determine how to modify the model&#39;s inputs to avoid infeasibility.</p><p>If you&#39;re starting with a <a href="../scenario_db/#scenario_db">NEMO scenario database</a>, you can apply <code>find_infeasibilities</code> as follows:</p><ul><li>Create a <code>JuMP</code> model</li><li>Call <code>calculatescenario</code> for the scenario database, passing it the <code>JuMP</code> model in the <code>jumpmodel</code> argument</li><li>Call <code>find_infeasibilities</code> for the <code>JuMP</code> model</li></ul><p>Here&#39;s an example:</p><pre><code class="language-julia">julia&gt; using NemoMod, JuMP, HiGHS
+
+julia&gt; m = direct_model(HiGHS.Optimizer())
+A JuMP Model
+Feasibility problem with:
+Variables: 0
+Model mode: DIRECT
+Solver name: HiGHS
+
+julia&gt; NemoMod.calculatescenario(&quot;c:/temp/storage_test_infeasible.sqlite&quot;; jumpmodel=m)
+2025-17-Feb 17:38:27.023 Started modeling scenario. NEMO version = 2.2.0, solver = HiGHS.
+2025-17-Feb 17:38:27.051 Read NEMO configuration file at C:\Users\jwvey\Dropbox\Research\Next Gen Modeling\Julia\NemoMod\nemo.ini.
+2025-17-Feb 17:38:27.062 Read jumpdirectmode argument from configuration file.
+2025-17-Feb 17:38:27.062 Read jumpbridges argument from configuration file.
+2025-17-Feb 17:38:27.062 Validated run-time arguments.
+2025-17-Feb 17:38:27.064 Connected to scenario database. Path = c:\temp\storage_test_infeasible.sqlite.
+2025-17-Feb 17:38:27.699 Dropped pre-existing result tables from database.
+2025-17-Feb 17:38:27.935 Created parameter views and indices.
+2025-17-Feb 17:38:27.940 Created temporary tables.
+2025-17-Feb 17:38:27.945 Started optimizing all years for scenario.
+2025-17-Feb 17:38:27.947 Verified that transmission modeling is not enabled.
+2025-17-Feb 17:38:28.178 Defined dimensions.
+2025-17-Feb 17:38:29.259 Executed core database queries.
+Running HiGHS 1.6.0: Copyright (c) 2023 HiGHS under MIT licence terms
+2025-17-Feb 17:38:29.429 Defined demand variables.
+2025-17-Feb 17:38:29.828 Defined storage variables.
+2025-17-Feb 17:38:29.896 Defined capacity variables.
+2025-17-Feb 17:38:31.535 Defined activity variables.
+2025-17-Feb 17:38:31.795 Defined costing variables.
+2025-17-Feb 17:38:31.817 Defined reserve margin variables.
+2025-17-Feb 17:38:31.912 Defined emissions variables.
+2025-17-Feb 17:38:31.912 Defined combined nodal and non-nodal variables.
+2025-17-Feb 17:38:31.912 Finished defining model variables.
+2025-17-Feb 17:38:31.912 Scheduled task to add constraints to model.
+2025-17-Feb 17:38:31.978 Queued constraint CAa1_TotalNewCapacity for creation.
+2025-17-Feb 17:38:31.979 Queued constraint CAa2_TotalAnnualCapacity for creation.
+2025-17-Feb 17:38:31.979 Queued constraint VRateOfActivity1 for creation.
+2025-17-Feb 17:38:31.979 Queued constraint RampRate for creation.
+2025-17-Feb 17:38:31.979 Queued constraint CAa3_TotalActivityOfEachTechnology for creation.
+2025-17-Feb 17:38:31.980 Queued constraint CAa4_Constraint_Capacity for creation.
+2025-17-Feb 17:38:31.980 Queued constraint MinimumTechnologyUtilization for creation.
+2025-17-Feb 17:38:31.980 Queued constraint EBa2_RateOfFuelProduction2 for creation.
+2025-17-Feb 17:38:31.980 Queued constraint GenerationAnnualNN for creation.
+2025-17-Feb 17:38:31.980 Queued constraint ReGenerationAnnualNN for creation.
+2025-17-Feb 17:38:31.980 Queued constraint EBa3_RateOfFuelProduction3 for creation.
+2025-17-Feb 17:38:31.980 Queued constraint EBa7_EnergyBalanceEachTS1 for creation.
+2025-17-Feb 17:38:31.980 Queued constraint VRateOfProduction1 for creation.
+2025-17-Feb 17:38:31.980 Queued constraint EBa5_RateOfFuelUse2 for creation.
+2025-17-Feb 17:38:31.984 Queued constraint EBa6_RateOfFuelUse3 for creation.
+2025-17-Feb 17:38:31.984 Queued constraint EBa8_EnergyBalanceEachTS2 for creation.
+2025-17-Feb 17:38:31.986 Queued constraint VRateOfUse1 for creation.
+2025-17-Feb 17:38:33.474 Queued constraint EBa9_EnergyBalanceEachTS3 for creation.
+2025-17-Feb 17:38:33.474 Queued constraint EBa11_EnergyBalanceEachTS5 for creation.
+2025-17-Feb 17:38:33.474 Queued constraint EBb0_EnergyBalanceEachYear for creation.
+2025-17-Feb 17:38:33.474 Queued constraint EBb1_EnergyBalanceEachYear for creation.
+2025-17-Feb 17:38:33.474 Queued constraint EBb2_EnergyBalanceEachYear for creation.
+2025-17-Feb 17:38:33.474 Queued constraint EBb3_EnergyBalanceEachYear for creation.
+2025-17-Feb 17:38:33.474 Queued constraint EBb5_EnergyBalanceEachYear for creation.
+2025-17-Feb 17:38:33.474 Queued constraint Acc3_AverageAnnualRateOfActivity for creation.
+2025-17-Feb 17:38:33.474 Queued constraint NS1_RateOfStorageCharge for creation.
+2025-17-Feb 17:38:33.751 Queued constraint NS2_RateOfStorageDischarge for creation.
+2025-17-Feb 17:38:33.751 Queued constraint NS3_StorageLevelTsGroup1Start for creation.
+2025-17-Feb 17:38:33.751 Queued constraint NS4_StorageLevelTsGroup2Start for creation.
+2025-17-Feb 17:38:33.751 Queued constraint NS5_StorageLevelTimesliceEnd for creation.
+2025-17-Feb 17:38:33.751 Queued constraint NS6_StorageLevelTsGroup2End for creation.
+2025-17-Feb 17:38:33.751 Queued constraint NS6a_StorageLevelTsGroup2NetZero for creation.
+2025-17-Feb 17:38:33.751 Queued constraint NS7_StorageLevelTsGroup1End for creation.
+2025-17-Feb 17:38:33.751 Queued constraint NS7a_StorageLevelTsGroup1NetZero for creation.
+2025-17-Feb 17:38:33.751 Queued constraint NS8_StorageLevelYearEnd for creation.
+2025-17-Feb 17:38:33.751 Queued constraint NS8a_StorageLevelYearEndNetZero for creation.
+2025-17-Feb 17:38:33.751 Queued constraint SI1_StorageUpperLimit for creation.
+2025-17-Feb 17:38:34.372 Queued constraint SI2_StorageLowerLimit for creation.
+2025-17-Feb 17:38:34.372 Queued constraint SI3_TotalNewStorage for creation.
+2025-17-Feb 17:38:34.372 Queued constraint NS9a_StorageLevelTsLowerLimit for creation.
+2025-17-Feb 17:38:34.372 Queued constraint NS9b_StorageLevelTsUpperLimit for creation.
+2025-17-Feb 17:38:34.372 Queued constraint NS10_StorageChargeLimit for creation.
+2025-17-Feb 17:38:34.372 Queued constraint NS11_StorageDischargeLimit for creation.
+2025-17-Feb 17:38:34.372 Queued constraint NS12a_StorageLevelTsGroup2LowerLimit for creation.
+2025-17-Feb 17:38:34.372 Queued constraint NS12b_StorageLevelTsGroup2UpperLimit for creation.
+2025-17-Feb 17:38:34.372 Queued constraint NS13a_StorageLevelTsGroup1LowerLimit for creation.
+2025-17-Feb 17:38:34.372 Queued constraint NS13b_StorageLevelTsGroup1UpperLimit for creation.
+2025-17-Feb 17:38:34.372 Queued constraint NS14_MaxStorageCapacity for creation.
+2025-17-Feb 17:38:34.372 Queued constraint NS15_MinStorageCapacity for creation.
+2025-17-Feb 17:38:34.372 Queued constraint NS16_MaxStorageCapacityInvestment for creation.
+2025-17-Feb 17:38:34.456 Queued constraint NS17_MinStorageCapacityInvestment for creation.
+2025-17-Feb 17:38:34.456 Queued constraint NS18_FullLoadHours for creation.
+2025-17-Feb 17:38:34.456 Queued constraint SI4a_FinancingStorage for creation.
+2025-17-Feb 17:38:34.456 Queued constraint SI4_UndiscountedCapitalInvestmentStorage for creation.
+2025-17-Feb 17:38:34.558 Queued constraint SI5_DiscountingCapitalInvestmentStorage for creation.
+2025-17-Feb 17:38:34.558 Queued constraint SI6_SalvageValueStorageAtEndOfPeriod1 for creation.
+2025-17-Feb 17:38:34.558 Queued constraint SI7_SalvageValueStorageAtEndOfPeriod2 for creation.
+2025-17-Feb 17:38:34.558 Queued constraint SI8_SalvageValueStorageAtEndOfPeriod3 for creation.
+2025-17-Feb 17:38:34.558 Queued constraint SI9_SalvageValueStorageDiscountedToStartYear for creation.
+2025-17-Feb 17:38:34.714 Queued constraint SI10_TotalDiscountedCostByStorage for creation.
+2025-17-Feb 17:38:34.714 Queued constraint CC1a_FinancingTechnology for creation.
+2025-17-Feb 17:38:34.714 Queued constraint CC1_UndiscountedCapitalInvestment for creation.
+2025-17-Feb 17:38:34.714 Queued constraint CC2_DiscountingCapitalInvestment for creation.
+2025-17-Feb 17:38:34.714 Queued constraint SV1_SalvageValueAtEndOfPeriod1 for creation.
+2025-17-Feb 17:38:34.714 Queued constraint SV2_SalvageValueAtEndOfPeriod2 for creation.
+2025-17-Feb 17:38:34.714 Queued constraint SV3_SalvageValueAtEndOfPeriod3 for creation.
+2025-17-Feb 17:38:34.714 Queued constraint SV4_SalvageValueDiscountedToStartYear for creation.
+2025-17-Feb 17:38:34.834 Queued constraint OC1_OperatingCostsVariable for creation.
+2025-17-Feb 17:38:34.836 Queued constraint OC2_OperatingCostsFixedAnnual for creation.
+2025-17-Feb 17:38:35.009 Queued constraint OC3_OperatingCostsTotalAnnual for creation.
+2025-17-Feb 17:38:35.009 Queued constraint OC4_DiscountedOperatingCostsTotalAnnual for creation.
+2025-17-Feb 17:38:35.009 Queued constraint TDC1_TotalDiscountedCostByTechnology for creation.
+2025-17-Feb 17:38:35.009 Queued constraint TDC2_TotalDiscountedCost for creation.
+2025-17-Feb 17:38:35.009 Queued constraint TCC1_TotalAnnualMaxCapacityConstraint for creation.
+2025-17-Feb 17:38:35.009 Queued constraint TCC2_TotalAnnualMinCapacityConstraint for creation.
+2025-17-Feb 17:38:35.011 Queued constraint NCC1_TotalAnnualMaxNewCapacityConstraint for creation.
+2025-17-Feb 17:38:35.042 Queued constraint NCC2_TotalAnnualMinNewCapacityConstraint for creation.
+2025-17-Feb 17:38:35.042 Queued constraint AAC1_TotalAnnualTechnologyActivity for creation.
+2025-17-Feb 17:38:35.042 Queued constraint AAC2_TotalAnnualTechnologyActivityUpperLimit for creation.
+2025-17-Feb 17:38:35.043 Queued constraint RM1_TotalCapacityInReserveMargin for creation.
+2025-17-Feb 17:38:35.270 Queued constraint RM2_ReserveMargin for creation.
+2025-17-Feb 17:38:35.270 Queued constraint RE1_FuelProductionByTechnologyAnnual for creation.
+2025-17-Feb 17:38:35.272 Queued constraint FuelUseByTechnologyAnnual for creation.
+2025-17-Feb 17:38:35.272 Queued constraint RE2_ProductionTarget for creation.
+2025-17-Feb 17:38:35.272 Queued constraint RE3_ProductionTargetRG for creation.
+2025-17-Feb 17:38:35.272 Queued constraint MinShareProduction for creation.
+2025-17-Feb 17:38:35.679 Queued constraint E2a_AnnualEmissionProduction for creation.
+2025-17-Feb 17:38:35.679 Queued constraint E2b_AnnualEmissionProduction for creation.
+2025-17-Feb 17:38:35.679 Queued constraint E4_EmissionsPenaltyByTechnology for creation.
+2025-17-Feb 17:38:35.679 Queued constraint E5_DiscountedEmissionsPenaltyByTechnology for creation.
+2025-17-Feb 17:38:35.679 Queued constraint E6_EmissionsAccounting1 for creation.
+2025-17-Feb 17:38:35.679 Queued constraint E7_EmissionsAccounting2 for creation.
+2025-17-Feb 17:38:35.679 Queued constraint E8_AnnualEmissionsLimit for creation.
+2025-17-Feb 17:38:35.679 Queued constraint E9_ModelPeriodEmissionsLimit for creation.
+2025-17-Feb 17:38:35.679 Queued 94 standard constraints for creation.
+2025-17-Feb 17:38:36.153 Finished scheduled task to add constraints to model.
+2025-17-Feb 17:38:36.153 Added 94 standard constraints to model.
+2025-17-Feb 17:38:36.153 Defined model objective.
+Presolving model
+12326 rows, 10436 cols, 42450 nonzeros
+9962 rows, 8003 cols, 37363 nonzeros
+8985 rows, 5682 cols, 31783 nonzeros
+8514 rows, 5210 cols, 30362 nonzeros
+Presolve : Reductions: rows 8514(-38897); columns 5210(-37470); elements 30362(-101615)
+Solving the presolved LP
+Using EKK dual simplex solver - serial
+  Iteration        Objective     Infeasibilities num(sum)
+          0     0.0000000000e+00 Pr: 970(1220.33) 0s
+       2080     3.9383739235e+03 0s
+Model   status      : Infeasible
+Simplex   iterations: 2080
+Objective value     :  3.9383153013e+03
+HiGHS run time      :          0.11
+ERROR:   No LP invertible representation for getDualRay
+2025-17-Feb 17:38:36.264 Solved model. Solver status = INFEASIBLE.
+2025-17-Feb 17:38:36.299 Solver did not find a solution for model. No results will be saved to database.
+2025-17-Feb 17:38:36.300 Finished optimizing all years for scenario.
+2025-17-Feb 17:38:36.303 Dropped temporary tables.
+INFEASIBLE::TerminationStatusCode = 2
+
+julia&gt; NemoMod.find_infeasibilities(m, true)
+[ Info: Verifying that model is infeasible.
+[ Info: Model contains 47411 constraints that will be evaluated for infeasibilities.
+[ Info: Changing bounds for vtotaldiscountedcost.
+[ Info: Beginning infeasibility search.
+[ Info: Temporarily removed 23706 constraints from model.
+[ Info: Added 11853 constraints back to model.
+[ Info: Added 5927 constraints back to model.
+[ Info: Added 2963 constraints back to model.
+[ Info: Added 1482 constraints back to model.
+[ Info: Added 741 constraints back to model.
+[ Info: Temporarily removed 371 constraints from model.
+[ Info: Added 186 constraints back to model.
+[ Info: Temporarily removed 93 constraints from model.
+[ Info: Added 47 constraints back to model.
+[ Info: Added 23 constraints back to model.
+[ Info: Temporarily removed 12 constraints from model.
+[ Info: Temporarily removed 6 constraints from model.
+[ Info: Added 3 constraints back to model.
+[ Info: Added 2 constraints back to model.
+[ Info: Found an infeasibility: ScalarConstraint{AffExpr, MathOptInterface.LessThan{Float64}}(vtotaltechnologyannualactivity[1,gassupply,2020], MathOptInterface.LessThan{Float64}(0.0)). Saving and continuing search.
+[ Info: Added 960 constraints back to model.
+[ Info: Finished infeasibility search.
+1-element Vector{Any}:
+ ScalarConstraint{AffExpr, MathOptInterface.LessThan{Float64}}(vtotaltechnologyannualactivity[1,gassupply,2020], MathOptInterface.LessThan{Float64}(0.0))</code></pre><p>As this example shows, interpreting the output from <code>find_infeasbilities</code> requires some familiarity with NEMO&#39;s <a href="../dimensions/#dimensions">dimensions</a>, <a href="../variables/#variables">variables</a>, and <a href="../parameters/#parameters">parameters</a>. In this particular case, there&#39;s an unreasonable <a href="../parameters/#TotalTechnologyAnnualActivityUpperLimit">total technology annual activity upper limit</a> (0) specified for a technology (<code>gassupply</code>); without some gas in 2020, the scenario is infeasible. In general, when evaluating output from <code>find_infeasibilities</code>, consider the definitions of variables and think about how variables connect to the parameters that are defined in the scenario database. You can also look directly at <a href="https://github.com/sei-international/NemoMod.jl">NEMO&#39;s code</a> to see how variables are used in different constraints.</p><div class="admonition is-success"><header class="admonition-header">Tip</header><div class="admonition-body"><p>If you&#39;re using NEMO with LEAP, you can retrieve a copy of the NEMO database for one of your LEAP model&#39;s scenarios as follows:</p><ul><li>Go to Settings -&gt; Optimization in LEAP and check &quot;Keep Intermediate Results&quot;.</li><li>Calculate the scenario in LEAP and save the results.</li><li>Open the LEAP areas folder (you can find the path to this folder under Settings -&gt; Folders in LEAP), and go into the folder corresponding to your LEAP model.</li><li>The NEMO database for the scenario should be in this folder and named &quot;NEMO_X.sqlite&quot;, where &quot;X&quot; is the LEAP ID number for the scenario. To determine the LEAP ID number for a scenario, see LEAP&#39;s help.</li></ul></div></div><h2 id="Solver-specific-tools"><a class="docs-heading-anchor" href="#Solver-specific-tools">Solver-specific tools</a><a id="Solver-specific-tools-1"></a><a class="docs-heading-anchor-permalink" href="#Solver-specific-tools" title="Permalink"></a></h2><p>In addition to what NEMO provides, some solvers come with tools or functions for tracking down sources of infeasibility in a model. For example, Gurobi offers <a href="https://docs.gurobi.com/projects/optimizer/en/current/features/infeasibility.html">a suite of functions for infeasibility analysis and diagnosis</a>. Tools like these may require you to convert your model into a solver-specific format before searching for causes of infeasibility. Consult your solver&#39;s documentation for more information.</p></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../performance_tips/">« Performance tips</a><a class="docs-footer-nextpage" href="../custom_constraints/">Custom constraints »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> on <span class="colophon-date" title="Thursday 3 April 2025 15:49">Thursday 3 April 2025</span>. Using Julia version 1.7.3.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
