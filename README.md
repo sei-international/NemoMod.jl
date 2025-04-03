@@ -37,7 +37,3 @@ If you are interested in contributing to NEMO, please contact [Jason Veysey](htt
 NEMO's Julia code is made available under the Apache License, Version 2.0. See [LICENSE.md](LICENSE.md) for details, including attribution requirements and limitations on use.
 
 The initial versions of NEMO were informed by version 2017_11_08 of the [Open Source Energy Modelling System (OSeMOSYS)](https://github.com/OSeMOSYS/OSeMOSYS), which was also released under the Apache License, Version 2.0.
-
-# For more information
-
-The NEMO team includes several SEI staff: [Jason Veysey](https://www.sei.org/people/jason-veysey/), [Charlie Heaps](https://www.sei.org/people/charles-heaps/), and [Taylor Binnington](https://www.sei.org/people/taylor-binnington/). Please feel free to contact any of us for more information or if you have questions.

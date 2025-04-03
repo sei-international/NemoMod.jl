@@ -28,4 +28,4 @@ For more background on NEMO and its raison d'être, see the README at NEMO's [Gi
 
 # NEMO team
 
-NEMO is a project of the [Energy Modeling Program](https://www.sei.org/centres/us/research-areas/energy-modeling/) at the [Stockholm Environment Institute](https://www.sei.org/) (SEI). Key contributors include [Jason Veysey](https://www.sei.org/people/jason-veysey/), [Charlie Heaps](https://www.sei.org/people/charles-heaps/), and [Taylor Binnington](https://www.sei.org/people/taylor-binnington/). The project was started through an SEI Seed & Innovation grant funded by the [Swedish International Development Cooperation Agency](https://www.sida.se/English/) (Sida).
+NEMO is a project of the [Energy Modeling Program](https://www.sei.org/centres/us/research-areas/energy-modeling/) at the [Stockholm Environment Institute](https://www.sei.org/) (SEI). Key contributors include [Jason Veysey](https://www.sei.org/people/jason-veysey/) and [Charlie Heaps](https://www.sei.org/people/charles-heaps/). The project was started through an SEI Seed & Innovation grant funded by the [Swedish International Development Cooperation Agency](https://www.sida.se/English/) (Sida).
