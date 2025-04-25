@@ -1073,7 +1073,7 @@ Maximum nominal energy produced by a [technology](@ref technology) over the mode
 
 ## [Trade route](@id TradeRoute)
 
-Indicator of whether [region](@ref region) `r` can trade a [fuel](@ref fuel) with region `rr`.
+Indicator of whether [region](@ref region) `r` can export a [fuel](@ref fuel) to region `rr`. Trade routes establish export pathways that are not capacity-limited (for capacity-limited trading of fuels, use [transmission lines](@ref transmissionline)).
 
 #### Scenario database
 
@@ -1089,8 +1089,8 @@ Indicator of whether [region](@ref region) `r` can trade a [fuel](@ref fuel) wit
 | `val` | real  | Indicator (0 for no, 1 for yes) |
 
 !!! note
-    To enable trade between two regions, only one row in `TradeRoute` is needed. Either region can be assigned to `r`, and the second region should be assigned to `rr`. Be sure to set `val` to 1.
-
+    To enable two-way trade between two regions, two rows in `TradeRoute` are required. Each region should be `r` in one of the rows and `rr` in the other. Be sure to set `val` to 1 in both rows.
+ 
 !!! tip
     It is not necessary to populate zeros in `TradeRoute` for cases where trade is disallowed. NEMO assumes trade is not allowed unless a route is explicitly defined in the table.
 
