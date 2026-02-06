@@ -5,6 +5,10 @@ CurrentModule = NemoMod
 
 This page highlights key changes in NEMO since its initial public release. For a full history of NEMO releases, including the code for each version, see the [Releases page on NEMO's GitHub site](https://github.com/sei-international/NemoMod.jl/releases).
 
+## Version 2.3
+
+  * **Julia platform upgrade:** Updated NEMO to use Julia 1.12.4 and the latest releases of various Julia packages, including JuMP and solver wrappers. This change adds support for the most recent versions of several solvers, among them Gurobi 13, HiGHS 1.13, Mosek 11, and Xpress 9.8.
+
 ## Version 2.2
 
   * **Limited foresight optimization:** Enabled limited foresight optimization - see [Perfect foresight vs. limited foresight](@ref foresight) for details.

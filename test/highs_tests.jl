@@ -281,7 +281,8 @@ if @isdefined HiGHS
 
         # Test limited foresight optimization
         @info "Running HiGHS test 6 on storage_transmission_test.sqlite: limited foresight optimization."
-        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer, add_bridges=false) : direct_model(HiGHS.Optimizer())), varstosave="vtotaldiscountedcost", calcyears=[[2021,2022],[2025,2029]], quiet = calculatescenario_quiet)
+        # As of HiGHS 1.13, presolving this problem leads to a spurious infeasibility
+        NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(HiGHS.Optimizer, "presolve" => "off"), add_bridges=false) : direct_model(optimizer_with_attributes(HiGHS.Optimizer, "presolve" => "off"))), varstosave="vtotaldiscountedcost", calcyears=[[2021,2022],[2025,2029]], quiet = calculatescenario_quiet)
 
         if !compilation
             testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame

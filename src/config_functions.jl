@@ -290,12 +290,12 @@ function setsolverparamsfromcfg(configfile::ConfParse, jumpmodel::JuMP.Model, qu
             for t in [Int, Float64, Bool]
                 val = tryparse(t, split_p[2])
 
-                if val != nothing
+                if !isnothing(val)
                     break
                 end
             end
 
-            if val == nothing
+            if isnothing(val)
                 # String value
                 val = split_p[2]
             end
