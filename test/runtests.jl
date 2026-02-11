@@ -54,7 +54,7 @@ end  # delete_file(path::String)
 """Helper function used in test of writing optimization problem for a scenario. Wrapping
     file creation operation in a function helps ensure Julia releases output file for deletion."""
 function write_opt_prob(optprobfile::String)
-    dbfile = joinpath(@__DIR__, "storage_test.sqlite")
+    dbfile = joinpath(dbfile_path, "storage_test.sqlite")
     chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
     # Write output file for optimization problem
@@ -84,9 +84,9 @@ end  # precalcresultspath_setup(testpath::String, db1name::String, db2name::Stri
 """Helper function used in test of creating a new NEMO database. Wrapping SQLite
     operations in a function helps ensure Julia releases new DB file for deletion."""
 function new_nemo_db()
-    db = NemoMod.createnemodb(joinpath(@__DIR__, "new_nemo.sqlite"))
+    db = NemoMod.createnemodb(joinpath(dbfile_path, "new_nemo.sqlite"))
 
-    !compilation && @test isfile(joinpath(@__DIR__, "new_nemo.sqlite"))
+    !compilation && @test isfile(joinpath(dbfile_path, "new_nemo.sqlite"))
     # Test that AccumulatedAnnualDemand table exists
     !compilation && @test !SQLite.done(SQLite.DBInterface.execute(db, "PRAGMA table_info('AccumulatedAnnualDemand')"))
 end  # new_nemo_db()
@@ -95,7 +95,7 @@ end  # new_nemo_db()
 """Helper function used in test of setting parameter defaults. Wrapping SQLite
     operations in a function helps ensure Julia releases new DB file for deletion."""
 function param_default_db()
-    db = NemoMod.createnemodb(joinpath(@__DIR__, "param_default.sqlite"))
+    db = NemoMod.createnemodb(joinpath(dbfile_path, "param_default.sqlite"))
     !compilation && @test SQLite.done(SQLite.DBInterface.execute(db, "SELECT val FROM DefaultParams WHERE tablename = 'VariableCost'"))  # No rows in query result
 
     NemoMod.setparamdefault(db, "VariableCost", 1.0)
@@ -117,10 +117,10 @@ end  # @testset "Solving a scenario"
     # Tests will be skipped if HiGHS package is not installed.
     if @isdefined HiGHS
         @info "Testing options to control JuMP direct mode and bridging."
-        dbfile = joinpath(@__DIR__, "storage_test.sqlite")
+        dbfile = joinpath(dbfile_path, "storage_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
-        configfile = joinpath(pwd(), "nemo.ini")  # Config file used to access options for controlling direct mode and bridging
+        configfile = joinpath(dbfile_path, "nemo.toml")  # Config file used to access options for controlling direct mode and bridging
         delete_file(configfile, 20)
 
         open(configfile, "w") do io
@@ -158,7 +158,7 @@ end  # @testset "JuMP direct mode and bridging"
 
 @testset "Writing optimization problem for a scenario" begin
     @info "Testing function to write optimization problem for a scenario."
-    optprobfile = joinpath(@__DIR__, "storage_test_prob.gz")
+    optprobfile = joinpath(dbfile_path, "storage_test_prob.gz")
 
     write_opt_prob(optprobfile)
     GC.gc()
@@ -172,7 +172,7 @@ end  # @testset "Writing optimization problem for a scenario"
 @testset "Testing precalcresultspath logic" begin
     @info "Testing precalcresultspath logic."
 
-    testpath = joinpath(@__DIR__, "precalctest")
+    testpath = joinpath(dbfile_path, "precalctest")
     db1name = "storage_test.sqlite"
     db2name = "precalctest.sqlite"
     precalcresultspath_setup(testpath, db1name, db2name)
@@ -183,7 +183,7 @@ end  # @testset "Writing optimization problem for a scenario"
 
     # BEGIN: Test passing a directory path to precalcresultspath.
     # db1 should be overwritten with file in precalcresultspath with same name
-    NemoMod.calculatescenario(db1path; precalcresultspath=@__DIR__, quiet = calculatescenario_quiet)
+    NemoMod.calculatescenario(db1path; precalcresultspath=dbfile_path, quiet = calculatescenario_quiet)
 
     !compilation && @test isfile(db1path)
     db = SQLite.DB(db1path)
@@ -197,7 +197,7 @@ end  # @testset "Writing optimization problem for a scenario"
 
     # BEGIN: Test passing a file path to precalcresultspath.
     # db2 should be overwritten with specified file
-    NemoMod.calculatescenario(db2path; precalcresultspath=joinpath(@__DIR__, "storage_test.sqlite"), quiet = calculatescenario_quiet)
+    NemoMod.calculatescenario(db2path; precalcresultspath=joinpath(dbfile_path, "storage_test.sqlite"), quiet = calculatescenario_quiet)
 
     !compilation && @test isfile(db2path)
     db = SQLite.DB(db2path)
@@ -221,9 +221,9 @@ end  # @testset "Testing precalcresultspath logic"
         GC.gc()
 
         # Try up to 20 times to delete file
-        delete_file(joinpath(@__DIR__, "new_nemo.sqlite"), 20)
+        delete_file(joinpath(dbfile_path, "new_nemo.sqlite"), 20)
 
-        !compilation && @test !isfile(joinpath(@__DIR__, "new_nemo.sqlite"))
+        !compilation && @test !isfile(joinpath(dbfile_path, "new_nemo.sqlite"))
     end  # @testset "Create a new NEMO database"
 
     @testset "Set parameter default" begin
@@ -231,8 +231,8 @@ end  # @testset "Testing precalcresultspath logic"
         GC.gc()
 
         # Try up to 20 times to delete file
-        delete_file(joinpath(@__DIR__, "param_default.sqlite"), 20)
+        delete_file(joinpath(dbfile_path, "param_default.sqlite"), 20)
 
-        !compilation && @test !isfile(joinpath(@__DIR__, "param_default.sqlite"))
+        !compilation && @test !isfile(joinpath(dbfile_path, "param_default.sqlite"))
     end  # @testset "Set parameter default"
 end  # @testset "Other database operations"
