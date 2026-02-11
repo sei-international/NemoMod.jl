@@ -135,25 +135,144 @@ function calculatescenario(
         # END: Regularize some inputs.
 
         # BEGIN: Read config file and process calculatescenarioargs and solver blocks.
-        configfile = getconfig(quiet)  # ConfParse structure for config file if one is found; otherwise nothing
+        configdata = getconfig(quiet)  # TOML.parsefile for config file if one is found; otherwise nothing
 
-        if !isnothing(configfile)
+        if !isnothing(configdata)
             (jumpdirectmode, jumpbridges) = getjumpmodelproperties(jumpmodel)
 
-            # Arrays of Boolean and string arguments for calculatescenario(); necessary in order to have mutable objects for getconfigargs! call
-            local boolargs::Array{Bool,1} = [restrictvars,reportzeros,continuoustransmission,forcemip,quiet,jumpdirectmode,jumpbridges]
-            local stringargs::Array{String,1} = [startvalsdbpath,startvalsvars,precalcresultspath]
+            if haskey(configdata, "calculatescenarioargs")
+                configdata_csa = configdata["calculatescenarioargs"]  # Dictionary for calculatescenarioargs block in config file
 
-            getconfigargs!(configfile, calcyears, varstosavearr, boolargs, stringargs, quiet)
+                if haskey(configdata_csa, "quiet")
+                    try
+                        quiet::Bool = configdata_csa["quiet"]
+                        logmsg("Set quiet argument from configuration file.", quiet)
+                    catch
+                        logmsg("Could not use quiet key in configuration file. Make sure it is specified in the correct format. Continuing with NEMO.", quiet)
+                    end
+                end
 
-            (restrictvars, reportzeros, continuoustransmission, forcemip, quiet) = collect(boolargs)  # Ignores last two elements of boolargs
-            (startvalsdbpath, startvalsvars, precalcresultspath) = collect(stringargs)
+                if haskey(configdata_csa, "calcyears")
+                    try
+                        original_calcyears = copy(calcyears)
+                        empty!(calcyears)
+                    
+                        if isa(configdata_csa["calcyears"], Vector{Int})
+                            append!(calcyears, [configdata_csa["calcyears"]])
+                        else
+                            append!(calcyears, configdata_csa["calcyears"])
+                        end
 
-            if jumpdirectmode != boolargs[6] || jumpbridges != boolargs[7]
-                reset_jumpmodel(jumpmodel; direct=boolargs[6], bridges=boolargs[7])
+                        logmsg("Set calcyears argument from configuration file.", quiet)
+                    catch
+                        logmsg("Could not use calcyears key in configuration file. Make sure it is specified in the correct format. Continuing with NEMO.", quiet)
+                        append!(calcyears, original_calcyears)
+                    end
+                end
+
+                if haskey(configdata_csa, "varstosave")
+                    try
+                        union!(varstosavearr, configdata_csa["varstosave"])
+                        logmsg("Set varstosave argument from configuration file.", quiet)
+                    catch
+                        logmsg("Could not use varstosave key in configuration file. Make sure it is specified in the correct format. Continuing with NEMO.", quiet)
+                    end
+                end
+
+                if haskey(configdata_csa, "restrictvars")
+                    try
+                        restrictvars::Bool = configdata_csa["restrictvars"]
+                        logmsg("Set restrictvars argument from configuration file.", quiet)
+                    catch
+                        logmsg("Could not use restrictvars key in configuration file. Make sure it is specified in the correct format. Continuing with NEMO.", quiet)
+                    end
+                end
+
+                if haskey(configdata_csa, "reportzeros")
+                    try
+                        reportzeros::Bool = configdata_csa["reportzeros"]
+                        logmsg("Set reportzeros argument from configuration file.", quiet)
+                    catch
+                        logmsg("Could not use reportzeros key in configuration file. Make sure it is specified in the correct format. Continuing with NEMO.", quiet)
+                    end
+                end
+
+                if haskey(configdata_csa, "continuoustransmission")
+                    try
+                        continuoustransmission::Bool = configdata_csa["continuoustransmission"]
+                        logmsg("Set continuoustransmission argument from configuration file.", quiet)
+                    catch
+                        logmsg("Could not use continuoustransmission key in configuration file. Make sure it is specified in the correct format. Continuing with NEMO.", quiet)
+                    end
+                end
+
+                if haskey(configdata_csa, "forcemip")
+                    try
+                        forcemip::Bool = configdata_csa["forcemip"]
+                        logmsg("Set forcemip argument from configuration file.", quiet)
+                    catch
+                        logmsg("Could not use forcemip key in configuration file. Make sure it is specified in the correct format. Continuing with NEMO.", quiet)
+                    end
+                end
+
+                if haskey(configdata_csa, "startvalsdbpath")
+                    try
+                        startvalsdbpath::String = configdata_csa["startvalsdbpath"]
+                        logmsg("Set startvalsdbpath argument from configuration file.", quiet)
+                    catch
+                        logmsg("Could not use startvalsdbpath key in configuration file. Make sure it is specified in the correct format. Continuing with NEMO.", quiet)
+                    end
+                end
+
+                if haskey(configdata_csa, "startvalsvars")
+                    try
+                        startvalsvars::String = configdata_csa["startvalsvars"]
+                        logmsg("Set startvalsvars argument from configuration file.", quiet)
+                    catch
+                        logmsg("Could not use startvalsvars key in configuration file. Make sure it is specified in the correct format. Continuing with NEMO.", quiet)
+                    end
+                end
+
+                if haskey(configdata_csa, "precalcresultspath")
+                    try
+                        precalcresultspath::String = configdata_csa["precalcresultspath"]
+                        logmsg("Set precalcresultspath argument from configuration file.", quiet)
+                    catch
+                        logmsg("Could not use precalcresultspath key in configuration file. Make sure it is specified in the correct format. Continuing with NEMO.", quiet)
+                    end
+                end              
+
+                newjumpdirectmode::Bool = jumpdirectmode  # New value for jumpdirectmode based on config file; initialized to current value of jumpdirectmode
+                newjumpbridges::Bool = jumpbridges  # New value for jumpbridges based on config file; initialized to current value of jumpbridges
+
+                if haskey(configdata_csa, "jumpdirectmode")
+                    try
+                        newjumpdirectmode = configdata_csa["jumpdirectmode"]
+                    catch
+                        logmsg("Could not use jumpdirectmode key in configuration file. Make sure it is specified in the correct format. Continuing with NEMO.", quiet)
+                    end
+                end
+
+                if haskey(configdata_csa, "jumpbridges")
+                    try
+                        newjumpbridges = configdata_csa["jumpbridges"]
+                    catch
+                        logmsg("Could not use jumpbridges key in configuration file. Make sure it is specified in the correct format. Continuing with NEMO.", quiet)
+                    end
+                end
+
+                if newjumpdirectmode != jumpdirectmode || newjumpbridges != jumpbridges
+                    reset_jumpmodel(jumpmodel; direct=newjumpdirectmode, bridges=newjumpbridges, quiet=quiet)
+                end
+            end  # haskey(configdata, "calculatescenarioargs")
+
+            if haskey(configdata, "solver") && haskey(configdata["solver"], "parameters")
+                if isa(configdata["solver"]["parameters"], String)
+                    setsolverparamsfromcfg(configdata["solver"]["parameters"], jumpmodel, quiet)
+                else
+                    logmsg("Could not use solver parameters key in configuration file. Make sure it is specified in the correct format. Continuing with NEMO.", quiet)
+                end
             end
-
-            setsolverparamsfromcfg(configfile, jumpmodel, quiet)
         end
         # END: Read config file and process calculatescenarioargs and solver blocks.
 
@@ -217,9 +336,9 @@ function calculatescenario(
         # END: Update database if necessary.
 
         # BEGIN: Perform beforescenariocalc include.
-        if !isnothing(configfile) && haskey(configfile, "includes", "beforescenariocalc")
+        if !isnothing(configdata) && haskey(configdata, "includes") && haskey(configdata["includes"], "beforescenariocalc")
             try
-                include(normpath(joinpath(pwd(), retrieve(configfile, "includes", "beforescenariocalc"))))
+                include(normpath(joinpath(pwd(), configdata["includes"]["beforescenariocalc"])))
                 logmsg("Performed beforescenariocalc include.", quiet)
             catch e
                 logmsg("Could not perform beforescenariocalc include. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
@@ -271,7 +390,7 @@ function calculatescenario(
         for i in eachindex(calcyears)
             empty!(jumpmodel)
 
-            returnval = modelscenario(dbpath; jumpmodel=jumpmodel, calcyears=calcyears[i], limitedforesight=(length(calcyears) > 1), finalgroupyears=(i==length(calcyears)), lastyearprevgroupyears=(i > 1 ? maximum(calcyears[i-1]) : nothing), varstosavearr=varstosavearr, restrictvars=restrictvars, reportzeros=reportzeros, continuoustransmission=continuoustransmission, forcemip=forcemip, startvalsdbpath=startvalsdbpath, startvalsvars=startvalsvars, precalcresultspath=precalcresultspath, writefilename=writefilename, writefileformat=writefileformat, quiet=quiet, configfile=configfile)
+            returnval = modelscenario(dbpath; jumpmodel=jumpmodel, calcyears=calcyears[i], limitedforesight=(length(calcyears) > 1), finalgroupyears=(i==length(calcyears)), lastyearprevgroupyears=(i > 1 ? maximum(calcyears[i-1]) : nothing), varstosavearr=varstosavearr, restrictvars=restrictvars, reportzeros=reportzeros, continuoustransmission=continuoustransmission, forcemip=forcemip, startvalsdbpath=startvalsdbpath, startvalsvars=startvalsvars, precalcresultspath=precalcresultspath, writefilename=writefilename, writefileformat=writefileformat, quiet=quiet, configdata=configdata)
 
             if writefilename == "" && !in(returnval, [MathOptInterface.OPTIMAL, MathOptInterface.LOCALLY_SOLVED, MathOptInterface.ALMOST_OPTIMAL, MathOptInterface.ITERATION_LIMIT, MathOptInterface.TIME_LIMIT, MathOptInterface.NODE_LIMIT, MathOptInterface.SOLUTION_LIMIT, MathOptInterface.MEMORY_LIMIT, MathOptInterface.OBJECTIVE_LIMIT, MathOptInterface.NORM_LIMIT, MathOptInterface.OTHER_LIMIT]) && i < length(calcyears)
                 logmsg("Halting limited foresight optimization because no solution was found for last group of years.", quiet)
@@ -285,9 +404,9 @@ function calculatescenario(
         logmsg("Dropped temporary tables.", quiet)
 
         # BEGIN: Perform afterscenariocalc include.
-        if !isnothing(configfile) && haskey(configfile, "includes", "afterscenariocalc")
+        if !isnothing(configdata) && haskey(configdata, "includes") && haskey(configdata["includes"], "afterscenariocalc")
             try
-                include(normpath(joinpath(pwd(), retrieve(configfile, "includes", "afterscenariocalc"))))
+                include(normpath(joinpath(pwd(), configdata["includes"]["afterscenariocalc"])))
                 logmsg("Performed afterscenariocalc include.", quiet)
             catch e
                 logmsg("Could not perform afterscenariocalc include. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
@@ -334,7 +453,7 @@ end  # calculatescenario()
         writefilename::String = "",
         writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS,
         quiet::Bool = false,
-        configfile = nothing)
+        configdata = nothing)
 
 Implements scenario modeling logic for `calculatescenario()`. `limitedforesight` indicates whether `modelscenario` is being invoked in series for limited foresight optimization. If `limitedforesight` is `true`: 1) `finalgroupyears` indicates whether the last group of years in the limited foresight calculation is being modeled; 2) `lastyearprevgroupyears` is the last year modeled in the previous group of years (an `Int` or `nothing`).
 """
@@ -356,7 +475,7 @@ function modelscenario(
     writefilename::String = "",
     writefileformat::MathOptInterface.FileFormats.FileFormat = MathOptInterface.FileFormats.FORMAT_MPS,
     quiet::Bool = false,
-    configfile = nothing)
+    configdata = nothing)
 # Lines within modelscenario() are not indented since the function is so lengthy. To make an otherwise local
 # variable visible outside the function, prefix it with global. For JuMP constraint references,
 # create a new global variable and assign to it the constraint reference.
@@ -376,7 +495,7 @@ end
 global csrestrictyears = restrictyears
 global csinyears = inyears
 
-if !isnothing(configfile) && haskey(configfile, "includes", "customconstraints")
+if !isnothing(configdata) && haskey(configdata, "includes") && haskey(configdata["includes"], "customconstraints")
     # Define global variable for jumpmodel
     global csjumpmodel = jumpmodel
 end
@@ -6708,9 +6827,9 @@ logmsg("Added $numaddedconsarrays standard constraints to model.", quiet)
 # END: Ensure all non-custom constraints are added to model.
 
 # BEGIN: Perform customconstraints include.
-if !isnothing(configfile) && haskey(configfile, "includes", "customconstraints")
+if !isnothing(configdata) && haskey(configdata, "includes") && haskey(configdata["includes"], "customconstraints")
     try
-        include(normpath(joinpath(pwd(), retrieve(configfile, "includes", "customconstraints"))))
+        include(normpath(joinpath(pwd(), configdata["includes"]["customconstraints"])))
         logmsg("Performed customconstraints include.", quiet)
     catch e
         logmsg("Could not perform customconstraints include. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
