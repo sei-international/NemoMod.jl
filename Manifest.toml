@@ -2,7 +2,7 @@
 
 julia_version = "1.12.4"
 manifest_format = "2.0"
-project_hash = "db5dcedfebaff014b45e3a3274f07bb5532b2278"
+project_hash = "c9c3da336030c07a95d479884dbd648d311a3b2d"
 
 [[deps.ASL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -355,7 +355,7 @@ uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 version = "1.1.3"
 
 [[deps.NemoMod]]
-deps = ["Cbc", "DataFrames", "Dates", "JuMP", "MathOptInterface", "SQLite", "Test"]
+deps = ["Cbc", "DataFrames", "Dates", "JuMP", "MathOptInterface", "SQLite", "TOML", "Test"]
 path = "."
 uuid = "a3c327a0-d2f0-11e8-37fd-d12fd35c3c72"
 version = "2.3.0"
