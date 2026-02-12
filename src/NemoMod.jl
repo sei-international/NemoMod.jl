@@ -8,7 +8,7 @@
 =#
 
 module NemoMod
-export calculatescenario, createnemodb, dropdefaultviews, dropresulttables, logmsg, setparamdefault, convertscenariounits, find_infeasibilities
+export calculatescenario, createnemodb, dropdefaultviews, dropresulttables, logmsg, setparamdefault, convertscenariounits, find_infeasibilities, convert_ini_to_toml
 
 #= List of module global variables.
     • csdbpath - dbpath argument in most recent invocation of calculatescenario() or modelscenario()

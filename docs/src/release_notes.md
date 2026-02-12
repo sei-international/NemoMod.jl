@@ -9,6 +9,8 @@ This page highlights key changes in NEMO since its initial public release. For a
 
   * **Julia platform upgrade:** Updated NEMO to use Julia 1.12.4 and the latest releases of various Julia packages, including JuMP and solver wrappers. This change adds support for the most recent versions of several solvers, among them Gurobi 13, HiGHS 1.13, Mosek 11, and Xpress 9.8.
 
+  * **TOML for NEMO configuration files:** Changed the format of NEMO configuration files to [TOML](https://toml.io/). See the [documentation for configuration files](@ref configuration_file) for details. Legacy configuration files in `ini` format can be converted to TOML using the [`convert_ini_to_toml`](@ref) function.
+
 ## Version 2.2
 
   * **Limited foresight optimization:** Enabled limited foresight optimization - see [Perfect foresight vs. limited foresight](@ref foresight) for details.
