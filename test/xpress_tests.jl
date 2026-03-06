@@ -8,7 +8,15 @@
 =#
 
 try
-    using Xpress
+    if compilation
+        # Suppress status messages when Xpress initializes
+        original_logger = global_logger()
+        global_logger(SimpleLogger(stderr, Logging.Warn))
+        using Xpress
+        global_logger(original_logger)
+    else
+        using Xpress
+    end
 catch e
     @info "Error when initializing Xpress. Error message: " * sprint(showerror, e) * "."
     @info "Skipping Xpress tests."
