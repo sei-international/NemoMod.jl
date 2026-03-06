@@ -14,7 +14,7 @@ if !@isdefined NemoMod
     using NemoMod
 end
 
-using Test, SQLite, DataFrames, JuMP, Logging
+using Test, SQLite, DataFrames, JuMP
 
 const TOL = 0.5  # Default tolerance for isapprox() comparisons
 
@@ -109,7 +109,7 @@ end  # param_default_db()
     include(joinpath(@__DIR__, "gurobi_tests.jl"))
     include(joinpath(@__DIR__, "highs_tests.jl"))
     include(joinpath(@__DIR__, "mosek_tests.jl"))
-    include(joinpath(@__DIR__, "xpress_tests.jl"))
+    !compilation && include(joinpath(@__DIR__, "xpress_tests.jl"))  # Xpress tests are omitted from compilation because Xpress.jl requires an Xpress license to initialize
     include(joinpath(@__DIR__, "glpk_tests.jl"))
 end  # @testset "Solving a scenario"
 
