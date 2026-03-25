@@ -11,6 +11,9 @@ This page highlights key changes in NEMO since its initial public release. For a
 
   * **TOML for NEMO configuration files:** Changed the format of NEMO configuration files to [TOML](https://toml.io/). See the [documentation for configuration files](@ref configuration_file) for details. Legacy configuration files in `ini` format can be converted to TOML using the [`convert_ini_to_toml`](@ref) function.
 
+!!! note
+    If you're using NEMO 2.3 with LEAP, make sure you're running LEAP 2026.3 or later. Earlier versions of LEAP aren't compatible with NEMO 2.3.
+
 ## Version 2.2
 
   * **Limited foresight optimization:** Enabled limited foresight optimization - see [Perfect foresight vs. limited foresight](@ref foresight) for details.
