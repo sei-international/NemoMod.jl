@@ -7,12 +7,12 @@ This page highlights key changes in NEMO since its initial public release. For a
 
 ## Version 2.3
 
-  * **Julia platform upgrade:** Updated NEMO to use Julia 1.12.4 and the latest releases of various Julia packages, including JuMP and solver wrappers. This change adds support for the most recent versions of several solvers, among them Gurobi 13, HiGHS 1.13, Mosek 11, and Xpress 9.8.
+  * **Julia platform upgrade:** Updated NEMO to use Julia 1.12.4 and recent releases of various Julia packages, including JuMP and solver wrappers. This change adds support for the most recent versions of several solvers, among them Gurobi 13, HiGHS 1.13, Mosek 11, and Xpress 9.8. As part of the change, the software for Gurobi 13 is now delivered with NEMO - so you no longer need to install Gurobi separately to use it with NEMO (you do still need to obtain a Gurobi license, though). For details on which solvers are supported with NEMO 2.3, and their licensing requirements, see [Solver compatibility](@ref solver_compatibility).
 
   * **TOML for NEMO configuration files:** Changed the format of NEMO configuration files to [TOML](https://toml.io/). See the [documentation for configuration files](@ref configuration_file) for details. Legacy configuration files in `ini` format can be converted to TOML using the [`convert_ini_to_toml`](@ref) function.
 
 !!! note
-    If you're using NEMO 2.3 with LEAP, make sure you're running LEAP 2026.3 or later. Earlier versions of LEAP aren't compatible with NEMO 2.3.
+    If you're using NEMO 2.3 with LEAP, make sure you're running LEAP 2026.3.0.1 or later. Earlier versions of LEAP aren't compatible with NEMO 2.3.
 
 ## Version 2.2
 
@@ -163,3 +163,4 @@ This page highlights key changes in NEMO since its initial public release. For a
   * **General error handling in `calculatescenario`:** Restructured `calculatescenario` so exceptions are trapped and presented along with information on how to report problems to the NEMO team.
 
   * **Other changes:** Streamlined NEMO's logic for upgrading legacy database versions in `calculatescenario`. Now the functions that perform upgrades are only called when needed. Removed the `createnemodb_leap` function since LEAP isn't using it.
+0
