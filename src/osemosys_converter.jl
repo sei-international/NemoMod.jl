@@ -10,33 +10,77 @@
 """
     convert_osemosys(osemosys_path::String, nemo_path::String;
         defaults::Dict{String, Float64} = Dict{String, Float64}(),
-        quiet::Bool = false)
+        quiet::Bool = false,
+        config_path::String = "")
 
 Converts an OSeMOSYS scenario database to NemoMod format.
 
-The source database should be an SQLite file with OSeMOSYS-format tables, using uppercase column
-names matching set names (e.g., `REGION`, `TECHNOLOGY`, `YEAR`) and `VALUE` for data columns.
-Sets are tables with a single `VALUE` column. This is the format produced by tools such as
-[otoole](https://github.com/OSeMOSYS/otoole).
+`osemosys_path` can be either:
+- A path to an SQLite database with OSeMOSYS-format tables (as produced by
+  [otoole](https://github.com/OSeMOSYS/otoole)), or
+- A path to a directory of otoole CSV files. In this case, `config_path` must also be provided,
+  and otoole must be installed and available on the system PATH. The CSV directory will be converted
+  to a temporary SQLite database using `otoole convert csv sqlite` before proceeding.
+
+The OSeMOSYS tables should use uppercase column names matching set names (e.g., `REGION`,
+`TECHNOLOGY`, `YEAR`) and `VALUE` for data columns.
 
 Creates a new NemoMod scenario database at `nemo_path` using [`createnemodb`](@ref), then copies
 and transforms data from the OSeMOSYS source. Tables that exist only in NemoMod (e.g., transmission
 network tables) are left empty.
 
 # Arguments
-- `osemosys_path::String`: Path to the source OSeMOSYS SQLite database.
+- `osemosys_path::String`: Path to the source OSeMOSYS SQLite database or otoole CSV directory.
 - `nemo_path::String`: Path for the output NemoMod SQLite database (will be created/overwritten).
 - `defaults::Dict{String, Float64} = Dict{String, Float64}()`: Default values to set in the
   NemoMod `DefaultParams` table, keyed by parameter table name.
 - `quiet::Bool = false`: Suppresses status messages when `true`.
+- `config_path::String = ""`: Path to otoole config.yaml file. Required when `osemosys_path` is
+  a CSV directory.
 """
 function convert_osemosys(osemosys_path::String, nemo_path::String;
     defaults::Dict{String, Float64} = Dict{String, Float64}(),
-    quiet::Bool = false)
+    quiet::Bool = false,
+    config_path::String = "")
+
+    # Determine if osemosys_path is a directory (CSV) or file (SQLite)
+    local sqlite_path::String = osemosys_path
+    local temp_sqlite::Bool = false
+
+    if isdir(osemosys_path)
+        # CSV directory: convert to temporary SQLite using otoole
+        isempty(config_path) && error("config_path is required when osemosys_path is a CSV directory.")
+        !isfile(config_path) && error("Config file not found: $(config_path)")
+
+        sqlite_path = tempname() * ".sqlite"
+        temp_sqlite = true
+
+        logmsg("Converting CSV directory to temporary SQLite using otoole...", quiet)
+
+        local cmd = `otoole convert csv sqlite $(osemosys_path) $(sqlite_path) $(config_path)`
+
+        try
+            run(cmd)
+        catch e
+            rm(sqlite_path; force=true)
+            error("Failed to run otoole. Ensure otoole is installed (pip install otoole) and on your PATH. Error: $(e)")
+        end
+
+        logmsg("otoole conversion complete: $(sqlite_path)", quiet)
+    elseif !isfile(osemosys_path)
+        error("OSeMOSYS path not found: $(osemosys_path)")
+    end
 
     # Open source database
-    local srcdb::SQLite.DB = SQLite.DB(osemosys_path)
-    logmsg("Opened OSeMOSYS database at $(osemosys_path).", quiet)
+    local srcdb::SQLite.DB
+    try
+        srcdb = SQLite.DB(sqlite_path)
+    catch e
+        temp_sqlite && rm(sqlite_path; force=true)
+        rethrow()
+    end
+
+    logmsg("Opened OSeMOSYS database at $(sqlite_path).", quiet)
 
     # Create target NemoMod database (this creates full schema at version 11)
     local destdb::SQLite.DB = createnemodb(nemo_path; defaultvals=defaults)
@@ -69,6 +113,14 @@ function convert_osemosys(osemosys_path::String, nemo_path::String;
     catch
         SQLite.DBInterface.execute(destdb, "ROLLBACK")
         rethrow()
+    finally
+        # Clean up temporary SQLite file if we created one from CSV
+        if temp_sqlite
+            # Close source database before deleting
+            DBInterface.close!(srcdb)
+            rm(sqlite_path; force=true)
+            logmsg("Cleaned up temporary SQLite file.", quiet)
+        end
     end
     # END: Wrap all operations in try-catch for rollback on error.
 
