@@ -5,6 +5,15 @@ CurrentModule = NemoMod
 
 This page highlights key changes in NEMO since its initial public release. For a full history of NEMO releases, including the code for each version, see the [Releases page on NEMO's GitHub site](https://github.com/sei-international/NemoMod.jl/releases).
 
+## Version 2.3
+
+  * **Julia platform upgrade:** Updated NEMO to use Julia 1.12.4 and recent releases of various Julia packages, including JuMP and solver wrappers. This change adds support for the most recent versions of several solvers, among them Gurobi 13, HiGHS 1.13, Mosek 11, and Xpress 9.8. As part of the change, the software for Gurobi 13 is now delivered with NEMO - so you no longer need to install Gurobi separately to use it with NEMO (you do still need to obtain a Gurobi license, though). For details on which solvers are supported with NEMO 2.3, and their licensing requirements, see [Solver compatibility](@ref solver_compatibility).
+
+  * **TOML for NEMO configuration files:** Changed the format of NEMO configuration files to [TOML](https://toml.io/). See the [documentation for configuration files](@ref configuration_file) for details. Legacy configuration files in `ini` format can be converted to TOML using the [`convert_ini_to_toml`](@ref) function.
+
+!!! note
+    If you're using NEMO 2.3 with LEAP, make sure you're running LEAP 2026.3.0.1 or later. Earlier versions of LEAP aren't compatible with NEMO 2.3.
+
 ## Version 2.2
 
   * **Limited foresight optimization:** Enabled limited foresight optimization - see [Perfect foresight vs. limited foresight](@ref foresight) for details.
@@ -79,7 +88,7 @@ This page highlights key changes in NEMO since its initial public release. For a
 !!! note
     To use NEMO 1.7 with LEAP, please ensure you are running LEAP version **2020.1.0.57** or higher.
 
-  * **Multi-threading:** Implemented a new paradigm for parallel processing in NEMO - replaced distributed Julia processes with multi-threading. In addition to streamlining operations that were already parallelized, this change allowed parallelization of constraint creation and results saving in [`calculatescenario`](@ref scenario_calc). It should reduce run-time and memory use for most models. Deprecated the `numprocs` and `targetprocs` arguments for `calculatescenario` and [`writescenariomodel`](@ref writescenariomodel); they were used to select distributed Julia processes and are no longer needed. When parallel processing, NEMO uses as many threads as are available in the Julia session. This in turn is controlled by a command line argument or environment variable provided when invoking Julia (see [Julia's documentation](https://docs.julialang.org/) for details).
+  * **Multi-threading:** Implemented a new paradigm for parallel processing in NEMO - replaced distributed Julia processes with multi-threading. In addition to streamlining operations that were already parallelized, this change allowed parallelization of constraint creation and results saving in [`calculatescenario`](@ref scenario_calc). It should reduce run-time and memory use for most models. Deprecated the `numprocs` and `targetprocs` arguments for `calculatescenario` and `writescenariomodel`; they were used to select distributed Julia processes and are no longer needed. When parallel processing, NEMO uses as many threads as are available in the Julia session. This in turn is controlled by a command line argument or environment variable provided when invoking Julia (see [Julia's documentation](https://docs.julialang.org/) for details).
 
   * **Improved functionality for renewable energy targets:** Increased the flexibility and simplicity of NEMO's renewable energy target calculations. Added fuel as a dimension for [`REMinProductionTarget`](@ref REMinProductionTarget), so this parameter now describes the fraction of a fuel's production in a region and year that must be by renewable technologies. As in earlier versions of NEMO, the [`RETagTechnology`](@ref RETagTechnology) parameter determines the renewability of technologies. Modified the logic for verifying compliance with `REMinProductionTarget` to exclude production from storage. Removed the `RETagFuel` parameter and `vtotalreproductionannual` and `vretotalproductionoftargetfuelannual` output variables since the new calculation method made them superfluous.
 
@@ -117,9 +126,9 @@ This page highlights key changes in NEMO since its initial public release. For a
 
 ## Version 1.4
 
-  * **Writing NEMO models:** Added a function to write an output file representing the NEMO optimization problem for a scenario ([`writescenariomodel`](@ref)). This function supports common solver file formats including MPS and LP and can compress its output with Gzip or BZip2. Results from the function can be used as an input to solver performance tuning programs, such as Gurobi's [parameter tuning tool](https://www.gurobi.com/documentation/9.1/refman/parameter_tuning_tool.html) and CPLEX's [tuning tool](https://www.ibm.com/support/knowledgecenter/SSSA5P_20.1.0/ilog.odms.cplex.help/CPLEX/UsrMan/topics/progr_consid/tuning/01_tune_title_synopsis.html).
+  * **Writing NEMO models:** Added a function to write an output file representing the NEMO optimization problem for a scenario (`writescenariomodel`). This function supports common solver file formats including MPS and LP and can compress its output with Gzip or BZip2. Results from the function can be used as an input to solver performance tuning programs, such as Gurobi's [parameter tuning tool](https://www.gurobi.com/documentation/9.1/refman/parameter_tuning_tool.html) and CPLEX's [tuning tool](https://www.ibm.com/support/knowledgecenter/SSSA5P_20.1.0/ilog.odms.cplex.help/CPLEX/UsrMan/topics/progr_consid/tuning/01_tune_title_synopsis.html).
 
-  * **Calculating selected years:** Added functionality to calculate selected years of a scenario. You can invoke this feature with a new `calcyears` argument for [`calculatescenario`](@ref scenario_calc) (and [`writescenariomodel`](@ref)). Calculating selected years can quickly provide results for large models. The results may not be identical to what you would get if you calculated all years, but NEMO uses several methods to reduce discrepancies between the two cases. See [Calculating selected years](@ref selected_years) for details.
+  * **Calculating selected years:** Added functionality to calculate selected years of a scenario. You can invoke this feature with a new `calcyears` argument for [`calculatescenario`](@ref scenario_calc) (and `writescenariomodel`). Calculating selected years can quickly provide results for large models. The results may not be identical to what you would get if you calculated all years, but NEMO uses several methods to reduce discrepancies between the two cases. See [Calculating selected years](@ref selected_years) for details.
 
   * **New default solver - Cbc:** Changed the default solver for `calculatescenario` to Cbc. Since NEMO version 1.3, Cbc generally offers better performance than GLPK for NEMO models.
 
@@ -154,3 +163,4 @@ This page highlights key changes in NEMO since its initial public release. For a
   * **General error handling in `calculatescenario`:** Restructured `calculatescenario` so exceptions are trapped and presented along with information on how to report problems to the NEMO team.
 
   * **Other changes:** Streamlined NEMO's logic for upgrading legacy database versions in `calculatescenario`. Now the functions that perform upgrades are only called when needed. Removed the `createnemodb_leap` function since LEAP isn't using it.
+0

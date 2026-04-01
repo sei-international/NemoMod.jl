@@ -13,7 +13,7 @@
 Overload of ConfParser.parse_line() in which quoted key values are returned as-is in their
 entirety.
 """
-function ConfParser.parse_line(line::String)
+#= function ConfParser.parse_line(line::String)
     parsed = String[]
     splitted = split(line, ",")
 
@@ -32,24 +32,28 @@ function ConfParser.parse_line(line::String)
         end
     end
     parsed
-end
+end =#
 
 """
     getconfig(quiet::Bool = false)
 
 Reads in NEMO's configuration file, which should be in the Julia working directory,
-in `ini` format, and named `nemo.ini` or `nemo.cfg`. See the sample file in the NEMO
-package's `utils` directory for more information.
+in `TOML` format, and named `nemo.toml`, `nemo.ini`, or `nemo.cfg`. See the sample file 
+in the NEMO package's `utils` directory for more information. Returns a `Dict` containing
+the configuration file's contents, or `nothing` if no configuration file is found.
 
 # Arguments
 - `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to STDOUT).
 """
 function getconfig(quiet::Bool = false)
+    configpathtoml::String = joinpath(pwd(), "nemo.toml")
     configpathini::String = joinpath(pwd(), "nemo.ini")
     configpathcfg::String = joinpath(pwd(), "nemo.cfg")
     configpath::String = ""
 
-    if isfile(configpathini)
+    if isfile(configpathtoml)
+        configpath = configpathtoml
+    elseif isfile(configpathini)
         configpath = configpathini
     elseif isfile(configpathcfg)
         configpath = configpathcfg
@@ -58,10 +62,9 @@ function getconfig(quiet::Bool = false)
     end
 
     try
-        local conffile::ConfParse = ConfParse(configpath)
-        parse_conf!(conffile)
+        local configdata::Dict{String,Any} = TOML.parsefile(configpath)
         logmsg("Read NEMO configuration file at " * configpath * ".", quiet)
-        return conffile
+        return configdata
     catch
         logmsg("Could not parse NEMO configuration file at " * configpath * ". Please verify format.", quiet)
     end
@@ -91,7 +94,7 @@ Loads run-time arguments for `calculatescenario()` from a configuration file.
 - `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to `STDOUT`).
     This argument is not changed by the function.
 """
-function getconfigargs!(configfile::ConfParse, calcyears::Vector{Vector{Int}}, varstosavearr::Array{String,1},
+#= function getconfigargs!(configfile::ConfParse, calcyears::Vector{Vector{Int}}, varstosavearr::Array{String,1},
     bools::Array{Bool,1}, strings::Array{String,1}, quiet::Bool)
 
     if haskey(configfile, "calculatescenarioargs", "calcyears")
@@ -199,7 +202,7 @@ function getconfigargs!(configfile::ConfParse, calcyears::Vector{Vector{Int}}, v
             if typeof(startvalsvarsconfig) == String
                 strings[2] = startvalsvarsconfig
             else
-                # startvalsdbpathconfig should be an array of strings
+                # startvalsvarsconfig should be an array of strings
                 strings[2] = join(startvalsvarsconfig, ",")
             end
 
@@ -252,7 +255,7 @@ function getconfigargs!(configfile::ConfParse, calcyears::Vector{Vector{Int}}, v
             logmsg("Could not read jumpbridges argument from configuration file. Error message: " * sprint(showerror, e) * ". Continuing with NEMO.", quiet)
         end
     end
-end  # getconfigargs!(configfile::ConfParse, calcyears::Array{Int,1}, varstosavearr::Array{String,1}, bools::Array{Bool,1}, quiet::Bool)
+end  # getconfigargs!(configfile::ConfParse, calcyears::Array{Int,1}, varstosavearr::Array{String,1}, bools::Array{Bool,1}, quiet::Bool) =#
 
 """
     setsolverparamsfromcfg(configfile::ConfParse, jumpmodel::JuMP.Model, quiet::Bool)
@@ -260,61 +263,150 @@ end  # getconfigargs!(configfile::ConfParse, calcyears::Array{Int,1}, varstosave
 Sets solver parameters specified in a configuration file. Reports which parameters were and were not successfully set.
 
 # Arguments
-- `configfile::ConfParse`: Configuration file. Solver parameters should be in `parameters` key within `solver` block,
-    specified as follows: `parameter1=value1`, `parameter2=value2`, ...
+- `parameters_string::String`: String containing solver parameters in the format `parameter1=value1,parameter2=value2,...`.
 - `jumpmodel::JuMP.Model`: JuMP model in which solver parameters will be set.
 - `quiet::Bool`: Suppresses low-priority status messages (which are otherwise printed to `STDOUT`).
 """
-function setsolverparamsfromcfg(configfile::ConfParse, jumpmodel::JuMP.Model, quiet::Bool)
-    if haskey(configfile, "solver", "parameters")
-        local retrieved_params = retrieve(configfile, "solver", "parameters")  # May be a string (if there's one parameter-value pair) or an array of strings (if there are more than one, comma-delimited parameter-value pairs)
-        local params_set::String = ""  # List of parameters that were successfully set; used in status message
+function setsolverparamsfromcfg(parameters_string::String, jumpmodel::JuMP.Model, quiet::Bool)
+    local params_set::String = ""  # List of parameters that were successfully set; used in status message
 
-        # Add singleton parameters to an array to facilitate processing
-        if typeof(retrieved_params) == String
-            retrieved_params = [retrieved_params]
+    # BEGIN: Process each parameter-value pair in parameters_string.
+    for e in split(parameters_string, ","; keepempty=false)
+        local split_p::Array{String,1} = [strip(pp) for pp = split(e, "="; keepempty=false)]  # Current parameter specification split on =; split_p[1] = parameter name, split_p[2] = parameter value
+
+        if length(split_p) != 2
+            logmsg("Could not set solver parameter specified in configuration file as " * e * ". Continuing with NEMO.", quiet)
+            continue
         end
 
-        # BEGIN: Process each parameter-value pair in retrieved_params.
-        for e in retrieved_params
-            local split_p::Array{String,1} = [strip(pp) for pp = split(e, "="; keepempty=false)]  # Current parameter specification split on =; split_p[1] = parameter name, split_p[2] = parameter value
+        local val  # Parsed value for current parameter
 
-            if length(split_p) != 2
-                logmsg("Could not set solver parameter specified in configuration file as " * e * ". Continuing with NEMO.", quiet)
-                continue
+        # Int, float, and Boolean values - order is important since an integer value will parse to a float
+        for t in [Int, Float64, Bool]
+            val = tryparse(t, split_p[2])
+
+            if !isnothing(val)
+                break
+            end
+        end
+
+        if isnothing(val)
+            # String value
+            val = split_p[2]
+        end
+
+        # Call set_optimizer_attribute for parameter and value
+        try
+            set_attribute(jumpmodel, split_p[1], val)
+            params_set *= split_p[1] * ", "
+        catch
+            # Remove attribute from jumpmodel to prevent errors if jumpmodel later needs to be emptied
+            try 
+                delete!(jumpmodel.moi_backend.params, split_p[1])
+            catch
+                # Just continue
             end
 
-            local val  # Parsed value for current parameter
+            try 
+                delete!(jumpmodel.moi_backend.optimizer.model.params, split_p[1])
+            catch
+                # Just continue
+            end
 
-            # Int, float, and Boolean values - order is important since an integer value will parse to a float
-            for t in [Int, Float64, Bool]
-                val = tryparse(t, split_p[2])
+            logmsg("Could not set solver parameter specified in configuration file as " * e * ". Continuing with NEMO.", quiet)
+        end
+    end
+    # END: Process each parameter-value pair in parameters_string.
 
-                if val != nothing
-                    break
+    # Report parameters that were set
+    if length(params_set) != 0
+        logmsg("Set following solver parameters using values in configuration file: " * params_set[1:prevind(params_set, lastindex(params_set), 2)] * ".", quiet)
+    end
+end  # setsolverparamsfromcfg(parameters_string::String, jumpmodel::JuMP.Model, quiet::Bool)
+
+"""
+     convert_ini_to_toml(ini_path::String, toml_path::String, quiet::Bool = false)
+
+Converts a configuration file from NEMO 2.2 or earlier (in INI format) to the TOML format used in NEMO version 2.3 and later.
+
+# Arguments
+- `ini_path::String`: Path to the INI file to be converted.
+- `toml_path::String`: Path where the new TOML file should be saved.
+- `quiet::Bool = false`: Suppresses low-priority status messages (which are otherwise printed to `STDOUT`).
+"""
+function convert_ini_to_toml(ini_path::String, toml_path::String, quiet::Bool = false)
+    try
+        open(toml_path, "w") do io
+            open(ini_path, "r") do ini_io
+                for line in eachline(ini_io)
+                    line = replace(line, ";" => "#")
+                    
+                    if startswith(line, r"\#|\[calculatescenarioargs\]|\[solver\]|\[includes\]") || isempty(strip(line))
+                        # Retain comments, blank lines, and allowable blocks
+                        println(io, line)
+                    elseif startswith(line, r"jumpdirectmode|jumpbridges|restrictvars|reportzeros|continuoustransmission|forcemip|quiet")
+                        # Boolean parameters
+                        key, value = split(line, "="; limit=2)
+                        
+                        comment = ""  # Any comment on this line
+
+                        if contains(value, "#")                        
+                            value, comment = split(value, "#"; limit=2)
+                        end
+                        
+                        println(io, "$(strip(key)) = $(strip(lowercase(value)))" * "$(isempty(comment) ? "" : " # $(strip(comment))")")
+                    elseif startswith(line, "calcyears")
+                        # calcyears parameter - convert to TOML array of arrays
+                        key, value = split(line, "="; limit=2)
+
+                        comment = ""  # Any comment on this line
+
+                        if contains(value, "#")                        
+                            value, comment = split(value, "#"; limit=2)
+                        end
+
+                        toml_value = "["  # Value written into TOML file
+
+                        for group in split(value, ",")
+                            years = [strip(y) for y in split(strip(group), "|")]
+                            toml_value *= "[" * join(years, ", ") * "], "
+                        end
+
+                        toml_value = toml_value[1:length(toml_value) - 2] * "]"  # Remove trailing comma and space, add closing bracket
+                        
+                        println(io, "$(strip(key)) = $toml_value" * "$(isempty(comment) ? "" : " # $(strip(comment))")")
+                    elseif startswith(line, "varstosave")
+                        # varstosave parameter - convert to TOML array
+                        key, value = split(line, "="; limit=2)
+
+                        comment = ""  # Any comment on this line
+
+                        if contains(value, "#")                        
+                            value, comment = split(value, "#"; limit=2)
+                        end              
+
+                        vars = [strip(v) for v in split(value, ",")]
+                        toml_value = "[\"" * join(vars, "\", \"") * "\"]"
+                        println(io, "$(strip(key)) = $toml_value" * "$(isempty(comment) ? "" : " # $(strip(comment))")")
+                    elseif startswith(line, r"startvalsdbpath|startvalsvars|precalcresultspath|parameters|beforescenariocalc|afterscenariocalc|customconstraints")
+                        # String parameters
+                        key, value = split(line, "="; limit=2)
+
+                        comment = ""  # Any comment on this line
+
+                        if contains(value, "#")                        
+                            value, comment = split(value, "#"; limit=2)
+                        end              
+
+                        value = replace(value, "\"" => "") # Remove any existing quotes around value
+                        println(io, "$(strip(key)) = \"$(strip(value))\"" * "$(isempty(comment) ? "" : " # $(strip(comment))")")
+                    end
                 end
             end
-
-            if val == nothing
-                # String value
-                val = split_p[2]
-            end
-
-            # Call set_optimizer_attribute for parameter and value
-            try
-                set_attribute(jumpmodel, split_p[1], val)
-                params_set *= split_p[1] * ", "
-            catch
-                # Remove attribute from jumpmodel to prevent errors if jumpmodel later needs to be emptied
-                delete!(jumpmodel.moi_backend.params, split_p[1])
-                logmsg("Could not set solver parameter specified in configuration file as " * e * ". Continuing with NEMO.", quiet)
-            end
         end
-        # END: Process each parameter-value pair in retrieved_params.
 
-        # Report parameters that were set
-        if length(params_set) != 0
-            logmsg("Set following solver parameters using values in configuration file: " * params_set[1:prevind(params_set, lastindex(params_set), 2)] * ".", quiet)
-        end
-    end  # haskey(configfile, "solver", "parameters")
-end  # setsolverparamsfromcfg(configfile::ConfParse, jumpmodel::JuMP.Model, quiet::Bool)
+        logmsg("Converted INI file at $ini_path to TOML file at $toml_path.", quiet)
+    catch e
+        logmsg("Could not convert INI file at $ini_path to TOML file at $toml_path. Error message: " * sprint(showerror, e) * ".")
+    end
+end  # convert_ini_to_toml(ini_path::String, toml_path::String)

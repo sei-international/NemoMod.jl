@@ -1,0 +1,61 @@
+# Sample configuration file for NEMO. This file is in TOML format - see https://toml.io for more information on TOML.
+#
+# When running calculatescenario(), NEMO searches for a configuration file named nemo.toml, nemo.ini, or nemo.cfg in the Julia working directory. All paths in configuration files should be defined relative to the Julia working directory.
+#
+# Currently supported sections and keys for configuration files are listed below. All sections and keys are optional.
+#
+# [calculatescenarioargs]
+# This section contains parameters that affect the behavior of calculatescenario(). See the documentation for calculatescenario() for additional information.
+#
+# jumpdirectmode: true or false (a TOML Boolean). Activates or deactivates direct mode in JuMP - see JuMP's documentation for details (https://jump.dev/JuMP.jl/stable). Example: jumpdirectmode=true.
+#
+# jumpbridges: true or false (a TOML Boolean). Activates or deactivates bridging in JuMP - see JuMP's documentation for details (https://jump.dev/JuMP.jl/stable). Example: jumpbridges=false.
+#
+# calcyears: Years to include in the scenario calculation (a TOML array of arrays of years). Each inner array represents a group of years; groups should be in chronological order in the outer array and should not overlap. Each group of years is optimized with perfect foresight, with results from prior groups providing starting conditions (so a limited foresight optimization is conducted across all groups). Example: calcyears=[[2025,2027],[2030,2032]] (optimize 2025 and 2027 with perfect foresight; then optimize 2030 and 2032 with perfect foresight, using results from 2025 and 2027 as a starting point). If this key is included in a configuration file, it overrides the calcyears argument for calculatescenario().
+#
+# varstosave: Model output variables to save in the scenario database (a TOML array of strings). Example: varstosave=["vtransmissionannual", "vtransmissionbuilt"]. If this key is included in a configuration file, it adds to the varstosave argument for calculatescenario().
+#
+# restrictvars: true or false (a TOML Boolean). Indicates whether NEMO should prioritize omitting unnecessary variables from the scenario calculation. Example: restrictvars=true. If this key is included in a configuration file, it overrides the restrictvars argument for calculatescenario().
+#
+# reportzeros: true or false (a TOML Boolean). Indicates whether saved results from the scenario calculation should include values equal to zero. Example: reportzeros=false. If this key is included in a configuration file, it overrides the reportzeros argument for calculatescenario().
+#
+# continuoustransmission: true or false (a TOML Boolean). Indicates whether transmission capacity expansion should be modeled with continuous or discrete variables. Example: continuoustransmission=true. If this key is included in a configuration file, it overrides the continuoustransmission argument for calculatescenario().
+#
+# forcemip: true or false (a TOML Boolean). Forces NEMO to use a mixed-integer programming solver for the scenario calculation. Example: forcemip=true. If this key is included in a configuration file, it overrides the forcemip argument for calculatescenario().
+#
+# startvalsdbpath: Path to a pre-calculated scenario database used to warm start optimization (a TOML string). Example: startvalsdbpath="c:/temp/warmstart/test.sqlite". If this key is included in a configuration file, it overrides the startvalsdbpath argument for calculatescenario().
+#
+# startvalsvars: Comma-delimited list of model output variables for which to set starting values from the warm start database (a TOML string). Example: startvalsvars="vtransmissionannual,vtransmissionbuilt". If this key is included in a configuration file, it overrides the startvalsvars argument for calculatescenario().
+#
+# precalcresultspath: Path to a pre-calculated scenario database (or a directory containing a pre-calculated database) that NEMO should copy over the database specified in calculatescenario's dbpath argument (a TOML string). Examples: precalcresultspath="c:/temp/precalc/test.sqlite", precalcresultspath="c:/temp/precalc". If this key is included in a configuration file, it overrides the precalcresultspath argument for calculatescenario().
+#
+# quiet: true or false (a TOML Boolean). Indicates whether NEMO should suppress low-priority status messages when running calculatescenario(). Example: quiet=true. If this key is included in a configuration file, it overrides the quiet argument for calculatescenario().
+#
+# [solver]
+# This section specifies parameters that are passed to the solver used in calculatescenario().
+#
+# parameters: Comma-delimited list of solver parameters and values in the form parameter1=value1,parameter2=value2 (a TOML string). Example: parameters="NumericFocus=2,MIPGap=0.05,MIPFocus=1,Method=3". NEMO infers the types of parameter values using Julia's tryparse function. Values are tested to see if they parse to Bool, Int, and Float64 types. Values that do not parse to any of these types are passed to the solver as strings.
+#
+# [includes]
+# This section identifies user-provided Julia files (scripts) that should be included when running calculatescenario().
+#
+# beforescenariocalc: Path to a Julia file that is included before each scenario calculation in NEMO (i.e., at the start of calculatescenario()) (a TOML string). Example: beforescenariocalc="./beforescenariocalc.jl".
+#
+# afterscenariocalc: Path to a Julia file that is included after each scenario calculation in NEMO (i.e., at the end of calculatescenario()) (a TOML string). Example: afterscenariocalc="./afterscenariocalc.jl".
+#
+# customconstraints: Path to a Julia file that is included when building constraints during scenario calculation in NEMO (a TOML string). Example: customconstraints="./customconstraints.jl".
+
+# Example of sections and keys in practice:
+#
+# [calculatescenarioargs]
+# calcyears = [[2025],[2026],[2027],[2028],[2029],[2030]]
+# continuoustransmission = true
+# quiet = false
+#
+# [solver]
+# parameters = "CPXPARAM_MIP_Tolerances_MIPGap=0.05,CPXPARAM_Simplex_Perturbation_Indicator=1"  # CPLEX parameters
+#
+# [includes]
+# Files are located in Julia working directory
+# beforescenariocalc = "./beforescenariocalc.jl"
+# afterscenariocalc = "./afterscenariocalc.jl"

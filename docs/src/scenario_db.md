@@ -7,13 +7,7 @@ CurrentModule = NemoMod
 Scenario databases store inputs and outputs for a NEMO model scenario, including [dimensions](@ref dimensions), [parameters](@ref parameters), and [calculated result variables](@ref variables). Each scenario has its own database. To calculate a scenario, you pass its database to the [`calculatescenario`](@ref) function. NEMO then reads inputs from the database and writes results back to it.
 
 !!! tip
-    For examples of scenario databases, look in the `test` directory for the NEMO Julia package. You can find this directory as follows.
-
-    ```julia
-    julia> using NemoMod
-
-    julia> println(normpath(joinpath(pathof(NemoMod), "..", "..", "test")))
-    ```
+    For examples of scenario databases, look in the `test` subdirectory in the [NEMO package directory](@ref nemo_package_directory). The `.sqlite` files in this folder are scenario databases.
 
 ## Tables
 

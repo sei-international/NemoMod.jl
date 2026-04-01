@@ -9,7 +9,7 @@ Identifying the source(s) of infeasibility in a NEMO model (or any large optimiz
 
 ## Using `find_infeasibilities`
 
-Often, however, the source of infeasibility isn't clear. In this case, it can be helpful to use a tool that looks for causes of infeasibility in your model. NEMO provides such a tool in its [`find_infeasibilities`](@ref find_infeasbilities) function. Given an infeasible `JuMP` model created by calculating a NEMO scenario (with the [`calculatescenario`](@ref calculatescenario) function), `find_infeasibilities` returns an array of constraints that make the model infeasible (i.e., the model becomes feasible when these constraints are removed). You can use this information to determine how to modify the model's inputs to avoid infeasibility.
+Often, however, the source of infeasibility isn't clear. In this case, it can be helpful to use a tool that looks for causes of infeasibility in your model. NEMO provides such a tool in its [`find_infeasibilities`](@ref find_infeasibilities) function. Given an infeasible `JuMP` model created by calculating a NEMO scenario (with the [`calculatescenario`](@ref calculatescenario) function), `find_infeasibilities` returns an array of constraints that make the model infeasible (i.e., the model becomes feasible when these constraints are removed). You can use this information to determine how to modify the model's inputs to avoid infeasibility.
 
 If you're starting with a [NEMO scenario database](@ref scenario_db), you can apply `find_infeasibilities` as follows:
 
