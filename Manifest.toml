@@ -1,8 +1,8 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.12.4"
+julia_version = "1.12.5"
 manifest_format = "2.0"
-project_hash = "c9c3da336030c07a95d479884dbd648d311a3b2d"
+project_hash = "f62e2a58bfcb25412a49646e1fc1dfe77f450290"
 
 [[deps.ASL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -177,6 +177,35 @@ deps = ["Random"]
 uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
 version = "1.11.0"
 
+[[deps.GLPK]]
+deps = ["GLPK_jll", "MathOptInterface"]
+git-tree-sha1 = "1d706bd23e5d2d407bfd369499ee6f96afb0c3ad"
+uuid = "60bf3e95-4087-53dc-ae20-288a0d20c6a6"
+version = "1.2.1"
+
+[[deps.GLPK_jll]]
+deps = ["Artifacts", "GMP_jll", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "6aa6294ba949ccfc380463bf50ff988b46de5bc7"
+uuid = "e8aa6df9-e6ca-548a-97ff-1f85fc5b8b98"
+version = "5.0.1+1"
+
+[[deps.GMP_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "781609d7-10c4-51f6-84f2-b8444358ff6d"
+version = "6.3.0+2"
+
+[[deps.HiGHS]]
+deps = ["HiGHS_jll", "LinearAlgebra", "MathOptIIS", "MathOptInterface", "OpenBLAS32_jll", "PrecompileTools", "SparseArrays"]
+git-tree-sha1 = "2b592162e8b40a5cf6435c37d86a8e2cf25cd459"
+uuid = "87dc4568-4c63-4d18-b0c0-bb2238e4078b"
+version = "1.22.2"
+
+[[deps.HiGHS_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Zlib_jll", "libblastrampoline_jll"]
+git-tree-sha1 = "621d773f277b9eadac7e049eaa6418af65c7b9d7"
+uuid = "8fd58aa0-07eb-5a78-9b36-339c94fd15ea"
+version = "1.13.1+0"
+
 [[deps.InlineStrings]]
 git-tree-sha1 = "8f3d257792a522b4601c24a577954b0a8cd7334d"
 uuid = "842dd82b-1e85-43dc-bf29-5d0ee9dffc48"
@@ -325,6 +354,12 @@ version = "0.5.16"
 deps = ["Base64", "JuliaSyntaxHighlighting", "StyledStrings"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 version = "1.11.0"
+
+[[deps.MathOptIIS]]
+deps = ["MathOptInterface"]
+git-tree-sha1 = "12f262200198606174e28c59da634e9d9da839ed"
+uuid = "8c4f8055-bd93-4160-a86b-a0c04941dbff"
+version = "0.1.2"
 
 [[deps.MathOptInterface]]
 deps = ["BenchmarkTools", "CodecBzip2", "CodecZlib", "ForwardDiff", "JSON", "LinearAlgebra", "MutableArithmetics", "NaNMath", "OrderedCollections", "PrecompileTools", "Printf", "SparseArrays", "SpecialFunctions", "Test"]
