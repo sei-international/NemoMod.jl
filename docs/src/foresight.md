@@ -58,32 +58,32 @@ NemoMod.calculatescenario("my_scenario.sqlite"; jumpmodel=direct_model(Xpress.Op
     calcyears=[[2025],[2026],[2027],[2028],[2029],[2030],[2031],[2032],[2033],[2034],[2035],[2036],[2037],[2038],[2039],[2040],[2041],[2042],[2043],[2044],[2045],[2046],[2047],[2048],[2049],[2050]])
 ```
 
-You can also specify `calcyears` in a [NEMO configuration file](@ref configuration_file). In that case, you separate groups of years with commas and years within a group with vertical bars (|). The following block reproduces the above examples in configuration file syntax.
+You can also specify `calcyears` in a [NEMO configuration file](@ref configuration_file). In that case, the option is written as a TOML array of arrays of years. Each inner array defines a group of years, and the outer array orders the groups. If you provide more than one group of years, NEMO conducts a limited foresight optimization. As with the `calcyears` argument for `calculatescenario`, years in groups can be sparse, and groups must be specified in chronological order and must not overlap. The following block reproduces the above examples in configuration file syntax.
 
-```ini
+```toml
 [calculatescenarioargs]
-; Optimize all years with perfect foresight
-calcyears=2025|2026|2027|2028|2029|2030|2031|2032|2033|2034|2035|2036|2037|2038|2039|2040|2041|2042|2043|2044|2045|2046|2047|2048|2049|2050
-
-[calculatescenarioargs]
-; Optimize selected years with perfect foresight
-calcyears=2025|2030|2035|2040|2045|2050
+# Optimize all years with perfect foresight
+calcyears=[[2025,2026,2027,2028,2029,2030,2031,2032,2033,2034,2035,2036,2037,2038,2039,2040,2041,2042,2043,2044,2045,2046,2047,2048,2049,2050]]
 
 [calculatescenarioargs]
-; Limited foresight optimization in three parts:
-;   optimize 2025-2034 with perfect foresight,
-;   then optimize 2035-2044 with perfect foresight,
-;   then optimize 2045-2050 with perfect foresight
-calcyears=2025|2026|2027|2028|2029|2030|2031|2032|2033|2034,2035|2036|2037|2038|2039|2040|2041|2042|2043|2044,2045|2046|2047|2048|2049|2050
+# Optimize selected years with perfect foresight
+calcyears=[[2025,2030,2035,2040,2045,2050]]
 
 [calculatescenarioargs]
-; Limited foresight optimization in three parts (calculating selected years only):
-;   optimize 2025, 2030, and 2034 with perfect foresight;
-;   then optimize 2035, 2040, and 2044 with perfect foresight;
-;   then optimize 2045 and 2050 with perfect foresight
-calcyears=2025|2030|2034,2035|2040|2044,2045|2050
+# Limited foresight optimization in three parts:
+#   optimize 2025-2034 with perfect foresight,
+#   then optimize 2035-2044 with perfect foresight,
+#   then optimize 2045-2050 with perfect foresight
+calcyears=[[2025,2026,2027,2028,2029,2030,2031,2032,2033,2034],[2035,2036,2037,2038,2039,2040,2041,2042,2043,2044],[2045,2046,2047,2048,2049,2050]]
 
 [calculatescenarioargs]
-; Limited foresight optimization: optimize each year individually
-calcyears=2025,2026,2027,2028,2029,2030,2031,2032,2033,2034,2035,2036,2037,2038,2039,2040,2041,2042,2043,2044,2045,2046,2047,2048,2049,2050
+# Limited foresight optimization in three parts (calculating selected years only):
+#   optimize 2025, 2030, and 2034 with perfect foresight;
+#   then optimize 2035, 2040, and 2044 with perfect foresight;
+#   then optimize 2045 and 2050 with perfect foresight
+calcyears=[[2025,2030,2034],[2035,2040,2044],[2045,2050]]
+
+[calculatescenarioargs]
+# Limited foresight optimization: optimize each year individually
+calcyears=[[2025],[2026],[2027],[2028],[2029],[2030],[2031],[2032],[2033],[2034],[2035],[2036],[2037],[2038],[2039],[2040],[2041],[2042],[2043],[2044],[2045],[2046],[2047],[2048],[2049],[2050]]
 ```

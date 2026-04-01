@@ -50,3 +50,9 @@ setparamdefault
 ```@docs
 find_infeasibilities
 ```
+
+## convert\_ini\_to_toml
+
+```@docs
+convert_ini_to_toml
+```

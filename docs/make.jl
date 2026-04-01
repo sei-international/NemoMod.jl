@@ -7,7 +7,8 @@ using NemoMod
 Overload of Documenter.Writers.HTMLWriter.analytics_script() that provides
 compatibility with Google Analytics 4.
 """
-function Documenter.Writers.HTMLWriter.analytics_script(tracking_id::AbstractString)
+# Overload appears not to be necessary as of Documenter v1.16.1
+#= function Documenter.Writers.HTMLWriter.analytics_script(tracking_id::AbstractString)
     if isempty(tracking_id)
         return Documenter.Utilities.DOM.Tag(Symbol("#RAW#"))("")
     else
@@ -20,7 +21,7 @@ function Documenter.Writers.HTMLWriter.analytics_script(tracking_id::AbstractStr
           gtag('config', '$(tracking_id)');
         </script>""")
     end
-end  # Documenter.Writers.HTMLWriter.analytics_script(tracking_id::AbstractString)
+end  # Documenter.Writers.HTMLWriter.analytics_script(tracking_id::AbstractString) =#
 
 makedocs(
     sitename = "NEMO",

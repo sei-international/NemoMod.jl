@@ -11,7 +11,7 @@ Custom constraints scripts typically consist of a function that builds constrain
 
 * `csdbpath` (`String`): The path to the scenario's database.
 
-* `csquiet` (`Bool`): The `quiet` argument specified when initiating the scenario calculation (via [`calculatescenario`](@ref) or [`writescenariomodel`](@ref)).
+* `csquiet` (`Bool`): The `quiet` argument specified when initiating the scenario calculation (via [`calculatescenario`](@ref)).
 
 * `csrestrictyears` (`Bool`): Indicates whether the scenario calculation is for selected years as opposed to all years in the scenario database.
 
