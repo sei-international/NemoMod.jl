@@ -228,7 +228,7 @@ function _convert_osemosys_timeslicing!(srcdb::SQLite.DB, destdb::SQLite.DB,
 
     # --- TSGROUP1 from SEASON ---
     if !isempty(seasons)
-        for (idx, season) in enumerate(sort(seasons, by=s -> tryparse(Int, s) !== nothing ? parse(Int, s) : idx))
+        for (idx, season) in enumerate(sort(seasons, by=s -> (tryparse(Int, s) !== nothing ? 0 : 1, tryparse(Int, s) !== nothing ? parse(Int, s) : 0, s)))
             # Calculate multiplier from DaysInDayType
             multiplier = 1.0
 
@@ -259,7 +259,7 @@ function _convert_osemosys_timeslicing!(srcdb::SQLite.DB, destdb::SQLite.DB,
 
     # --- TSGROUP2 from DAYTYPE ---
     if !isempty(daytypes)
-        for (idx, daytype) in enumerate(sort(daytypes, by=d -> tryparse(Int, d) !== nothing ? parse(Int, d) : idx))
+        for (idx, daytype) in enumerate(sort(daytypes, by=d -> (tryparse(Int, d) !== nothing ? 0 : 1, tryparse(Int, d) !== nothing ? parse(Int, d) : 0, d)))
             # Estimate multiplier (days per week for this day type)
             if length(daytypes) == 2
                 # Common case: weekday/weekend

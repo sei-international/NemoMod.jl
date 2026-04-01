@@ -236,3 +236,7 @@ end  # @testset "Testing precalcresultspath logic"
         !compilation && @test !isfile(joinpath(dbfile_path, "param_default.sqlite"))
     end  # @testset "Set parameter default"
 end  # @testset "Other database operations"
+
+@testset "OSeMOSYS converter" begin
+    include(joinpath(@__DIR__, "osemosys_converter_tests.jl"))
+end
