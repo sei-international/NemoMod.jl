@@ -246,31 +246,16 @@ end
     !compilation && @test size(tg1, 1) == 2
     !compilation && @test tg1[1, :name] == "S"
     !compilation && @test tg1[2, :name] == "W"
-    # DaysInDayType: S has 182.5 days summed across all years per season-query -> 182.5 * 3 years / 7 ...
-    # Actually the query is SUM(VALUE) WHERE SEASON=S which sums across all years: 182.5*3=547.5 / 7 = 78.21
-    # Wait, let me re-read the code. It queries per season: SUM(VALUE) as total FROM DaysInDayType WHERE SEASON = ?
-    # With 3 years of 182.5 each: total = 547.5, multiplier = 547.5/7 = 78.214...
-    # Hmm, that seems high. Let me check if this is correct for the converter code.
-    # The code: "SELECT SUM(VALUE) as total FROM $(tname) WHERE SEASON = ?"
-    # Our DaysInDayType has 3 rows for S (one per year), each with VALUE=182.5
-    # SUM = 547.5, /7 = 78.214...
-    # This is what the converter produces, so let's test for it
-    !compilation && @test isapprox(tg1[1, :multiplier], 547.5 / 7.0; atol=0.01)
-    !compilation && @test isapprox(tg1[2, :multiplier], 547.5 / 7.0; atol=0.01)
+    # DaysInDayType: S has 182.5 days per year, averaged across years -> 182.5 / 7 = 26.07 weeks
+    !compilation && @test isapprox(tg1[1, :multiplier], 182.5 / 7.0; atol=0.01)
+    !compilation && @test isapprox(tg1[2, :multiplier], 182.5 / 7.0; atol=0.01)
 
     # TSGROUP2: 1 daytype with multiplier
-    # With only 1 daytype, the heuristic gives 7.0/1 = 7.0, but DaysInDayType refines it.
-    # DaysInDayType query for daytype "1": AVG(d.VALUE * 7.0 / st.season_total)
-    # For each row: season_total for S = 182.5*3=547.5 (sum per season across years), but wait...
-    # The inner query groups by SEASON: SUM(VALUE) for S = 547.5, for W = 547.5
-    # Then: d.VALUE * 7.0 / st.season_total for S rows: 182.5 * 7.0 / 547.5 = 2.333..., same for W rows
-    # AVG of all 6 rows (3 S + 3 W) = 2.333...
-    # Hmm that doesn't seem right either. Let me just test for the actual output.
+    # With 1 daytype accounting for all days: 182.5 * 7.0 / 182.5 = 7.0 days per week
     tg2 = DataFrame(SQLite.DBInterface.execute(destdb, "SELECT name, [order], multiplier FROM TSGROUP2 ORDER BY [order]"))
     !compilation && @test size(tg2, 1) == 1
     !compilation && @test tg2[1, :name] == "1"
-    # Just verify multiplier is a positive number
-    !compilation && @test tg2[1, :multiplier] > 0
+    !compilation && @test isapprox(tg2[1, :multiplier], 7.0; atol=0.01)
 
     # LTsGroup: 3 timeslices mapped correctly
     lts = DataFrame(SQLite.DBInterface.execute(destdb, "SELECT l, lorder, tg1, tg2 FROM LTsGroup ORDER BY l"))
@@ -346,18 +331,22 @@ end
         "SELECT r, t, l, y, val FROM AvailabilityFactor ORDER BY t, l"))
 
     # CapacityFactor gave 3 rows for TECH1 (SD, SN, WD at 2020)
+    # AvailabilityFactor also has TECH1/2020 but INSERT OR IGNORE should deduplicate
     tech1_rows = filter(r -> r.t == "TECH1", af)
-    !compilation && @test size(tech1_rows, 1) >= 3
+    !compilation && @test size(tech1_rows, 1) == 3  # exactly 3, not 6
 
-    # Check CapacityFactor values are present for TECH1
+    # Check CapacityFactor values are preserved (not overwritten by AvailabilityFactor)
     tech1_sd = filter(r -> r.t == "TECH1" && r.l == "SD" && r.y == "2020", af)
-    !compilation && @test any(isapprox.(tech1_sd.val, 0.9; atol=0.01))  # from CapacityFactor
+    !compilation && @test size(tech1_sd, 1) == 1
+    !compilation && @test isapprox(tech1_sd[1, :val], 0.9; atol=0.01)  # from CapacityFactor
 
     tech1_sn = filter(r -> r.t == "TECH1" && r.l == "SN" && r.y == "2020", af)
-    !compilation && @test any(isapprox.(tech1_sn.val, 0.3; atol=0.01))  # from CapacityFactor
+    !compilation && @test size(tech1_sn, 1) == 1
+    !compilation && @test isapprox(tech1_sn[1, :val], 0.3; atol=0.01)  # from CapacityFactor
 
     tech1_wd = filter(r -> r.t == "TECH1" && r.l == "WD" && r.y == "2020", af)
-    !compilation && @test any(isapprox.(tech1_wd.val, 0.7; atol=0.01))  # from CapacityFactor
+    !compilation && @test size(tech1_wd, 1) == 1
+    !compilation && @test isapprox(tech1_wd[1, :val], 0.7; atol=0.01)  # from CapacityFactor
 
     # TECH2: expanded from 3D AvailabilityFactor (0.85) across all timeslices
     tech2_rows = filter(r -> r.t == "TECH2", af)
@@ -509,6 +498,75 @@ end
 
     cc = DataFrame(SQLite.DBInterface.execute(db, "SELECT * FROM CapitalCost"))
     !compilation && @test size(cc, 1) == 0
+
+    finalize(db); db = nothing; GC.gc()
+    delete_file(dest_path, 20)
+    delete_file(src_path, 20)
+end
+
+@testset "TradeRoute with missing columns" begin
+    src_path = joinpath(dbfile_path, "test_osemosys_tr_src.sqlite")
+    dest_path = joinpath(dbfile_path, "test_osemosys_tr_dest.sqlite")
+
+    srcdb_temp = SQLite.DB(src_path)
+    SQLite.DBInterface.execute(srcdb_temp, "CREATE TABLE REGION (VALUE TEXT)")
+    SQLite.DBInterface.execute(srcdb_temp, "INSERT INTO REGION VALUES ('R1')")
+    SQLite.DBInterface.execute(srcdb_temp, "CREATE TABLE TECHNOLOGY (VALUE TEXT)")
+    SQLite.DBInterface.execute(srcdb_temp, "INSERT INTO TECHNOLOGY VALUES ('TECH1')")
+    SQLite.DBInterface.execute(srcdb_temp, "CREATE TABLE FUEL (VALUE TEXT)")
+    SQLite.DBInterface.execute(srcdb_temp, "INSERT INTO FUEL VALUES ('ELC')")
+    SQLite.DBInterface.execute(srcdb_temp, "CREATE TABLE EMISSION (VALUE TEXT)")
+    SQLite.DBInterface.execute(srcdb_temp, "CREATE TABLE MODE_OF_OPERATION (VALUE TEXT)")
+    SQLite.DBInterface.execute(srcdb_temp, "INSERT INTO MODE_OF_OPERATION VALUES ('1')")
+    SQLite.DBInterface.execute(srcdb_temp, "CREATE TABLE TIMESLICE (VALUE TEXT)")
+    SQLite.DBInterface.execute(srcdb_temp, "INSERT INTO TIMESLICE VALUES ('TS1')")
+    SQLite.DBInterface.execute(srcdb_temp, "CREATE TABLE YEAR (VALUE TEXT)")
+    SQLite.DBInterface.execute(srcdb_temp, "INSERT INTO YEAR VALUES ('2020')")
+    # TradeRoute with missing FUEL column — should skip gracefully
+    SQLite.DBInterface.execute(srcdb_temp, "CREATE TABLE TradeRoute (REGION TEXT, rr TEXT, YEAR TEXT, VALUE REAL)")
+    SQLite.DBInterface.execute(srcdb_temp, "INSERT INTO TradeRoute VALUES ('R1', 'R1', '2020', 1.0)")
+    DBInterface.close!(srcdb_temp)
+
+    db = NemoMod.convert_osemosys(src_path, dest_path; quiet=true)
+
+    tr = DataFrame(SQLite.DBInterface.execute(db, "SELECT * FROM TradeRoute"))
+    !compilation && @test size(tr, 1) == 0  # skipped due to missing column
+
+    finalize(db); db = nothing; GC.gc()
+    delete_file(dest_path, 20)
+    delete_file(src_path, 20)
+end
+
+@testset "Lowercase column names" begin
+    src_path = joinpath(dbfile_path, "test_osemosys_lcol_src.sqlite")
+    dest_path = joinpath(dbfile_path, "test_osemosys_lcol_dest.sqlite")
+
+    srcdb_temp = SQLite.DB(src_path)
+    SQLite.DBInterface.execute(srcdb_temp, "CREATE TABLE region (value TEXT)")
+    SQLite.DBInterface.execute(srcdb_temp, "INSERT INTO region VALUES ('R1')")
+    SQLite.DBInterface.execute(srcdb_temp, "CREATE TABLE technology (value TEXT)")
+    SQLite.DBInterface.execute(srcdb_temp, "INSERT INTO technology VALUES ('TECH1')")
+    SQLite.DBInterface.execute(srcdb_temp, "CREATE TABLE fuel (value TEXT)")
+    SQLite.DBInterface.execute(srcdb_temp, "INSERT INTO fuel VALUES ('ELC')")
+    SQLite.DBInterface.execute(srcdb_temp, "CREATE TABLE emission (value TEXT)")
+    SQLite.DBInterface.execute(srcdb_temp, "INSERT INTO emission VALUES ('CO2')")
+    SQLite.DBInterface.execute(srcdb_temp, "CREATE TABLE mode_of_operation (value TEXT)")
+    SQLite.DBInterface.execute(srcdb_temp, "INSERT INTO mode_of_operation VALUES ('1')")
+    SQLite.DBInterface.execute(srcdb_temp, "CREATE TABLE timeslice (value TEXT)")
+    SQLite.DBInterface.execute(srcdb_temp, "INSERT INTO timeslice VALUES ('TS1')")
+    SQLite.DBInterface.execute(srcdb_temp, "CREATE TABLE year (value TEXT)")
+    SQLite.DBInterface.execute(srcdb_temp, "INSERT INTO year VALUES ('2020')")
+    # Lowercase column names in parameter table
+    SQLite.DBInterface.execute(srcdb_temp, "CREATE TABLE capitalcost (region TEXT, technology TEXT, year TEXT, value REAL)")
+    SQLite.DBInterface.execute(srcdb_temp, "INSERT INTO capitalcost VALUES ('R1', 'TECH1', '2020', 500.0)")
+    DBInterface.close!(srcdb_temp)
+
+    db = NemoMod.convert_osemosys(src_path, dest_path; quiet=true)
+
+    cc = DataFrame(SQLite.DBInterface.execute(db, "SELECT r, t, y, val FROM CapitalCost"))
+    !compilation && @test size(cc, 1) == 1
+    !compilation && @test cc[1, :r] == "R1"
+    !compilation && @test isapprox(cc[1, :val], 500.0; atol=0.01)
 
     finalize(db); db = nothing; GC.gc()
     delete_file(dest_path, 20)

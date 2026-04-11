@@ -52,6 +52,10 @@ function convert_osemosys(osemosys_path::String, nemo_path::String;
         isempty(config_path) && error("config_path is required when osemosys_path is a CSV directory.")
         !isfile(config_path) && error("Config file not found: $(config_path)")
 
+        if isnothing(Sys.which("otoole"))
+            error("otoole is not installed or not on your PATH. Install with: pip install otoole")
+        end
+
         sqlite_path = tempname() * ".sqlite"
         temp_sqlite = true
 
@@ -83,6 +87,7 @@ function convert_osemosys(osemosys_path::String, nemo_path::String;
     logmsg("Opened OSeMOSYS database at $(sqlite_path).", quiet)
 
     # Create target NemoMod database (this creates full schema at version 11)
+    isfile(nemo_path) && logmsg("Warning: overwriting existing file at $(nemo_path).", quiet)
     local destdb::SQLite.DB = createnemodb(nemo_path; defaultvals=defaults)
     logmsg("Created NemoMod database at $(nemo_path).", quiet)
 
@@ -90,9 +95,21 @@ function convert_osemosys(osemosys_path::String, nemo_path::String;
     local src_tables::Vector{String} = [r[:name] for r in
         SQLite.DBInterface.execute(srcdb, "SELECT name FROM sqlite_master WHERE type='table'")]
 
+    # Validate that required dimension tables exist
+    required_tables = ["REGION", "TECHNOLOGY", "FUEL", "YEAR", "TIMESLICE", "MODE_OF_OPERATION"]
+    missing_tables = filter(t -> !_osemosys_table_exists(src_tables, t), required_tables)
+    if !isempty(missing_tables)
+        logmsg("Warning: source database is missing required OSeMOSYS tables: $(join(missing_tables, ", ")).", quiet)
+    end
+
     # BEGIN: Wrap all operations in try-catch for rollback on error.
     try
         SQLite.DBInterface.execute(destdb, "BEGIN")
+
+        # Create temporary unique indexes on parameter tables so INSERT OR IGNORE
+        # correctly deduplicates rows. NemoMod tables only have PRIMARY KEY(id) with
+        # auto-increment, so without these indexes INSERT OR IGNORE never ignores.
+        _dedup_indexes = _create_dedup_indexes!(destdb)
 
         # 1. Convert dimension tables (sets)
         _convert_osemosys_sets!(srcdb, destdb, src_tables, quiet)
@@ -108,16 +125,49 @@ function convert_osemosys(osemosys_path::String, nemo_path::String;
         _transform_osemosys_reserve_margin!(srcdb, destdb, src_tables, quiet)
         _transform_osemosys_re_targets!(srcdb, destdb, src_tables, quiet)
 
+        # Log any unrecognized source tables
+        known_tables = Set(lowercase.([
+            "emission", "fuel", "mode_of_operation", "region", "technology", "timeslice", "year", "storage",
+            "season", "daytype", "conversionls", "conversionld", "conversionlh", "daysindaytype",
+            "accumulatedannualdemand", "annualemissionlimit", "annualexogenousemission",
+            "capacityofonetechnologyunit", "capacitytoactivityunit", "capitalcost", "capitalcoststorage",
+            "depreciationmethod", "discountrate", "emissionactivityratio", "emissionspenalty",
+            "fixedcost", "inputactivityratio", "minstoragecharge", "modelperiodemissionlimit",
+            "modelperiodexogenousemission", "operationallife", "operationallifestorage",
+            "outputactivityratio", "retagtechnology", "residualcapacity", "residualstoragecapacity",
+            "specifiedannualdemand", "specifieddemandprofile", "storagelevelstart",
+            "storagemaxchargerate", "storagemaxdischargerate", "technologyfromstorage",
+            "technologytostorage", "totalannualmaxcapacity", "totalannualmaxcapacityinvestment",
+            "totalannualmincapacity", "totalannualmincapacityinvestment",
+            "totaltechnologyannualactivitylowerlimit", "totaltechnologyannualactivityupperlimit",
+            "totaltechnologymodelperiodactivitylowerlimit", "totaltechnologymodelperiodactivityupperlimit",
+            "traderoute", "variablecost", "yearsplit",
+            "capacityfactor", "availabilityfactor", "reservemargin", "reservemargintagfuel",
+            "reservemargintagtechnology", "reminproductiontarget", "retagfuel"
+        ]))
+        unrecognized = filter(t -> !(lowercase(t) in known_tables), src_tables)
+        if !isempty(unrecognized)
+            logmsg("Warning: the following source tables were not converted: $(join(unrecognized, ", ")).", quiet)
+        end
+
+        # Drop temporary dedup indexes before committing
+        for idx_name in _dedup_indexes
+            SQLite.DBInterface.execute(destdb, "DROP INDEX IF EXISTS $(idx_name)")
+        end
+
         SQLite.DBInterface.execute(destdb, "COMMIT")
         logmsg("Conversion complete.", quiet)
     catch
         SQLite.DBInterface.execute(destdb, "ROLLBACK")
+        DBInterface.close!(destdb)
+        rm(nemo_path; force=true)
         rethrow()
     finally
+        # Always close source database
+        DBInterface.close!(srcdb)
+
         # Clean up temporary SQLite file if we created one from CSV
         if temp_sqlite
-            # Close source database before deleting
-            DBInterface.close!(srcdb)
             rm(sqlite_path; force=true)
             logmsg("Cleaned up temporary SQLite file.", quiet)
         end
@@ -153,19 +203,16 @@ function _read_osemosys_set(srcdb::SQLite.DB, src_tables::Vector{String}, name::
     tname = _osemosys_table_name(src_tables, name)
     isnothing(tname) && return String[]
 
-    df::DataFrame = SQLite.DBInterface.execute(srcdb, "SELECT * FROM $(tname)") |> DataFrame
+    df::DataFrame = SQLite.DBInterface.execute(srcdb, "SELECT * FROM $(_quote_id(tname))") |> DataFrame
 
     if size(df, 1) == 0
         return String[]
     end
 
-    # OSeMOSYS sets typically have a VALUE column
-    if "VALUE" in names(df)
-        return string.(df[!, :VALUE])
-    elseif "value" in names(df)
-        return string.(df[!, :value])
-    elseif size(df, 2) == 1
-        return string.(df[!, 1])
+    # OSeMOSYS sets typically have a VALUE column (case-insensitive)
+    val_col = _resolve_column(String.(names(df)), "VALUE")
+    if !isnothing(val_col)
+        return string.(df[!, val_col])
     else
         return string.(df[!, 1])
     end
@@ -178,7 +225,88 @@ Reads a parameter table from the OSeMOSYS database. Returns a DataFrame with ori
 function _read_osemosys_param(srcdb::SQLite.DB, src_tables::Vector{String}, name::String)
     tname = _osemosys_table_name(src_tables, name)
     isnothing(tname) && return DataFrame()
-    return SQLite.DBInterface.execute(srcdb, "SELECT * FROM $(tname)") |> DataFrame
+    return SQLite.DBInterface.execute(srcdb, "SELECT * FROM $(_quote_id(tname))") |> DataFrame
+end
+
+"""Quotes a SQL identifier (table or column name) to prevent injection and handle special characters."""
+_quote_id(name::String) = "\"" * replace(name, "\"" => "\"\"") * "\""
+
+"""Resolves a column name case-insensitively from a list of actual column names.
+Returns the actual column name or `nothing` if not found."""
+function _resolve_column(actual_columns::Vector{String}, expected::String)
+    idx = findfirst(c -> lowercase(c) == lowercase(expected), actual_columns)
+    return isnothing(idx) ? nothing : actual_columns[idx]
+end
+
+"""Returns the actual column names for a table in the source database."""
+function _get_column_names(srcdb::SQLite.DB, table_name::String)
+    colinfo = SQLite.DBInterface.execute(srcdb,
+        "PRAGMA table_info($(_quote_id(table_name)))") |> DataFrame
+    return String.(colinfo[!, :name])
+end
+
+"""Creates temporary unique indexes on NemoMod parameter tables so that INSERT OR IGNORE
+correctly deduplicates rows. Returns a vector of index names that were created."""
+function _create_dedup_indexes!(destdb::SQLite.DB)
+    # Map of table name -> data columns (excluding auto-increment id and val)
+    table_keys = [
+        ("AccumulatedAnnualDemand", ["r", "f", "y"]),
+        ("AnnualEmissionLimit", ["r", "e", "y"]),
+        ("AnnualExogenousEmission", ["r", "e", "y"]),
+        ("AvailabilityFactor", ["r", "t", "l", "y"]),
+        ("CapacityOfOneTechnologyUnit", ["r", "t", "y"]),
+        ("CapacityToActivityUnit", ["r", "t"]),
+        ("CapitalCost", ["r", "t", "y"]),
+        ("CapitalCostStorage", ["r", "s", "y"]),
+        ("DepreciationMethod", ["r"]),
+        ("DiscountRate", ["r"]),
+        ("EmissionActivityRatio", ["r", "t", "e", "m", "y"]),
+        ("EmissionsPenalty", ["r", "e", "y"]),
+        ("FixedCost", ["r", "t", "y"]),
+        ("InputActivityRatio", ["r", "t", "f", "m", "y"]),
+        ("MinStorageCharge", ["r", "s", "y"]),
+        ("ModelPeriodEmissionLimit", ["r", "e"]),
+        ("ModelPeriodExogenousEmission", ["r", "e"]),
+        ("OperationalLife", ["r", "t"]),
+        ("OperationalLifeStorage", ["r", "s"]),
+        ("OutputActivityRatio", ["r", "t", "f", "m", "y"]),
+        ("REMinProductionTarget", ["r", "f", "y"]),
+        ("RETagTechnology", ["r", "t", "y"]),
+        ("ReserveMargin", ["r", "f", "y"]),
+        ("ReserveMarginTagTechnology", ["r", "t", "f", "y"]),
+        ("ResidualCapacity", ["r", "t", "y"]),
+        ("ResidualStorageCapacity", ["r", "s", "y"]),
+        ("SpecifiedAnnualDemand", ["r", "f", "y"]),
+        ("SpecifiedDemandProfile", ["r", "f", "l", "y"]),
+        ("StorageLevelStart", ["r", "s"]),
+        ("StorageMaxChargeRate", ["r", "s"]),
+        ("StorageMaxDischargeRate", ["r", "s"]),
+        ("TechnologyFromStorage", ["r", "t", "s", "m"]),
+        ("TechnologyToStorage", ["r", "t", "s", "m"]),
+        ("TotalAnnualMaxCapacity", ["r", "t", "y"]),
+        ("TotalAnnualMaxCapacityInvestment", ["r", "t", "y"]),
+        ("TotalAnnualMinCapacity", ["r", "t", "y"]),
+        ("TotalAnnualMinCapacityInvestment", ["r", "t", "y"]),
+        ("TotalTechnologyAnnualActivityLowerLimit", ["r", "t", "y"]),
+        ("TotalTechnologyAnnualActivityUpperLimit", ["r", "t", "y"]),
+        ("TotalTechnologyModelPeriodActivityLowerLimit", ["r", "t"]),
+        ("TotalTechnologyModelPeriodActivityUpperLimit", ["r", "t"]),
+        ("TradeRoute", ["r", "rr", "f", "y"]),
+        ("VariableCost", ["r", "t", "m", "y"]),
+        ("YearSplit", ["l", "y"]),
+    ]
+
+    index_names = String[]
+
+    for (table, cols) in table_keys
+        idx_name = "_tmp_dedup_$(table)"
+        col_list = join(cols, ", ")
+        SQLite.DBInterface.execute(destdb,
+            "CREATE UNIQUE INDEX IF NOT EXISTS $(idx_name) ON $(table) ($(col_list))")
+        push!(index_names, idx_name)
+    end
+
+    return index_names
 end
 
 # BEGIN: Set conversion.
@@ -234,12 +362,23 @@ function _convert_osemosys_timeslicing!(srcdb::SQLite.DB, destdb::SQLite.DB,
 
             if has_daysindaytype
                 tname = _osemosys_table_name(src_tables, "DaysInDayType")
-                df = SQLite.DBInterface.execute(srcdb,
-                    "SELECT SUM(VALUE) as total FROM $(tname) WHERE SEASON = ?", [season]) |> DataFrame
+                did_cols = _get_column_names(srcdb, tname)
+                did_season = _resolve_column(did_cols, "SEASON")
+                did_year = _resolve_column(did_cols, "YEAR")
+                did_value = _resolve_column(did_cols, "VALUE")
+                qt = _quote_id(tname)
 
-                if size(df, 1) > 0 && !ismissing(df[1, :total])
-                    # Days in season / 7 = number of weeks (repetitions)
-                    multiplier = df[1, :total] / 7.0
+                if !isnothing(did_season) && !isnothing(did_year) && !isnothing(did_value)
+                    df = SQLite.DBInterface.execute(srcdb,
+                        "SELECT AVG(yearly_total) as total FROM (
+                            SELECT $(_quote_id(did_year)), SUM($(_quote_id(did_value))) as yearly_total FROM $(qt)
+                            WHERE $(_quote_id(did_season)) = ? GROUP BY $(_quote_id(did_year))
+                        )", [season]) |> DataFrame
+
+                    if size(df, 1) > 0 && !ismissing(df[1, :total])
+                        # Days in season / 7 = number of weeks (repetitions)
+                        multiplier = df[1, :total] / 7.0
+                    end
                 end
             end
 
@@ -260,29 +399,35 @@ function _convert_osemosys_timeslicing!(srcdb::SQLite.DB, destdb::SQLite.DB,
     # --- TSGROUP2 from DAYTYPE ---
     if !isempty(daytypes)
         for (idx, daytype) in enumerate(sort(daytypes, by=d -> (tryparse(Int, d) !== nothing ? 0 : 1, tryparse(Int, d) !== nothing ? parse(Int, d) : 0, d)))
-            # Estimate multiplier (days per week for this day type)
-            if length(daytypes) == 2
-                # Common case: weekday/weekend
-                multiplier = idx == 1 ? 5.0 : 2.0
-            else
-                multiplier = 7.0 / length(daytypes)
-            end
+            # Default: equal distribution across day types
+            multiplier = 7.0 / length(daytypes)
 
-            # Try to calculate from DaysInDayType for better accuracy
+            # Calculate from DaysInDayType for accuracy
             if has_daysindaytype
                 tname_did = _osemosys_table_name(src_tables, "DaysInDayType")
-                df = SQLite.DBInterface.execute(srcdb,
-                    """SELECT AVG(d.VALUE * 7.0 / st.season_total) as days_per_week
-                       FROM $(tname_did) d
-                       INNER JOIN (
-                           SELECT SEASON, SUM(VALUE) as season_total
-                           FROM $(tname_did)
-                           GROUP BY SEASON
-                       ) st ON d.SEASON = st.SEASON
-                       WHERE d.DAYTYPE = ?""", [daytype]) |> DataFrame
+                did_cols = _get_column_names(srcdb, tname_did)
+                did_season = _resolve_column(did_cols, "SEASON")
+                did_daytype = _resolve_column(did_cols, "DAYTYPE")
+                did_year = _resolve_column(did_cols, "YEAR")
+                did_value = _resolve_column(did_cols, "VALUE")
+                qtname = _quote_id(tname_did)
 
-                if size(df, 1) > 0 && !ismissing(df[1, :days_per_week])
-                    multiplier = df[1, :days_per_week]
+                if !isnothing(did_season) && !isnothing(did_daytype) && !isnothing(did_year) && !isnothing(did_value)
+                    qs = _quote_id(did_season); qy = _quote_id(did_year)
+                    qv = _quote_id(did_value); qdt = _quote_id(did_daytype)
+                    df = SQLite.DBInterface.execute(srcdb,
+                        """SELECT AVG(d.$(qv) * 7.0 / st.season_total) as days_per_week
+                           FROM $(qtname) d
+                           INNER JOIN (
+                               SELECT $(qs), $(qy), SUM($(qv)) as season_total
+                               FROM $(qtname)
+                               GROUP BY $(qs), $(qy)
+                           ) st ON d.$(qs) = st.$(qs) AND d.$(qy) = st.$(qy)
+                           WHERE d.$(qdt) = ?""", [daytype]) |> DataFrame
+
+                    if size(df, 1) > 0 && !ismissing(df[1, :days_per_week])
+                        multiplier = df[1, :days_per_week]
+                    end
                 end
             end
 
@@ -308,11 +453,18 @@ function _convert_osemosys_timeslicing!(srcdb::SQLite.DB, destdb::SQLite.DB,
         tg1 = "1"
         if has_conversionls
             tname = _osemosys_table_name(src_tables, "Conversionls")
-            df = SQLite.DBInterface.execute(srcdb,
-                "SELECT SEASON FROM $(tname) WHERE TIMESLICE = ? AND VALUE = 1", [ts]) |> DataFrame
+            cols = _get_column_names(srcdb, tname)
+            season_col = _resolve_column(cols, "SEASON")
+            ts_col = _resolve_column(cols, "TIMESLICE")
+            val_col = _resolve_column(cols, "VALUE")
 
-            if size(df, 1) > 0
-                tg1 = string(df[1, :SEASON])
+            if !isnothing(season_col) && !isnothing(ts_col) && !isnothing(val_col)
+                df = SQLite.DBInterface.execute(srcdb,
+                    "SELECT $(_quote_id(season_col)) FROM $(_quote_id(tname)) WHERE $(_quote_id(ts_col)) = ? AND $(_quote_id(val_col)) = 1", [ts]) |> DataFrame
+
+                if size(df, 1) > 0
+                    tg1 = string(df[1, 1])
+                end
             end
         end
 
@@ -320,11 +472,18 @@ function _convert_osemosys_timeslicing!(srcdb::SQLite.DB, destdb::SQLite.DB,
         tg2 = "1"
         if has_conversionld
             tname = _osemosys_table_name(src_tables, "Conversionld")
-            df = SQLite.DBInterface.execute(srcdb,
-                "SELECT DAYTYPE FROM $(tname) WHERE TIMESLICE = ? AND VALUE = 1", [ts]) |> DataFrame
+            cols = _get_column_names(srcdb, tname)
+            dt_col = _resolve_column(cols, "DAYTYPE")
+            ts_col = _resolve_column(cols, "TIMESLICE")
+            val_col = _resolve_column(cols, "VALUE")
 
-            if size(df, 1) > 0
-                tg2 = string(df[1, :DAYTYPE])
+            if !isnothing(dt_col) && !isnothing(ts_col) && !isnothing(val_col)
+                df = SQLite.DBInterface.execute(srcdb,
+                    "SELECT $(_quote_id(dt_col)) FROM $(_quote_id(tname)) WHERE $(_quote_id(ts_col)) = ? AND $(_quote_id(val_col)) = 1", [ts]) |> DataFrame
+
+                if size(df, 1) > 0
+                    tg2 = string(df[1, 1])
+                end
             end
         end
 
@@ -332,12 +491,19 @@ function _convert_osemosys_timeslicing!(srcdb::SQLite.DB, destdb::SQLite.DB,
         lorder = 1
         if has_conversionlh
             tname = _osemosys_table_name(src_tables, "Conversionlh")
-            df = SQLite.DBInterface.execute(srcdb,
-                "SELECT DAILYTIMEBRACKET FROM $(tname) WHERE TIMESLICE = ? AND VALUE = 1", [ts]) |> DataFrame
+            cols = _get_column_names(srcdb, tname)
+            dtb_col = _resolve_column(cols, "DAILYTIMEBRACKET")
+            ts_col = _resolve_column(cols, "TIMESLICE")
+            val_col = _resolve_column(cols, "VALUE")
 
-            if size(df, 1) > 0
-                parsed = tryparse(Int, string(df[1, :DAILYTIMEBRACKET]))
-                !isnothing(parsed) && (lorder = parsed)
+            if !isnothing(dtb_col) && !isnothing(ts_col) && !isnothing(val_col)
+                df = SQLite.DBInterface.execute(srcdb,
+                    "SELECT $(_quote_id(dtb_col)) FROM $(_quote_id(tname)) WHERE $(_quote_id(ts_col)) = ? AND $(_quote_id(val_col)) = 1", [ts]) |> DataFrame
+
+                if size(df, 1) > 0
+                    parsed = tryparse(Int, string(df[1, 1]))
+                    !isnothing(parsed) && (lorder = parsed)
+                end
             end
         end
 
@@ -441,13 +607,23 @@ function _copy_osemosys_compatible_params!(srcdb::SQLite.DB, destdb::SQLite.DB,
         actual_name = _osemosys_table_name(src_tables, src_table)
         isnothing(actual_name) && continue
 
-        src_cols = [m[1] for m in col_mapping]
+        # Resolve actual column names (case-insensitive)
+        actual_cols = _get_column_names(srcdb, actual_name)
+        expected_src_cols = [m[1] for m in col_mapping]
         dest_cols = [m[2] for m in col_mapping]
+
+        resolved_cols = [_resolve_column(actual_cols, c) for c in expected_src_cols]
+        if any(isnothing, resolved_cols)
+            missing_cols = expected_src_cols[isnothing.(resolved_cols)]
+            logmsg("Warning: $(actual_name) missing columns $(join(missing_cols, ", ")), skipping.", quiet)
+            continue
+        end
 
         local df::DataFrame
         try
+            select_cols = join([_quote_id(c) for c in resolved_cols], ", ")
             df = SQLite.DBInterface.execute(srcdb,
-                "SELECT $(join(src_cols, ", ")) FROM $(actual_name)") |> DataFrame
+                "SELECT $(select_cols) FROM $(_quote_id(actual_name))") |> DataFrame
         catch e
             logmsg("Warning: could not read $(actual_name): $(e)", quiet)
             continue
@@ -458,9 +634,11 @@ function _copy_osemosys_compatible_params!(srcdb::SQLite.DB, destdb::SQLite.DB,
         placeholders = join(fill("?", length(dest_cols)), ", ")
         insert_sql = "INSERT OR IGNORE INTO $(dest_table) ($(join(dest_cols, ", "))) VALUES ($(placeholders))"
 
+        stmt = SQLite.Stmt(destdb, insert_sql)
         for row in eachrow(df)
-            SQLite.DBInterface.execute(destdb, insert_sql, [row[Symbol(c)] for c in src_cols])
+            DBInterface.execute(stmt, [row[Symbol(c)] for c in resolved_cols])
         end
+        DBInterface.close!(stmt)
 
         logmsg("Copied $(size(df, 1)) rows from $(actual_name) to $(dest_table).", quiet)
     end
@@ -476,10 +654,7 @@ function _copy_osemosys_traderoute!(srcdb::SQLite.DB, destdb::SQLite.DB,
     isnothing(actual_name) && return
 
     # Introspect column names to handle varying conventions
-    local colinfo::DataFrame = SQLite.DBInterface.execute(srcdb,
-        "PRAGMA table_info('$(actual_name)')") |> DataFrame
-
-    colnames = colinfo[!, :name]
+    colnames = _get_column_names(srcdb, actual_name)
 
     # Find the two region columns and fuel/year/value columns
     region_cols = filter(c -> uppercase(c) == "REGION", colnames)
@@ -488,23 +663,29 @@ function _copy_osemosys_traderoute!(srcdb::SQLite.DB, destdb::SQLite.DB,
     if length(region_cols) >= 2
         r_col = region_cols[1]
         rr_col = region_cols[2]
-    elseif any(c -> uppercase(c) == "REGION", colnames) && any(c -> lowercase(c) == "rr", colnames)
-        r_col = colnames[findfirst(c -> uppercase(c) == "REGION", colnames)]
-        rr_col = colnames[findfirst(c -> lowercase(c) == "rr", colnames)]
-    elseif any(c -> uppercase(c) == "REGION", colnames) && any(c -> uppercase(c) == "REGION2", colnames)
-        r_col = colnames[findfirst(c -> uppercase(c) == "REGION", colnames)]
-        rr_col = colnames[findfirst(c -> uppercase(c) == "REGION2", colnames)]
+    elseif !isnothing(_resolve_column(colnames, "REGION")) && !isnothing(_resolve_column(colnames, "rr"))
+        r_col = _resolve_column(colnames, "REGION")
+        rr_col = _resolve_column(colnames, "rr")
+    elseif !isnothing(_resolve_column(colnames, "REGION")) && !isnothing(_resolve_column(colnames, "REGION2"))
+        r_col = _resolve_column(colnames, "REGION")
+        rr_col = _resolve_column(colnames, "REGION2")
     else
         logmsg("Warning: could not determine TradeRoute region columns, skipping.", quiet)
         return
     end
 
-    f_col = colnames[findfirst(c -> uppercase(c) == "FUEL", colnames)]
-    y_col = colnames[findfirst(c -> uppercase(c) == "YEAR", colnames)]
-    v_col = colnames[findfirst(c -> uppercase(c) == "VALUE", colnames)]
+    f_col = _resolve_column(colnames, "FUEL")
+    y_col = _resolve_column(colnames, "YEAR")
+    v_col = _resolve_column(colnames, "VALUE")
 
+    if isnothing(f_col) || isnothing(y_col) || isnothing(v_col)
+        logmsg("Warning: TradeRoute missing required columns (FUEL, YEAR, or VALUE), skipping.", quiet)
+        return
+    end
+
+    qtn = _quote_id(actual_name)
     df = SQLite.DBInterface.execute(srcdb,
-        "SELECT $(r_col), $(rr_col), $(f_col), $(y_col), $(v_col) FROM $(actual_name)") |> DataFrame
+        "SELECT $(_quote_id(r_col)), $(_quote_id(rr_col)), $(_quote_id(f_col)), $(_quote_id(y_col)), $(_quote_id(v_col)) FROM $(qtn)") |> DataFrame
 
     for row in eachrow(df)
         SQLite.DBInterface.execute(destdb,
@@ -524,13 +705,18 @@ function _transform_osemosys_availability_factor!(srcdb::SQLite.DB, destdb::SQLi
     cf_name = _osemosys_table_name(src_tables, "CapacityFactor")
 
     if !isnothing(cf_name)
+        cols = _get_column_names(srcdb, cf_name)
+        r = _resolve_column(cols, "REGION"); t = _resolve_column(cols, "TECHNOLOGY")
+        l = _resolve_column(cols, "TIMESLICE"); y = _resolve_column(cols, "YEAR")
+        v = _resolve_column(cols, "VALUE")
+
         df = SQLite.DBInterface.execute(srcdb,
-            "SELECT REGION, TECHNOLOGY, TIMESLICE, YEAR, VALUE FROM $(cf_name)") |> DataFrame
+            "SELECT $(_quote_id(r)), $(_quote_id(t)), $(_quote_id(l)), $(_quote_id(y)), $(_quote_id(v)) FROM $(_quote_id(cf_name))") |> DataFrame
 
         for row in eachrow(df)
             SQLite.DBInterface.execute(destdb,
                 "INSERT OR IGNORE INTO AvailabilityFactor (r, t, l, y, val) VALUES (?, ?, ?, ?, ?)",
-                [row[:REGION], row[:TECHNOLOGY], row[:TIMESLICE], row[:YEAR], row[:VALUE]])
+                [row[1], row[2], row[3], row[4], row[5]])
         end
 
         logmsg("Transformed $(size(df, 1)) rows from CapacityFactor to AvailabilityFactor.", quiet)
@@ -541,18 +727,22 @@ function _transform_osemosys_availability_factor!(srcdb::SQLite.DB, destdb::SQLi
     af_name = _osemosys_table_name(src_tables, "AvailabilityFactor")
 
     if !isnothing(af_name)
+        cols = _get_column_names(srcdb, af_name)
+        r = _resolve_column(cols, "REGION"); t = _resolve_column(cols, "TECHNOLOGY")
+        y = _resolve_column(cols, "YEAR"); v = _resolve_column(cols, "VALUE")
+
         df = SQLite.DBInterface.execute(srcdb,
-            "SELECT REGION, TECHNOLOGY, YEAR, VALUE FROM $(af_name)") |> DataFrame
+            "SELECT $(_quote_id(r)), $(_quote_id(t)), $(_quote_id(y)), $(_quote_id(v)) FROM $(_quote_id(af_name))") |> DataFrame
 
         if size(df, 1) > 0
             timeslices = _read_osemosys_set(srcdb, src_tables, "TIMESLICE")
             count = 0
 
             for row in eachrow(df)
-                for l in timeslices
+                for ls in timeslices
                     SQLite.DBInterface.execute(destdb,
                         "INSERT OR IGNORE INTO AvailabilityFactor (r, t, l, y, val) VALUES (?, ?, ?, ?, ?)",
-                        [row[:REGION], row[:TECHNOLOGY], l, row[:YEAR], row[:VALUE]])
+                        [row[1], row[2], ls, row[3], row[4]])
                     count += 1
                 end
             end
@@ -576,38 +766,52 @@ function _transform_osemosys_reserve_margin!(srcdb::SQLite.DB, destdb::SQLite.DB
 
     rmtf_name = _osemosys_table_name(src_tables, "ReserveMarginTagFuel")
     if !isnothing(rmtf_name)
+        cols = _get_column_names(srcdb, rmtf_name)
+        rc = _resolve_column(cols, "REGION"); fc = _resolve_column(cols, "FUEL")
+        yc = _resolve_column(cols, "YEAR"); vc = _resolve_column(cols, "VALUE")
+
         df = SQLite.DBInterface.execute(srcdb,
-            "SELECT REGION, FUEL, YEAR FROM $(rmtf_name) WHERE VALUE = 1") |> DataFrame
+            "SELECT $(_quote_id(rc)), $(_quote_id(fc)), $(_quote_id(yc)) FROM $(_quote_id(rmtf_name)) WHERE $(_quote_id(vc)) = 1") |> DataFrame
 
         for row in eachrow(df)
-            key = (string(row[:REGION]), string(row[:YEAR]))
+            key = (string(row[1]), string(row[3]))
             if !haskey(reserve_fuels, key)
                 reserve_fuels[key] = String[]
             end
-            push!(reserve_fuels[key], string(row[:FUEL]))
+            push!(reserve_fuels[key], string(row[2]))
         end
     end
 
     # Fallback fuel if no ReserveMarginTagFuel data
     all_fuels = _read_osemosys_set(srcdb, src_tables, "FUEL")
-    default_fuel = isempty(all_fuels) ? "ELC" : first(all_fuels)
+
+    if isempty(all_fuels) && isempty(reserve_fuels)
+        logmsg("Warning: no fuels defined and no ReserveMarginTagFuel data; skipping reserve margin transformation.", quiet)
+        return
+    end
+
+    default_fuel = isempty(all_fuels) ? String[] : [first(all_fuels)]
 
     # Transform ReserveMargin
     rm_name = _osemosys_table_name(src_tables, "ReserveMargin")
 
     if !isnothing(rm_name)
+        cols = _get_column_names(srcdb, rm_name)
+        rc = _resolve_column(cols, "REGION"); yc = _resolve_column(cols, "YEAR")
+        vc = _resolve_column(cols, "VALUE")
+
         df = SQLite.DBInterface.execute(srcdb,
-            "SELECT REGION, YEAR, VALUE FROM $(rm_name)") |> DataFrame
+            "SELECT $(_quote_id(rc)), $(_quote_id(yc)), $(_quote_id(vc)) FROM $(_quote_id(rm_name))") |> DataFrame
 
         count = 0
         for row in eachrow(df)
-            key = (string(row[:REGION]), string(row[:YEAR]))
-            fuels = get(reserve_fuels, key, [default_fuel])
+            key = (string(row[1]), string(row[2]))
+            fuels = get(reserve_fuels, key, default_fuel)
 
             for f in fuels
                 SQLite.DBInterface.execute(destdb,
                     "INSERT OR IGNORE INTO ReserveMargin (r, f, y, val) VALUES (?, ?, ?, ?)",
-                    [row[:REGION], f, row[:YEAR], row[:VALUE]])
+                    [row[1], f, row[2], row[3]])
                 count += 1
             end
         end
@@ -619,18 +823,22 @@ function _transform_osemosys_reserve_margin!(srcdb::SQLite.DB, destdb::SQLite.DB
     rmtt_name = _osemosys_table_name(src_tables, "ReserveMarginTagTechnology")
 
     if !isnothing(rmtt_name)
+        cols = _get_column_names(srcdb, rmtt_name)
+        rc = _resolve_column(cols, "REGION"); tc = _resolve_column(cols, "TECHNOLOGY")
+        yc = _resolve_column(cols, "YEAR"); vc = _resolve_column(cols, "VALUE")
+
         df = SQLite.DBInterface.execute(srcdb,
-            "SELECT REGION, TECHNOLOGY, YEAR, VALUE FROM $(rmtt_name) WHERE VALUE > 0") |> DataFrame
+            "SELECT $(_quote_id(rc)), $(_quote_id(tc)), $(_quote_id(yc)), $(_quote_id(vc)) FROM $(_quote_id(rmtt_name)) WHERE $(_quote_id(vc)) > 0") |> DataFrame
 
         count = 0
         for row in eachrow(df)
-            key = (string(row[:REGION]), string(row[:YEAR]))
-            fuels = get(reserve_fuels, key, [default_fuel])
+            key = (string(row[1]), string(row[3]))
+            fuels = get(reserve_fuels, key, default_fuel)
 
             for f in fuels
                 SQLite.DBInterface.execute(destdb,
                     "INSERT OR IGNORE INTO ReserveMarginTagTechnology (r, t, f, y, val) VALUES (?, ?, ?, ?, ?)",
-                    [row[:REGION], row[:TECHNOLOGY], f, row[:YEAR], row[:VALUE]])
+                    [row[1], row[2], f, row[3], row[4]])
                 count += 1
             end
         end
@@ -652,38 +860,52 @@ function _transform_osemosys_re_targets!(srcdb::SQLite.DB, destdb::SQLite.DB,
 
     rtf_name = _osemosys_table_name(src_tables, "RETagFuel")
     if !isnothing(rtf_name)
+        cols = _get_column_names(srcdb, rtf_name)
+        rc = _resolve_column(cols, "REGION"); fc = _resolve_column(cols, "FUEL")
+        yc = _resolve_column(cols, "YEAR"); vc = _resolve_column(cols, "VALUE")
+
         df = SQLite.DBInterface.execute(srcdb,
-            "SELECT REGION, FUEL, YEAR FROM $(rtf_name) WHERE VALUE = 1") |> DataFrame
+            "SELECT $(_quote_id(rc)), $(_quote_id(fc)), $(_quote_id(yc)) FROM $(_quote_id(rtf_name)) WHERE $(_quote_id(vc)) = 1") |> DataFrame
 
         for row in eachrow(df)
-            key = (string(row[:REGION]), string(row[:YEAR]))
+            key = (string(row[1]), string(row[3]))
             if !haskey(re_fuels, key)
                 re_fuels[key] = String[]
             end
-            push!(re_fuels[key], string(row[:FUEL]))
+            push!(re_fuels[key], string(row[2]))
         end
     end
 
     # Fallback
     all_fuels = _read_osemosys_set(srcdb, src_tables, "FUEL")
-    default_fuel = isempty(all_fuels) ? "ELC" : first(all_fuels)
+
+    if isempty(all_fuels) && isempty(re_fuels)
+        logmsg("Warning: no fuels defined and no RETagFuel data; skipping RE target transformation.", quiet)
+        return
+    end
+
+    default_fuel = isempty(all_fuels) ? String[] : [first(all_fuels)]
 
     # Transform REMinProductionTarget
     rmp_name = _osemosys_table_name(src_tables, "REMinProductionTarget")
 
     if !isnothing(rmp_name)
+        cols = _get_column_names(srcdb, rmp_name)
+        rc = _resolve_column(cols, "REGION"); yc = _resolve_column(cols, "YEAR")
+        vc = _resolve_column(cols, "VALUE")
+
         df = SQLite.DBInterface.execute(srcdb,
-            "SELECT REGION, YEAR, VALUE FROM $(rmp_name)") |> DataFrame
+            "SELECT $(_quote_id(rc)), $(_quote_id(yc)), $(_quote_id(vc)) FROM $(_quote_id(rmp_name))") |> DataFrame
 
         count = 0
         for row in eachrow(df)
-            key = (string(row[:REGION]), string(row[:YEAR]))
-            fuels = get(re_fuels, key, [default_fuel])
+            key = (string(row[1]), string(row[2]))
+            fuels = get(re_fuels, key, default_fuel)
 
             for f in fuels
                 SQLite.DBInterface.execute(destdb,
                     "INSERT OR IGNORE INTO REMinProductionTarget (r, f, y, val) VALUES (?, ?, ?, ?)",
-                    [row[:REGION], f, row[:YEAR], row[:VALUE]])
+                    [row[1], f, row[2], row[3]])
                 count += 1
             end
         end
