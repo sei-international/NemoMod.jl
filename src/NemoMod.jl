@@ -19,7 +19,7 @@ export calculatescenario, createnemodb, dropdefaultviews, dropresulttables, logm
 =#
 
 # BEGIN: Access other modules and code files.
-using JuMP, SQLite, DataFrames, Dates, MathOptInterface, TOML
+using JuMP, SQLite, DataFrames, Dates, MathOptInterface, TOML, CSV, YAML
 using Cbc  # Open-source solvers
 
 include("config_functions.jl")  # Functions for using NEMO configuration files

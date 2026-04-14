@@ -606,62 +606,24 @@ end
 end
 
 # ---- Roundtrip: storage_test_otoole CSV fixture -> NemoMod ----
-# Loads the otoole CSV fixture under test/storage_test_otoole/ into a temporary
-# OSeMOSYS-format SQLite database, runs convert_osemosys on it, and asserts the
-# resulting NemoMod database is equivalent to the original storage_test.sqlite
-# (modulo the documented adaptations in test/storage_test_otoole/README.md).
-#
-# The CSVs are loaded directly with Julia rather than via `otoole convert csv
-# sqlite` so the test runs in any environment, including ones where otoole is
-# missing or where the installed otoole version no longer ships an SQLite
-# backend (otoole >= 1.0). When the CSV path of convert_osemosys is exercised
-# at runtime by users, it shells out to otoole and produces an equivalent
-# SQLite — so loading the CSVs here directly faithfully simulates that path.
-
-"""Loads the otoole CSV fixture at `csv_dir` into an OSeMOSYS-format SQLite
-database at `sqlite_path`. Each `<NAME>.csv` becomes a table `<NAME>` whose
-columns are taken from the CSV header. All columns are declared TEXT so set
-identifiers (e.g. integer `MODE_OF_OPERATION` values) survive intact; the
-converter relies on SQLite's type affinity to coerce numeric `VALUE` strings
-when copying into NemoMod's REAL parameter columns. Existing files at
-`sqlite_path` are overwritten. Skips files named `config.yaml` and `README*`."""
-function _load_otoole_csv_fixture(csv_dir::String, sqlite_path::String)
-    isfile(sqlite_path) && rm(sqlite_path; force=true)
-    db = SQLite.DB(sqlite_path)
-
-    for fname in sort(readdir(csv_dir))
-        endswith(fname, ".csv") || continue
-        tname = splitext(fname)[1]
-        rows_iter = eachline(joinpath(csv_dir, fname))
-        header_line, body = Iterators.peel(rows_iter)
-        cols = String.(split(header_line, ","))
-        col_decls = join(["\"$(c)\" TEXT" for c in cols], ", ")
-        SQLite.DBInterface.execute(db, "CREATE TABLE \"$(tname)\" ($(col_decls))")
-
-        placeholders = join(fill("?", length(cols)), ", ")
-        insert_sql = "INSERT INTO \"$(tname)\" VALUES ($(placeholders))"
-        stmt = SQLite.Stmt(db, insert_sql)
-        for line in body
-            isempty(line) && continue
-            fields = String.(split(line, ","))
-            DBInterface.execute(stmt, fields)
-        end
-    end
-
-    DBInterface.close!(db)
-    return sqlite_path
-end
+# End-to-end exercise of the production CSV-input path of convert_osemosys
+# against the storage_test_otoole/ fixture (35 otoole-format CSVs + config.yaml).
+# The fixture is a faithful otoole representation of storage_test.sqlite (with
+# the documented adaptations in test/storage_test_otoole/README.md), so the
+# resulting NemoMod database should match the original modulo those documented
+# differences. This testset covers _parse_otoole_config and
+# _load_csv_directory_to_sqlite! as well as the entire downstream
+# OSeMOSYS->NemoMod converter pipeline.
 
 @testset "storage_test_otoole CSV roundtrip" begin
     otoole_dir = joinpath(dbfile_path, "storage_test_otoole")
     orig_path = joinpath(dbfile_path, "storage_test.sqlite")
-    src_path = joinpath(dbfile_path, "storage_test_otoole_src.sqlite")
+    config_path = joinpath(otoole_dir, "config.yaml")
     dest_path = joinpath(dbfile_path, "storage_test_otoole_dest.sqlite")
-    delete_file(src_path, 5)
     delete_file(dest_path, 5)
 
-    _load_otoole_csv_fixture(otoole_dir, src_path)
-    destdb_rt = NemoMod.convert_osemosys(src_path, dest_path; quiet=true)
+    destdb_rt = NemoMod.convert_osemosys(otoole_dir, dest_path;
+        config_path=config_path, quiet=true)
     origdb_rt = SQLite.DB(orig_path)
 
     # ---- Sets ----
@@ -802,7 +764,136 @@ end
     finalize(origdb_rt); origdb_rt = nothing
     GC.gc()
     delete_file(dest_path, 20)
-    delete_file(src_path, 20)
     !compilation && @test !isfile(dest_path)
-    !compilation && @test !isfile(src_path)
+end
+
+# ---- Edge cases for the native CSV directory loader ----
+# Direct unit tests of NemoMod._load_csv_directory_to_sqlite! against synthetic
+# CSV directories. These cover behaviors the storage_test_otoole roundtrip does
+# not exercise because that fixture is rectangular and well-formed.
+@testset "CSV directory loader edge cases" begin
+
+    @testset "Quoted fields with commas" begin
+        td = mktempdir()
+        try
+            write(joinpath(td, "config.yaml"), """
+            FOO:
+              dtype: str
+              type: set
+            """)
+            write(joinpath(td, "FOO.csv"), "VALUE\n\"foo,bar\"\nbaz\n")
+
+            cfg = NemoMod._parse_otoole_config(joinpath(td, "config.yaml"))
+            sqlite_path = joinpath(td, "out.sqlite")
+            NemoMod._load_csv_directory_to_sqlite!(td, sqlite_path, cfg)
+
+            db = SQLite.DB(sqlite_path)
+            df = DataFrame(SQLite.DBInterface.execute(db, "SELECT VALUE FROM FOO"))
+            DBInterface.close!(db)
+
+            !compilation && @test size(df, 1) == 2
+            !compilation && @test sort(string.(df.VALUE)) == ["baz", "foo,bar"]
+        finally
+            rm(td; recursive=true, force=true)
+        end
+    end
+
+    @testset "Ragged rows" begin
+        td = mktempdir()
+        try
+            write(joinpath(td, "config.yaml"), """
+            REGION:
+              dtype: str
+              type: set
+            TECHNOLOGY:
+              dtype: str
+              type: set
+            YEAR:
+              dtype: int
+              type: set
+            CapitalCost:
+              dtype: float
+              type: param
+              indices: [REGION, TECHNOLOGY, YEAR]
+              default: 0
+            """)
+            # Header has 4 columns, second body row only has 3 → ragged
+            write(joinpath(td, "CapitalCost.csv"),
+                "REGION,TECHNOLOGY,YEAR,VALUE\n1,gas,2020,1000.0\n1,solar,2021\n")
+
+            cfg = NemoMod._parse_otoole_config(joinpath(td, "config.yaml"))
+            sqlite_path = joinpath(td, "out.sqlite")
+
+            !compilation && @test_throws ErrorException NemoMod._load_csv_directory_to_sqlite!(td, sqlite_path, cfg)
+            !compilation && @test !isfile(sqlite_path)  # cleanup on error
+        finally
+            rm(td; recursive=true, force=true)
+        end
+    end
+
+    @testset "Empty and header-only files" begin
+        td = mktempdir()
+        try
+            write(joinpath(td, "config.yaml"), """
+            REGION:
+              dtype: str
+              type: set
+            FOO:
+              dtype: str
+              type: set
+            """)
+            write(joinpath(td, "REGION.csv"), "")          # empty (0 bytes)
+            write(joinpath(td, "FOO.csv"), "VALUE\n")       # header-only
+
+            cfg = NemoMod._parse_otoole_config(joinpath(td, "config.yaml"))
+            sqlite_path = joinpath(td, "out.sqlite")
+            NemoMod._load_csv_directory_to_sqlite!(td, sqlite_path, cfg)
+
+            db = SQLite.DB(sqlite_path)
+            tables = sort(DataFrame(SQLite.DBInterface.execute(db,
+                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")).name)
+            n_region = DataFrame(SQLite.DBInterface.execute(db, "SELECT COUNT(*) AS n FROM REGION"))[1, :n]
+            n_foo = DataFrame(SQLite.DBInterface.execute(db, "SELECT COUNT(*) AS n FROM FOO"))[1, :n]
+            DBInterface.close!(db)
+
+            # Both tables should exist (created from config) but be empty
+            !compilation && @test "REGION" in tables
+            !compilation && @test "FOO" in tables
+            !compilation && @test n_region == 0
+            !compilation && @test n_foo == 0
+        finally
+            rm(td; recursive=true, force=true)
+        end
+    end
+
+    @testset "Subdirectories and non-CSV files ignored" begin
+        td = mktempdir()
+        try
+            write(joinpath(td, "config.yaml"), """
+            FOO:
+              dtype: str
+              type: set
+            """)
+            write(joinpath(td, "FOO.csv"), "VALUE\nalpha\n")
+            write(joinpath(td, "README.md"), "notes")
+            write(joinpath(td, "notes.txt"), "more notes")
+            mkdir(joinpath(td, "subdir"))
+            write(joinpath(td, "subdir", "ignored.csv"), "VALUE\n999\n")
+
+            cfg = NemoMod._parse_otoole_config(joinpath(td, "config.yaml"))
+            sqlite_path = joinpath(td, "out.sqlite")
+            NemoMod._load_csv_directory_to_sqlite!(td, sqlite_path, cfg)
+
+            db = SQLite.DB(sqlite_path)
+            tables = sort(DataFrame(SQLite.DBInterface.execute(db,
+                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")).name)
+            foo_vals = DataFrame(SQLite.DBInterface.execute(db, "SELECT VALUE FROM FOO")).VALUE
+            DBInterface.close!(db)
+
+            !compilation && @test tables == ["FOO"]
+            !compilation && @test string.(foo_vals) == ["alpha"]
+        finally
+            rm(td; recursive=true, force=true)
+        end
+    end
 end
