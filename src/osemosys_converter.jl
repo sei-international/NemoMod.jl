@@ -18,9 +18,10 @@ Converts an OSeMOSYS scenario database to NemoMod format.
 `osemosys_path` can be either:
 - A path to an SQLite database with OSeMOSYS-format tables (as produced by
   [otoole](https://github.com/OSeMOSYS/otoole)), or
-- A path to a directory of otoole CSV files. In this case, `config_path` must also be provided,
-  and otoole must be installed and available on the system PATH. The CSV directory will be converted
-  to a temporary SQLite database using `otoole convert csv sqlite` before proceeding.
+- A path to a directory of otoole-format CSV files (one CSV per OSeMOSYS table, with columns
+  named after set members and `VALUE`). In this case, `config_path` must also be provided.
+  The CSV directory is loaded into a temporary SQLite database in-process using `CSV.jl` and
+  `YAML.jl` — otoole does not need to be installed.
 
 The OSeMOSYS tables should use uppercase column names matching set names (e.g., `REGION`,
 `TECHNOLOGY`, `YEAR`) and `VALUE` for data columns.
@@ -36,7 +37,8 @@ network tables) are left empty.
   NemoMod `DefaultParams` table, keyed by parameter table name.
 - `quiet::Bool = false`: Suppresses status messages when `true`.
 - `config_path::String = ""`: Path to otoole config.yaml file. Required when `osemosys_path` is
-  a CSV directory.
+  a CSV directory. Used to determine each CSV's schema (column types and indices) and to
+  validate that every CSV file in the directory matches a declared table.
 """
 function convert_osemosys(osemosys_path::String, nemo_path::String;
     defaults::Dict{String, Float64} = Dict{String, Float64}(),
@@ -48,29 +50,25 @@ function convert_osemosys(osemosys_path::String, nemo_path::String;
     local temp_sqlite::Bool = false
 
     if isdir(osemosys_path)
-        # CSV directory: convert to temporary SQLite using otoole
+        # CSV directory: parse config.yaml and load into a temporary SQLite via the native Julia loader.
         isempty(config_path) && error("config_path is required when osemosys_path is a CSV directory.")
         !isfile(config_path) && error("Config file not found: $(config_path)")
 
-        if isnothing(Sys.which("otoole"))
-            error("otoole is not installed or not on your PATH. Install with: pip install otoole")
-        end
+        logmsg("Parsing otoole config at $(config_path)...", quiet)
+        local config = _parse_otoole_config(config_path)
 
         sqlite_path = tempname() * ".sqlite"
         temp_sqlite = true
 
-        logmsg("Converting CSV directory to temporary SQLite using otoole...", quiet)
-
-        local cmd = `otoole convert csv sqlite $(osemosys_path) $(sqlite_path) $(config_path)`
-
+        logmsg("Loading CSV directory into temporary SQLite...", quiet)
         try
-            run(cmd)
+            _load_csv_directory_to_sqlite!(osemosys_path, sqlite_path, config)
         catch e
             rm(sqlite_path; force=true)
-            error("Failed to run otoole. Ensure otoole is installed (pip install otoole) and on your PATH. Error: $(e)")
+            error("Failed to load CSV directory at $(osemosys_path): $(e)")
         end
 
-        logmsg("otoole conversion complete: $(sqlite_path)", quiet)
+        logmsg("Loaded CSV directory: $(sqlite_path)", quiet)
     elseif !isfile(osemosys_path)
         error("OSeMOSYS path not found: $(osemosys_path)")
     end
@@ -243,6 +241,214 @@ function _get_column_names(srcdb::SQLite.DB, table_name::String)
     colinfo = SQLite.DBInterface.execute(srcdb,
         "PRAGMA table_info($(_quote_id(table_name)))") |> DataFrame
     return String.(colinfo[!, :name])
+end
+
+# ---- otoole CSV directory loader ----
+# Replaces a former shellout to `otoole convert csv sqlite ...`, which never
+# actually existed in any installable otoole release. The native loader uses
+# CSV.jl for RFC 4180 parsing and YAML.jl for parsing the otoole config file.
+
+"""otoole config.yaml dtype -> SQLite column type."""
+const _OTOOLE_DTYPE_TO_SQLITE = Dict(
+    "str"   => "TEXT",
+    "int"   => "INTEGER",
+    "float" => "REAL",
+)
+
+"""
+    _parse_otoole_config(config_path::String)
+
+Parses an otoole config.yaml and returns a normalized table-name → schema map.
+Each value is a `NamedTuple` with:
+- `type`    — `:set` or `:param`
+- `dtype`   — the otoole dtype string for the VALUE column ("str", "int", "float")
+- `indices` — index column names in declaration order; empty for sets
+
+Throws an `ErrorException` if the YAML is unparseable, if any entry is missing
+`type` or `dtype`, if `type` is not "set"/"param", or if `dtype` is not str/int/float.
+"""
+function _parse_otoole_config(config_path::String)
+    raw = try
+        YAML.load_file(config_path)
+    catch e
+        error("Failed to parse otoole config at $(config_path): $(e)")
+    end
+
+    isa(raw, AbstractDict) ||
+        error("otoole config $(config_path) must be a YAML mapping at the top level")
+
+    out = Dict{String, NamedTuple{(:type, :dtype, :indices), Tuple{Symbol, String, Vector{String}}}}()
+
+    for (tname, entry) in raw
+        isa(entry, AbstractDict) ||
+            error("otoole config $(config_path): entry $(tname) is not a mapping")
+
+        haskey(entry, "type")  || error("otoole config $(config_path): entry $(tname) is missing 'type'")
+        haskey(entry, "dtype") || error("otoole config $(config_path): entry $(tname) is missing 'dtype'")
+
+        ttype_str = String(entry["type"])
+        ttype = if ttype_str == "set"
+            :set
+        elseif ttype_str == "param"
+            :param
+        else
+            error("otoole config $(config_path): entry $(tname) has invalid type '$(ttype_str)' (expected 'set' or 'param')")
+        end
+
+        dtype = String(entry["dtype"])
+        haskey(_OTOOLE_DTYPE_TO_SQLITE, dtype) ||
+            error("otoole config $(config_path): entry $(tname) has invalid dtype '$(dtype)' (expected str/int/float)")
+
+        indices = if ttype == :param
+            haskey(entry, "indices") || error("otoole config $(config_path): param $(tname) is missing 'indices'")
+            String[String(i) for i in entry["indices"]]
+        else
+            String[]
+        end
+
+        out[String(tname)] = (type=ttype, dtype=dtype, indices=indices)
+    end
+
+    return out
+end
+
+"""Returns the SQLite type for a column in a given table, given the parsed config.
+For the VALUE column, uses the table's own dtype. For index columns (which name a set),
+follows the reference back to the set's dtype. Errors if the index references an
+undefined or non-set entry."""
+function _column_sqlite_type(config::AbstractDict, table_name::String, col_name::String)
+    if uppercase(col_name) == "VALUE"
+        return _OTOOLE_DTYPE_TO_SQLITE[config[table_name].dtype]
+    else
+        # col_name should match a set entry in config (case-insensitive)
+        keys_vec = collect(keys(config))
+        match_idx = findfirst(k -> lowercase(k) == lowercase(col_name) && config[k].type == :set, keys_vec)
+        isnothing(match_idx) &&
+            error("otoole config: index column '$(col_name)' of $(table_name) does not name a defined set")
+        return _OTOOLE_DTYPE_TO_SQLITE[config[keys_vec[match_idx]].dtype]
+    end
+end
+
+"""
+    _load_csv_directory_to_sqlite!(csv_dir::String, sqlite_path::String, config::AbstractDict)
+
+Loads an otoole-format CSV directory into a fresh OSeMOSYS-shaped SQLite database
+at `sqlite_path`, using `config` (as produced by [`_parse_otoole_config`](@ref))
+to determine each table's schema and to validate the CSV files.
+
+Behavior:
+- A SQLite table is created for **every** entry in `config`, with column types
+  derived from the otoole dtypes (sets get a single `VALUE` column; params get
+  `[indices..., VALUE]`).
+- For each table, if a `<NAME>.csv` exists in `csv_dir`, its rows are loaded.
+  CSV.jl handles parsing — quoted fields, embedded commas, escaping, and BOMs
+  all work transparently.
+- Tables with no CSV file (or with an empty CSV file) are left empty (with a
+  warning for the empty-file case).
+- CSVs whose header columns disagree with the config (case-insensitive set
+  comparison) → ERROR with a list of missing/extra columns.
+- CSVs with ragged rows (any field is `missing` after parsing) → ERROR with the
+  row number and column name.
+- CSV files in `csv_dir` whose name does not match a config entry → ERROR
+  (catches stale files and typos early).
+- Files that are not `*.csv` (case-insensitive), and subdirectories, are silently
+  ignored — so `config.yaml`, `README.md`, etc. cohabit cleanly.
+- Any existing file at `sqlite_path` is overwritten.
+
+CSV column order in the file may differ from the config's `indices` declaration —
+columns are matched by name (case-insensitive) and reordered to match the SQLite
+table's declared column order.
+
+On error, the partially-written SQLite file is removed before the exception
+propagates, so a parse failure does not leave a stale file behind.
+"""
+function _load_csv_directory_to_sqlite!(csv_dir::String, sqlite_path::String, config::AbstractDict)
+    isfile(sqlite_path) && rm(sqlite_path; force=true)
+    db = SQLite.DB(sqlite_path)
+
+    try
+        # Discover top-level CSV files (case-insensitive .csv extension, files only)
+        csv_files = Dict{String, String}()  # tablename → full path
+        for entry in readdir(csv_dir)
+            full = joinpath(csv_dir, entry)
+            isfile(full) || continue
+            lowercase(splitext(entry)[2]) == ".csv" || continue
+            tname = splitext(entry)[1]
+            csv_files[tname] = full
+        end
+
+        # Detect orphaned CSVs (in dir but not in config) — strict
+        orphans = setdiff(keys(csv_files), keys(config))
+        if !isempty(orphans)
+            error("CSV files in $(csv_dir) have no entries in config.yaml: $(join(sort(collect(orphans)), ", "))")
+        end
+
+        # Iterate config entries — create tables and load any matching CSV
+        for tname in sort(collect(keys(config)))
+            entry = config[tname]
+            cols = entry.type == :set ? ["VALUE"] : String[entry.indices..., "VALUE"]
+            col_decls = join(["\"$(c)\" $(_column_sqlite_type(config, tname, c))" for c in cols], ", ")
+            SQLite.DBInterface.execute(db, "CREATE TABLE \"$(tname)\" ($(col_decls))")
+
+            haskey(csv_files, tname) || continue  # no CSV → leave table empty
+            full = csv_files[tname]
+
+            if filesize(full) == 0
+                @warn "otoole CSV is empty, table $(tname) will have no rows" path=full
+                continue
+            end
+
+            df = try
+                CSV.read(full, DataFrame; types=String, stringtype=String, silencewarnings=true)
+            catch e
+                error("Failed to parse CSV $(full): $(e)")
+            end
+
+            # Header-only file → 0 rows, nothing to insert (table already created)
+            size(df, 1) == 0 && continue
+
+            # Validate header (case-insensitive, set equality with declared cols)
+            actual_names = String.(names(df))
+            actual_lower = Set(lowercase.(actual_names))
+            expected_lower = Set(lowercase.(cols))
+            if actual_lower != expected_lower
+                missing_cols = sort(collect(setdiff(expected_lower, actual_lower)))
+                extra_cols = sort(collect(setdiff(actual_lower, expected_lower)))
+                error("CSV $(full) header does not match config for table $(tname). " *
+                      "Expected columns: $(cols). Got: $(actual_names). " *
+                      "Missing: $(missing_cols). Unexpected: $(extra_cols).")
+            end
+
+            # Reorder columns to match `cols` (case-insensitive)
+            col_indices = Int[
+                findfirst(c -> lowercase(c) == lowercase(want), actual_names) for want in cols
+            ]
+
+            # Detect ragged rows (any missing in any column → strict error)
+            for (i, row) in enumerate(eachrow(df))
+                for col_idx in col_indices
+                    if ismissing(row[col_idx])
+                        error("CSV $(full) row $(i+1) (data row $(i)) has a missing field in column \"$(actual_names[col_idx])\"")
+                    end
+                end
+            end
+
+            placeholders = join(fill("?", length(cols)), ", ")
+            insert_sql = "INSERT INTO \"$(tname)\" VALUES ($(placeholders))"
+            stmt = SQLite.Stmt(db, insert_sql)
+            for row in eachrow(df)
+                fields = String[String(row[i]) for i in col_indices]
+                DBInterface.execute(stmt, fields)
+            end
+        end
+    catch
+        DBInterface.close!(db)
+        rm(sqlite_path; force=true)
+        rethrow()
+    end
+
+    DBInterface.close!(db)
+    return sqlite_path
 end
 
 """Creates temporary unique indexes on NemoMod parameter tables so that INSERT OR IGNORE
