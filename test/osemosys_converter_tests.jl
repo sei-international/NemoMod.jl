@@ -604,3 +604,205 @@ end
     delete_file(joinpath(dbfile_path, "test_err_dest.sqlite"), 5)
     delete_file(joinpath(dbfile_path, "test_err_dest2.sqlite"), 5)
 end
+
+# ---- Roundtrip: storage_test_otoole CSV fixture -> NemoMod ----
+# Loads the otoole CSV fixture under test/storage_test_otoole/ into a temporary
+# OSeMOSYS-format SQLite database, runs convert_osemosys on it, and asserts the
+# resulting NemoMod database is equivalent to the original storage_test.sqlite
+# (modulo the documented adaptations in test/storage_test_otoole/README.md).
+#
+# The CSVs are loaded directly with Julia rather than via `otoole convert csv
+# sqlite` so the test runs in any environment, including ones where otoole is
+# missing or where the installed otoole version no longer ships an SQLite
+# backend (otoole >= 1.0). When the CSV path of convert_osemosys is exercised
+# at runtime by users, it shells out to otoole and produces an equivalent
+# SQLite — so loading the CSVs here directly faithfully simulates that path.
+
+"""Loads the otoole CSV fixture at `csv_dir` into an OSeMOSYS-format SQLite
+database at `sqlite_path`. Each `<NAME>.csv` becomes a table `<NAME>` whose
+columns are taken from the CSV header. All columns are declared TEXT so set
+identifiers (e.g. integer `MODE_OF_OPERATION` values) survive intact; the
+converter relies on SQLite's type affinity to coerce numeric `VALUE` strings
+when copying into NemoMod's REAL parameter columns. Existing files at
+`sqlite_path` are overwritten. Skips files named `config.yaml` and `README*`."""
+function _load_otoole_csv_fixture(csv_dir::String, sqlite_path::String)
+    isfile(sqlite_path) && rm(sqlite_path; force=true)
+    db = SQLite.DB(sqlite_path)
+
+    for fname in sort(readdir(csv_dir))
+        endswith(fname, ".csv") || continue
+        tname = splitext(fname)[1]
+        rows_iter = eachline(joinpath(csv_dir, fname))
+        header_line, body = Iterators.peel(rows_iter)
+        cols = String.(split(header_line, ","))
+        col_decls = join(["\"$(c)\" TEXT" for c in cols], ", ")
+        SQLite.DBInterface.execute(db, "CREATE TABLE \"$(tname)\" ($(col_decls))")
+
+        placeholders = join(fill("?", length(cols)), ", ")
+        insert_sql = "INSERT INTO \"$(tname)\" VALUES ($(placeholders))"
+        stmt = SQLite.Stmt(db, insert_sql)
+        for line in body
+            isempty(line) && continue
+            fields = String.(split(line, ","))
+            DBInterface.execute(stmt, fields)
+        end
+    end
+
+    DBInterface.close!(db)
+    return sqlite_path
+end
+
+@testset "storage_test_otoole CSV roundtrip" begin
+    otoole_dir = joinpath(dbfile_path, "storage_test_otoole")
+    orig_path = joinpath(dbfile_path, "storage_test.sqlite")
+    src_path = joinpath(dbfile_path, "storage_test_otoole_src.sqlite")
+    dest_path = joinpath(dbfile_path, "storage_test_otoole_dest.sqlite")
+    delete_file(src_path, 5)
+    delete_file(dest_path, 5)
+
+    _load_otoole_csv_fixture(otoole_dir, src_path)
+    destdb_rt = NemoMod.convert_osemosys(src_path, dest_path; quiet=true)
+    origdb_rt = SQLite.DB(orig_path)
+
+    # ---- Sets ----
+    for (s, expected) in [
+        ("REGION", ["1"]),
+        ("YEAR", string.(2020:2029)),
+        ("FUEL", ["electricity", "gas", "solar"]),
+        ("TECHNOLOGY", ["gas", "gassupply", "solar", "solarsupply", "storage1"]),
+        ("MODE_OF_OPERATION", ["1", "2"]),  # integerized vs original 'generate'/'store'
+    ]
+        vals = sort(DataFrame(SQLite.DBInterface.execute(destdb_rt, "SELECT val FROM $(s)")).val)
+        !compilation && @test vals == expected
+    end
+
+    # STORAGE: name and netzero* flags. netzeroyear is hardcoded to 1 by the
+    # converter even though the original DB has 0; the other flags match.
+    storage_df_rt = DataFrame(SQLite.DBInterface.execute(destdb_rt,
+        "SELECT val, netzeroyear, netzerotg1, netzerotg2 FROM STORAGE"))
+    !compilation && @test size(storage_df_rt, 1) == 1
+    !compilation && @test storage_df_rt[1, :val] == "storage1"
+    !compilation && @test storage_df_rt[1, :netzeroyear] == 1
+    !compilation && @test storage_df_rt[1, :netzerotg1] == 0
+    !compilation && @test storage_df_rt[1, :netzerotg2] == 0
+
+    # ---- Time slicing: TSGROUP1 / TSGROUP2 ----
+    # Only the (name, multiplier) pairs are compared; the converter
+    # reorders alphabetically and uses generic descriptions.
+    tg1_rt = DataFrame(SQLite.DBInterface.execute(destdb_rt,
+        "SELECT name, multiplier FROM TSGROUP1 ORDER BY name"))
+    !compilation && @test size(tg1_rt, 1) == 2
+    !compilation && @test sort(tg1_rt.name) == ["summer", "winter"]
+    for row in eachrow(tg1_rt)
+        !compilation && @test isapprox(row.multiplier, 26.0714; atol=0.01)
+    end
+
+    tg2_rt = DataFrame(SQLite.DBInterface.execute(destdb_rt,
+        "SELECT name, multiplier FROM TSGROUP2 ORDER BY name"))
+    !compilation && @test size(tg2_rt, 1) == 2
+    !compilation && @test sort(tg2_rt.name) == ["weekday", "weekend"]
+    wd = filter(r -> r.name == "weekday", tg2_rt)
+    we = filter(r -> r.name == "weekend", tg2_rt)
+    !compilation && @test isapprox(wd[1, :multiplier], 5.0; atol=0.01)
+    !compilation && @test isapprox(we[1, :multiplier], 2.0; atol=0.01)
+
+    # LTsGroup: every NemoMod row should reappear identically.
+    lts_rt = DataFrame(SQLite.DBInterface.execute(destdb_rt,
+        "SELECT l, lorder, tg1, tg2 FROM LTsGroup ORDER BY l"))
+    lts_orig = DataFrame(SQLite.DBInterface.execute(origdb_rt,
+        "SELECT l, lorder, tg1, tg2 FROM LTsGroup ORDER BY l"))
+    !compilation && @test size(lts_rt, 1) == size(lts_orig, 1) == 96
+    !compilation && @test lts_rt == lts_orig
+
+    # ---- Direct-copy parameters: row counts and key values ----
+    # Helper: row count of a destination table.
+    ncount(tbl) = DataFrame(SQLite.DBInterface.execute(destdb_rt,
+        "SELECT COUNT(*) AS n FROM $(tbl)"))[1, :n]
+
+    for (tbl, expected_n) in [
+        ("CapitalCost", 20),
+        ("CapitalCostStorage", 10),
+        ("OperationalLife", 5),
+        ("OperationalLifeStorage", 1),
+        ("InputActivityRatio", 30),
+        ("OutputActivityRatio", 50),
+        ("VariableCost", 30),
+        ("SpecifiedAnnualDemand", 10),
+        ("SpecifiedDemandProfile", 960),
+        ("ResidualStorageCapacity", 10),
+        ("StorageLevelStart", 1),
+        ("TechnologyToStorage", 1),
+        ("TechnologyFromStorage", 1),
+        ("AvailabilityFactor", 960),  # repopulated from CapacityFactor.csv
+        ("YearSplit", 960),
+    ]
+        !compilation && @test ncount(tbl) == expected_n
+    end
+
+    # StorageFullLoadHours is dropped on export and should be empty.
+    !compilation && @test ncount("StorageFullLoadHours") == 0
+
+    # Spot-check specific values (mode strings are integerized).
+    cc_gas = DataFrame(SQLite.DBInterface.execute(destdb_rt,
+        "SELECT val FROM CapitalCost WHERE r='1' AND t='gas' AND y='2020'"))
+    !compilation && @test isapprox(cc_gas[1, :val], 1000.0; atol=0.01)
+
+    cc_solar = DataFrame(SQLite.DBInterface.execute(destdb_rt,
+        "SELECT val FROM CapitalCost WHERE r='1' AND t='solar' AND y='2025'"))
+    !compilation && @test isapprox(cc_solar[1, :val], 2000.0; atol=0.01)
+
+    iar_storage = DataFrame(SQLite.DBInterface.execute(destdb_rt,
+        "SELECT m, val FROM InputActivityRatio WHERE r='1' AND t='storage1' AND f='electricity' AND y='2020'"))
+    !compilation && @test size(iar_storage, 1) == 1
+    !compilation && @test iar_storage[1, :m] == "2"  # 'store' -> 2
+    !compilation && @test isapprox(iar_storage[1, :val], 1.25; atol=0.001)
+
+    oar_gas = DataFrame(SQLite.DBInterface.execute(destdb_rt,
+        "SELECT m, val FROM OutputActivityRatio WHERE r='1' AND t='gas' AND f='electricity' AND y='2020'"))
+    !compilation && @test oar_gas[1, :m] == "1"  # 'generate' -> 1
+    !compilation && @test isapprox(oar_gas[1, :val], 1.0; atol=0.01)
+
+    tts = DataFrame(SQLite.DBInterface.execute(destdb_rt,
+        "SELECT m, val FROM TechnologyToStorage"))
+    !compilation && @test tts[1, :m] == "2"
+    !compilation && @test isapprox(tts[1, :val], 1.0; atol=0.01)
+
+    tfs = DataFrame(SQLite.DBInterface.execute(destdb_rt,
+        "SELECT m, val FROM TechnologyFromStorage"))
+    !compilation && @test tfs[1, :m] == "1"
+    !compilation && @test isapprox(tfs[1, :val], 1.0; atol=0.01)
+
+    sad = DataFrame(SQLite.DBInterface.execute(destdb_rt,
+        "SELECT val FROM SpecifiedAnnualDemand WHERE r='1' AND f='electricity' AND y='2020'"))
+    !compilation && @test isapprox(sad[1, :val], 31.536; atol=0.001)
+
+    # AvailabilityFactor: repopulated only for solar (gas/storage1 etc. fall back to default 1.0)
+    af_solar = DataFrame(SQLite.DBInterface.execute(destdb_rt,
+        "SELECT COUNT(*) AS n FROM AvailabilityFactor WHERE t='solar'"))
+    !compilation && @test af_solar[1, :n] == 960
+
+    # ---- ReserveMargin: NemoMod 3D form is rebuilt from 2D + ReserveMarginTagFuel ----
+    rm_rt = DataFrame(SQLite.DBInterface.execute(destdb_rt,
+        "SELECT r, f, y, val FROM ReserveMargin ORDER BY y"))
+    !compilation && @test size(rm_rt, 1) == 10
+    !compilation && @test all(rm_rt.f .== "electricity")
+    !compilation && @test all(isapprox.(rm_rt.val, 1.25; atol=0.01))
+
+    rmtt_rt = DataFrame(SQLite.DBInterface.execute(destdb_rt,
+        "SELECT t, f, val FROM ReserveMarginTagTechnology WHERE y='2020' ORDER BY t"))
+    !compilation && @test size(rmtt_rt, 1) == 3
+    !compilation && @test all(rmtt_rt.f .== "electricity")
+    rmtt_vals = Dict(rmtt_rt.t .=> rmtt_rt.val)
+    !compilation && @test isapprox(rmtt_vals["gas"], 1.0; atol=0.01)
+    !compilation && @test isapprox(rmtt_vals["solar"], 0.5; atol=0.01)
+    !compilation && @test isapprox(rmtt_vals["storage1"], 0.5; atol=0.01)
+
+    # Clean up
+    finalize(destdb_rt); destdb_rt = nothing
+    finalize(origdb_rt); origdb_rt = nothing
+    GC.gc()
+    delete_file(dest_path, 20)
+    delete_file(src_path, 20)
+    !compilation && @test !isfile(dest_path)
+    !compilation && @test !isfile(src_path)
+end
