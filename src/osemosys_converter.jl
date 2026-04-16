@@ -84,6 +84,7 @@ function convert_osemosys(osemosys_path::String, nemo_path::String;
 
     logmsg("Opened OSeMOSYS database at $(sqlite_path).", quiet)
 
+    #TODO: move this after the check for missing tables
     # Create target NemoMod database (this creates full schema at version 11)
     isfile(nemo_path) && logmsg("Warning: overwriting existing file at $(nemo_path).", quiet)
     local destdb::SQLite.DB = createnemodb(nemo_path; defaultvals=defaults)
@@ -98,6 +99,7 @@ function convert_osemosys(osemosys_path::String, nemo_path::String;
     missing_tables = filter(t -> !_osemosys_table_exists(src_tables, t), required_tables)
     if !isempty(missing_tables)
         logmsg("Warning: source database is missing required OSeMOSYS tables: $(join(missing_tables, ", ")).", quiet)
+        #TODO: return an errorException 
     end
 
     # BEGIN: Wrap all operations in try-catch for rollback on error.
