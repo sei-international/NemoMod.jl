@@ -241,5 +241,8 @@ if @isdefined GLPK
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
     end  # "Solving storage_transmission_test with GLPK"
 
-    GC.gc()
+    # Two full-GC passes flush pending GLPK Optimizer finalizers on the main thread.
+    # Otherwise they can fire later from an @async constraint-builder task during
+    # a different solver's test, which aborts GLPK's memory pool (glp_free error).
+    GC.gc(true); GC.gc(true)
 end  # @isdefined GLPK
