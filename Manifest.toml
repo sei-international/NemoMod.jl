@@ -2,7 +2,7 @@
 
 julia_version = "1.12.5"
 manifest_format = "2.0"
-project_hash = "10a6f08a890689fadbd84cd7cc6e191756a9210c"
+project_hash = "f2b3501461fdd76ca265d1f29c9780bf18c1d864"
 
 [[deps.ASL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -211,18 +211,6 @@ deps = ["Artifacts", "Libdl"]
 uuid = "781609d7-10c4-51f6-84f2-b8444358ff6d"
 version = "6.3.0+2"
 
-[[deps.HiGHS]]
-deps = ["HiGHS_jll", "LinearAlgebra", "MathOptIIS", "MathOptInterface", "OpenBLAS32_jll", "PrecompileTools", "SparseArrays"]
-git-tree-sha1 = "bf5e946f72ebd1b4620249a6be7ff34832ba9ca0"
-uuid = "87dc4568-4c63-4d18-b0c0-bb2238e4078b"
-version = "1.23.0"
-
-[[deps.HiGHS_jll]]
-deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Zlib_jll", "libblastrampoline_jll"]
-git-tree-sha1 = "50ed12dc8c37ebb8d2b759f21755259d8512f2bd"
-uuid = "8fd58aa0-07eb-5a78-9b36-339c94fd15ea"
-version = "1.14.0+0"
-
 [[deps.InlineStrings]]
 git-tree-sha1 = "8f3d257792a522b4601c24a577954b0a8cd7334d"
 uuid = "842dd82b-1e85-43dc-bf29-5d0ee9dffc48"
@@ -378,12 +366,6 @@ deps = ["Base64", "JuliaSyntaxHighlighting", "StyledStrings"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 version = "1.11.0"
 
-[[deps.MathOptIIS]]
-deps = ["MathOptInterface"]
-git-tree-sha1 = "3b3d69130d8ab8c39d5fa4d30e20a8e6428c9d37"
-uuid = "8c4f8055-bd93-4160-a86b-a0c04941dbff"
-version = "0.2.0"
-
 [[deps.MathOptInterface]]
 deps = ["BenchmarkTools", "CodecBzip2", "CodecZlib", "ForwardDiff", "JSON", "LinearAlgebra", "MutableArithmetics", "NaNMath", "OrderedCollections", "PrecompileTools", "Printf", "SparseArrays", "SpecialFunctions", "Test"]
 git-tree-sha1 = "7fb98657926ccb4de8f9bb96cda453700ca39a8b"
@@ -417,7 +399,7 @@ uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 version = "1.1.3"
 
 [[deps.NemoMod]]
-deps = ["CSV", "Cbc", "DataFrames", "Dates", "GLPK", "HiGHS", "JuMP", "MathOptInterface", "SQLite", "TOML", "Test", "YAML"]
+deps = ["CSV", "Cbc", "DataFrames", "Dates", "GLPK", "JuMP", "MathOptInterface", "SQLite", "TOML", "Test", "YAML"]
 path = "."
 uuid = "a3c327a0-d2f0-11e8-37fd-d12fd35c3c72"
 version = "2.3.0"
