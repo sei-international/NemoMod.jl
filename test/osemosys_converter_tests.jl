@@ -600,6 +600,29 @@ end
         config_path="/nonexistent/config.yaml")
     rm(test_dir2)
 
+    # Source DB missing a required dimension table (TECHNOLOGY) must error
+    # *before* the destination NemoMod DB is created, so no stale file is left behind.
+    incomplete_src = joinpath(dbfile_path, "test_incomplete_src.sqlite")
+    incomplete_dest = joinpath(dbfile_path, "test_incomplete_dest.sqlite")
+    delete_file(incomplete_src, 5)
+    delete_file(incomplete_dest, 5)
+
+    let db = SQLite.DB(incomplete_src)
+        # Every required dimension except TECHNOLOGY
+        SQLite.DBInterface.execute(db, "CREATE TABLE REGION (VALUE TEXT)")
+        SQLite.DBInterface.execute(db, "CREATE TABLE FUEL (VALUE TEXT)")
+        SQLite.DBInterface.execute(db, "CREATE TABLE YEAR (VALUE TEXT)")
+        SQLite.DBInterface.execute(db, "CREATE TABLE TIMESLICE (VALUE TEXT)")
+        SQLite.DBInterface.execute(db, "CREATE TABLE MODE_OF_OPERATION (VALUE TEXT)")
+        DBInterface.close!(db)
+    end
+
+    !compilation && @test_throws ErrorException NemoMod.convert_osemosys(
+        incomplete_src, incomplete_dest; quiet=true)
+    !compilation && @test !isfile(incomplete_dest)
+
+    delete_file(incomplete_src, 5)
+
     # Clean up any dest files that might have been partially created
     delete_file(joinpath(dbfile_path, "test_err_dest.sqlite"), 5)
     delete_file(joinpath(dbfile_path, "test_err_dest2.sqlite"), 5)
