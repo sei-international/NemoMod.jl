@@ -84,23 +84,28 @@ function convert_osemosys(osemosys_path::String, nemo_path::String;
 
     logmsg("Opened OSeMOSYS database at $(sqlite_path).", quiet)
 
-    #TODO: move this after the check for missing tables
+    # Validate required dimension tables before touching the destination path,
+    # so a malformed source never produces a half-baked NemoMod DB on disk.
+    local src_tables::Vector{String}
+    try
+        src_tables = [r[:name] for r in
+            SQLite.DBInterface.execute(srcdb, "SELECT name FROM sqlite_master WHERE type='table'")]
+
+        required_tables = ["REGION", "TECHNOLOGY", "FUEL", "YEAR", "TIMESLICE", "MODE_OF_OPERATION"]
+        missing_tables = filter(t -> !_osemosys_table_exists(src_tables, t), required_tables)
+        if !isempty(missing_tables)
+            error("Source database is missing required OSeMOSYS tables: $(join(missing_tables, ", ")).")
+        end
+    catch
+        DBInterface.close!(srcdb)
+        temp_sqlite && rm(sqlite_path; force=true)
+        rethrow()
+    end
+
     # Create target NemoMod database (this creates full schema at version 11)
     isfile(nemo_path) && logmsg("Warning: overwriting existing file at $(nemo_path).", quiet)
     local destdb::SQLite.DB = createnemodb(nemo_path; defaultvals=defaults)
     logmsg("Created NemoMod database at $(nemo_path).", quiet)
-
-    # Get list of tables in source database
-    local src_tables::Vector{String} = [r[:name] for r in
-        SQLite.DBInterface.execute(srcdb, "SELECT name FROM sqlite_master WHERE type='table'")]
-
-    # Validate that required dimension tables exist
-    required_tables = ["REGION", "TECHNOLOGY", "FUEL", "YEAR", "TIMESLICE", "MODE_OF_OPERATION"]
-    missing_tables = filter(t -> !_osemosys_table_exists(src_tables, t), required_tables)
-    if !isempty(missing_tables)
-        logmsg("Warning: source database is missing required OSeMOSYS tables: $(join(missing_tables, ", ")).", quiet)
-        #TODO: return an errorException 
-    end
 
     # BEGIN: Wrap all operations in try-catch for rollback on error.
     try
@@ -369,6 +374,10 @@ function _load_csv_directory_to_sqlite!(csv_dir::String, sqlite_path::String, co
     db = SQLite.DB(sqlite_path)
 
     try
+        # Wrap all DDL and bulk INSERTs in a single transaction. SQLite's default is
+        # autocommit per statement, which is orders of magnitude slower for bulk loads.
+        SQLite.DBInterface.execute(db, "BEGIN")
+
         # Discover top-level CSV files (case-insensitive .csv extension, files only)
         csv_files = Dict{String, String}()  # tablename → full path
         for entry in readdir(csv_dir)
@@ -443,6 +452,8 @@ function _load_csv_directory_to_sqlite!(csv_dir::String, sqlite_path::String, co
                 DBInterface.execute(stmt, fields)
             end
         end
+
+        SQLite.DBInterface.execute(db, "COMMIT")
     catch
         DBInterface.close!(db)
         rm(sqlite_path; force=true)
@@ -861,17 +872,12 @@ function _copy_osemosys_traderoute!(srcdb::SQLite.DB, destdb::SQLite.DB,
     actual_name = _osemosys_table_name(src_tables, "TradeRoute")
     isnothing(actual_name) && return
 
-    # Introspect column names to handle varying conventions
+    # Introspect column names to handle varying conventions for the second region column.
+    # SQLite rejects duplicate column names case-insensitively, so the source must use
+    # distinct names — typically REGION + rr (otoole) or REGION + REGION2.
     colnames = _get_column_names(srcdb, actual_name)
 
-    # Find the two region columns and fuel/year/value columns
-    region_cols = filter(c -> uppercase(c) == "REGION", colnames)
-
-    # Some OSeMOSYS databases use REGION and rr or REGION2
-    if length(region_cols) >= 2
-        r_col = region_cols[1]
-        rr_col = region_cols[2]
-    elseif !isnothing(_resolve_column(colnames, "REGION")) && !isnothing(_resolve_column(colnames, "rr"))
+    if !isnothing(_resolve_column(colnames, "REGION")) && !isnothing(_resolve_column(colnames, "rr"))
         r_col = _resolve_column(colnames, "REGION")
         rr_col = _resolve_column(colnames, "rr")
     elseif !isnothing(_resolve_column(colnames, "REGION")) && !isnothing(_resolve_column(colnames, "REGION2"))
