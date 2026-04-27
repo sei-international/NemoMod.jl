@@ -116,6 +116,11 @@ end  # param_default_db()
     include(joinpath(@__DIR__, "glpk_tests.jl"))
 end  # @testset "Solving a scenario"
 
+# Flush any pending solver-Optimizer finalizers on the main thread before running
+# subsequent tests. NemoMod builds constraints in @async tasks; if GC fires on one of
+# those threads and a GLPK finalizer is still pending, GLPK aborts (glp_free error).
+GC.gc(true); GC.gc(true)
+
 @testset "JuMP direct mode and bridging" begin
     # Tests will be skipped if HiGHS package is not installed.
     if @isdefined HiGHS
