@@ -46,7 +46,7 @@ function convert_osemosys(osemosys_path::String, nemo_path::String;
     config_path::String = "")
 
     # Determine if osemosys_path is a directory (CSV) or file (SQLite)
-    local sqlite_path::String = osemosys_path
+    local sqlite_path::String = osemosys_path #if we have been passed a SQLLite database, this points to it. if not, we change this var later
     local temp_sqlite::Bool = false
 
     if isdir(osemosys_path)
@@ -57,7 +57,7 @@ function convert_osemosys(osemosys_path::String, nemo_path::String;
         logmsg("Parsing otoole config at $(config_path)...", quiet)
         local config = _parse_otoole_config(config_path)
 
-        sqlite_path = tempname() * ".sqlite"
+        local sqlite_path = tempname() * ".sqlite"
         temp_sqlite = true
 
         logmsg("Loading CSV directory into temporary SQLite...", quiet)
@@ -84,12 +84,6 @@ function convert_osemosys(osemosys_path::String, nemo_path::String;
 
     logmsg("Opened OSeMOSYS database at $(sqlite_path).", quiet)
 
-    #TODO: move this after the check for missing tables
-    # Create target NemoMod database (this creates full schema at version 11)
-    isfile(nemo_path) && logmsg("Warning: overwriting existing file at $(nemo_path).", quiet)
-    local destdb::SQLite.DB = createnemodb(nemo_path; defaultvals=defaults)
-    logmsg("Created NemoMod database at $(nemo_path).", quiet)
-
     # Get list of tables in source database
     local src_tables::Vector{String} = [r[:name] for r in
         SQLite.DBInterface.execute(srcdb, "SELECT name FROM sqlite_master WHERE type='table'")]
@@ -98,9 +92,13 @@ function convert_osemosys(osemosys_path::String, nemo_path::String;
     required_tables = ["REGION", "TECHNOLOGY", "FUEL", "YEAR", "TIMESLICE", "MODE_OF_OPERATION"]
     missing_tables = filter(t -> !_osemosys_table_exists(src_tables, t), required_tables)
     if !isempty(missing_tables)
-        logmsg("Warning: source database is missing required OSeMOSYS tables: $(join(missing_tables, ", ")).", quiet)
-        #TODO: return an errorException 
+        error("Warning: source database is missing required OSeMOSYS tables: $(join(missing_tables, ", ")).")
     end
+
+    # Create target NemoMod database (this creates full schema at version 11)
+    isfile(nemo_path) && error("Existing file at $(nemo_path).")
+    local destdb::SQLite.DB = createnemodb(nemo_path; defaultvals=defaults)
+    logmsg("Created NemoMod database at $(nemo_path).", quiet)
 
     # BEGIN: Wrap all operations in try-catch for rollback on error.
     try
@@ -109,7 +107,7 @@ function convert_osemosys(osemosys_path::String, nemo_path::String;
         # Create temporary unique indexes on parameter tables so INSERT OR IGNORE
         # correctly deduplicates rows. NemoMod tables only have PRIMARY KEY(id) with
         # auto-increment, so without these indexes INSERT OR IGNORE never ignores.
-        _dedup_indexes = _create_dedup_indexes!(destdb)
+       local _dedup_indexes = _create_dedup_indexes!(destdb)
 
         # 1. Convert dimension tables (sets)
         _convert_osemosys_sets!(srcdb, destdb, src_tables, quiet)
@@ -146,6 +144,7 @@ function convert_osemosys(osemosys_path::String, nemo_path::String;
             "reservemargintagtechnology", "reminproductiontarget", "retagfuel"
         ]))
         unrecognized = filter(t -> !(lowercase(t) in known_tables), src_tables)
+ 
         if !isempty(unrecognized)
             logmsg("Warning: the following source tables were not converted: $(join(unrecognized, ", ")).", quiet)
         end
@@ -157,6 +156,7 @@ function convert_osemosys(osemosys_path::String, nemo_path::String;
 
         SQLite.DBInterface.execute(destdb, "COMMIT")
         logmsg("Conversion complete.", quiet)
+ 
     catch
         SQLite.DBInterface.execute(destdb, "ROLLBACK")
         DBInterface.close!(destdb)
