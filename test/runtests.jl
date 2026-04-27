@@ -4,10 +4,13 @@
 
     Copyright © 2019: Stockholm Environment Institute U.S.
 
-	File description: Tests for NemoMod package. Running full suite of tests requires
-        GLPK, Cbc, CPLEX, Gurobi, Mosek, and Xpress solvers. However, testing procedure
-        is configured so that tests for a particular solver are skipped if solver is
-        not present.
+	File description: Tests for NemoMod package. The test environment declares only the
+        free, no-license solvers (GLPK, Cbc, HiGHS) as dependencies, so `Pkg.test` works
+        out-of-the-box. Tests for the commercial solvers (CPLEX, Gurobi, Mosek, Xpress)
+        are wrapped in try/catch around `using` and are skipped automatically when the
+        solver package is not installed. To run the full suite, activate the test
+        environment and `Pkg.add` each commercial solver you have a license for; the
+        corresponding testset will then run.
 =#
 
 if !@isdefined NemoMod
@@ -112,6 +115,11 @@ end  # param_default_db()
     !compilation && include(joinpath(@__DIR__, "xpress_tests.jl"))  # Xpress tests are omitted from compilation because Xpress.jl requires an Xpress license to initialize
     include(joinpath(@__DIR__, "glpk_tests.jl"))
 end  # @testset "Solving a scenario"
+
+# Flush any pending solver-Optimizer finalizers on the main thread before running
+# subsequent tests. NemoMod builds constraints in @async tasks; if GC fires on one of
+# those threads and a GLPK finalizer is still pending, GLPK aborts (glp_free error).
+GC.gc(true); GC.gc(true)
 
 @testset "JuMP direct mode and bridging" begin
     # Tests will be skipped if HiGHS package is not installed.
@@ -236,3 +244,7 @@ end  # @testset "Testing precalcresultspath logic"
         !compilation && @test !isfile(joinpath(dbfile_path, "param_default.sqlite"))
     end  # @testset "Set parameter default"
 end  # @testset "Other database operations"
+
+@testset "OSeMOSYS converter" begin
+    include(joinpath(@__DIR__, "osemosys_converter_tests.jl"))
+end
