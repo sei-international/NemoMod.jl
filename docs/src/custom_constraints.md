@@ -77,8 +77,8 @@ For the most part, adding custom constraints to a LEAP-NEMO model is just a matt
 
 ```
 [includes]
-customconstraints=./customconstraints.txt
+customconstraints="./customconstraints.txt"
 ```
 
 !!! note
-    Another point to remember when adding custom constraints to a LEAP-NEMO model is that the constraints must properly account for the model's [units of measure](@ref uoms). When LEAP runs NEMO, it uses petajoules as the energy unit, gigawatts for power, million $ for costs, and metric tonnes for emissions.
+    Another point to remember when adding custom constraints to a LEAP-NEMO model is that the constraints must properly account for the model's [units of measure](@ref uoms). When LEAP runs NEMO, it generally uses petajoules as the energy unit, gigawatts for power, million $ for costs, and metric tonnes for emissions.

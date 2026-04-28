@@ -4,3 +4,6 @@
 docs/build/
 .vscode
 nemo.ini
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/worktrees/
