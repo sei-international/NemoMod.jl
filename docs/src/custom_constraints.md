@@ -75,7 +75,7 @@ For the most part, adding custom constraints to a LEAP-NEMO model is just a matt
 2. Name your custom constraints script with a `.txt` extension (e.g., `customconstraints.txt`), and save it in the LEAP Areas folder for your model. To find this folder, go to Settings -> Folders in LEAP, and make note of the path in the Areas field. The LEAP Areas folder for your model is a subdirectory in this path with the same name as the model.
 3. Add a NEMO configuration file named `nemo.cfg` in the LEAP Areas folder for your model. In this file, set the `customconstraints` key in the `includes` block to `./[name of your custom constraints script]`. For example:
 
-```
+```toml
 [includes]
 customconstraints="./customconstraints.txt"
 ```
