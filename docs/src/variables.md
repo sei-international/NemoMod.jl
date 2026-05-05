@@ -44,7 +44,7 @@ Total annual [nodal](@ref nodal_def) use of a [fuel](@ref fuel). Unit: region's 
 
 #### Julia code
 
-* Variable in JuMP model: `vuseannualnodal[n,l,f,y]`
+* Variable in JuMP model: `vuseannualnodal[n,f,y]`
 
 ### [Annual non-nodal generation](@id vgenerationannualnn)
 
