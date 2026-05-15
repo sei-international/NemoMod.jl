@@ -21,6 +21,12 @@ convertscenariounits
 createnemodb
 ```
 
+## data_validation
+
+```@docs
+data_validation
+```
+
 ## dropdefaultviews
 
 ```@docs

@@ -35,6 +35,7 @@ Energy carriers. **Abbreviation: `f`.**
 |:--- | :--: |:----------- |
 | `val` | text | Unique identifier for fuel |
 | `desc` | text  | Description of fuel |
+| `timesliced` | text  | Determines whether NEMO simulates production, consumption, and trade of fuel in time slices (`1`) or at annual level only (`0`); default value = `1` |
 
 #### Julia code
 

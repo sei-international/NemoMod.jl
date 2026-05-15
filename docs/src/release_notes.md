@@ -5,6 +5,18 @@ CurrentModule = NemoMod
 
 This page highlights key changes in NEMO since its initial public release. For a full history of NEMO releases, including the code for each version, see the [Releases page on NEMO's GitHub site](https://github.com/sei-international/NemoMod.jl/releases).
 
+## Version 2.4
+
+  * **Time-sliced fuels:** Added an option to designate [fuels](@ref fuel) as time-sliced or non time-sliced (via `FUEL.timesliced`: use `1` for a time-sliced fuel and `0` for a non time-sliced fuel). This determines whether NEMO simulates the production, consumption, and trade of a fuel in time slices or at the annual level only. Prior to NEMO 2.4, the production, consumption, and trade of all fuels was simulated in time slices. Designating fuels as non time-sliced can significantly improve the performance of complex models because it simplifies the underlying optimization problem. In many models, using non time-sliced fuels doesn't materially change the optimization results. The new `FUEL.timesliced` column has a default value of `1`, so NEMO's original behavior of simulating fuels in time slices has been retained.
+
+  * **Data validation function:** Added a function, [`data_validation`](@ref), that performs data validation checks in a scenario database. NEMO runs this function when a scenario is calculated. If any checks fail, the function returns an error and warning messages describing the problem. You can use the function yourself to check data without calculating a scenario. Right now, the function includes only a few checks, but more will likely be added in the future.
+
+!!! warning
+    NEMO requires a fuel to be time-sliced in a few cases: 1) if [transmission modeling is enabled](@ref TransmissionModelingEnabled) for the fuel; 2) if the fuel is stored in or released from [storage](@ref storage); and 3) if a [reserve margin](@ref ReserveMargin) is defined for production of the fuel. `data_validation` checks for these conditions.
+
+!!! tip
+    To update a legacy scenario database to be compatible with NEMO 2.4, use the `db_v11_to_v12` function. This function applies the default value of `1` in `FUEL.timesliced`.
+
 ## Version 2.3
 
   * **Julia platform upgrade:** Updated NEMO to use Julia 1.12.4 and recent releases of various Julia packages, including JuMP and solver wrappers. This change adds support for the most recent versions of several solvers, among them Gurobi 13, HiGHS 1.13, Mosek 11, and Xpress 9.8. As part of the change, the software for Gurobi 13 is now delivered with NEMO - so you no longer need to install Gurobi separately to use it with NEMO (you do still need to obtain a Gurobi license, though). For details on which solvers are supported with NEMO 2.3, and their licensing requirements, see [Solver compatibility](@ref solver_compatibility).

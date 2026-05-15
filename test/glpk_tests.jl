@@ -20,11 +20,13 @@ if @isdefined GLPK
     @info "Testing scenario solution with GLPK."
 
     @testset "Solving storage_test with GLPK" begin
+        testnumber = 0  # Counter used in @info messages
         dbfile = joinpath(dbfile_path, "storage_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
-        @info "Running GLPK test 1 on storage_test.sqlite: default outputs."
+        testnumber += 1
+        @info "Running GLPK test $(testnumber) on storage_test.sqlite: default outputs."
         NemoMod.calculatescenario(dbfile; jumpmodel=(reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), restrictvars=true, quiet = calculatescenario_quiet)
 
         db = SQLite.DB(dbfile)
@@ -56,7 +58,8 @@ if @isdefined GLPK
         end
 
         # Test with optional outputs
-        @info "Running GLPK test 2 on storage_test.sqlite: optional outputs."
+        testnumber += 1
+        @info "Running GLPK test $(testnumber) on storage_test.sqlite: optional outputs."
         NemoMod.calculatescenario(dbfile; jumpmodel=(reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))),
             varstosave = "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vrateofdemand, vproductionbytechnology, vtotaltechnologyannualactivity, "
             * "vtotaltechnologymodelperiodactivity, vusebytechnology, vmodelperiodcostbyregion, vannualtechnologyemissionpenaltybyemission, "
@@ -89,7 +92,8 @@ if @isdefined GLPK
         end
 
         # Test with restrictvars
-        @info "Running GLPK test 3 on storage_test.sqlite: restrictvars."
+        testnumber += 1
+        @info "Running GLPK test $(testnumber) on storage_test.sqlite: restrictvars."
         NemoMod.calculatescenario(dbfile; jumpmodel=(reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))),
             varstosave = "vrateofproductionbytechnologybymode, vrateofusebytechnologybymode, vproductionbytechnology, vusebytechnology, "
             * "vtotaldiscountedcost",
@@ -121,8 +125,48 @@ if @isdefined GLPK
             @test isapprox(testqry[10,:val], 99.1923800166593; atol=TOL)
         end
 
+        # Test with restrictvars and non time sliced fuels
+        testnumber += 1
+        @info "Running GLPK test $(testnumber) on storage_test.sqlite: restrictvars and non time sliced fuels."
+
+        try
+            SQLite.DBInterface.execute(db, "update FUEL set timesliced = 0 where val <> 'electricity'")
+
+            NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))),
+                varstosave = "vproductionbytechnology, vusebytechnology, vtotaldiscountedcost, vdemandannualnn, vdemandnn, vproductionbytechnology, vproductionnn, vrateofactivity, vrateofdemandnn, vrateofproduction, vrateofproductionbytechnologybymodenn, vrateofproductionbytechnologynn, vrateofproductionnn, vrateoftotalactivity, vrateofuse, vrateofusebytechnologybymodenn, vrateofusebytechnologynn, vrateofusenn, vtotalcapacityinreservemargin, vusebytechnology, vusenn", restrictvars = true, quiet = calculatescenario_quiet)
+
+            if !compilation
+                testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+
+                @test testqry[1,:y] == "2020"
+                @test testqry[2,:y] == "2021"
+                @test testqry[3,:y] == "2022"
+                @test testqry[4,:y] == "2023"
+                @test testqry[5,:y] == "2024"
+                @test testqry[6,:y] == "2025"
+                @test testqry[7,:y] == "2026"
+                @test testqry[8,:y] == "2027"
+                @test testqry[9,:y] == "2028"
+                @test testqry[10,:y] == "2029"
+
+                @test isapprox(testqry[1,:val], 3845.15703585078; atol=TOL)
+                @test isapprox(testqry[2,:val], 146.55231044248; atol=TOL)
+                @test isapprox(testqry[3,:val], 139.573628992838; atol=TOL)
+                @test isapprox(testqry[4,:val], 132.927265707465; atol=TOL)
+                @test isapprox(testqry[5,:val], 126.597395911871; atol=TOL)
+                @test isapprox(testqry[6,:val], 120.568948487496; atol=TOL)
+                @test isapprox(testqry[7,:val], 114.827569869287; atol=TOL)
+                @test isapprox(testqry[8,:val], 109.359590464849; atol=TOL)
+                @test isapprox(testqry[9,:val], 104.151990918904; atol=TOL)
+                @test isapprox(testqry[10,:val], 99.1923723037182; atol=TOL)
+            end
+        finally
+            SQLite.DBInterface.execute(db, "update FUEL set timesliced = 1 where val <> 'electricity'")
+        end
+
         # Test with storage net zero constraints
-        @info "Running GLPK test 4 on storage_test.sqlite: storage net zero constraints."
+        testnumber += 1
+        @info "Running GLPK test $(testnumber) on storage_test.sqlite: storage net zero constraints."
 
         try
             SQLite.DBInterface.execute(db, "update STORAGE set netzeroyear = 1")
@@ -158,7 +202,8 @@ if @isdefined GLPK
         end
 
         # Test with calcyears
-        @info "Running GLPK test 5 on storage_test.sqlite: calcyears."
+        testnumber += 1
+        @info "Running GLPK test $(testnumber) on storage_test.sqlite: calcyears."
         NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), restrictvars=true, calcyears=[2020,2029], quiet = calculatescenario_quiet)
 
         if !compilation
@@ -171,16 +216,41 @@ if @isdefined GLPK
             @test isapprox(testqry[2,:val], 3427.81584479179; atol=TOL)
         end
 
+        # Test with calcyears and non time sliced fuels
+        testnumber += 1
+        @info "Running GLPK test $(testnumber) on storage_test.sqlite: calcyears and non time sliced fuels."
+
+        try
+            SQLite.DBInterface.execute(db, "update FUEL set timesliced = 0 where val <> 'electricity'")
+
+            NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), varstosave = "vproductionbytechnology, vusebytechnology, vtotaldiscountedcost, vdemandannualnn, vdemandnn, vproductionbytechnology, vproductionnn, vrateofactivity, vrateofdemandnn, vrateofproduction, vrateofproductionbytechnologybymodenn, vrateofproductionbytechnologynn, vrateofproductionnn, vrateoftotalactivity, vrateofuse, vrateofusebytechnologybymodenn, vrateofusebytechnologynn, vrateofusenn, vtotalcapacityinreservemargin, vusebytechnology, vusenn", restrictvars=true, calcyears=[2020,2029], quiet = calculatescenario_quiet)
+
+            if !compilation
+                testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+
+                @test testqry[1,:y] == "2020"
+                @test testqry[2,:y] == "2029"
+
+                @test isapprox(testqry[1,:val], 3840.94023817782; atol=TOL)
+                @test isapprox(testqry[2,:val], 3427.81584479179; atol=TOL)
+            end
+        finally
+            SQLite.DBInterface.execute(db, "update FUEL set timesliced = 1 where val <> 'electricity'")
+        end
+
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
     end  # "Solving storage_test with GLPK"
 
     @testset "Solving storage_transmission_test with GLPK" begin
+        testnumber = 0  # Counter used in @info messages
         dbfile = joinpath(dbfile_path, "storage_transmission_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
-        @info "Running GLPK test 1 on storage_transmission_test.sqlite: default outputs."
+        # Test with default outputs
+        testnumber += 1
+        @info "Running GLPK test $(testnumber) on storage_transmission_test.sqlite: default outputs."
         NemoMod.calculatescenario(dbfile; jumpmodel=(reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))),
             varstosave = "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
                 * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
@@ -200,8 +270,35 @@ if @isdefined GLPK
             @test isapprox(testqry[3,:val], 1611.02249720726; atol=TOL)
         end
 
+        # Test with non time sliced fuels
+        testnumber += 1
+        @info "Running GLPK test $(testnumber) on storage_transmission_test.sqlite: non time sliced fuels."
+
+        try
+            SQLite.DBInterface.execute(db, "update FUEL set timesliced = 0 where val <> 'electricity'")
+
+            NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))),
+                varstosave = "vdemandannualnn, vdemandnn, vproductionbytechnology, vproductionnn, vrateofactivity, vrateofdemandnn, vrateofproduction, vrateofproductionbytechnologybymodenn, vrateofproductionbytechnologynn, vrateofproductionnn, vrateoftotalactivity, vrateofuse, vrateofusebytechnologybymodenn, vrateofusebytechnologynn, vrateofusenn, vtotalcapacityinreservemargin, vusebytechnology, vusenn, vdemandannualnodal, vdemandnodal, vgenerationannualnodal, vproductionannualnodal, vproductionnodal, vrateofactivitynodal, vrateofproductionbytechnologynodal, vrateofproductionnodal, vrateoftotalactivitynodal, vrateofusebytechnologynodal, vrateofusenodal, vregenerationannualnodal, vuseannualnodal, vusenodal, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vusebytechnologyannual, vtotaldiscountedcost, vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
+                restrictvars=true, calcyears=[2020,2025,2029], quiet = calculatescenario_quiet)
+
+            if !compilation
+                testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+
+                @test testqry[1,:y] == "2020"
+                @test testqry[2,:y] == "2025"
+                @test testqry[3,:y] == "2029"
+
+                @test isapprox(testqry[1,:val], 9774.87377127422; atol=TOL)
+                @test isapprox(testqry[2,:val], 2510.44571676115; atol=TOL)
+                @test isapprox(testqry[3,:val], 1611.02249720726; atol=TOL)
+            end
+        finally
+            SQLite.DBInterface.execute(db, "update FUEL set timesliced = 1 where val <> 'electricity'")
+        end
+
         # Test transshipment power flow
-        @info "Running GLPK test 2 on storage_transmission_test.sqlite: transshipment power flow."
+        testnumber += 1
+        @info "Running GLPK test $(testnumber) on storage_transmission_test.sqlite: transshipment power flow."
 
         try
             SQLite.DBInterface.execute(db, "update TransmissionModelingEnabled set type = 3")
@@ -220,7 +317,8 @@ if @isdefined GLPK
         end
 
         # Test limited foresight optimization
-        @info "Running GLPK test 3 on storage_transmission_test.sqlite: limited foresight optimization."
+        testnumber += 1
+        @info "Running GLPK test $(testnumber) on storage_transmission_test.sqlite: limited foresight optimization."
         NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), varstosave="vtotaldiscountedcost", calcyears=[[2021,2022],[2025,2029]], continuoustransmission=true, quiet = calculatescenario_quiet)
 
         if !compilation
@@ -234,6 +332,31 @@ if @isdefined GLPK
             @test isapprox(testqry[2,:val], 305.484279868535; atol=TOL)
             @test isapprox(testqry[3,:val], 1363.86508522952; atol=TOL)
             @test isapprox(testqry[4,:val], 1848.08891142363; atol=TOL)
+        end
+
+        # Test limited foresight optimization with non time sliced fuels
+        testnumber += 1
+        @info "Running GLPK test $(testnumber) on storage_transmission_test.sqlite: limited foresight optimization with non time sliced fuels."
+
+        try
+            SQLite.DBInterface.execute(db, "update FUEL set timesliced = 0 where val <> 'electricity'")
+
+            NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true)) : direct_model(optimizer_with_attributes(GLPK.Optimizer, "presolve" => true))), varstosave="vdemandannualnn, vdemandnn, vproductionbytechnology, vproductionnn, vrateofactivity, vrateofdemandnn, vrateofproduction, vrateofproductionbytechnologybymodenn, vrateofproductionbytechnologynn, vrateofproductionnn, vrateoftotalactivity, vrateofuse, vrateofusebytechnologybymodenn, vrateofusebytechnologynn, vrateofusenn, vtotalcapacityinreservemargin, vusebytechnology, vusenn, vdemandannualnodal, vdemandnodal, vgenerationannualnodal, vproductionannualnodal, vproductionnodal, vrateofactivitynodal, vrateofproductionbytechnologynodal, vrateofproductionnodal, vrateoftotalactivitynodal, vrateofusebytechnologynodal, vrateofusenodal, vregenerationannualnodal, vuseannualnodal, vusenodal, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vusebytechnologyannual, vtotaldiscountedcost, vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual", calcyears=[[2021,2022],[2025,2029]], continuoustransmission=true, quiet = calculatescenario_quiet)
+
+            if !compilation
+                testqry = SQLite.DBInterface.execute(db, "select * from vtotaldiscountedcost") |> DataFrame
+                @test testqry[1,:y] == "2021"
+                @test testqry[2,:y] == "2022"
+                @test testqry[3,:y] == "2025"
+                @test testqry[4,:y] == "2029"
+
+                @test isapprox(testqry[1,:val], 4846.62588182009; atol=TOL)
+                @test isapprox(testqry[2,:val], 305.484279868535; atol=TOL)
+                @test isapprox(testqry[3,:val], 1363.86508522952; atol=TOL)
+                @test isapprox(testqry[4,:val], 1848.08891142363; atol=TOL)
+            end
+        finally
+            SQLite.DBInterface.execute(db, "update FUEL set timesliced = 1 where val <> 'electricity'")
         end
 
         # Delete test results and re-compact test database

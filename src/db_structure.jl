@@ -145,12 +145,13 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     #   - 9: Added REGIONGROUP, RRGroup, REMinProductionTargetRG.
     #   - 10: Added ReserveMargin.f and ReserveMarginTagTechnology.f. Deprecated ReserveMarginTagFuel. Dropped original AvailabilityFactor table and renamed CapacityFactor to AvailabilityFactor. Added TransmissionAvailabilityFactor.
     #   - 11: Added MinAnnualTransmissionNodes, MaxAnnualTransmissionNodes
+    #   - 12: Added FUEL.timesliced
     SQLite.DBInterface.execute(db, "CREATE TABLE `Version` (`version` INTEGER, PRIMARY KEY(`version`))")
-    SQLite.DBInterface.execute(db, "INSERT INTO Version VALUES(11)")
+    SQLite.DBInterface.execute(db, "INSERT INTO Version VALUES($(NEMO_DB_VERSION))")
 
     # No defaults in DefaultParams for sets/dimensions
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `EMISSION` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`) )")
-    SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `FUEL` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`) )")
+    SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `FUEL` ( `val` TEXT NOT NULL UNIQUE, `desc` TEXT, `timesliced` INTEGER NOT NULL DEFAULT 1, PRIMARY KEY(`val`) )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `MODE_OF_OPERATION` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `REGION` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `REGIONGROUP` (`val` TEXT NOT NULL UNIQUE, `desc` TEXT, PRIMARY KEY(`val`))")
@@ -619,6 +620,124 @@ function db_v10_to_v11(db::SQLite.DB; quiet::Bool = false)
     # END: Wrap database operations in try-catch block to allow rollback on error.
 end  # db_v10_to_v11(db::SQLite.DB; quiet::Bool = false)
 
+#= Upgrades NEMO database from version 11 to version 12 by: 
+    - Adding FUEL.timesliced
+=#
+function db_v11_to_v12(db::SQLite.DB; quiet::Bool = false)
+    # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
+    try
+        # BEGIN: SQLite transaction.
+        SQLite.DBInterface.execute(db, "BEGIN")
+
+        # Add FUEL.timesliced; default to 1 so existing databases preserve full time-sliced behavior with no other changes
+        SQLite.DBInterface.execute(db, "ALTER TABLE `FUEL` ADD COLUMN `timesliced` INTEGER NOT NULL DEFAULT 1")
+
+        SQLite.DBInterface.execute(db, "update version set version = 12")
+
+        SQLite.DBInterface.execute(db, "COMMIT")
+        # END: SQLite transaction.
+
+        logmsg("Upgraded database to version 12.", quiet)
+    catch
+        # Rollback transaction and rethrow error
+        SQLite.DBInterface.execute(db, "ROLLBACK")
+        rethrow()
+    end
+    # END: Wrap database operations in try-catch block to allow rollback on error.
+end  # db_v11_to_v12(db::SQLite.DB; quiet::Bool = false)
+
+"""
+    data_validation(db::SQLite.DB; expected_version::Int = NEMO_DB_VERSION)
+
+Validates a NEMO scenario database for internal consistency. Each check that finds violations
+emits a single `@warn` message summarizing the violations for that check. If any check finds
+at least one violation, this function throws an error after all checks have run, instructing
+the user to consult the preceding warnings.
+
+Verifies up front that the database schema is at `expected_version` (default: the current
+NEMO data dictionary version). If the database is at a different version, throws an error
+without running any checks, since the checks assume the latest schema.
+
+# Arguments
+- `db::SQLite.DB`: An open NEMO scenario database.
+- `expected_version::Int = NEMO_DB_VERSION`: The schema version the checks were written for.
+  Override only for advanced/testing scenarios.
+"""
+function data_validation(db::SQLite.DB; expected_version::Int = NEMO_DB_VERSION)
+    # BEGIN: Verify database schema version matches what these checks were written for.
+    local actual_version::Int = 0
+
+    for row in SQLite.DBInterface.execute(db, "select version from Version")
+        actual_version = row[:version]
+    end
+
+    if actual_version != expected_version
+        error("NEMO data_validation expects database version $(expected_version), but the database provided to data_validation is at version $(actual_version). To upgrade the database to the latest version supported by this release of NEMO, you can run calculatescenario or use the database upgrade functions whose names begin with db_v.")
+    end
+    # END: Verify database schema version.
+
+    local anyviolation::Bool = false  # Set to true if any check finds at least one violation
+    local violations::Vector{String}  # Reused across checks; reassigned at the start of each
+
+    # BEGIN: Check 1 - a fuel with TransmissionModelingEnabled must be time-sliced.
+    violations = String[]
+
+    for row in SQLite.DBInterface.execute(db, "select distinct tme.f as f
+        from TransmissionModelingEnabled tme, FUEL f
+        where tme.f = f.val and f.timesliced <> 1
+        order by tme.f")
+        push!(violations, row[:f])
+    end
+
+    if !isempty(violations)
+        anyviolation = true
+        @warn "Data validation error. The following fuels have TransmissionModelingEnabled set but are marked non-time-sliced (FUEL.timesliced is not 1): " * join(violations, ", ") * ". Either remove the TransmissionModelingEnabled entries or set FUEL.timesliced = 1 for these fuels."
+    end
+    # END: Check 1.
+
+    # BEGIN: Check 2 - a fuel with a non-zero ReserveMargin must be time-sliced.
+    violations = String[]
+
+    for row in SQLite.DBInterface.execute(db, "select distinct rm.f as f
+        from ReserveMargin_def rm, FUEL f
+        where rm.f = f.val and f.timesliced <> 1 and rm.val > 1
+        order by rm.f")
+        push!(violations, row[:f])
+    end
+
+    if !isempty(violations)
+        anyviolation = true
+        @warn "Data validation error. The following fuels have a non-zero ReserveMargin but are marked non-time-sliced (FUEL.timesliced is not 1): " * join(violations, ", ") * ". Either remove the reserve margin for these fuels or set FUEL.timesliced = 1."
+    end
+    # END: Check 2.
+
+    # BEGIN: Check 3 - a fuel involved in storage modeling (charged into storage or discharged from storage) must be time-sliced.
+    violations = String[]
+
+    for row in SQLite.DBInterface.execute(db, "select distinct f.val as f
+    from TechnologyToStorage_def tts, InputActivityRatio_def iar, fuel f
+    where tts.val = 1 and tts.r = iar.r and tts.t = iar.t and tts.m = iar.m and iar.val <> 0 and iar.f = f.val and f.timesliced <> 1
+    UNION
+    select distinct f.val as f
+    from TechnologyFromStorage_def tfs, OutputActivityRatio_def oar, fuel f
+    where tfs.val = 1 and tfs.r = oar.r and tfs.t = oar.t and tfs.m = oar.m and oar.val <> 0 and oar.f = f.val and f.timesliced <> 1
+    order by f")
+        push!(violations, row[:f])
+    end
+
+    if !isempty(violations)
+        anyviolation = true
+        @warn "Data validation error. The following fuels are charged into or discharged from storage (via TechnologyToStorage with InputActivityRatio, or TechnologyFromStorage with OutputActivityRatio, in the matching mode of operation) but are marked non-time-sliced (FUEL.timesliced is not 1): " * join(violations, ", ") * ". Set FUEL.timesliced = 1 for these fuels, or remove the relevant storage connections."
+    end
+    # END: Check 3.
+
+    # If any check found violations, error out.
+    if anyviolation
+        error("NEMO data validation failed. Consult the preceding @warn messages for details.")
+    end
+    
+end  # data_validation(db::SQLite.DB; expected_version::Int = NEMO_DB_VERSION)
+
 """
     create_temp_tables(db::SQLite.DB)
 
@@ -672,6 +791,59 @@ function create_temp_tables(db::SQLite.DB, calcyears::Vector{Vector{Int}})
 
         SQLite.DBInterface.execute(db, "CREATE UNIQUE INDEX yearintervals_fks_unique on yearintervals (y)")
 
+        # BEGIN: Build timeslicedtech temp table.
+        # timeslicedtech(r, t, y) lists every (region, technology, year) combination whose
+        # technology must be simulated with time slices. A technology is time-sliced in year y iff
+        # it produces or consumes a time-sliced fuel in y (via OutputActivityRatio or
+        # InputActivityRatio with non-zero val). Storage-connected technologies are covered by
+        # this rule because data_validation enforces that fuels charged into or discharged from storage
+        # must be time-sliced.
+        SQLite.DBInterface.execute(db, "DROP TABLE IF EXISTS timeslicedtech")
+
+        SQLite.DBInterface.execute(db, "create table timeslicedtech as
+        select distinct ar.r as r, ar.t as t, ar.y as y
+            from (select r, t, f, y from OutputActivityRatio_def where val <> 0
+                  union
+                  select r, t, f, y from InputActivityRatio_def where val <> 0) ar,
+                 FUEL f
+            where ar.f = f.val and f.timesliced = 1")
+
+        SQLite.DBInterface.execute(db, "CREATE UNIQUE INDEX timeslicedtech_fks_unique on timeslicedtech (r, t, y)")
+        # END: Build timeslicedtech temp table.
+
+        # BEGIN: Build nontimeslicedtech temp table.
+        # nontimeslicedtech(r, t, y) lists every (region, technology, year) combination whose
+        # technology has non-zero activity (OutputActivityRatio or InputActivityRatio) but is
+        # NOT time-sliced. Symmetric companion to timeslicedtech, used by NonTSTech_*-style
+        # constraints to scope themselves to relevant technologies.
+        SQLite.DBInterface.execute(db, "DROP TABLE IF EXISTS nontimeslicedtech")
+
+        SQLite.DBInterface.execute(db, "create table nontimeslicedtech as
+        select distinct ar.r, ar.t, ar.y
+        from (select r, t, y from OutputActivityRatio_def where val <> 0
+              union
+              select r, t, y from InputActivityRatio_def where val <> 0) ar
+        where not exists (select 1 from timeslicedtech tst
+                          where tst.r = ar.r and tst.t = ar.t and tst.y = ar.y)")
+
+        SQLite.DBInterface.execute(db, "CREATE UNIQUE INDEX nontimeslicedtech_pk on nontimeslicedtech (r, t, y)")
+        # END: Build nontimeslicedtech temp table.
+
+        # BEGIN: Build annualavailabilityfactor temp table.
+        # annualavailabilityfactor(r, t, y, val) holds Σ_l (AvailabilityFactor[r,t,l,y] * YearSplit[l,y]),
+        # normalized by Σ_l YearSplit[l,y] for defensive correctness if the year split doesn't sum
+        # exactly to 1. Used by annual capacity constraints for non-time-sliced technologies.
+        SQLite.DBInterface.execute(db, "DROP TABLE IF EXISTS annualavailabilityfactor")
+
+        SQLite.DBInterface.execute(db, "create table annualavailabilityfactor as
+        select af.r, af.t, af.y, sum(af.val * ys.val) / sum(ys.val) as val
+        from AvailabilityFactor_def af, YearSplit_def ys
+        where af.l = ys.l and af.y = ys.y
+        group by af.r, af.t, af.y")
+
+        SQLite.DBInterface.execute(db, "CREATE UNIQUE INDEX annualavailabilityfactor_fks_unique on annualavailabilityfactor (r, t, y)")
+        # END: Build annualavailabilityfactor temp table.
+
         SQLite.DBInterface.execute(db, "COMMIT")
         # END: SQLite transaction.
     catch
@@ -690,8 +862,10 @@ function drop_temp_tables(db::SQLite.DB)
     SQLite.DBInterface.execute(db, "BEGIN")
 
     SQLite.DBInterface.execute(db, "DROP TABLE IF EXISTS nodalstorage")
-
     SQLite.DBInterface.execute(db, "DROP TABLE IF EXISTS yearintervals")
+    SQLite.DBInterface.execute(db, "DROP TABLE IF EXISTS timeslicedtech")
+    SQLite.DBInterface.execute(db, "DROP TABLE IF EXISTS nontimeslicedtech")
+    SQLite.DBInterface.execute(db, "DROP TABLE IF EXISTS annualavailabilityfactor")
 
     SQLite.DBInterface.execute(db, "COMMIT")
     # END: SQLite transaction.

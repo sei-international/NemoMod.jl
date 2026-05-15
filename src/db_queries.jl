@@ -47,10 +47,11 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     return_val["queryvrateofdemandnn"] = (dbpath, "select sdp.r as r, sdp.f as f, sdp.l as l, sdp.y as y,
     cast(sdp.val as real) as specifieddemandprofile, cast(sad.val as real) as specifiedannualdemand,
     cast(ys.val as real) as ys
-    from SpecifiedDemandProfile_def sdp, SpecifiedAnnualDemand_def sad, YearSplit_def ys
+    from SpecifiedDemandProfile_def sdp, SpecifiedAnnualDemand_def sad, YearSplit_def ys, fuel f
     left join TransmissionModelingEnabled tme on tme.r = sad.r and tme.f = sad.f and tme.y = sad.y
     where sad.r = sdp.r and sad.f = sdp.f and sad.y = sdp.y
     and ys.l = sdp.l and ys.y = sdp.y
+    and f.val = sdp.f and f.timesliced = 1
     and sdp.val <> 0 and sad.val <> 0 and ys.val <> 0
     $(restrictyears ? "and sdp.y in" * inyears : "")
     and tme.id is null")
@@ -61,8 +62,9 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     select r, t, m, y from InputActivityRatio_def
     where val <> 0 $(restrictyears ? "and y in" * inyears : ""))
     select r.val as r, l.val as l, t.val as t, m.val as m, y.val as y
-    from REGION r, TIMESLICE l, TECHNOLOGY t, MODE_OF_OPERATION m, YEAR y, ar
+    from REGION r, TIMESLICE l, TECHNOLOGY t, MODE_OF_OPERATION m, YEAR y, ar, timeslicedtech tst
     where ar.r = r.val and ar.t = t.val and ar.m = m.val and ar.y = y.val
+    and tst.r = r.val and tst.t = t.val and tst.y = y.val
     order by r.val, t.val, l.val, y.val")
 
     return_val["queryvtrade"] = (dbpath, "select r.val as r, rr.val as rr, l.val as l, f.val as f, y.val as y
@@ -70,6 +72,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     WHERE
     r.val = tr.r and rr.val = tr.rr and f.val = tr.f and y.val = tr.y
     and tr.r <> tr.rr and tr.val = 1 $(restrictyears ? "and tr.y in" * inyears : "")
+    and f.timesliced = 1
     order by r.val, rr.val, f.val, y.val")
 
     return_val["queryvtradeannual"] = (dbpath, "select r.val as r, rr.val as rr, f.val as f, y.val as y
@@ -80,17 +83,13 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
 
     # fs_t is populated if t produces from storage
     return_val["queryvrateofproductionbytechnologybymodenn"] = (dbpath, "select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y,
-    cast(oar.val as real) as oar, cast(ys.val as real) as ys, fs.t as fs_t, cast(ret.val as real) as ret
-    from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, OutputActivityRatio_def oar
+    cast(oar.val as real) as oar, cast(ys.val as real) as ys
+    from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, OutputActivityRatio_def oar, timeslicedtech tst
     left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
-	left join (select DISTINCT tfs.r, tfs.t, tfs.m, y.val as y from TechnologyFromStorage_def tfs, year y
-		left join nodalstorage ns on ns.r = tfs.r and ns.s = tfs.s and ns.y = y.val
-		where tfs.val > 0 $(restrictyears ? "and y.val in" * inyears : "")
-		and ns.r is null) fs on fs.r = r.val and fs.t = t.val and fs.m = m.val and fs.y = y.val
-    left join RETagTechnology_def ret on ret.r = r.val and ret.t = t.val and ret.y = y.val
     where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.m = m.val and oar.y = y.val
     and oar.val <> 0
     and ys.y = y.val
+    and tst.r = r.val and tst.t = t.val and tst.y = y.val
     and tme.id is null
     $(restrictyears ? "and y.val in" * inyears : "")
 	order by r.val, f.val, y.val, ys.l, t.val")
@@ -99,61 +98,43 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     from region r, YearSplit_def ys, technology t, fuel f, year y,
     (select distinct r, t, f, y
     from OutputActivityRatio_def
-    where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar
+    where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar, timeslicedtech tst
     left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
     where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val
     and ys.y = y.val
+    and tst.r = r.val and tst.t = t.val and tst.y = y.val
     and tme.id is null
     order by r.val, ys.l, f.val, y.val")
 
-    return_val["queryvproductionbytechnologyannual"] = (dbpath, "select * from (
-    select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l,
-    cast(ys.val as real) as ys
-    from region r, technology t, fuel f, year y, YearSplit_def ys,
-    (select distinct r, t, f, y
-    from OutputActivityRatio_def
-    where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar
-    left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
-    where oar.r = r.val and oar.t = t.val and oar.f = f.val and oar.y = y.val
-    and ys.y = y.val
-    and tme.id is null
-    union all
-    select n.r as r, ntc.t as t, oar.f as f, ntc.y as y, ntc.n as n, ys.l as l,
-    cast(ys.val as real) as ys
-    from NodalDistributionTechnologyCapacity_def ntc, NODE n,
-    TransmissionModelingEnabled tme, YearSplit_def ys,
-    (select distinct r, t, f, y
-    from OutputActivityRatio_def
-    where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar
-    where ntc.val > 0
-    and ntc.n = n.val
-    and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
-    and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
-    and ntc.y = ys.y
-    )
-    order by r, t, f, y")
+    return_val["queryvproductionbytechnologyannual"] = (dbpath, "select oar.r as r, oar.t as t, oar.f as f, oar.y as y, oar.m as m, cast(oar.val as real) as oar
+    from OutputActivityRatio_def oar
+    where oar.val <> 0
+    $(restrictyears ? "and oar.y in" * inyears : "")
+    order by oar.r, oar.t, oar.f, oar.y")
 
     return_val["queryvrateofusebytechnologybymodenn"] = (dbpath, "select r.val as r, ys.l as l, t.val as t, m.val as m, f.val as f, y.val as y, cast(iar.val as real) as iar
-    from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, InputActivityRatio_def iar
+    from region r, YearSplit_def ys, technology t, MODE_OF_OPERATION m, fuel f, year y, InputActivityRatio_def iar, timeslicedtech tst
     left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
 	left join (select distinct n.r, ntc.t, ntc.y from NodalDistributionTechnologyCapacity_def ntc, node n where ntc.n = n.val and ntc.val > 0) ntcr 
 		on ntcr.r = r.val and ntcr.t = t.val and ntcr.y = y.val
     where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.m = m.val and iar.y = y.val and iar.val <> 0
     and ys.y = y.val
     and (tme.id is null or (tme.id is not null and ntcr.t is null))
+    and tst.r = r.val and tst.t = t.val and tst.y = y.val
     $(restrictyears ? "and y.val in" * inyears : "")
     order by r.val, ys.l, t.val, f.val, y.val")
 
     return_val["queryvrateofusebytechnologynn"] = (dbpath, "with iar as (select distinct r, t, f, y from InputActivityRatio_def where val <> 0 $(restrictyears ? "and y in" * inyears : ""))
     select r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
-    from region r, YearSplit_def ys, technology t, fuel f, year y, iar
+    from region r, YearSplit_def ys, technology t, fuel f, year y, iar, timeslicedtech tst
     left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
     where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
     and ys.y = y.val
     and tme.id is null
+    and tst.r = r.val and tst.t = t.val and tst.y = y.val
 	union all
 	select r.val as r, ys.l as l, t.val as t, f.val as f, y.val as y, cast(ys.val as real) as ys
-    from region r, YearSplit_def ys, technology t, fuel f, year y, TransmissionModelingEnabled tme, iar
+    from region r, YearSplit_def ys, technology t, fuel f, year y, TransmissionModelingEnabled tme, iar, timeslicedtech tst
 	left join (select distinct n.r, ntc.t, ntc.y from NodalDistributionTechnologyCapacity_def ntc, node n where ntc.n = n.val and ntc.val > 0) ntcr 
 		on ntcr.r = r.val and ntcr.t = t.val and ntcr.y = y.val
 	where 
@@ -161,38 +142,14 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
 	and tme.r = r.val and tme.f = f.val and tme.y = y.val
 	and iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
 	and ntcr.t is null
+    and tst.r = r.val and tst.t = t.val and tst.y = y.val
     order by r.val, ys.l, f.val, y.val")
 
-    return_val["queryvusebytechnologyannual"] = (dbpath, "with iar as (select distinct r, t, f, y from InputActivityRatio_def where val <> 0 $(restrictyears ? "and y in" * inyears : ""))
-    select * from (
-    select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l, cast(ys.val as real) as ys
-    from region r, technology t, fuel f, year y, YearSplit_def ys, iar
-    left join TransmissionModelingEnabled tme on tme.r = r.val and tme.f = f.val and tme.y = y.val
-    where iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
-    and ys.y = y.val
-    and tme.id is null
-	union all
-	select r.val as r, t.val as t, f.val as f, y.val as y, null as n, ys.l as l, cast(ys.val as real) as ys
-    from region r, technology t, fuel f, year y, YearSplit_def ys, iar, TransmissionModelingEnabled tme
-	left join (select distinct n.r, ntc.t, ntc.y from NodalDistributionTechnologyCapacity_def ntc, node n where ntc.n = n.val and ntc.val > 0) ntcr 
-		on ntcr.r = r.val and ntcr.t = t.val and ntcr.y = y.val
-	where 
-	ys.y = y.val
-	and tme.r = r.val and tme.f = f.val and tme.y = y.val
-	and iar.r = r.val and iar.t = t.val and iar.f = f.val and iar.y = y.val
-	and ntcr.t is null
-    union all
-    select n.r as r, ntc.t as t, iar.f as f, ntc.y as y, ntc.n as n, ys.l as l,
-    cast(ys.val as real) as ys
-    from NodalDistributionTechnologyCapacity_def ntc, NODE n,
-    TransmissionModelingEnabled tme, YearSplit_def ys, iar
-    where ntc.val > 0
-    and ntc.n = n.val
-    and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
-    and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
-    and ntc.y = ys.y
-    )
-    order by r, t, f, y")
+    return_val["queryvusebytechnologyannual"] = (dbpath, "select iar.r as r, iar.t as t, iar.f as f, iar.y as y, iar.m as m, cast(iar.val as real) as iar
+    from InputActivityRatio_def iar
+    where iar.val <> 0
+    $(restrictyears ? "and iar.y in" * inyears : "")
+    order by iar.r, iar.t, iar.f, iar.y")
 
     return_val["querycaa5_totalnewcapacity"] = (dbpath, "select cot.r as r, cot.t as t, cot.y as y, cast(cot.val as real) as cot
     from CapacityOfOneTechnologyUnit_def cot where cot.val <> 0 $(restrictyears ? "and cot.y in" * inyears : "")")
@@ -235,11 +192,12 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
         where val <> 0 $(restrictyears ? "and y in" * inyears : "")
         union
         select r, t, f, m, y from InputActivityRatio_def
-        where val <> 0 $(restrictyears ? "and y in" * inyears : "")) ar
+        where val <> 0 $(restrictyears ? "and y in" * inyears : "")) ar, timeslicedtech tst
         where ntc.val > 0
         and ntc.n = n.val
         and tme.r = n.r and tme.f = ar.f and tme.y = ntc.y
         and ar.r = n.r and ar.t = ntc.t and ar.y = ntc.y
+        and tst.r = n.r and tst.t = ntc.t and tst.y = ntc.y
         order by ntc.n, ntc.t, l.val, ntc.y")
 
         return_val["queryvrateofproductionbytechnologynodal"] = (dbpath, "select ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y,
@@ -248,12 +206,13 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     	TransmissionModelingEnabled tme,
         (select distinct r, t, f, y
         from OutputActivityRatio_def
-        where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar
+        where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar, timeslicedtech tst
         where ntc.val > 0
         and ntc.y = ys.y
         and ntc.n = n.val
         and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
     	and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
+        and tst.r = n.r and tst.t = ntc.t and tst.y = ntc.y
         order by ntc.n, ys.l, oar.f, ntc.y")
 
         return_val["queryvrateofusebytechnologynodal"] = (dbpath, "select ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y,
@@ -262,12 +221,13 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     	TransmissionModelingEnabled tme,
         (select distinct r, t, f, y
         from InputActivityRatio_def
-        where val <> 0 $(restrictyears ? "and y in" * inyears : "")) iar
+        where val <> 0 $(restrictyears ? "and y in" * inyears : "")) iar, timeslicedtech tst
         where ntc.val > 0
         and ntc.y = ys.y
         and ntc.n = n.val
         and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
     	and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
+        and tst.r = n.r and tst.t = ntc.t and tst.y = ntc.y
         order by ntc.n, ys.l, iar.f, ntc.y")
 
         if vproductionbytechnologysaved
@@ -276,12 +236,13 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
             TransmissionModelingEnabled tme,
             (select distinct r, t, f, y
             from OutputActivityRatio_def
-            where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar
+            where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar, timeslicedtech tst
             where ntc.val > 0
             and ntc.y = ys.y
             and ntc.n = n.val
             and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
-            and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y")
+            and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
+            and tst.r = n.r and tst.t = ntc.t and tst.y = ntc.y")
 
             return_val["queryvproductionbytechnologynodal"] = (dbpath, "select n.r as r, ntc.n as n, ys.l as l, ntc.t as t, oar.f as f, ntc.y as y,
                 cast(ys.val as real) as ys
@@ -289,12 +250,13 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
             TransmissionModelingEnabled tme,
             (select distinct r, t, f, y
             from OutputActivityRatio_def
-            where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar
+            where val <> 0 $(restrictyears ? "and y in" * inyears : "")) oar, timeslicedtech tst
             where ntc.val > 0
             and ntc.y = ys.y
             and ntc.n = n.val
             and tme.r = n.r and tme.f = oar.f and tme.y = ntc.y
             and oar.r = n.r and oar.t = ntc.t and oar.y = ntc.y
+            and tst.r = n.r and tst.t = ntc.t and tst.y = ntc.y
             order by n.r, ys.l, ntc.t, oar.f, ntc.y")
         end
 
@@ -304,12 +266,13 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
             TransmissionModelingEnabled tme,
             (select distinct r, t, f, y
             from InputActivityRatio_def
-            where val <> 0 $(restrictyears ? "and y in" * inyears : "")) iar
+            where val <> 0 $(restrictyears ? "and y in" * inyears : "")) iar, timeslicedtech tst
             where ntc.val > 0
             and ntc.y = ys.y
             and ntc.n = n.val
             and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
-            and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y")
+            and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
+            and tst.r = n.r and tst.t = ntc.t and tst.y = ntc.y")
 
             return_val["queryvusebytechnologynodal"] = (dbpath, "select n.r as r, ntc.n as n, ys.l as l, ntc.t as t, iar.f as f, ntc.y as y,
                 cast(ys.val as real) as ys
@@ -317,12 +280,13 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
             TransmissionModelingEnabled tme,
             (select distinct r, t, f, y
             from InputActivityRatio_def
-            where val <> 0 $(restrictyears ? "and y in" * inyears : "")) iar
+            where val <> 0 $(restrictyears ? "and y in" * inyears : "")) iar, timeslicedtech tst
             where ntc.val > 0
             and ntc.y = ys.y
             and ntc.n = n.val
             and tme.r = n.r and tme.f = iar.f and tme.y = ntc.y
             and iar.r = n.r and iar.t = ntc.t and iar.y = ntc.y
+            and tst.r = n.r and tst.t = ntc.t and tst.y = ntc.y
             order by n.r, ys.l, ntc.t, iar.f, ntc.y")
         end
 
@@ -376,6 +340,7 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
         left join NODE n on n.r = r.val
         where
         ys.l = l.val and ys.y = y.val
+        and f.timesliced = 1
         $(restrictyears ? "and y.val in" * inyears : "")
         order by r.val, l.val, f.val, y.val")
 

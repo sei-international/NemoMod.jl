@@ -676,6 +676,9 @@ Multiplier that defines the level of reserve production capacity for a [region](
 | `y` | text  | Year |
 | `val` | real  | Multiplier (e.g., 1.15 for a 15% reserve margin) |
 
+!!! note
+    If a reserve margin is set for a fuel, the fuel must be time-sliced (`FUEL.timesliced` = `1`).
+
 ## [Reserve margin tag technology](@id ReserveMarginTagTechnology)
 
 Fraction of a [technology's](@ref technology) installed capacity that counts toward the [reserve margin](@ref ReserveMargin).
@@ -845,6 +848,9 @@ Indicator of whether a [technology](@ref technology) can discharge a [storage](@
 !!! tip
     It is not necessary to populate zeros in `TechnologyFromStorage` for technologies that aren't connected to a storage. NEMO assumes no connection if a technology isn't represented in the table.
 
+!!! note
+    If a technology is connected to storage via `TechnologyFromStorage`, the fuels it produces must be time-sliced (`FUEL.timesliced` = `1`).
+
 ## [Technology to storage](@id TechnologyToStorage)
 
 Indicator of whether a [technology](@ref technology) can charge a [storage](@ref storage).
@@ -864,6 +870,9 @@ Indicator of whether a [technology](@ref technology) can charge a [storage](@ref
 
 !!! tip
     It is not necessary to populate zeros in `TechnologyToStorage` for technologies that aren't connected to a storage. NEMO assumes no connection if a technology isn't represented in the table.
+
+!!! note
+    If a technology is connected to storage via `TechnologyToStorage`, the fuels it consumes must be time-sliced (`FUEL.timesliced` = `1`).
 
 ## [Time slice group assignment](@id LTsGroup)
 
@@ -1140,6 +1149,9 @@ Indicator of whether transmission modeling is enabled for a [region](@ref region
 
 !!! note
     At present, NEMO does not endogenously simulate line losses for types 1 and 2.
+
+!!! note
+    If transmission modeling is enabled for a fuel, the fuel must be time-sliced (`FUEL.timesliced` = `1`).
 
 #### Scenario database
 
