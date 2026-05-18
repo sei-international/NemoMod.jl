@@ -744,6 +744,9 @@ Time-sliced exogenous demand. Use this parameter to specify the total demand in 
 | `y` | text  | Year |
 | `val` | real  | Demand (region's energy [unit](@ref uoms)) |
 
+!!! note
+    If you define specified annual demand for a non time-sliced [fuel](@ref fuel), NEMO treats it as analogous to [accumulated annual demand](@ref AccumulatedAnnualDemand) (i.e., as demand at the annual level, ignoring the [specified demand profile](@ref SpecifiedDemandProfile)).
+
 ## [Specified demand profile](@id SpecifiedDemandProfile)
 
 Fraction of [specified annual demand](@ref SpecifiedAnnualDemand) assigned to a [time slice](@ref timeslice). For a given [fuel](@ref fuel) and [year](@ref year), the sum of `SpecifiedDemandProfile` across time slices should be 1.
