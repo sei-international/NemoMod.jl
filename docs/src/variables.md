@@ -530,7 +530,7 @@ Discounted residual value of [capital investment transmission](@ref vcapitalinve
 
 ### [Subsidies disbursed by technology](@id vsubsidybytechnology)
 
-Subsidies disbursed for a [technology](@ref technology) in a [region](@ref region) and [year](@ref year). Subsidies can be applied to new endogenously built technology capacity if the [technology subsidy](@id TechnologySubsidy) parameter is set. They function like a discount on technology [capital costs](@ref CapitalCost), lowering capital investment and financing requirements. Unit: scenario's cost [unit](@ref uoms).
+Subsidies disbursed for a [technology](@ref technology) in a [region](@ref region) and [year](@ref year). Subsidies can be applied to new endogenously built technology capacity if the [technology subsidy](@ref TechnologySubsidy) parameter is set. They function like a discount on technology [capital costs](@ref CapitalCost), lowering capital investment and financing requirements. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
