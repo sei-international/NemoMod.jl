@@ -372,7 +372,8 @@ function calculatescenario(
         "TotalAnnualMinCapacityStorage", "TotalAnnualMaxCapacityInvestmentStorage", "TotalAnnualMinCapacityInvestmentStorage", "TransmissionAvailabilityFactor",
         "TransmissionCapacityToActivityUnit", "StorageFullLoadHours", "RampRate", "RampingReset", "NodalDistributionDemand",
         "NodalDistributionTechnologyCapacity", "NodalDistributionStorageCapacity", "MinimumUtilization", "InterestRateTechnology",
-        "InterestRateStorage", "MinShareProduction", "MinAnnualTransmissionNodes", "MaxAnnualTransmissionNodes"]
+        "InterestRateStorage", "MinShareProduction", "MinAnnualTransmissionNodes", "MaxAnnualTransmissionNodes", "TechnologySubsidy",
+        "MaxSubsidyPerTechnology", "MaxSubsidyPerRegion"]
 
         createviewwithdefaults(db, paramsneedingdefs)
         create_other_nemo_indices(db)
@@ -904,6 +905,26 @@ modelvarindices["vannualfixedoperatingcost"] = (vannualfixedoperatingcost, ["r",
 modelvarindices["vtotaldiscountedcostbytechnology"] = (vtotaldiscountedcostbytechnology, ["r", "t", "y"])
 @variable(jumpmodel, vtotaldiscountedcost[sregion, syear])
 modelvarindices["vtotaldiscountedcost"] = (vtotaldiscountedcost, ["r", "y"])
+
+# BEGIN: Technology subsidy variables.
+# Created only when positive technology subsidies are defined for modeled years. Both variables are
+# restricted to the subsidy's (r,t,y) / (r,y) combinations, so they stay sparse regardless of restrictvars.
+technologysubsidies::Bool = (size(queries["queryvsubsidybytechnology"], 1) > 0)  # Indicates whether any positive technology subsidies are defined
+
+subsidykeys::Set{Tuple{String,String,String}} = technologysubsidies ?
+    Set((row[:r], row[:t], row[:y]) for row in DataFrames.eachrow(queries["queryvsubsidybytechnology"])) :
+    Set{Tuple{String,String,String}}()  # Set of (r,t,y) with non-zero unit technology subsidies
+
+if technologysubsidies
+    indexdicts = keydicts_threaded(queries["queryvsubsidybytechnology"], 2)  # Restrict vsubsidybytechnology to (r,t,y) with a positive subsidy
+    @variable(jumpmodel, vsubsidybytechnology[r=[k[1] for k = keys(indexdicts[1])], t=indexdicts[1][[r]], y=indexdicts[2][[r,t]]] >= 0)
+    modelvarindices["vsubsidybytechnology"] = (vsubsidybytechnology, ["r", "t", "y"])
+
+    indexdicts = keydicts_threaded(unique(select(queries["queryvsubsidybytechnology"], [:r, :y])), 1)  # Restrict vsubsidybyregion to (r,y) with at least one positive subsidy
+    @variable(jumpmodel, vsubsidybyregion[r=[k[1] for k = keys(indexdicts[1])], y=indexdicts[1][[r]]] >= 0)
+    modelvarindices["vsubsidybyregion"] = (vsubsidybyregion, ["r", "y"])
+end
+# END: Technology subsidy variables.
 
 if in("vmodelperiodcostbyregion", varstosavearr)
     @variable(jumpmodel, vmodelperiodcostbyregion[sregion])
@@ -5194,6 +5215,7 @@ logmsg("Queued constraint SI10_TotalDiscountedCostByStorage for creation.", quie
 
 # BEGIN: CC1a_FinancingTechnology.
 # Total financing costs discounted to year new capacity is deployed; assumes capital costs are financed at interest rate and repaid in equal installments over life of technology (payments occur at year's end)
+# Finance costs are only incurred on unsubidized portion of capital costs
 cc1a_financingtechnology::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
 t = Threads.@spawn(begin
@@ -5212,8 +5234,10 @@ t = Threads.@spawn(begin
         local dr = row[:dr]
         local irt = row[:irt]
 
-        push!(cc1a_financingtechnology, @build_constraint(row[:cc] * vnewcapacity[r,t,y] * (irt / (1 - (1 + irt)^(-ol)) - 1/ol)
-            * (1 - (1 + dr)^(-ol)) / dr == vfinancecost[r,t,y]))
+        push!(cc1a_financingtechnology, @build_constraint((row[:cc] * vnewcapacity[r,t,y] 
+        - ((r,t,y) in subsidykeys ? vsubsidybytechnology[r,t,y] : 0.0))
+        * (irt / (1 - (1 + irt)^(-ol)) - 1/ol)
+        * (1 - (1 + dr)^(-ol)) / dr == vfinancecost[r,t,y]))
     end
 
     put!(cons_channel, cc1a_financingtechnology)
@@ -5235,7 +5259,8 @@ t = Threads.@spawn(begin
         local y = row[:y]
 
         push!(cc1_undiscountedcapitalinvestment, @build_constraint(row[:cc] * vnewcapacity[r,t,y]
-            + vfinancecost[r,t,y] == vcapitalinvestment[r,t,y]))
+            + vfinancecost[r,t,y] - ((r,t,y) in subsidykeys ? vsubsidybytechnology[r,t,y] : 0.0)
+            == vcapitalinvestment[r,t,y]))
     end
 
     put!(cons_channel, cc1_undiscountedcapitalinvestment)
@@ -6028,6 +6053,98 @@ if transmissionmodeling
     logmsg("Queued constraint OC4Tr_DiscountedOperatingCostsTotalAnnual for creation.", quiet)
 end
 # END: OC4Tr_DiscountedOperatingCostsTotalAnnual.
+
+# BEGIN: Technology subsidy constraints.
+if technologysubsidies
+    # BEGIN: SB1_SubsidyByTechnology and SB2_SubsidyByRegion.
+    sb1_subsidybytechnology::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+    sb2_subsidybyregion::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+
+    t = Threads.@spawn(let
+        local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = sum of vsubsidybytechnology
+        local lastkeys = Array{String, 1}(undef,2)  # lastkeys[1] = r, lastkeys[2] = y
+
+        for row in DataFrames.eachrow(queries["queryvsubsidybytechnology"])
+            local r = row[:r]
+            local t = row[:t]
+            local y = row[:y]
+
+            if isassigned(lastkeys, 1) && (r != lastkeys[1] || y != lastkeys[2])
+                # Create constraint
+                push!(sb2_subsidybyregion, @build_constraint(sumexps[1] == vsubsidybyregion[lastkeys[1],lastkeys[2]]))
+                sumexps[1] = AffExpr()
+            end
+
+            # This formulation allows construction of unsubsidized capacity for t; vsubsidybytechnology is subsidies actually given out
+            push!(sb1_subsidybytechnology, @build_constraint(vsubsidybytechnology[r,t,y] <= row[:subsidy] * vnewcapacity[r,t,y]))
+            
+            add_to_expression!(sumexps[1], vsubsidybytechnology[r,t,y])
+            
+            lastkeys[1] = r
+            lastkeys[2] = y
+        end
+
+        # Create last constraint
+        if isassigned(lastkeys, 1)
+            push!(sb2_subsidybyregion, @build_constraint(sumexps[1] == vsubsidybyregion[lastkeys[1],lastkeys[2]]))
+        end
+
+        put!(cons_channel, sb1_subsidybytechnology)
+        put!(cons_channel, sb2_subsidybyregion)
+    end)
+
+    numconsarrays += 2
+    logmsg("Queued constraints SB1_SubsidyByTechnology and SB2_SubsidyByRegion for creation.", quiet)
+    # END: SB1_SubsidyByTechnology and SB2_SubsidyByRegion.
+
+    # BEGIN: SB3_MaxSubsidyPerTechnology.
+    # Total technology subsidy can't exceed MaxSubsidyPerTechnology; inner join to TechnologySubsidy_def
+    # restricts to (r,t,y) where vsubsidybytechnology actually exists
+    sb3_maxsubsidypertechnology::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+
+    t = Threads.@spawn(begin
+        for row in SQLite.DBInterface.execute(db, "select mspt.r as r, mspt.t as t, mspt.y as y, cast(mspt.val as real) as maxsubsidy
+        from MaxSubsidyPerTechnology_def mspt, TechnologySubsidy_def ts
+        where mspt.r = ts.r and mspt.t = ts.t and mspt.y = ts.y and ts.val > 0
+        $(restrictyears ? "and mspt.y in" * inyears : "")")
+            local r = row[:r]
+            local t = row[:t]
+            local y = row[:y]
+
+            push!(sb3_maxsubsidypertechnology, @build_constraint(vsubsidybytechnology[r,t,y] <= row[:maxsubsidy]))
+        end
+
+        put!(cons_channel, sb3_maxsubsidypertechnology)
+    end)
+
+    numconsarrays += 1
+    logmsg("Queued constraint SB3_MaxSubsidyPerTechnology for creation.", quiet)
+    # END: SB3_MaxSubsidyPerTechnology.
+
+    # BEGIN: SB4_MaxSubsidyPerRegion.
+    # Total regional subsidy can't exceed MaxSubsidyPerRegion
+    sb4_maxsubsidyperregion::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+
+    t = Threads.@spawn(begin
+        for row in SQLite.DBInterface.execute(db, "select mspr.r as r, mspr.y as y, cast(mspr.val as real) as maxsubsidy
+            from MaxSubsidyPerRegion_def mspr,
+            (select distinct r, y from TechnologySubsidy_def where val > 0
+                $(restrictyears ? "and y in" * inyears : "")) ts
+            where ts.r = mspr.r and ts.y = mspr.y")
+            local r = row[:r]
+            local y = row[:y]
+
+            push!(sb4_maxsubsidyperregion, @build_constraint(vsubsidybyregion[r,y] <= row[:maxsubsidy]))
+        end
+
+        put!(cons_channel, sb4_maxsubsidyperregion)
+    end)
+
+    numconsarrays += 1
+    logmsg("Queued constraint SB4_MaxSubsidyPerRegion for creation.", quiet)
+    # END: SB4_MaxSubsidyPerRegion.
+end  # if technologysubsidies
+# END: Technology subsidy constraints.
 
 # BEGIN: TDC1_TotalDiscountedCostByTechnology.
 tdc1_totaldiscountedcostbytechnology::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()

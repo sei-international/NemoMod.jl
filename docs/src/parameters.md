@@ -321,6 +321,37 @@ For the indicated [fuel](@ref fuel) and [year](@ref year), maximum energy that c
 | `y` | text  | Year |
 | `val` | real  | Energy (energy unit for regions containing `n1` and `n2`) |
 
+## [Maximum subsidies per technology](@id MaxSubsidyPerTechnology)
+
+Maximum subsidies that can be disbursed for a [technology](@ref technology) in a [region](@ref region) and [year](@ref year). Subsidies can be applied to new endogenously built technology capacity if the [`TechnologySubsidy`](@ref TechnologySubsidy) parameter is defined. They function like a discount on [capital costs](@ref CapitalCost), lowering capital investment and financing requirements.
+
+#### Scenario database
+
+**Table: `MaxSubsidyPerTechnology`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `t` | text  | Technology |
+| `y` | text  | Year |
+| `val` | real  | Maximum subsidies (scenario's cost [unit](@ref uoms)) |
+
+## [Maximum subsidies per region](@id MaxSubsidyPerRegion)
+
+Maximum [technology](@ref technology) subsidies that can be disbursed in a [region](@ref region) and [year](@ref year). Subsidies can be applied to new endogenously built technology capacity if the [`TechnologySubsidy`](@ref TechnologySubsidy) parameter is defined. They function like a discount on [capital costs](@ref CapitalCost), lowering capital investment and financing requirements.
+
+#### Scenario database
+
+**Table: `MaxSubsidyPerRegion`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `y` | text  | Year |
+| `val` | real  | Maximum technology subsidies (scenario's cost [unit](@ref uoms)) |
+
 ## [Minimum annual transmission between nodes](@id MinAnnualTransmissionNodes)
 
 For the indicated [fuel](@ref fuel) and [year](@ref year), minimum energy that must be received at the second [node](@ref node) (`n2`) via transmission from the first node (`n1`). Energy received is net of any transmission losses.
@@ -853,6 +884,22 @@ Indicator of whether a [technology](@ref technology) can discharge a [storage](@
 
 !!! note
     If a technology is connected to storage via `TechnologyFromStorage`, the fuels it produces must be time-sliced (`FUEL.timesliced` = `1`).
+
+## [Technology subsidy](@id TechnologySubsidy)
+
+Maximum permissible subsidy amount per unit of endogenously built [technology](@ref technology) capacity. Subsidies function like a discount on technology [capital costs](@ref CapitalCost), lowering capital investment and financing requirements.
+
+#### Scenario database
+
+**Table: `TechnologySubsidy`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `t` | text  | Technology |
+| `y` | text  | Year |
+| `val` | real  | Maximum permissible subsidy (scenario's cost [unit](@ref uoms) / region's power unit) |
 
 ## [Technology to storage](@id TechnologyToStorage)
 

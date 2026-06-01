@@ -162,6 +162,11 @@ function scenario_calc_queries(dbpath::String, transmissionmodeling::Bool, vprod
     and yi.y = y.val
     order by r.val, t.val")
 
+    return_val["queryvsubsidybytechnology"] = (dbpath, "select ts.r as r, ts.t as t, ts.y as y, cast(ts.val as real) as subsidy
+    from TechnologySubsidy_def ts
+    where ts.val > 0 $(restrictyears ? "and ts.y in" * inyears : "")
+    order by ts.r, ts.y, ts.t")
+
     return_val["queryvannualtechnologyemissionbymode"] = (dbpath, "select r, t, e, y, m, cast(val as real) as ear
     from EmissionActivityRatio_def ear $(restrictyears ? "where y in" * inyears : "")
     order by r, t, e, y")

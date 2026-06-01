@@ -59,6 +59,8 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.DBInterface.execute(db,"drop table if exists InterestRateTechnology")
     SQLite.DBInterface.execute(db,"drop table if exists LTsGroup")
     SQLite.DBInterface.execute(db,"drop table if exists MaxAnnualTransmissionNodes")
+    SQLite.DBInterface.execute(db,"drop table if exists MaxSubsidyPerRegion")
+    SQLite.DBInterface.execute(db,"drop table if exists MaxSubsidyPerTechnology")
     SQLite.DBInterface.execute(db,"drop table if exists MinAnnualTransmissionNodes")
     SQLite.DBInterface.execute(db,"drop table if exists MinShareProduction")
     SQLite.DBInterface.execute(db,"drop table if exists MinStorageCharge")
@@ -91,6 +93,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.DBInterface.execute(db,"drop table if exists StorageMaxDischargeRate")
     SQLite.DBInterface.execute(db,"drop table if exists TechWithCapacityNeededToMeetPeakTS")
     SQLite.DBInterface.execute(db,"drop table if exists TechnologyFromStorage")
+    SQLite.DBInterface.execute(db,"drop table if exists TechnologySubsidy")
     SQLite.DBInterface.execute(db,"drop table if exists TechnologyToStorage")
     SQLite.DBInterface.execute(db,"drop table if exists TotalAnnualMaxCapacity")
     SQLite.DBInterface.execute(db,"drop table if exists TotalAnnualMaxCapacityStorage")
@@ -145,7 +148,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     #   - 9: Added REGIONGROUP, RRGroup, REMinProductionTargetRG.
     #   - 10: Added ReserveMargin.f and ReserveMarginTagTechnology.f. Deprecated ReserveMarginTagFuel. Dropped original AvailabilityFactor table and renamed CapacityFactor to AvailabilityFactor. Added TransmissionAvailabilityFactor.
     #   - 11: Added MinAnnualTransmissionNodes, MaxAnnualTransmissionNodes
-    #   - 12: Added FUEL.timesliced
+    #   - 12: Added FUEL.timesliced, TechnologySubsidy, MaxSubsidyPerTechnology, MaxSubsidyPerRegion.
     SQLite.DBInterface.execute(db, "CREATE TABLE `Version` (`version` INTEGER, PRIMARY KEY(`version`))")
     SQLite.DBInterface.execute(db, "INSERT INTO Version VALUES($(NEMO_DB_VERSION))")
 
@@ -188,6 +191,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMaxCapacity` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMaxCapacityStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TechnologyToStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `s` TEXT, `m` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TechnologySubsidy` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TechnologyFromStorage` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `s` TEXT, `m` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`m`) REFERENCES `MODE_OF_OPERATION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `StorageMaxDischargeRate` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `StorageMaxChargeRate` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`)" : "") * " )")
@@ -217,6 +221,8 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `MinStorageCharge` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `s` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`s`) REFERENCES `STORAGE`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `MinShareProduction` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `MinAnnualTransmissionNodes` ( `id` INTEGER NOT NULL UNIQUE, `n1` TEXT, `n2` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`n1`) REFERENCES `NODE`(`val`), FOREIGN KEY(`n2`) REFERENCES `NODE`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
+    SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `MaxSubsidyPerTechnology` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
+    SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `MaxSubsidyPerRegion` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `MaxAnnualTransmissionNodes` ( `id` INTEGER NOT NULL UNIQUE, `n1` TEXT, `n2` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`n1`) REFERENCES `NODE`(`val`), FOREIGN KEY(`n2`) REFERENCES `NODE`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `LTsGroup` ( `id` INTEGER PRIMARY KEY AUTOINCREMENT, `l` TEXT UNIQUE,	`lorder` INTEGER, `tg2` TEXT, `tg1` TEXT" * (foreignkeys ? ", FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`), FOREIGN KEY(`tg2`) REFERENCES `TSGROUP2`(`name`), FOREIGN KEY(`tg1`) REFERENCES `TSGROUP1`(`name`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `InterestRateTechnology` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
@@ -622,6 +628,7 @@ end  # db_v10_to_v11(db::SQLite.DB; quiet::Bool = false)
 
 #= Upgrades NEMO database from version 11 to version 12 by: 
     - Adding FUEL.timesliced
+    - Adding TechnologySubsidy, MaxSubsidyPerTechnology, MaxSubsidyPerRegion
 =#
 function db_v11_to_v12(db::SQLite.DB; quiet::Bool = false)
     # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
@@ -631,6 +638,15 @@ function db_v11_to_v12(db::SQLite.DB; quiet::Bool = false)
 
         # Add FUEL.timesliced; default to 1 so existing databases preserve full time-sliced behavior with no other changes
         SQLite.DBInterface.execute(db, "ALTER TABLE `FUEL` ADD COLUMN `timesliced` INTEGER NOT NULL DEFAULT 1")
+
+        # Add TechnologySubsidy table
+        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TechnologySubsidy` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`))")
+
+        # Add MaxSubsidyPerTechnology table
+        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `MaxSubsidyPerTechnology` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`))")
+
+        # Add MaxSubsidyPerRegion table
+        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `MaxSubsidyPerRegion` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`))")
 
         SQLite.DBInterface.execute(db, "update version set version = 12")
 
@@ -730,6 +746,23 @@ function data_validation(db::SQLite.DB; expected_version::Int = NEMO_DB_VERSION)
         @warn "Data validation error. The following fuels are charged into or discharged from storage (via TechnologyToStorage with InputActivityRatio, or TechnologyFromStorage with OutputActivityRatio, in the matching mode of operation) but are marked non-time-sliced (FUEL.timesliced is not 1): " * join(violations, ", ") * ". Set FUEL.timesliced = 1 for these fuels, or remove the relevant storage connections."
     end
     # END: Check 3.
+
+    # BEGIN: Check 4 - a technology subsidy must be less than the technology's capital cost.
+    violations = String[]
+
+    for row in SQLite.DBInterface.execute(db, "select ts.r as r, ts.t as t, ts.y as y
+        from TechnologySubsidy_def ts, CapitalCost_def cc
+        where ts.r = cc.r and ts.t = cc.t and ts.y = cc.y
+        and ts.val > 0 and ts.val >= cc.val
+        order by ts.r, ts.t, ts.y")
+        push!(violations, string(row[:r], "/", row[:t], "/", row[:y]))
+    end
+
+    if !isempty(violations)
+        anyviolation = true
+        @warn "Data validation error. The following region/technology/year combinations have a TechnologySubsidy greater than or equal to the corresponding CapitalCost (shown as region/technology/year): " * join(violations, ", ") * ". A technology subsidy must be less than the technology's capital cost."
+    end
+    # END: Check 4.
 
     # If any check found violations, error out.
     if anyviolation

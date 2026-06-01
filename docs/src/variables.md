@@ -314,7 +314,7 @@ Use of a [fuel](@ref fuel) by a [technology](@ref technology) in a [time slice](
 
 ### [Capital investment](@id vcapitalinvestment)
 
-Undiscounted investment in new endogenously determined [technology](@ref technology) capacity, including capital and [financing costs](@ref vfinancecost). Unit: scenario's cost [unit](@ref uoms).
+Undiscounted investment in new endogenously determined [technology](@ref technology) capacity, including capital and [financing costs](@ref vfinancecost). This variable is net of any [subsidies](@ref vsubsidybytechnology). Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -386,7 +386,7 @@ Discounted total emission costs associated with a [technology](@ref technology) 
 
 ### [Financing cost](@id vfinancecost)
 
-Financing cost incurred for new endogenously built [technology](@ref technology) capacity. NEMO calculates this cost by assuming that capital costs for the capacity are financed at the [technology's interest rate](@ref InterestRateTechnology) and repaid in equal installments over the capacity's lifetime. This variable provides the total financing cost over the lifetime, discounted to the capacity's installation year. Unit: scenario's cost [unit](@ref uoms).
+Financing cost incurred for new endogenously built [technology](@ref technology) capacity. NEMO calculates this cost by assuming that capital costs for the capacity (minus any [subsidies](@ref vsubsidybytechnology)) are financed at the [technology's interest rate](@ref InterestRateTechnology) and repaid in equal installments over the capacity's lifetime. This variable provides the total financing cost over the lifetime, discounted to the capacity's installation year. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -527,6 +527,22 @@ Discounted residual value of [capital investment transmission](@ref vcapitalinve
 #### Julia code
 
 * Variable in JuMP model: `vdiscountedsalvagevaluetransmission[tr,y]`
+
+### [Subsidies disbursed by technology](@id vsubsidybytechnology)
+
+Subsidies disbursed for a [technology](@ref technology) in a [region](@ref region) and [year](@ref year). Subsidies can be applied to new endogenously built technology capacity if the [technology subsidy](@id TechnologySubsidy) parameter is set. They function like a discount on technology [capital costs](@ref CapitalCost), lowering capital investment and financing requirements. Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vsubsidybytechnology[r,t,y]`
+
+### [Subsidies disbursed by region](@id vsubsidybyregion)
+
+Sum of [`vsubsidybytechnology`](@ref vsubsidybytechnology) across technologies. Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vsubsidybyregion[r,y]`
 
 ### [Total discounted cost](@id vtotaldiscountedcost)
 

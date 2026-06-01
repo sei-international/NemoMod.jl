@@ -522,5 +522,96 @@ if @isdefined MosekTools
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
     end  # "Solving ramp_test with Mosek"
 
+    @testset "Solving subsidy_test with Mosek" begin
+        testnumber = 0  # Counter used in @info messages
+        dbfile = joinpath(dbfile_path, "subsidy_test.sqlite")
+        chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
+
+        # Test with default outputs
+        testnumber += 1
+        @info "Running Mosek test $(testnumber) on subsidy_test.sqlite: default outputs."
+        NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), quiet = calculatescenario_quiet, reportzeros=true)
+
+        db = SQLite.DB(dbfile)
+
+        if !compilation
+            testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where f = 'electricity' and y in (2020, 2029) order by y, t") |> DataFrame
+
+            @test testqry[1,:y] == "2020"
+            @test testqry[2,:y] == "2020"
+            @test testqry[3,:y] == "2020"
+            @test testqry[4,:y] == "2020"
+            @test testqry[5,:y] == "2029"
+            @test testqry[6,:y] == "2029"
+            @test testqry[7,:y] == "2029"
+            @test testqry[8,:y] == "2029"
+
+            @test testqry[1,:t] == "gas"
+            @test testqry[2,:t] == "solar"
+            @test testqry[3,:t] == "storage1"
+            @test testqry[4,:t] == "wind"
+            @test testqry[5,:t] == "gas"
+            @test testqry[6,:t] == "solar"
+            @test testqry[7,:t] == "storage1"
+            @test testqry[8,:t] == "wind"            
+
+            @test isapprox(testqry[1,:val], 1.13; atol=TOL)
+            @test isapprox(testqry[2,:val], 34.10; atol=TOL)
+            @test isapprox(testqry[3,:val], 14.64; atol=TOL)
+            @test isapprox(testqry[4,:val], 0.0; atol=TOL)
+            @test isapprox(testqry[5,:val], 0.0; atol=TOL)
+            @test isapprox(testqry[6,:val], 35.45; atol=TOL)
+            @test isapprox(testqry[7,:val], 15.77; atol=TOL)
+            @test isapprox(testqry[8,:val], 0.0; atol=TOL)
+        end
+
+        # Test with subsidies
+        testnumber += 1
+        @info "Running Mosek test $(testnumber) on subsidy_test.sqlite: subsidies."
+
+        try
+            SQLite.DBInterface.execute(db, "insert into TechnologySubsidy select null, 1, 'wind', val, 3800.0 from year")
+
+            NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer), quiet = calculatescenario_quiet, reportzeros=true)
+            
+            if !compilation
+                testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where f = 'electricity' and y in (2020, 2029) order by y, t") |> DataFrame
+
+                @test testqry[1,:y] == "2020"
+                @test testqry[2,:y] == "2020"
+                @test testqry[3,:y] == "2020"
+                @test testqry[4,:y] == "2020"
+                @test testqry[5,:y] == "2029"
+                @test testqry[6,:y] == "2029"
+                @test testqry[7,:y] == "2029"
+                @test testqry[8,:y] == "2029"
+
+                @test testqry[1,:t] == "gas"
+                @test testqry[2,:t] == "solar"
+                @test testqry[3,:t] == "storage1"
+                @test testqry[4,:t] == "wind"
+                @test testqry[5,:t] == "gas"
+                @test testqry[6,:t] == "solar"
+                @test testqry[7,:t] == "storage1"
+                @test testqry[8,:t] == "wind"            
+
+                @test isapprox(testqry[1,:val], 0.0; atol=TOL)
+                @test isapprox(testqry[2,:val], 0.0; atol=TOL)
+                @test isapprox(testqry[3,:val], 1.21; atol=TOL)
+                @test isapprox(testqry[4,:val], 31.84; atol=TOL)
+                @test isapprox(testqry[5,:val], 0.0; atol=TOL)
+                @test isapprox(testqry[6,:val], 0.0; atol=TOL)
+                @test isapprox(testqry[7,:val], 1.21; atol=TOL)
+                @test isapprox(testqry[8,:val], 31.84; atol=TOL)
+            end
+        finally
+            SQLite.DBInterface.execute(db, "delete from TechnologySubsidy")
+        end
+
+        # Delete test results and re-compact test database
+        NemoMod.dropresulttables(db)
+        testqry = SQLite.DBInterface.execute(db, "VACUUM")
+    end  # "Solving subsidy_test with Mosek"
+
     GC.gc()
 end  # @isdefined MosekTools
