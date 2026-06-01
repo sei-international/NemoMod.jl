@@ -25,7 +25,7 @@ if @isdefined HiGHS
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
         # Test with default outputs
-        testnumber = 0  # Counter used in @info messages
+        testnumber += 1
         @info "Running HiGHS test $(testnumber) on storage_test.sqlite: default outputs."
         NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer) : direct_model(HiGHS.Optimizer())), quiet = calculatescenario_quiet)
 
