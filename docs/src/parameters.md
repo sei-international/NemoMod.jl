@@ -337,6 +337,22 @@ Maximum subsidies that can be disbursed for a [technology](@ref technology) in a
 | `y` | text  | Year |
 | `val` | real  | Maximum subsidies (scenario's cost [unit](@ref uoms)) |
 
+## [Maximum subsidies per technology group](@id MaxSubsidyPerTechnologyGroup)
+
+Maximum subsidies that can be disbursed for a [technology group](@ref technologygroup) in a [region](@ref region) and [year](@ref year). Subsidies can be applied to new endogenously built technology capacity if the [`TechnologySubsidy`](@ref TechnologySubsidy) parameter is defined. They function like a discount on [capital costs](@ref CapitalCost), lowering capital investment and financing requirements.
+
+#### Scenario database
+
+**Table: `MaxSubsidyPerTechnologyGroup`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `tg` | text  | Technology group |
+| `y` | text  | Year |
+| `val` | real  | Maximum subsidies (scenario's cost [unit](@ref uoms)) |
+
 ## [Maximum subsidies per region](@id MaxSubsidyPerRegion)
 
 Maximum [technology](@ref technology) subsidies that can be disbursed in a [region](@ref region) and [year](@ref year). Subsidies can be applied to new endogenously built technology capacity if the [`TechnologySubsidy`](@ref TechnologySubsidy) parameter is defined. They function like a discount on [capital costs](@ref CapitalCost), lowering capital investment and financing requirements.
@@ -884,6 +900,20 @@ Indicator of whether a [technology](@ref technology) can discharge a [storage](@
 
 !!! note
     If a technology is connected to storage via `TechnologyFromStorage`, the fuels it produces must be time-sliced (`FUEL.timesliced` = `1`).
+
+## [Technology group assignment](@id TTGroup)
+
+Map of [technologies](@ref technology) to [technology groups](@ref technologygroup). A technology can belong to zero or more groups.
+
+#### Scenario database
+
+**Table: `TTGroup`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `tg` | text  | Technology group |
+| `t` | text  | Technology |
 
 ## [Technology subsidy](@id TechnologySubsidy)
 

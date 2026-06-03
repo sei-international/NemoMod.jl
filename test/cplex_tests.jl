@@ -586,7 +586,7 @@ if @isdefined CPLEX
         try
             SQLite.DBInterface.execute(db, "insert into TechnologySubsidy select null, 1, 'wind', val, 3800.0 from year")
 
-            NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())), quiet = calculatescenario_quiet, reportzeros=true)
+            NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())), quiet = calculatescenario_quiet, reportzeros=true, varstosave="vproductionbytechnologyannual, vsubsidybyregion")
 
             if !compilation
                 testqry = SQLite.DBInterface.execute(db, "select * from vproductionbytechnologyannual where f = 'electricity' and y in (2020, 2029) order by y, t") |> DataFrame
@@ -617,9 +617,22 @@ if @isdefined CPLEX
                 @test isapprox(testqry[6,:val], 0.0; atol=TOL)
                 @test isapprox(testqry[7,:val], 1.21; atol=TOL)
                 @test isapprox(testqry[8,:val], 31.84; atol=TOL)
+                
+                testqry = SQLite.DBInterface.execute(db, "select * from vsubsidybyregion where r = 1 and y = 2020") |> DataFrame
+                @test isapprox(testqry[1,:val], 32270.65; atol=TOL)
+            end
+
+            SQLite.DBInterface.execute(db, "insert into MaxSubsidyPerTechnologyGroup select null, 1, 1, val, 30000.0 from year")
+
+            NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())), quiet = calculatescenario_quiet, reportzeros=true, varstosave="vproductionbytechnologyannual, vsubsidybyregion")
+            
+            if !compilation
+                testqry = SQLite.DBInterface.execute(db, "select * from vsubsidybyregion where r = 1 and y = 2020") |> DataFrame
+                @test isapprox(testqry[1,:val], 30000.00; atol=TOL)
             end
         finally
             SQLite.DBInterface.execute(db, "delete from TechnologySubsidy")
+            SQLite.DBInterface.execute(db, "delete from MaxSubsidyPerTechnologyGroup")
         end
 
         # Delete test results and re-compact test database

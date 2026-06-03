@@ -18,11 +18,6 @@ Emissions or other externalities in the energy system. You can associate costs w
 | `val` | text | Unique identifier for emission |
 | `desc` | text  | Description of emission |
 
-#### Julia code
-
-* Set of emissions: `semission` (an `Array` of `EMISSION.val`)
-* Subscript for emissions in other variables: `e`
-
 ## [Fuel](@id fuel)
 
 Energy carriers. **Abbreviation: `f`.**
@@ -37,11 +32,6 @@ Energy carriers. **Abbreviation: `f`.**
 | `desc` | text  | Description of fuel |
 | `timesliced` | text  | Determines whether NEMO simulates production, consumption, and trade of fuel in time slices (`1`) or at annual level only (`0`); default value = `1` |
 
-#### Julia code
-
-* Set of fuels: `sfuel` (an `Array` of `FUEL.val`)
-* Subscript for fuels in other variables: `f`
-
 ## [Mode of operation](@id mode_of_operation)
 
 Different ways in which [technologies](@ref technology) can function. Typically, one mode is defined for energy generation or production; if a scenario models energy [storage](@ref storage), another is defined for charging storage. **Abbreviation: `m`.**
@@ -54,11 +44,6 @@ Different ways in which [technologies](@ref technology) can function. Typically,
 |:--- | :--: |:----------- |
 | `val` | text | Unique identifier for mode |
 | `desc` | text  | Description of mode |
-
-#### Julia code
-
-* Set of modes: `smode_of_operation` (an `Array` of `MODE_OF_OPERATION.val`)
-* Subscript for modes in other variables: `m`
 
 ## [Node](@id node)
 
@@ -74,11 +59,6 @@ Locations in a transmission (or transmission and distribution) network. Networks
 | `desc` | text  | Description of node |
 | `r` | text  | [Region](@ref region) in which node is located (`REGION.val`) |
 
-#### Julia code
-
-* Set of nodes: `snode` (an `Array` of `NODE.val`)
-* Subscript for nodes in other variables: `n`
-
 ## [Region](@id region)
 
 Geographic regions. **Abbreviation: `r`.**
@@ -92,11 +72,6 @@ Geographic regions. **Abbreviation: `r`.**
 | `val` | text | Unique identifier for region |
 | `desc` | text  | Description of region |
 
-#### Julia code
-
-* Set of regions: `sregion` (an `Array` of `REGION.val`)
-* Subscript for regions in other variables: `r`
-
 ## [Region group](@id regiongroup)
 
 Groups of geographic regions. Each region can belong to multiple groups. **Abbreviation: `rg`.**
@@ -109,10 +84,6 @@ Groups of geographic regions. Each region can belong to multiple groups. **Abbre
 |:--- | :--: |:----------- |
 | `val` | text | Unique identifier for region group |
 | `desc` | text  | Description of region group |
-
-#### Julia code
-
-* Subscript for region groups in variables: `rg`
 
 ## [Storage](@id storage)
 
@@ -130,11 +101,6 @@ Energy storage options or facilities. **Abbreviation: `s`.**
 | `netzerotg1` | integer  | Indicates that storage can have no net charging or discharging over a [time slice group 1](@ref tsgroup1) (`1` = enabled) |
 | `netzerotg2` | integer  | Indicates that storage can have no net charging or discharging over a [time slice group 2](@ref tsgroup2) (`1` = enabled) |
 
-#### Julia code
-
-* Set of storage: `sstorage` (an `Array` of `STORAGE.val`)
-* Subscript for storage in other variables: `s`
-
 ## [Technology](@id technology)
 
 Energy-consuming or producing devices or equipment. **Abbreviation: `t`.**
@@ -148,10 +114,18 @@ Energy-consuming or producing devices or equipment. **Abbreviation: `t`.**
 | `val` | text | Unique identifier for technology |
 | `desc` | text  | Description of technology |
 
-#### Julia code
+## [Technology group](@id technologygroup)
 
-* Set of technologies: `stechnology` (an `Array` of `TECHNOLOGY.val`)
-* Subscript for technologies in other variables: `t`
+Groups of technologies. Each technology can belong to multiple groups. **Abbreviation: `tg`.**
+
+#### Scenario database
+
+**Table: `TECHNOLOGYGROUP`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `val` | text | Unique identifier for technology group |
+| `desc` | text  | Description of technology group |
 
 ## [Time slice](@id timeslice)
 
@@ -165,11 +139,6 @@ Sub-annual periods used to model energy demand and supply in selected cases. The
 |:--- | :--: |:----------- |
 | `val` | text | Unique identifier for time slice |
 | `desc` | text  | Description of time slice |
-
-#### Julia code
-
-* Set of time slices: `stimeslice` (an `Array` of `TIMESLICE.val`)
-* Subscript for technologies in other variables: `l`
 
 ## [Time slice group 1](@id tsgroup1)
 
@@ -186,11 +155,6 @@ Groupings of [time slices](@ref timeslice) within a [year](@ref year). **Abbrevi
 | `order` | integer  | Order of group within a year (should be `1` for first group, incremented by 1 for subsequent groups) |
 | `multiplier` | real  | Multiplier used in storage calculations (see [Time slicing](@ref time_slicing)) |
 
-#### Julia code
-
-* Set of groups: `stsgroup1` (an `Array` of `TSGROUP1.name`)
-* Subscript for groups in other variables: `tg1`
-
 ## [Time slice group 2](@id tsgroup2)
 
 Groupings of [time slices](@ref timeslice) within a [time slice group 1](@ref tsgroup1). **Abbreviation: `tg2`.**
@@ -205,11 +169,6 @@ Groupings of [time slices](@ref timeslice) within a [time slice group 1](@ref ts
 | `desc` | text  | Description of group |
 | `order` | integer  | Order of group within a time slice group 1 (should be `1` for first group, incremented by 1 for subsequent groups) |
 | `multiplier` | real  | Multiplier used in storage calculations (see [Time slicing](@ref time_slicing)) |
-
-#### Julia code
-
-* Set of groups: `stsgroup2` (an `Array` of `TSGROUP2.name`)
-* Subscript for groups in other variables: `tg2`
 
 ## [Transmission line](@id transmissionline)
 
@@ -235,11 +194,6 @@ Connections between [nodes](@ref node) in a transmission (or transmission and di
 | `efficiency` | real  | Efficiency of transmission over line (%, only used for pipeline flow modeling; see [`TransmissionModelingEnabled`](@ref TransmissionModelingEnabled)) |
 | `interestrate` | real  | Interest rate NEMO should use to calculate financing costs if building line endogenously (0 to 1; see [`vfinancecosttransmission`](@ref vfinancecosttransmission)) |
 
-#### Julia code
-
-* Set of lines: `stransmission` (an `Array` of `TransmissionLine.id`)
-* Subscript for lines in other variables: `tr`
-
 !!! note
 
     NEMO includes binary decision variables in a scenario's optimization problem if you a) model a transmission line with a non-zero variable cost; or b) model a line with an efficiency less than 1 using [transmission modeling type 3](@ref TransmissionModelingEnabled). This can increase solver run-time.
@@ -256,8 +210,3 @@ Years covered by scenario. Years must be integral. **Abbreviation: `y`.**
 |:--- | :--: |:----------- |
 | `val` | text | Unique identifier for year |
 | `desc` | text  | Description of year |
-
-#### Julia code
-
-* Set of years: `syear` (an `Array` of `YEAR.val` in numeric order)
-* Subscript for years in other variables: `y`

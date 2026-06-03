@@ -106,7 +106,7 @@ end  # reset_jumpmodel(jumpmodel::JuMP.Model; direct::Bool=false, bridges::Bool=
 """
     translatesetabb(a::String)
 
-Translates a set abbreviation into the set's name.
+Translates a dimension abbreviation into the dimension's name.
 
 # Examples
 ```jldoctest
@@ -147,6 +147,8 @@ function translatesetabb(a::String)
         return "TransmissionLine"
     elseif a == "rg"
         return "REGIONGROUP"
+    elseif a == "tg"
+        return "TECHNOLOGYGROUP"
     else
         return a
     end

@@ -373,7 +373,7 @@ function calculatescenario(
         "TransmissionCapacityToActivityUnit", "StorageFullLoadHours", "RampRate", "RampingReset", "NodalDistributionDemand",
         "NodalDistributionTechnologyCapacity", "NodalDistributionStorageCapacity", "MinimumUtilization", "InterestRateTechnology",
         "InterestRateStorage", "MinShareProduction", "MinAnnualTransmissionNodes", "MaxAnnualTransmissionNodes", "TechnologySubsidy",
-        "MaxSubsidyPerTechnology", "MaxSubsidyPerRegion"]
+        "MaxSubsidyPerTechnology", "MaxSubsidyPerRegion", "MaxSubsidyPerTechnologyGroup"]
 
         createviewwithdefaults(db, paramsneedingdefs)
         create_other_nemo_indices(db)
@@ -6143,6 +6143,53 @@ if technologysubsidies
     numconsarrays += 1
     logmsg("Queued constraint SB4_MaxSubsidyPerRegion for creation.", quiet)
     # END: SB4_MaxSubsidyPerRegion.
+
+    # BEGIN: SB5_MaxSubsidyPerTechnologyGroup.
+    # Total subsidy across the members of a technology group can't exceed MaxSubsidyPerTechnologyGroup
+    sb5_maxsubsidypertechnologygroup::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+
+    t = Threads.@spawn(let
+        local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = sum of vsubsidybytechnology over t in current tg
+        local lastkeys = Array{String, 1}(undef, 3)  # lastkeys[1] = r, lastkeys[2] = tg, lastkeys[3] = y
+        local lastvals = Array{Float64, 1}(undef,1)  # lastvals[1] = maxsubsidy
+
+        for row in SQLite.DBInterface.execute(db, "select mspg.r as r, mspg.tg as tg, mspg.y as y, ts.t as t, cast(mspg.val as real) as maxsubsidy
+        from MaxSubsidyPerTechnologyGroup_def mspg, TTGroup ttg, TechnologySubsidy_def ts
+        where mspg.val is not null
+        and ttg.tg = mspg.tg and ttg.t = ts.t
+        and ts.r = mspg.r and ts.y = mspg.y and ts.val > 0
+        $(restrictyears ? "and mspg.y in" * inyears : "")
+        order by mspg.r, mspg.tg, mspg.y, ts.t")
+            local r = row[:r]
+            local tg = row[:tg]
+            local y = row[:y]
+            local t = row[:t]
+
+            if isassigned(lastkeys, 1) && (r != lastkeys[1] || tg != lastkeys[2] || y != lastkeys[3])
+                # Push constraint for previous (r, tg, y) group
+                push!(sb5_maxsubsidypertechnologygroup, @build_constraint(sumexps[1] <= lastvals[1]))
+                sumexps[1] = AffExpr()
+            end
+
+            add_to_expression!(sumexps[1], vsubsidybytechnology[r, t, y])
+
+            lastkeys[1] = r
+            lastkeys[2] = tg
+            lastkeys[3] = y
+            lastvals[1] = row[:maxsubsidy]
+        end
+
+        # Push last constraint
+        if isassigned(lastkeys, 1)
+            push!(sb5_maxsubsidypertechnologygroup, @build_constraint(sumexps[1] <= lastvals[1]))
+        end
+
+        put!(cons_channel, sb5_maxsubsidypertechnologygroup)
+    end)
+
+    numconsarrays += 1
+    logmsg("Queued constraint SB5_MaxSubsidyPerTechnologyGroup for creation.", quiet)
+    # END: SB5_MaxSubsidyPerTechnologyGroup.
 end  # if technologysubsidies
 # END: Technology subsidy constraints.
 
