@@ -4,7 +4,7 @@
 
     Copyright © 2024: Stockholm Environment Institute U.S.
 
-    File description: Tests for OSeMOSYS to NemoMod converter.
+    File description: Tests for OSeMOSYS to NEMO converter.
 =#
 
 """Creates a minimal OSeMOSYS SQLite database for testing at the given path."""
@@ -198,7 +198,7 @@ end
 const osemosys_src_path = joinpath(dbfile_path, "test_osemosys_src.sqlite")
 const nemo_dest_path = joinpath(dbfile_path, "test_osemosys_dest.sqlite")
 
-@info "Testing OSeMOSYS to NemoMod converter."
+@info "Testing OSeMOSYS to NEMO converter."
 
 # ---- Main conversion test: create source DB, convert, then run all checks ----
 _create_test_osemosys_db(osemosys_src_path)
@@ -231,7 +231,7 @@ end
     years = sort(DataFrame(SQLite.DBInterface.execute(destdb, "SELECT val FROM YEAR")).val)
     !compilation && @test years == ["2020", "2025", "2030"]
 
-    # STORAGE: check val and extra NemoMod fields
+    # STORAGE: check val and extra NEMO fields
     storage_df = DataFrame(SQLite.DBInterface.execute(destdb, "SELECT val, netzeroyear, netzerotg1, netzerotg2 FROM STORAGE"))
     !compilation && @test size(storage_df, 1) == 1
     !compilation && @test storage_df[1, :val] == "DAM"
@@ -601,7 +601,7 @@ end
     rm(test_dir2)
 
     # Source DB missing a required dimension table (TECHNOLOGY) must error
-    # *before* the destination NemoMod DB is created, so no stale file is left behind.
+    # *before* the destination NEMO DB is created, so no stale file is left behind.
     incomplete_src = joinpath(dbfile_path, "test_incomplete_src.sqlite")
     incomplete_dest = joinpath(dbfile_path, "test_incomplete_dest.sqlite")
     delete_file(incomplete_src, 5)
@@ -628,15 +628,15 @@ end
     delete_file(joinpath(dbfile_path, "test_err_dest2.sqlite"), 5)
 end
 
-# ---- Roundtrip: storage_test_otoole CSV fixture -> NemoMod ----
+# ---- Roundtrip: storage_test_otoole CSV fixture -> NEMO ----
 # End-to-end exercise of the production CSV-input path of convert_osemosys
 # against the storage_test_otoole/ fixture (35 otoole-format CSVs + config.yaml).
 # The fixture is a faithful otoole representation of storage_test.sqlite (with
 # the documented adaptations in test/storage_test_otoole/README.md), so the
-# resulting NemoMod database should match the original modulo those documented
+# resulting NEMO database should match the original modulo those documented
 # differences. This testset covers _parse_otoole_config and
 # _load_csv_directory_to_sqlite! as well as the entire downstream
-# OSeMOSYS->NemoMod converter pipeline.
+# OSeMOSYS->NEMO converter pipeline.
 
 @testset "storage_test_otoole CSV roundtrip" begin
     otoole_dir = joinpath(dbfile_path, "storage_test_otoole")
@@ -691,7 +691,7 @@ end
     !compilation && @test isapprox(wd[1, :multiplier], 5.0; atol=0.01)
     !compilation && @test isapprox(we[1, :multiplier], 2.0; atol=0.01)
 
-    # LTsGroup: every NemoMod row should reappear identically.
+    # LTsGroup: every NEMO row should reappear identically.
     lts_rt = DataFrame(SQLite.DBInterface.execute(destdb_rt,
         "SELECT l, lorder, tg1, tg2 FROM LTsGroup ORDER BY l"))
     lts_orig = DataFrame(SQLite.DBInterface.execute(origdb_rt,
@@ -766,7 +766,7 @@ end
         "SELECT COUNT(*) AS n FROM AvailabilityFactor WHERE t='solar'"))
     !compilation && @test af_solar[1, :n] == 960
 
-    # ---- ReserveMargin: NemoMod 3D form is rebuilt from 2D + ReserveMarginTagFuel ----
+    # ---- ReserveMargin: NEMO 3D form is rebuilt from 2D + ReserveMarginTagFuel ----
     rm_rt = DataFrame(SQLite.DBInterface.execute(destdb_rt,
         "SELECT r, f, y, val FROM ReserveMargin ORDER BY y"))
     !compilation && @test size(rm_rt, 1) == 10

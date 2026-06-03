@@ -4,7 +4,7 @@
 
     Copyright © 2024: Stockholm Environment Institute U.S.
 
-    File description: Functions for converting an OSeMOSYS scenario database to NemoMod format.
+    File description: Functions for converting an OSeMOSYS scenario database to NEMO format.
 =#
 
 """
@@ -13,7 +13,7 @@
         quiet::Bool = false,
         config_path::String = "")
 
-Converts an OSeMOSYS scenario database to NemoMod format.
+Converts an OSeMOSYS scenario database to NEMO format.
 
 `osemosys_path` can be either:
 - A path to an SQLite database with OSeMOSYS-format tables (as produced by
@@ -26,15 +26,15 @@ Converts an OSeMOSYS scenario database to NemoMod format.
 The OSeMOSYS tables should use uppercase column names matching set names (e.g., `REGION`,
 `TECHNOLOGY`, `YEAR`) and `VALUE` for data columns.
 
-Creates a new NemoMod scenario database at `nemo_path` using [`createnemodb`](@ref), then copies
-and transforms data from the OSeMOSYS source. Tables that exist only in NemoMod (e.g., transmission
+Creates a new NEMO scenario database at `nemo_path` using [`createnemodb`](@ref), then copies
+and transforms data from the OSeMOSYS source. Tables that exist only in NEMO (e.g., transmission
 network tables) are left empty.
 
 # Arguments
 - `osemosys_path::String`: Path to the source OSeMOSYS SQLite database or otoole CSV directory.
-- `nemo_path::String`: Path for the output NemoMod SQLite database (will be created/overwritten).
+- `nemo_path::String`: Path for the output NEMO SQLite database (will be created/overwritten).
 - `defaults::Dict{String, Float64} = Dict{String, Float64}()`: Default values to set in the
-  NemoMod `DefaultParams` table, keyed by parameter table name.
+  NEMO `DefaultParams` table, keyed by parameter table name.
 - `quiet::Bool = false`: Suppresses status messages when `true`.
 - `config_path::String = ""`: Path to otoole config.yaml file. Required when `osemosys_path` is
   a CSV directory. Used to determine each CSV's schema (column types and indices) and to
@@ -85,7 +85,7 @@ function convert_osemosys(osemosys_path::String, nemo_path::String;
     logmsg("Opened OSeMOSYS database at $(sqlite_path).", quiet)
 
     # Validate required dimension tables before touching the destination path,
-    # so a malformed source never produces a half-baked NemoMod DB on disk.
+    # so a malformed source never produces a half-baked NEMO DB on disk.
     local src_tables::Vector{String}
     try
         src_tables = [r[:name] for r in
@@ -102,17 +102,17 @@ function convert_osemosys(osemosys_path::String, nemo_path::String;
         rethrow()
     end
 
-    # Create target NemoMod database (this creates full schema at version 11)
+    # Create target NEMO database (this creates full schema at version 11)
     isfile(nemo_path) && logmsg("Warning: overwriting existing file at $(nemo_path).", quiet)
     local destdb::SQLite.DB = createnemodb(nemo_path; defaultvals=defaults)
-    logmsg("Created NemoMod database at $(nemo_path).", quiet)
+    logmsg("Created NEMO database at $(nemo_path).", quiet)
 
     # BEGIN: Wrap all operations in try-catch for rollback on error.
     try
         SQLite.DBInterface.execute(destdb, "BEGIN")
 
         # Create temporary unique indexes on parameter tables so INSERT OR IGNORE
-        # correctly deduplicates rows. NemoMod tables only have PRIMARY KEY(id) with
+        # correctly deduplicates rows. NEMO tables only have PRIMARY KEY(id) with
         # auto-increment, so without these indexes INSERT OR IGNORE never ignores.
        local _dedup_indexes = _create_dedup_indexes!(destdb)
 
@@ -466,7 +466,7 @@ function _load_csv_directory_to_sqlite!(csv_dir::String, sqlite_path::String, co
     return sqlite_path
 end
 
-"""Creates temporary unique indexes on NemoMod parameter tables so that INSERT OR IGNORE
+"""Creates temporary unique indexes on NEMO parameter tables so that INSERT OR IGNORE
 correctly deduplicates rows. Returns a vector of index names that were created."""
 function _create_dedup_indexes!(destdb::SQLite.DB)
     # Map of table name -> data columns (excluding auto-increment id and val)
@@ -534,7 +534,7 @@ end
 function _convert_osemosys_sets!(srcdb::SQLite.DB, destdb::SQLite.DB,
     src_tables::Vector{String}, quiet::Bool)
 
-    # Simple dimension tables: OSeMOSYS VALUE -> NemoMod val
+    # Simple dimension tables: OSeMOSYS VALUE -> NEMO val
     simple_sets = ["EMISSION", "FUEL", "MODE_OF_OPERATION", "REGION", "TECHNOLOGY", "TIMESLICE", "YEAR"]
 
     for setname in simple_sets
@@ -548,7 +548,7 @@ function _convert_osemosys_sets!(srcdb::SQLite.DB, destdb::SQLite.DB,
         logmsg("Copied $(length(vals)) values for set $(setname).", quiet)
     end
 
-    # STORAGE: has additional fields in NemoMod
+    # STORAGE: has additional fields in NEMO
     storage_vals = _read_osemosys_set(srcdb, src_tables, "STORAGE")
 
     for v in storage_vals
@@ -917,7 +917,7 @@ end  # _copy_osemosys_traderoute!
 function _transform_osemosys_availability_factor!(srcdb::SQLite.DB, destdb::SQLite.DB,
     src_tables::Vector{String}, quiet::Bool)
 
-    # OSeMOSYS CapacityFactor [REGION, TECHNOLOGY, TIMESLICE, YEAR] -> NemoMod AvailabilityFactor [r, t, l, y]
+    # OSeMOSYS CapacityFactor [REGION, TECHNOLOGY, TIMESLICE, YEAR] -> NEMO AvailabilityFactor [r, t, l, y]
     cf_name = _osemosys_table_name(src_tables, "CapacityFactor")
 
     if !isnothing(cf_name)
@@ -973,8 +973,8 @@ end  # _transform_osemosys_availability_factor!
 function _transform_osemosys_reserve_margin!(srcdb::SQLite.DB, destdb::SQLite.DB,
     src_tables::Vector{String}, quiet::Bool)
 
-    # OSeMOSYS ReserveMargin [REGION, YEAR] -> NemoMod [r, f, y]
-    # OSeMOSYS ReserveMarginTagTechnology [REGION, TECHNOLOGY, YEAR] -> NemoMod [r, t, f, y]
+    # OSeMOSYS ReserveMargin [REGION, YEAR] -> NEMO [r, f, y]
+    # OSeMOSYS ReserveMarginTagTechnology [REGION, TECHNOLOGY, YEAR] -> NEMO [r, t, f, y]
     # OSeMOSYS ReserveMarginTagFuel [REGION, FUEL, YEAR] identifies which fuels are subject to reserve margin
 
     # Get fuels tagged for reserve margin
@@ -1068,7 +1068,7 @@ end  # _transform_osemosys_reserve_margin!
 function _transform_osemosys_re_targets!(srcdb::SQLite.DB, destdb::SQLite.DB,
     src_tables::Vector{String}, quiet::Bool)
 
-    # OSeMOSYS REMinProductionTarget [REGION, YEAR] -> NemoMod [r, f, y]
+    # OSeMOSYS REMinProductionTarget [REGION, YEAR] -> NEMO [r, f, y]
     # OSeMOSYS RETagFuel [REGION, FUEL, YEAR] identifies which fuels count as renewable
 
     # Get RE-tagged fuels
