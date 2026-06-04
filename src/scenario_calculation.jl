@@ -373,7 +373,7 @@ function calculatescenario(
         "TransmissionCapacityToActivityUnit", "StorageFullLoadHours", "RampRate", "RampingReset", "NodalDistributionDemand",
         "NodalDistributionTechnologyCapacity", "NodalDistributionStorageCapacity", "MinimumUtilization", "InterestRateTechnology",
         "InterestRateStorage", "MinShareProduction", "MinAnnualTransmissionNodes", "MaxAnnualTransmissionNodes", "TechnologySubsidy",
-        "MaxSubsidyPerTechnology", "MaxSubsidyPerRegion", "MaxSubsidyPerTechnologyGroup"]
+        "MaxSubsidyPerTechnology", "MaxSubsidyPerRegion", "MaxSubsidyPerTechnologyGroup", "MaxShareProduction"]
 
         createviewwithdefaults(db, paramsneedingdefs)
         create_other_nemo_indices(db)
@@ -6878,10 +6878,12 @@ t = Threads.@spawn(let
     from region r
     union all
     select n.r as r, n.val as n
-    from node n) rn
+    from node n) rn,
+    (select distinct r, t, f, y from OutputActivityRatio_def where val <> 0) oar
     left join TransmissionModelingEnabled tme on tme.r = msp.r and tme.f = msp.f and tme.y = msp.y
     where
     msp.r = rn.r and msp.val > 0
+    and msp.r = oar.r and msp.t = oar.t and msp.f = oar.f and msp.y = oar.y	
     $(restrictyears ? "and msp.y in" * inyears : "")
     order by msp.r, msp.t, msp.f, msp.y")
         local r = row[:r]
@@ -6891,10 +6893,7 @@ t = Threads.@spawn(let
 
         if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
             # Create constraint
-            if !isnothing(variable_by_name(jumpmodel, "vproductionbytechnologyannual[$(lastkeys[1]),$(lastkeys[2]),$(lastkeys[3]),$(lastkeys[4])]"))
-                push!(minshareproduction, @build_constraint(vproductionbytechnologyannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >= (sumexps[1]) * lastvals[1]))
-            end
-
+            push!(minshareproduction, @build_constraint(vproductionbytechnologyannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >= (sumexps[1]) * lastvals[1]))
             sumexps[1] = AffExpr()
         end
 
@@ -6913,9 +6912,7 @@ t = Threads.@spawn(let
 
     # Create last constraint
     if isassigned(lastkeys, 1)
-        if !isnothing(variable_by_name(jumpmodel, "vproductionbytechnologyannual[$(lastkeys[1]),$(lastkeys[2]),$(lastkeys[3]),$(lastkeys[4])]"))
-            push!(minshareproduction, @build_constraint(vproductionbytechnologyannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >= (sumexps[1]) * lastvals[1]))
-        end
+        push!(minshareproduction, @build_constraint(vproductionbytechnologyannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >= (sumexps[1]) * lastvals[1]))
     end
 
     put!(cons_channel, minshareproduction)
@@ -6924,6 +6921,64 @@ end)
 numconsarrays += 1
 logmsg("Queued constraint MinShareProduction for creation.", quiet)
 # END: MinShareProduction.
+
+# BEGIN: MaxShareProduction.
+maxshareproduction::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+
+t = Threads.@spawn(let
+    local lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = t, lastkeys[3] = f, lastkeys[4] = y
+    local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = msp
+    local sumexps = Array{AffExpr, 1}([AffExpr()]) # sumexps[1] = sum of vgenerationannualnn and vgenerationannualnodal
+
+    for row in SQLite.DBInterface.execute(db, "select msp.r, msp.t, msp.f, msp.y, rn.n, cast(msp.val as real) as msp, tme.id as tme
+    from MaxShareProduction_def msp,
+    (select r.val as r, null as n
+    from region r
+    union all
+    select n.r as r, n.val as n
+    from node n) rn,
+    (select distinct r, t, f, y from OutputActivityRatio_def where val <> 0) oar
+    left join TransmissionModelingEnabled tme on tme.r = msp.r and tme.f = msp.f and tme.y = msp.y
+    where
+    msp.r = rn.r and msp.val >= 0
+    and msp.r = oar.r and msp.t = oar.t and msp.f = oar.f and msp.y = oar.y	
+    $(restrictyears ? "and msp.y in" * inyears : "")
+    order by msp.r, msp.t, msp.f, msp.y")
+        local r = row[:r]
+        local t = row[:t]
+        local f = row[:f]
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (r != lastkeys[1] || t != lastkeys[2] || f != lastkeys[3] || y != lastkeys[4])
+            # Create constraint
+            push!(maxshareproduction, @build_constraint(vproductionbytechnologyannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] <= (sumexps[1]) * lastvals[1]))
+            sumexps[1] = AffExpr()
+        end
+
+        if !ismissing(row[:n]) && !ismissing(row[:tme])
+            transmissionmodeling && add_to_expression!(sumexps[1], vgenerationannualnodal[row[:n],f,y])
+        elseif ismissing(row[:n]) && ismissing(row[:tme])
+            add_to_expression!(sumexps[1], vgenerationannualnn[r,f,y])
+        end
+
+        lastkeys[1] = r
+        lastkeys[2] = t
+        lastkeys[3] = f
+        lastkeys[4] = y
+        lastvals[1] = row[:msp]
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        push!(maxshareproduction, @build_constraint(vproductionbytechnologyannual[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] <= (sumexps[1]) * lastvals[1]))
+    end
+
+    put!(cons_channel, maxshareproduction)
+end)
+
+numconsarrays += 1
+logmsg("Queued constraint MaxShareProduction for creation.", quiet)
+# END: MaxShareProduction.
 
 # BEGIN: E1_AnnualEmissionProductionByMode.
 if in("vannualtechnologyemissionbymode", varstosavearr)

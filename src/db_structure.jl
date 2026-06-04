@@ -59,6 +59,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.DBInterface.execute(db,"drop table if exists InterestRateTechnology")
     SQLite.DBInterface.execute(db,"drop table if exists LTsGroup")
     SQLite.DBInterface.execute(db,"drop table if exists MaxAnnualTransmissionNodes")
+    SQLite.DBInterface.execute(db,"drop table if exists MaxShareProduction")
     SQLite.DBInterface.execute(db,"drop table if exists MaxSubsidyPerRegion")
     SQLite.DBInterface.execute(db,"drop table if exists MaxSubsidyPerTechnology")
     SQLite.DBInterface.execute(db,"drop table if exists MaxSubsidyPerTechnologyGroup")
@@ -151,7 +152,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     #   - 9: Added REGIONGROUP, RRGroup, REMinProductionTargetRG.
     #   - 10: Added ReserveMargin.f and ReserveMarginTagTechnology.f. Deprecated ReserveMarginTagFuel. Dropped original AvailabilityFactor table and renamed CapacityFactor to AvailabilityFactor. Added TransmissionAvailabilityFactor.
     #   - 11: Added MinAnnualTransmissionNodes, MaxAnnualTransmissionNodes
-    #   - 12: Added FUEL.timesliced, TechnologySubsidy, MaxSubsidyPerTechnology, MaxSubsidyPerRegion, TECHNOLOGYGROUP, TTGroup, MaxSubsidyPerTechnologyGroup.
+    #   - 12: Added FUEL.timesliced, TechnologySubsidy, MaxSubsidyPerTechnology, MaxSubsidyPerRegion, TECHNOLOGYGROUP, TTGroup, MaxSubsidyPerTechnologyGroup, MaxShareProduction.
     SQLite.DBInterface.execute(db, "CREATE TABLE `Version` (`version` INTEGER, PRIMARY KEY(`version`))")
     SQLite.DBInterface.execute(db, "INSERT INTO Version VALUES($(NEMO_DB_VERSION))")
 
@@ -229,6 +230,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `MaxSubsidyPerTechnologyGroup` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `tg` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`tg`) REFERENCES `TECHNOLOGYGROUP`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `MaxSubsidyPerTechnology` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `MaxSubsidyPerRegion` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
+    SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `MaxShareProduction` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `MaxAnnualTransmissionNodes` ( `id` INTEGER NOT NULL UNIQUE, `n1` TEXT, `n2` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`n1`) REFERENCES `NODE`(`val`), FOREIGN KEY(`n2`) REFERENCES `NODE`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `LTsGroup` ( `id` INTEGER PRIMARY KEY AUTOINCREMENT, `l` TEXT UNIQUE,	`lorder` INTEGER, `tg2` TEXT, `tg1` TEXT" * (foreignkeys ? ", FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`), FOREIGN KEY(`tg2`) REFERENCES `TSGROUP2`(`name`), FOREIGN KEY(`tg1`) REFERENCES `TSGROUP1`(`name`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `InterestRateTechnology` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
@@ -636,6 +638,7 @@ end  # db_v10_to_v11(db::SQLite.DB; quiet::Bool = false)
     - Adding FUEL.timesliced
     - Adding TechnologySubsidy, MaxSubsidyPerTechnology, MaxSubsidyPerRegion
     - Adding TECHNOLOGYGROUP, TTGroup, MaxSubsidyPerTechnologyGroup
+    - Adding MaxShareProduction
 =#
 function db_v11_to_v12(db::SQLite.DB; quiet::Bool = false)
     # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
@@ -663,6 +666,9 @@ function db_v11_to_v12(db::SQLite.DB; quiet::Bool = false)
 
         # Add MaxSubsidyPerTechnologyGroup table
         SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `MaxSubsidyPerTechnologyGroup` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `tg` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`))")
+
+        # Add MaxShareProduction table
+        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `MaxShareProduction` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`))")
 
         SQLite.DBInterface.execute(db, "update version set version = 12")
 

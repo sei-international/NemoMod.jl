@@ -321,6 +321,23 @@ For the indicated [fuel](@ref fuel) and [year](@ref year), maximum energy that c
 | `y` | text  | Year |
 | `val` | real  | Energy (energy unit for regions containing `n1` and `n2`) |
 
+## [Maximum production share](@id MaxShareProduction)
+
+For the specified [region](@ref region), [fuel](@ref fuel), and [year](@ref year), maximum fraction of production (excluding production from [storage](@ref storage)) that may be delivered by the indicated [technology](@ref technology).
+
+#### Scenario database
+
+**Table: `MaxShareProduction`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `t` | text  | Technology |
+| `f` | text  | Fuel |
+| `y` | text  | Year |
+| `val` | real  | Fraction (0 to 1) |
+
 ## [Maximum subsidies per technology](@id MaxSubsidyPerTechnology)
 
 Maximum subsidies that can be disbursed for a [technology](@ref technology) in a [region](@ref region) and [year](@ref year). Subsidies can be applied to new endogenously built technology capacity if the [`TechnologySubsidy`](@ref TechnologySubsidy) parameter is defined. They function like a discount on [capital costs](@ref CapitalCost), lowering capital investment and financing requirements.
