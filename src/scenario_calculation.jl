@@ -11,7 +11,7 @@
     calculatescenario(
         dbpath::String;
         jumpmodel::JuMP.Model = Model(Cbc.Optimizer),
-        calcyears::Array{Int, 1} = Array{Int, 1}(),
+        calcyears::Union{Vector{Int}, Vector{Vector{Int}}} = [Vector{Int}()],
         varstosave::String = "vdemandnn, vnewcapacity, vtotalcapacityannual,
             vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual,
             vusenn, vtotaldiscountedcost",
@@ -373,7 +373,9 @@ function calculatescenario(
         "TransmissionCapacityToActivityUnit", "StorageFullLoadHours", "RampRate", "RampingReset", "NodalDistributionDemand",
         "NodalDistributionTechnologyCapacity", "NodalDistributionStorageCapacity", "MinimumUtilization", "InterestRateTechnology",
         "InterestRateStorage", "MinShareProduction", "MinAnnualTransmissionNodes", "MaxAnnualTransmissionNodes", "TechnologySubsidy",
-        "MaxSubsidyPerTechnology", "MaxSubsidyPerRegion", "MaxSubsidyPerTechnologyGroup", "MaxShareProduction"]
+        "MaxSubsidyPerTechnology", "MaxSubsidyPerRegion", "MaxSubsidyPerTechnologyGroup", "MaxShareProduction", 
+        "TotalAnnualMaxCapacityRG", "TotalAnnualMaxCapacityTG", "TotalAnnualMaxCapacityInvestmentRG", "TotalAnnualMaxCapacityInvestmentTG", 
+        "TotalAnnualMinCapacityRG", "TotalAnnualMinCapacityTG", "TotalAnnualMinCapacityInvestmentRG", "TotalAnnualMinCapacityInvestmentTG"]
 
         createviewwithdefaults(db, paramsneedingdefs)
         create_other_nemo_indices(db)
@@ -6354,6 +6356,374 @@ end)
 numconsarrays += 1
 logmsg("Queued constraint NCC2_TotalAnnualMinNewCapacityConstraint for creation.", quiet)
 # END: NCC2_TotalAnnualMinNewCapacityConstraint.
+
+# BEGIN: TCC1RG_TotalAnnualMaxCapacity.
+tcc1rg_totalannualmaxcapacity::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+
+t = Threads.@spawn(let
+    local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = rg, lastkeys[2] = t, lastkeys[3] = y
+    local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = tmx (max capacity for region group)
+    local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = Σ_r vtotalcapacityannual over regions in group
+
+    for row in SQLite.DBInterface.execute(db, "select tmc.rg, rrg.r, tmc.t, tmc.y, cast(tmc.val as real) as tmx
+    from TotalAnnualMaxCapacityRG_def tmc, RRGroup rrg
+    where tmc.rg = rrg.rg
+    and tmc.val is not null
+    $(restrictyears ? "and tmc.y in" * inyears : "")
+    order by tmc.rg, tmc.t, tmc.y")
+        local rg = row[:rg]
+        local r = row[:r]
+        local t = row[:t]
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (rg != lastkeys[1] || t != lastkeys[2] || y != lastkeys[3])
+            # Create constraint
+            push!(tcc1rg_totalannualmaxcapacity, @build_constraint(sumexps[1] <= lastvals[1]))
+            sumexps[1] = AffExpr()
+        end
+
+        add_to_expression!(sumexps[1], vtotalcapacityannual[r,t,y])
+
+        lastkeys[1] = rg
+        lastkeys[2] = t
+        lastkeys[3] = y
+        lastvals[1] = row[:tmx]
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        push!(tcc1rg_totalannualmaxcapacity, @build_constraint(sumexps[1] <= lastvals[1]))
+    end
+
+    put!(cons_channel, tcc1rg_totalannualmaxcapacity)
+end)
+
+numconsarrays += 1
+logmsg("Queued constraint TCC1RG_TotalAnnualMaxCapacity for creation.", quiet)
+# END: TCC1RG_TotalAnnualMaxCapacity.
+
+# BEGIN: TCC1TG_TotalAnnualMaxCapacity.
+tcc1tg_totalannualmaxcapacity::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+
+t = Threads.@spawn(let
+    local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = tg, lastkeys[3] = y
+    local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = tmx (max capacity for technology group)
+    local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = Σ_t vtotalcapacityannual over technologies in group
+
+    for row in SQLite.DBInterface.execute(db, "select tmc.r, tmc.tg, ttg.t, tmc.y, cast(tmc.val as real) as tmx
+    from TotalAnnualMaxCapacityTG_def tmc, TTGroup ttg
+    where tmc.tg = ttg.tg
+    and tmc.val is not null
+    $(restrictyears ? "and tmc.y in" * inyears : "")
+    order by tmc.r, tmc.tg, tmc.y")
+        local r = row[:r]
+        local tg = row[:tg]
+        local t = row[:t]
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (r != lastkeys[1] || tg != lastkeys[2] || y != lastkeys[3])
+            # Create constraint
+            push!(tcc1tg_totalannualmaxcapacity, @build_constraint(sumexps[1] <= lastvals[1]))
+            sumexps[1] = AffExpr()
+        end
+
+        add_to_expression!(sumexps[1], vtotalcapacityannual[r,t,y])
+
+        lastkeys[1] = r
+        lastkeys[2] = tg
+        lastkeys[3] = y
+        lastvals[1] = row[:tmx]
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        push!(tcc1tg_totalannualmaxcapacity, @build_constraint(sumexps[1] <= lastvals[1]))
+    end
+
+    put!(cons_channel, tcc1tg_totalannualmaxcapacity)
+end)
+
+numconsarrays += 1
+logmsg("Queued constraint TCC1TG_TotalAnnualMaxCapacity for creation.", quiet)
+# END: TCC1TG_TotalAnnualMaxCapacity.
+
+# BEGIN: TCC2RG_TotalAnnualMinCapacity.
+tcc2rg_totalannualmincapacity::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+
+t = Threads.@spawn(let
+    local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = rg, lastkeys[2] = t, lastkeys[3] = y
+    local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = tmn (min capacity for region group)
+    local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = Σ_r vtotalcapacityannual over regions in group
+
+    for row in SQLite.DBInterface.execute(db, "select tmc.rg, rrg.r, tmc.t, tmc.y, cast(tmc.val as real) as tmn
+    from TotalAnnualMinCapacityRG_def tmc, RRGroup rrg
+    where tmc.val > 0
+    and tmc.rg = rrg.rg
+    $(restrictyears ? "and tmc.y in" * inyears : "")
+    order by tmc.rg, tmc.t, tmc.y")
+        local rg = row[:rg]
+        local r = row[:r]
+        local t = row[:t]
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (rg != lastkeys[1] || t != lastkeys[2] || y != lastkeys[3])
+            # Create constraint
+            push!(tcc2rg_totalannualmincapacity, @build_constraint(sumexps[1] >= lastvals[1]))
+            sumexps[1] = AffExpr()
+        end
+
+        add_to_expression!(sumexps[1], vtotalcapacityannual[r,t,y])
+
+        lastkeys[1] = rg
+        lastkeys[2] = t
+        lastkeys[3] = y
+        lastvals[1] = row[:tmn]
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        push!(tcc2rg_totalannualmincapacity, @build_constraint(sumexps[1] >= lastvals[1]))
+    end
+
+    put!(cons_channel, tcc2rg_totalannualmincapacity)
+end)
+
+numconsarrays += 1
+logmsg("Queued constraint TCC2RG_TotalAnnualMinCapacity for creation.", quiet)
+# END: TCC2RG_TotalAnnualMinCapacity.
+
+# BEGIN: TCC2TG_TotalAnnualMinCapacity.
+tcc2tg_totalannualmincapacity::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+
+t = Threads.@spawn(let
+    local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = tg, lastkeys[3] = y
+    local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = tmn (min capacity for technology group)
+    local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = Σ_t vtotalcapacityannual over technologies in group
+
+    for row in SQLite.DBInterface.execute(db, "select tmc.r, tmc.tg, ttg.t, tmc.y, cast(tmc.val as real) as tmn
+    from TotalAnnualMinCapacityTG_def tmc, TTGroup ttg
+    where tmc.val > 0
+    and tmc.tg = ttg.tg
+    $(restrictyears ? "and tmc.y in" * inyears : "")
+    order by tmc.r, tmc.tg, tmc.y")
+        local r = row[:r]
+        local tg = row[:tg]
+        local t = row[:t]
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (r != lastkeys[1] || tg != lastkeys[2] || y != lastkeys[3])
+            # Create constraint
+            push!(tcc2tg_totalannualmincapacity, @build_constraint(sumexps[1] >= lastvals[1]))
+            sumexps[1] = AffExpr()
+        end
+
+        add_to_expression!(sumexps[1], vtotalcapacityannual[r,t,y])
+
+        lastkeys[1] = r
+        lastkeys[2] = tg
+        lastkeys[3] = y
+        lastvals[1] = row[:tmn]
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        push!(tcc2tg_totalannualmincapacity, @build_constraint(sumexps[1] >= lastvals[1]))
+    end
+
+    put!(cons_channel, tcc2tg_totalannualmincapacity)
+end)
+
+numconsarrays += 1
+logmsg("Queued constraint TCC2TG_TotalAnnualMinCapacity for creation.", quiet)
+# END: TCC2TG_TotalAnnualMinCapacity.
+
+# BEGIN: NCC1RG_TotalAnnualMaxCapacityInvestment.
+ncc1rg_totalannualmaxcapacityinvestment::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+
+t = Threads.@spawn(let
+    local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = rg, lastkeys[2] = t, lastkeys[3] = y
+    local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = tmx (max new capacity for region group)
+    local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = Σ_r vnewcapacity over regions in group
+
+    for row in SQLite.DBInterface.execute(db, "select tmc.rg, rrg.r, tmc.t, tmc.y, cast(tmc.val as real) as tmx
+    from TotalAnnualMaxCapacityInvestmentRG_def tmc, RRGroup rrg
+    where tmc.rg = rrg.rg
+    and tmc.val is not null
+    $(restrictyears ? "and tmc.y in" * inyears : "")
+    order by tmc.rg, tmc.t, tmc.y")
+        local rg = row[:rg]
+        local r = row[:r]
+        local t = row[:t]
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (rg != lastkeys[1] || t != lastkeys[2] || y != lastkeys[3])
+            # Create constraint
+            push!(ncc1rg_totalannualmaxcapacityinvestment, @build_constraint(sumexps[1] <= lastvals[1]
+                * (restrictyears ? yearintervalsdict[lastkeys[3]] : 1)))
+            sumexps[1] = AffExpr()
+        end
+
+        add_to_expression!(sumexps[1], vnewcapacity[r,t,y])
+
+        lastkeys[1] = rg
+        lastkeys[2] = t
+        lastkeys[3] = y
+        lastvals[1] = row[:tmx]
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        push!(ncc1rg_totalannualmaxcapacityinvestment, @build_constraint(sumexps[1] <= lastvals[1]
+            * (restrictyears ? yearintervalsdict[lastkeys[3]] : 1)))
+    end
+
+    put!(cons_channel, ncc1rg_totalannualmaxcapacityinvestment)
+end)
+
+numconsarrays += 1
+logmsg("Queued constraint NCC1RG_TotalAnnualMaxCapacityInvestment for creation.", quiet)
+# END: NCC1RG_TotalAnnualMaxCapacityInvestment.
+
+# BEGIN: NCC1TG_TotalAnnualMaxCapacityInvestment.
+ncc1tg_totalannualmaxcapacityinvestment::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+
+t = Threads.@spawn(let
+    local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = tg, lastkeys[3] = y
+    local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = tmx (max new capacity for technology group)
+    local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = Σ_t vnewcapacity over technologies in group
+
+    for row in SQLite.DBInterface.execute(db, "select tmc.r, tmc.tg, ttg.t, tmc.y, cast(tmc.val as real) as tmx
+    from TotalAnnualMaxCapacityInvestmentTG_def tmc, TTGroup ttg
+    where tmc.tg = ttg.tg
+    and tmc.val is not null
+    $(restrictyears ? "and tmc.y in" * inyears : "")
+    order by tmc.r, tmc.tg, tmc.y")
+        local r = row[:r]
+        local tg = row[:tg]
+        local t = row[:t]
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (r != lastkeys[1] || tg != lastkeys[2] || y != lastkeys[3])
+            # Create constraint
+            push!(ncc1tg_totalannualmaxcapacityinvestment, @build_constraint(sumexps[1] <= lastvals[1]
+                * (restrictyears ? yearintervalsdict[lastkeys[3]] : 1)))
+            sumexps[1] = AffExpr()
+        end
+
+        add_to_expression!(sumexps[1], vnewcapacity[r,t,y])
+
+        lastkeys[1] = r
+        lastkeys[2] = tg
+        lastkeys[3] = y
+        lastvals[1] = row[:tmx]
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        push!(ncc1tg_totalannualmaxcapacityinvestment, @build_constraint(sumexps[1] <= lastvals[1]
+            * (restrictyears ? yearintervalsdict[lastkeys[3]] : 1)))
+    end
+
+    put!(cons_channel, ncc1tg_totalannualmaxcapacityinvestment)
+end)
+
+numconsarrays += 1
+logmsg("Queued constraint NCC1TG_TotalAnnualMaxCapacityInvestment for creation.", quiet)
+# END: NCC1TG_TotalAnnualMaxCapacityInvestment.
+
+# BEGIN: NCC2RG_TotalAnnualMinCapacityInvestment.
+ncc2rg_totalannualmincapacityinvestment::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+
+t = Threads.@spawn(let
+    local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = rg, lastkeys[2] = t, lastkeys[3] = y
+    local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = tmn (min new capacity for region group)
+    local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = Σ_r vnewcapacity over regions in group
+
+    for row in SQLite.DBInterface.execute(db, "select tmc.rg, rrg.r, tmc.t, tmc.y, cast(tmc.val as real) as tmn
+    from TotalAnnualMinCapacityInvestmentRG_def tmc, RRGroup rrg
+    where tmc.val > 0
+    and tmc.rg = rrg.rg
+    $(restrictyears ? "and tmc.y in" * inyears : "")
+    order by tmc.rg, tmc.t, tmc.y")
+        local rg = row[:rg]
+        local r = row[:r]
+        local t = row[:t]
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (rg != lastkeys[1] || t != lastkeys[2] || y != lastkeys[3])
+            # Create constraint
+            push!(ncc2rg_totalannualmincapacityinvestment, @build_constraint(sumexps[1] >= lastvals[1]
+                * (restrictyears ? yearintervalsdict[lastkeys[3]] : 1)))
+            sumexps[1] = AffExpr()
+        end
+
+        add_to_expression!(sumexps[1], vnewcapacity[r,t,y])
+
+        lastkeys[1] = rg
+        lastkeys[2] = t
+        lastkeys[3] = y
+        lastvals[1] = row[:tmn]
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        push!(ncc2rg_totalannualmincapacityinvestment, @build_constraint(sumexps[1] >= lastvals[1]
+            * (restrictyears ? yearintervalsdict[lastkeys[3]] : 1)))
+    end
+
+    put!(cons_channel, ncc2rg_totalannualmincapacityinvestment)
+end)
+
+numconsarrays += 1
+logmsg("Queued constraint NCC2RG_TotalAnnualMinCapacityInvestment for creation.", quiet)
+# END: NCC2RG_TotalAnnualMinCapacityInvestment.
+
+# BEGIN: NCC2TG_TotalAnnualMinCapacityInvestment.
+ncc2tg_totalannualmincapacityinvestment::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+
+t = Threads.@spawn(let
+    local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = tg, lastkeys[3] = y
+    local lastvals = Array{Float64, 1}([0.0])  # lastvals[1] = tmn (min new capacity for technology group)
+    local sumexps = Array{AffExpr, 1}([AffExpr()])  # sumexps[1] = Σ_t vnewcapacity over technologies in group
+
+    for row in SQLite.DBInterface.execute(db, "select tmc.r, tmc.tg, ttg.t, tmc.y, cast(tmc.val as real) as tmn
+    from TotalAnnualMinCapacityInvestmentTG_def tmc, TTGroup ttg
+    where tmc.val > 0
+    and tmc.tg = ttg.tg
+    $(restrictyears ? "and tmc.y in" * inyears : "")
+    order by tmc.r, tmc.tg, tmc.y")
+        local r = row[:r]
+        local tg = row[:tg]
+        local t = row[:t]
+        local y = row[:y]
+
+        if isassigned(lastkeys, 1) && (r != lastkeys[1] || tg != lastkeys[2] || y != lastkeys[3])
+            # Create constraint
+            push!(ncc2tg_totalannualmincapacityinvestment, @build_constraint(sumexps[1] >= lastvals[1]
+                * (restrictyears ? yearintervalsdict[lastkeys[3]] : 1)))
+            sumexps[1] = AffExpr()
+        end
+
+        add_to_expression!(sumexps[1], vnewcapacity[r,t,y])
+
+        lastkeys[1] = r
+        lastkeys[2] = tg
+        lastkeys[3] = y
+        lastvals[1] = row[:tmn]
+    end
+
+    # Create last constraint
+    if isassigned(lastkeys, 1)
+        push!(ncc2tg_totalannualmincapacityinvestment, @build_constraint(sumexps[1] >= lastvals[1]
+            * (restrictyears ? yearintervalsdict[lastkeys[3]] : 1)))
+    end
+
+    put!(cons_channel, ncc2tg_totalannualmincapacityinvestment)
+end)
+
+numconsarrays += 1
+logmsg("Queued constraint NCC2TG_TotalAnnualMinCapacityInvestment for creation.", quiet)
+# END: NCC2TG_TotalAnnualMinCapacityInvestment.
 
 # BEGIN: AAC1_TotalAnnualTechnologyActivity.
 if (annualactivityupperlimits || annualactivitylowerlimits || modelperiodactivityupperlimits || modelperiodactivitylowerlimits
