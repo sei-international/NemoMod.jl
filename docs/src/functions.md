@@ -14,6 +14,16 @@ See [Calculating a scenario](@ref scenario_calc).
 ```@docs
 convertscenariounits
 ```
+## convert\_ini\_to_toml
+
+```@docs
+convert_ini_to_toml
+```
+
+## convert_osemosys
+```@docs
+convert_osemosys
+```
 
 ## createnemodb
 
@@ -55,10 +65,4 @@ setparamdefault
 
 ```@docs
 find_infeasibilities
-```
-
-## convert\_ini\_to_toml
-
-```@docs
-convert_ini_to_toml
 ```

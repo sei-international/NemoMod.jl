@@ -19,6 +19,8 @@ This page highlights key changes in NEMO since its initial public release. For a
 
   * **Data validation function:** Introduced a function, [`data_validation`](@ref), that performs data validation checks in a scenario database. NEMO runs this function when a scenario is calculated. If any checks fail, the function returns an error and warning messages describing the problem. You can use the function yourself to check data without calculating a scenario. Right now, the function includes only a few checks, but more will likely be added in the future.
 
+  * **OSeMOSYS to NEMO converter:** Added a function for converting [OSeMOSYS](https://osemosys.org/) models to NEMO - [`convert_osemosys`](@ref). The function takes as an input an OSeMOSYS model's data (in either SQLite or CSV format, as produced by [OSeMOSYS tools for energy work](https://github.com/OSeMOSYS/otoole) (otoole)) and returns a [NEMO scenario database](@ref scenario_db) for the model. Many thanks to [Iain Morrow](https://github.com/IainDM) for this enhancement!
+
 !!! warning
     NEMO requires a fuel to be time-sliced in a few cases: 1) if [transmission modeling is enabled](@ref TransmissionModelingEnabled) for the fuel; 2) if the fuel is stored in or released from [storage](@ref storage); and 3) if a [reserve margin](@ref ReserveMargin) is defined for production of the fuel. `data_validation` checks for these conditions.
 
