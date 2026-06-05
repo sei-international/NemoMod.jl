@@ -1,0 +1,168 @@
+# otoole configuration for the storage_test dataset.
+#
+# This file describes every CSV in this directory so that
+# `otoole convert csv sqlite ... config.yaml` can build a valid
+# OSeMOSYS SQLite database. Defaults are taken from the
+# DefaultParams table of NemoMod's storage_test.sqlite so that a
+# roundtrip through `NemoMod.convert_osemosys` reproduces the
+# original model semantics.
+
+# ---------- Sets ----------
+REGION:
+  dtype: str
+  type: set
+YEAR:
+  dtype: int
+  type: set
+TECHNOLOGY:
+  dtype: str
+  type: set
+FUEL:
+  dtype: str
+  type: set
+EMISSION:
+  dtype: str
+  type: set
+MODE_OF_OPERATION:
+  dtype: int
+  type: set
+STORAGE:
+  dtype: str
+  type: set
+TIMESLICE:
+  dtype: str
+  type: set
+SEASON:
+  dtype: str
+  type: set
+DAYTYPE:
+  dtype: str
+  type: set
+DAILYTIMEBRACKET:
+  dtype: int
+  type: set
+
+# ---------- Time-slicing parameters ----------
+YearSplit:
+  dtype: float
+  type: param
+  indices: [TIMESLICE, YEAR]
+  default: 0
+DaySplit:
+  dtype: float
+  type: param
+  indices: [DAILYTIMEBRACKET, YEAR]
+  default: 0.00137
+DaysInDayType:
+  dtype: float
+  type: param
+  indices: [SEASON, DAYTYPE, YEAR]
+  default: 7
+Conversionls:
+  dtype: float
+  type: param
+  indices: [TIMESLICE, SEASON]
+  default: 0
+Conversionld:
+  dtype: float
+  type: param
+  indices: [TIMESLICE, DAYTYPE]
+  default: 0
+Conversionlh:
+  dtype: float
+  type: param
+  indices: [TIMESLICE, DAILYTIMEBRACKET]
+  default: 0
+
+# ---------- Capacity & cost parameters ----------
+CapitalCost:
+  dtype: float
+  type: param
+  indices: [REGION, TECHNOLOGY, YEAR]
+  default: 0
+CapitalCostStorage:
+  dtype: float
+  type: param
+  indices: [REGION, STORAGE, YEAR]
+  default: 0
+OperationalLife:
+  dtype: int
+  type: param
+  indices: [REGION, TECHNOLOGY]
+  default: 1
+OperationalLifeStorage:
+  dtype: int
+  type: param
+  indices: [REGION, STORAGE]
+  default: 99
+VariableCost:
+  dtype: float
+  type: param
+  indices: [REGION, TECHNOLOGY, MODE_OF_OPERATION, YEAR]
+  default: 0
+ResidualStorageCapacity:
+  dtype: float
+  type: param
+  indices: [REGION, STORAGE, YEAR]
+  default: 999
+
+# ---------- Activity / fuel parameters ----------
+InputActivityRatio:
+  dtype: float
+  type: param
+  indices: [REGION, TECHNOLOGY, FUEL, MODE_OF_OPERATION, YEAR]
+  default: 0
+OutputActivityRatio:
+  dtype: float
+  type: param
+  indices: [REGION, TECHNOLOGY, FUEL, MODE_OF_OPERATION, YEAR]
+  default: 0
+SpecifiedAnnualDemand:
+  dtype: float
+  type: param
+  indices: [REGION, FUEL, YEAR]
+  default: 0
+SpecifiedDemandProfile:
+  dtype: float
+  type: param
+  indices: [REGION, FUEL, TIMESLICE, YEAR]
+  default: 0
+CapacityFactor:
+  dtype: float
+  type: param
+  indices: [REGION, TECHNOLOGY, TIMESLICE, YEAR]
+  default: 1
+
+# ---------- Storage parameters ----------
+StorageLevelStart:
+  dtype: float
+  type: param
+  indices: [REGION, STORAGE]
+  default: 999
+TechnologyToStorage:
+  dtype: float
+  type: param
+  indices: [REGION, TECHNOLOGY, STORAGE, MODE_OF_OPERATION]
+  default: 0
+TechnologyFromStorage:
+  dtype: float
+  type: param
+  indices: [REGION, TECHNOLOGY, STORAGE, MODE_OF_OPERATION]
+  default: 0
+
+# ---------- Reserve margin parameters ----------
+ReserveMargin:
+  dtype: float
+  type: param
+  indices: [REGION, YEAR]
+  default: 1
+ReserveMarginTagFuel:
+  dtype: float
+  type: param
+  indices: [REGION, FUEL, YEAR]
+  default: 0
+ReserveMarginTagTechnology:
+  dtype: float
+  type: param
+  indices: [REGION, TECHNOLOGY, YEAR]
+  default: 0

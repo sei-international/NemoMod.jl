@@ -1,0 +1,6 @@
+REGION,TECHNOLOGY,VALUE
+1,gas,25.0
+1,gassupply,100.0
+1,solar,20.0
+1,solarsupply,100.0
+1,storage1,20.0
