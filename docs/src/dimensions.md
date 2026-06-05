@@ -85,6 +85,10 @@ Groups of geographic regions. Each region can belong to multiple groups. **Abbre
 | `val` | text | Unique identifier for region group |
 | `desc` | text  | Description of region group |
 
+!!! tip
+
+    To assign regions to region groups, use the [`RRGroup`](@ref RRGroup) parameter.
+
 ## [Storage](@id storage)
 
 Energy storage options or facilities. **Abbreviation: `s`.**
@@ -126,6 +130,10 @@ Groups of technologies. Each technology can belong to multiple groups. **Abbrevi
 |:--- | :--: |:----------- |
 | `val` | text | Unique identifier for technology group |
 | `desc` | text  | Description of technology group |
+
+!!! tip
+
+    To assign technologies to technology groups, use the [`TTGroup`](@ref TTGroup) parameter.
 
 ## [Time slice](@id timeslice)
 
