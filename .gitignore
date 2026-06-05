@@ -2,5 +2,9 @@
 *.jl.*.cov
 *.jl.mem
 docs/build/
+docs/internal/
 .vscode
 nemo.ini
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/worktrees/

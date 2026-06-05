@@ -16,7 +16,7 @@ Many NEMO outputs have "nodal" and "non-nodal" variants. **Nodal** variables sho
 
 ### [Annual nodal generation](@id vgenerationannualnodal)
 
-Total annual [nodal](@ref nodal_def) production of a [fuel](@ref fuel) excluding production from [storage](@ref storage). Unit: region's energy [unit](@ref uoms).
+Total annual [nodal](@ref nodal_def) production of a [fuel](@ref fuel) excluding production from [storage](@ref storage). This variable is only available for time-sliced fuels. Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -24,7 +24,7 @@ Total annual [nodal](@ref nodal_def) production of a [fuel](@ref fuel) excluding
 
 ### [Annual renewable nodal generation](@id vregenerationannualnodal)
 
-Total annual [nodal](@ref nodal_def) production of a [fuel](@ref fuel) from renewable sources, excluding production from [storage](@ref storage). The renewability of production is determined by the [RETagTechnology](@ref RETagTechnology) parameter. Unit: region's energy [unit](@ref uoms).
+Total annual [nodal](@ref nodal_def) production of a [fuel](@ref fuel) from renewable sources, excluding production from [storage](@ref storage). The renewability of production is determined by the [RETagTechnology](@ref RETagTechnology) parameter. This variable is only available for time-sliced fuels. Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -32,7 +32,7 @@ Total annual [nodal](@ref nodal_def) production of a [fuel](@ref fuel) from rene
 
 ### [Annual nodal production](@id vproductionannualnodal)
 
-Total annual [nodal](@ref nodal_def) production of a [fuel](@ref fuel) from all sources. Unit: region's energy [unit](@ref uoms).
+Total annual [nodal](@ref nodal_def) production of a [fuel](@ref fuel) from all sources. This variable is only available for time-sliced fuels. Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -40,11 +40,11 @@ Total annual [nodal](@ref nodal_def) production of a [fuel](@ref fuel) from all 
 
 ### [Annual nodal use](@id vuseannualnodal)
 
-Total annual [nodal](@ref nodal_def) use of a [fuel](@ref fuel). Unit: region's energy [unit](@ref uoms).
+Total annual [nodal](@ref nodal_def) use of a [fuel](@ref fuel). This variable is only available for time-sliced fuels. Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
-* Variable in JuMP model: `vuseannualnodal[n,l,f,y]`
+* Variable in JuMP model: `vuseannualnodal[n,f,y]`
 
 ### [Annual non-nodal generation](@id vgenerationannualnn)
 
@@ -104,7 +104,7 @@ Total annual use of a [fuel](@ref fuel) by a [technology](@ref technology), comb
 
 ### [Nodal production](@id vproductionnodal)
 
-Total [nodal](@ref nodal_def) production of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms).
+Total [nodal](@ref nodal_def) production of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). This variable is only available for time-sliced fuels. Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -112,7 +112,7 @@ Total [nodal](@ref nodal_def) production of a [fuel](@ref fuel) in a [time slice
 
 ### [Nodal rate of activity](@id vrateofactivitynodal)
 
-Amount of a [technology's](@ref technology) capacity in use in a [time slice](@ref timeslice) and [node](@ref nodal_def). NEMO multiplies the rate of activity by [input activity ratios](@ref InputActivityRatio) and [output activity ratios](@ref OutputActivityRatio) to determine [fuel](@ref fuel) use and production, respectively. Unit: region's energy [unit](@ref uoms) / year.
+Amount of a [technology's](@ref technology) capacity in use in a [time slice](@ref timeslice) and [node](@ref nodal_def). NEMO multiplies the rate of activity by [input activity ratios](@ref InputActivityRatio) and [output activity ratios](@ref OutputActivityRatio) to determine [fuel](@ref fuel) use and production, respectively. This variable is only available for technologies that produce or consume a time-sliced fuel. Unit: region's energy [unit](@ref uoms) / year.
 
 #### Julia code
 
@@ -120,7 +120,7 @@ Amount of a [technology's](@ref technology) capacity in use in a [time slice](@r
 
 ### [Nodal rate of production by technology](@id vrateofproductionbytechnologynodal)
 
-Time-sliced rate of [nodal](@ref nodal_def) production of a [fuel](@ref fuel) by a [technology](@ref technology). Unit: region's energy [unit](@ref uoms) / year.
+Time-sliced rate of [nodal](@ref nodal_def) production of a [fuel](@ref fuel) by a [technology](@ref technology). This variable is only available for technologies that produce or consume a time-sliced fuel. Unit: region's energy [unit](@ref uoms) / year.
 
 #### Julia code
 
@@ -128,7 +128,7 @@ Time-sliced rate of [nodal](@ref nodal_def) production of a [fuel](@ref fuel) by
 
 ### [Nodal rate of production](@id vrateofproductionnodal)
 
-Rate of total [nodal](@ref nodal_def) production of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms) / year.
+Rate of total [nodal](@ref nodal_def) production of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). This variable is only available for time-sliced fuels. Unit: region's energy [unit](@ref uoms) / year.
 
 #### Julia code
 
@@ -136,7 +136,7 @@ Rate of total [nodal](@ref nodal_def) production of a [fuel](@ref fuel) in a [ti
 
 ### [Nodal rate of total activity](@id vrateoftotalactivitynodal)
 
-[Nodal rate of activity](@ref vrateofactivitynodal) summed across [modes of operation](@ref mode_of_operation). Unit: region's energy [unit](@ref uoms) / year.
+[Nodal rate of activity](@ref vrateofactivitynodal) summed across [modes of operation](@ref mode_of_operation). This variable is only available for [technologies](@ref technology) that produce or consume a time-sliced [fuel](@ref fuel). Unit: region's energy [unit](@ref uoms) / year.
 
 #### Julia code
 
@@ -144,7 +144,7 @@ Rate of total [nodal](@ref nodal_def) production of a [fuel](@ref fuel) in a [ti
 
 ### [Nodal rate of use by technology](@id vrateofusebytechnologynodal)
 
-Time-sliced rate of [nodal](@ref nodal_def) use of a [fuel](@ref fuel) by a [technology](@ref technology). Unit: region's energy [unit](@ref uoms) / year.
+Time-sliced rate of [nodal](@ref nodal_def) use of a [fuel](@ref fuel) by a [technology](@ref technology). This variable is only available for technologies that produce or consume a time-sliced fuel. Unit: region's energy [unit](@ref uoms) / year.
 
 #### Julia code
 
@@ -152,7 +152,7 @@ Time-sliced rate of [nodal](@ref nodal_def) use of a [fuel](@ref fuel) by a [tec
 
 ### [Nodal rate of use](@id vrateofusenodal)
 
-Rate of total [nodal](@ref nodal_def) use of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms) / year.
+Rate of total [nodal](@ref nodal_def) use of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). This variable is only available for time-sliced fuels. Unit: region's energy [unit](@ref uoms) / year.
 
 #### Julia code
 
@@ -160,7 +160,7 @@ Rate of total [nodal](@ref nodal_def) use of a [fuel](@ref fuel) in a [time slic
 
 ### [Nodal use](@id vusenodal)
 
-Total [nodal](@ref nodal_def) use of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms).
+Total [nodal](@ref nodal_def) use of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). This variable is only available for time-sliced fuels. Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -168,7 +168,7 @@ Total [nodal](@ref nodal_def) use of a [fuel](@ref fuel) in a [time slice](@ref 
 
 ### [Non-nodal production](@id vproductionnn)
 
-Total [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms).
+Total [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). This variable is only available for time-sliced fuels. Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -176,7 +176,7 @@ Total [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel) in a [time s
 
 ### [Non-nodal rate of production by technology by mode](@id vrateofproductionbytechnologybymodenn)
 
-Time-sliced rate of [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel) by a [technology](@ref technology) operating in a [mode](@ref mode_of_operation). Unit: region's energy [unit](@ref uoms) / year.
+Time-sliced rate of [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel) by a [technology](@ref technology) operating in a [mode](@ref mode_of_operation). This variable is only available for technologies that produce or consume a time-sliced fuel. Unit: region's energy [unit](@ref uoms) / year.
 
 #### Julia code
 
@@ -184,7 +184,7 @@ Time-sliced rate of [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel
 
 ### [Non-nodal rate of production by technology](@id vrateofproductionbytechnologynn)
 
-Time-sliced rate of [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel) by a [technology](@ref technology). Unit: region's energy [unit](@ref uoms) / year.
+Time-sliced rate of [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel) by a [technology](@ref technology). This variable is only available for technologies that produce or consume a time-sliced fuel. Unit: region's energy [unit](@ref uoms) / year.
 
 #### Julia code
 
@@ -192,7 +192,7 @@ Time-sliced rate of [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel
 
 ### [Non-nodal rate of production](@id vrateofproductionnn)
 
-Rate of total [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). Unit: region's energy [unit](@ref uoms) / year.
+Rate of total [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). This variable is only available for time-sliced fuels. Unit: region's energy [unit](@ref uoms) / year.
 
 #### Julia code
 
@@ -200,7 +200,7 @@ Rate of total [non-nodal](@ref nodal_def) production of a [fuel](@ref fuel) in a
 
 ### [Non-nodal rate of use by technology by mode](@id vrateofusebytechnologybymodenn)
 
-Time-sliced rate of [non-nodal](@ref nodal_def) use of a [fuel](@ref fuel) by a [technology](@ref technology) operating in a [mode](@ref mode_of_operation). This variable can include use of [transmission-enabled fuels](@ref TransmissionModelingEnabled) by non-nodal technologies. Unit: region's energy [unit](@ref uoms) / year.
+Time-sliced rate of [non-nodal](@ref nodal_def) use of a [fuel](@ref fuel) by a [technology](@ref technology) operating in a [mode](@ref mode_of_operation). This variable can include use of [transmission-enabled fuels](@ref TransmissionModelingEnabled) by non-nodal technologies. It is only available for technologies that produce or consume a time-sliced fuel. Unit: region's energy [unit](@ref uoms) / year.
 
 #### Julia code
 
@@ -208,7 +208,7 @@ Time-sliced rate of [non-nodal](@ref nodal_def) use of a [fuel](@ref fuel) by a 
 
 ### [Non-nodal rate of use by technology](@id vrateofusebytechnologynn)
 
-Time-sliced rate of [non-nodal](@ref nodal_def) use of a [fuel](@ref fuel) by a [technology](@ref technology). This variable can include use of [transmission-enabled fuels](@ref TransmissionModelingEnabled) by non-nodal technologies. Unit: region's energy [unit](@ref uoms) / year.
+Time-sliced rate of [non-nodal](@ref nodal_def) use of a [fuel](@ref fuel) by a [technology](@ref technology). This variable can include use of [transmission-enabled fuels](@ref TransmissionModelingEnabled) by non-nodal technologies. It is only available for technologies that produce or consume a time-sliced fuel. Unit: region's energy [unit](@ref uoms) / year.
 
 #### Julia code
 
@@ -216,7 +216,7 @@ Time-sliced rate of [non-nodal](@ref nodal_def) use of a [fuel](@ref fuel) by a 
 
 ### [Non-nodal rate of use](@id vrateofusenn)
 
-Rate of total [non-nodal](@ref nodal_def) use of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). This variable can include use of [transmission-enabled fuels](@ref TransmissionModelingEnabled) by non-nodal technologies. Unit: region's energy [unit](@ref uoms) / year.
+Rate of total [non-nodal](@ref nodal_def) use of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). This variable can include use of [transmission-enabled fuels](@ref TransmissionModelingEnabled) by non-nodal technologies. It is only available for time-sliced fuels. Unit: region's energy [unit](@ref uoms) / year.
 
 #### Julia code
 
@@ -224,7 +224,7 @@ Rate of total [non-nodal](@ref nodal_def) use of a [fuel](@ref fuel) in a [time 
 
 ### [Non-nodal use](@id vusenn)
 
-Total [non-nodal](@ref nodal_def) use of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). This variable can include use of [transmission-enabled fuels](@ref TransmissionModelingEnabled) by non-nodal technologies. Unit: region's energy [unit](@ref uoms).
+Total [non-nodal](@ref nodal_def) use of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology). This variable can include use of [transmission-enabled fuels](@ref TransmissionModelingEnabled) by non-nodal technologies. It is only available for time-sliced fuels. Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -232,7 +232,7 @@ Total [non-nodal](@ref nodal_def) use of a [fuel](@ref fuel) in a [time slice](@
 
 ### [Production by technology](@id vproductionbytechnology)
 
-Production of a [fuel](@ref fuel) by a [technology](@ref technology) in a [time slice](@ref timeslice), combining [nodal and non-nodal](@ref nodal_def) production. Unit: region's energy [unit](@ref uoms).
+Production of a [fuel](@ref fuel) by a [technology](@ref technology) in a [time slice](@ref timeslice), combining [nodal and non-nodal](@ref nodal_def) production. This variable is only available for technologies that produce or consume a time-sliced fuel. Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -240,7 +240,7 @@ Production of a [fuel](@ref fuel) by a [technology](@ref technology) in a [time 
 
 ### [Rate of activity](@id vrateofactivity)
 
-Amount of a [technology's](@ref technology) capacity in use in a [time slice](@ref timeslice) (considering both [nodal and non-nodal](@ref nodal_def) activity). NEMO multiplies the rate of activity by [input activity ratios](@ref InputActivityRatio) and [output activity ratios](@ref OutputActivityRatio) to determine [fuel](@ref fuel) use and production, respectively. Unit: region's energy [unit](@ref uoms) / year.
+Amount of a [technology's](@ref technology) capacity in use in a [time slice](@ref timeslice) (considering both [nodal and non-nodal](@ref nodal_def) activity). NEMO multiplies the rate of activity by [input activity ratios](@ref InputActivityRatio) and [output activity ratios](@ref OutputActivityRatio) to determine [fuel](@ref fuel) use and production, respectively. This variable is only available for technologies that produce or consume a time-sliced fuel. Unit: region's energy [unit](@ref uoms) / year.
 
 #### Julia code
 
@@ -248,7 +248,7 @@ Amount of a [technology's](@ref technology) capacity in use in a [time slice](@r
 
 ### [Rate of production](@id vrateofproduction)
 
-Rate of total production of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology) and [nodal and non-nodal](@ref nodal_def) production. Unit: region's energy [unit](@ref uoms) / year.
+Rate of total production of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology) and [nodal and non-nodal](@ref nodal_def) production. This variable is only available for time-sliced fuels. Unit: region's energy [unit](@ref uoms) / year.
 
 #### Julia code
 
@@ -256,7 +256,7 @@ Rate of total production of a [fuel](@ref fuel) in a [time slice](@ref timeslice
 
 ### [Rate of total activity](@id vrateoftotalactivity)
 
-[Rate of activity](@ref vrateofactivity) summed across [modes of operation](@ref mode_of_operation). Unit: region's energy [unit](@ref uoms) / year.
+[Rate of activity](@ref vrateofactivity) summed across [modes of operation](@ref mode_of_operation). This variable is only available for [technologies](@ref technology) that produce or consume a time-sliced [fuel](@ref fuel). Unit: region's energy [unit](@ref uoms) / year.
 
 #### Julia code
 
@@ -264,7 +264,7 @@ Rate of total production of a [fuel](@ref fuel) in a [time slice](@ref timeslice
 
 ### [Rate of use](@id vrateofuse)
 
-Rate of total use of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology) and [nodal and non-nodal](@ref nodal_def) production. This variable can include use of [transmission-enabled fuels](@ref TransmissionModelingEnabled) by non-nodal technologies. Unit: region's energy [unit](@ref uoms) / year.
+Rate of total use of a [fuel](@ref fuel) in a [time slice](@ref timeslice), combining all [technologies](@ref technology) and [nodal and non-nodal](@ref nodal_def) production. This variable can include use of [transmission-enabled fuels](@ref TransmissionModelingEnabled) by non-nodal technologies. It is only available for time-sliced fuels. Unit: region's energy [unit](@ref uoms) / year.
 
 #### Julia code
 
@@ -296,7 +296,7 @@ Nominal energy produced by a [technology](@ref technology) during the modeling p
 
 ### [Trade](@id vtrade)
 
-Time-sliced trade of a [fuel](@ref fuel) from [region](@ref region) `r` to region `rr`. Unit: region's energy [unit](@ref uoms).
+Time-sliced trade of a [fuel](@ref fuel) from [region](@ref region) `r` to region `rr`. This variable is only available for time-sliced fuels. Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -304,7 +304,7 @@ Time-sliced trade of a [fuel](@ref fuel) from [region](@ref region) `r` to regio
 
 ### [Use by technology](@id vusebytechnology)
 
-Use of a [fuel](@ref fuel) by a [technology](@ref technology) in a [time slice](@ref timeslice), combining [nodal and non-nodal](@ref nodal_def) use. This variable can include use of [transmission-enabled fuels](@ref TransmissionModelingEnabled) by non-nodal technologies. Unit: region's energy [unit](@ref uoms).
+Use of a [fuel](@ref fuel) by a [technology](@ref technology) in a [time slice](@ref timeslice), combining [nodal and non-nodal](@ref nodal_def) use. This variable can include use of [transmission-enabled fuels](@ref TransmissionModelingEnabled) by non-nodal technologies. It is only available for technologies that produce or consume a time-sliced fuel. Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -314,7 +314,7 @@ Use of a [fuel](@ref fuel) by a [technology](@ref technology) in a [time slice](
 
 ### [Capital investment](@id vcapitalinvestment)
 
-Undiscounted investment in new endogenously determined [technology](@ref technology) capacity, including capital and [financing costs](@ref vfinancecost). Unit: scenario's cost [unit](@ref uoms).
+Undiscounted investment in new endogenously determined [technology](@ref technology) capacity, including capital and [financing costs](@ref vfinancecost). This variable is net of any [subsidies](@ref vsubsidybytechnology). Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -386,7 +386,7 @@ Discounted total emission costs associated with a [technology](@ref technology) 
 
 ### [Financing cost](@id vfinancecost)
 
-Financing cost incurred for new endogenously built [technology](@ref technology) capacity. NEMO calculates this cost by assuming that capital costs for the capacity are financed at the [technology's interest rate](@ref InterestRateTechnology) and repaid in equal installments over the capacity's lifetime. This variable provides the total financing cost over the lifetime, discounted to the capacity's installation year. Unit: scenario's cost [unit](@ref uoms).
+Financing cost incurred for new endogenously built [technology](@ref technology) capacity. NEMO calculates this cost by assuming that capital costs for the capacity (minus any [subsidies](@ref vsubsidybytechnology)) are financed at the [technology's interest rate](@ref InterestRateTechnology) and repaid in equal installments over the capacity's lifetime. This variable provides the total financing cost over the lifetime, discounted to the capacity's installation year. Unit: scenario's cost [unit](@ref uoms).
 
 #### Julia code
 
@@ -528,6 +528,22 @@ Discounted residual value of [capital investment transmission](@ref vcapitalinve
 
 * Variable in JuMP model: `vdiscountedsalvagevaluetransmission[tr,y]`
 
+### [Subsidies disbursed by technology](@id vsubsidybytechnology)
+
+Subsidies disbursed for a [technology](@ref technology) in a [region](@ref region) and [year](@ref year). Subsidies can be applied to new endogenously built technology capacity if the [technology subsidy](@ref TechnologySubsidy) parameter is set. They function like a discount on technology [capital costs](@ref CapitalCost), lowering capital investment and financing requirements. Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vsubsidybytechnology[r,t,y]`
+
+### [Subsidies disbursed by region](@id vsubsidybyregion)
+
+Sum of [`vsubsidybytechnology`](@ref vsubsidybytechnology) across technologies. Unit: scenario's cost [unit](@ref uoms).
+
+#### Julia code
+
+* Variable in JuMP model: `vsubsidybyregion[r,y]`
+
 ### [Total discounted cost](@id vtotaldiscountedcost)
 
 Sum of all discounted costs in a [region](@ref region) and [year](@ref year) ([technology](@ref technology), [storage](@ref storage), and [transmission](@ref transmissionline)). This variable includes adjustments to account for non-modeled years when [selected years are calculated](@ref selected_years). Unit: scenario's cost [unit](@ref uoms).
@@ -563,7 +579,7 @@ Sum of discounted [transmission](@ref transmissionline) costs: [`vdiscountedcapi
 
 ### [Nodal annual demand](@id vdemandannualnodal)
 
-[Nodal demand](@ref vdemandnodal) summed across [time slices](@ref timeslice). Unit: region's energy [unit](@ref uoms).
+[Nodal demand](@ref vdemandnodal) summed across [time slices](@ref timeslice). This variable is only available for time-sliced [fuels](@ref fuel). Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -571,7 +587,7 @@ Sum of discounted [transmission](@ref transmissionline) costs: [`vdiscountedcapi
 
 ### [Non-nodal annual demand](@id vdemandannualnn)
 
-[Non-nodal demand](@ref vdemandnn) summed across [time slices](@ref timeslice). Unit: region's energy [unit](@ref uoms).
+[Non-nodal demand](@ref vdemandnn) summed across [time slices](@ref timeslice). This variable is only available for time-sliced [fuels](@ref fuel). Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -579,7 +595,7 @@ Sum of discounted [transmission](@ref transmissionline) costs: [`vdiscountedcapi
 
 ### [Nodal demand](@id vdemandnodal)
 
-Time-sliced [nodal](@ref nodal_def) demand (time-sliced demand is defined with [`SpecifiedAnnualDemand`](@ref SpecifiedAnnualDemand) and [`SpecifiedDemandProfile`](@ref SpecifiedDemandProfile)). Unit: region's energy [unit](@ref uoms).
+Time-sliced [nodal](@ref nodal_def) demand (time-sliced demand is defined with [`SpecifiedAnnualDemand`](@ref SpecifiedAnnualDemand) and [`SpecifiedDemandProfile`](@ref SpecifiedDemandProfile)). This variable is only available for time-sliced [fuels](@ref fuel). Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -587,7 +603,7 @@ Time-sliced [nodal](@ref nodal_def) demand (time-sliced demand is defined with [
 
 ### [Non-nodal demand](@id vdemandnn)
 
-Time-sliced [non-nodal](@ref nodal_def) demand (time-sliced demand is defined with [`SpecifiedAnnualDemand`](@ref SpecifiedAnnualDemand) and [`SpecifiedDemandProfile`](@ref SpecifiedDemandProfile)). Unit: region's energy [unit](@ref uoms).
+Time-sliced [non-nodal](@ref nodal_def) demand (time-sliced demand is defined with [`SpecifiedAnnualDemand`](@ref SpecifiedAnnualDemand) and [`SpecifiedDemandProfile`](@ref SpecifiedDemandProfile)). This variable is only available for time-sliced [fuels](@ref fuel). Unit: region's energy [unit](@ref uoms).
 
 #### Julia code
 
@@ -595,7 +611,7 @@ Time-sliced [non-nodal](@ref nodal_def) demand (time-sliced demand is defined wi
 
 ### [Non-nodal rate of demand](@id vrateofdemandnn)
 
-Time-sliced rate of [non-nodal](@ref nodal_def) demand (time-sliced demand is defined with [`SpecifiedAnnualDemand`](@ref SpecifiedAnnualDemand) and [`SpecifiedDemandProfile`](@ref SpecifiedDemandProfile)). Unit: region's energy [unit](@ref uoms) / year.
+Time-sliced rate of [non-nodal](@ref nodal_def) demand (time-sliced demand is defined with [`SpecifiedAnnualDemand`](@ref SpecifiedAnnualDemand) and [`SpecifiedDemandProfile`](@ref SpecifiedDemandProfile)). This variable is only available for time-sliced [fuels](@ref fuel). Unit: region's energy [unit](@ref uoms) / year.
 
 #### Julia code
 
@@ -639,7 +655,7 @@ Total emissions during the modeling period (i.e., the period bounded by the firs
 
 ### [Total capacity in reserve margin](@id vtotalcapacityinreservemargin)
 
-Total [technology](@ref technology) capacity (combining all technologies) that counts toward meeting the [reserve margin](@ref ReserveMargin) for a [region](@ref region), [fuel](@ref fuel), and [year](@ref year). Unit: region's energy [unit](@ref uoms) / year.
+Total [technology](@ref technology) capacity (combining all technologies) that counts toward meeting the [reserve margin](@ref ReserveMargin) for a [region](@ref region), [fuel](@ref fuel), and [year](@ref year). This variable is only available for time-sliced fuels. Unit: region's energy [unit](@ref uoms) / year.
 
 #### Julia code
 

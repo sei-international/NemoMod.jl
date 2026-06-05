@@ -8,7 +8,7 @@
 =#
 
 module NemoMod
-export calculatescenario, createnemodb, dropdefaultviews, dropresulttables, logmsg, setparamdefault, convertscenariounits, find_infeasibilities, convert_osemosys, convert_ini_to_toml
+export calculatescenario, createnemodb, data_validation, dropdefaultviews, dropresulttables, logmsg, setparamdefault, convertscenariounits, find_infeasibilities, convert_osemosys, convert_ini_to_toml
 
 #= List of module global variables.
     • csdbpath - dbpath argument in most recent invocation of calculatescenario() or modelscenario()
@@ -17,6 +17,10 @@ export calculatescenario, createnemodb, dropdefaultviews, dropresulttables, logm
     • csinyears - SQL in clause predicate indicating which years are selected in most recent invocation of calculatescenario() or modelscenario()
     • csjumpmodel - jumpmodel argument in most recent invocation of calculatescenario() or modelscenario() (only set if a customconstraints include is performed)
 =#
+
+# Constants
+# Current NEMO data dictionary version. Update when introducing a new db_vN_to_vN+1 migration.
+const NEMO_DB_VERSION = 12
 
 # BEGIN: Access other modules and code files.
 using JuMP, SQLite, DataFrames, Dates, MathOptInterface, TOML, CSV, YAML

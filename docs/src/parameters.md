@@ -321,6 +321,70 @@ For the indicated [fuel](@ref fuel) and [year](@ref year), maximum energy that c
 | `y` | text  | Year |
 | `val` | real  | Energy (energy unit for regions containing `n1` and `n2`) |
 
+## [Maximum production share](@id MaxShareProduction)
+
+For the specified [region](@ref region), [fuel](@ref fuel), and [year](@ref year), maximum fraction of production (excluding production from [storage](@ref storage)) that may be delivered by the indicated [technology](@ref technology).
+
+#### Scenario database
+
+**Table: `MaxShareProduction`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `t` | text  | Technology |
+| `f` | text  | Fuel |
+| `y` | text  | Year |
+| `val` | real  | Fraction (0 to 1) |
+
+## [Maximum subsidies per technology](@id MaxSubsidyPerTechnology)
+
+Maximum subsidies that can be disbursed for a [technology](@ref technology) in a [region](@ref region) and [year](@ref year). Subsidies can be applied to new endogenously built technology capacity if the [`TechnologySubsidy`](@ref TechnologySubsidy) parameter is defined. They function like a discount on [capital costs](@ref CapitalCost), lowering capital investment and financing requirements.
+
+#### Scenario database
+
+**Table: `MaxSubsidyPerTechnology`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `t` | text  | Technology |
+| `y` | text  | Year |
+| `val` | real  | Maximum subsidies (scenario's cost [unit](@ref uoms)) |
+
+## [Maximum subsidies per technology group](@id MaxSubsidyPerTechnologyGroup)
+
+Maximum subsidies that can be disbursed for a [technology group](@ref technologygroup) in a [region](@ref region) and [year](@ref year). Subsidies can be applied to new endogenously built technology capacity if the [`TechnologySubsidy`](@ref TechnologySubsidy) parameter is defined. They function like a discount on [capital costs](@ref CapitalCost), lowering capital investment and financing requirements.
+
+#### Scenario database
+
+**Table: `MaxSubsidyPerTechnologyGroup`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `tg` | text  | Technology group |
+| `y` | text  | Year |
+| `val` | real  | Maximum subsidies (scenario's cost [unit](@ref uoms)) |
+
+## [Maximum subsidies per region](@id MaxSubsidyPerRegion)
+
+Maximum [technology](@ref technology) subsidies that can be disbursed in a [region](@ref region) and [year](@ref year). Subsidies can be applied to new endogenously built technology capacity if the [`TechnologySubsidy`](@ref TechnologySubsidy) parameter is defined. They function like a discount on [capital costs](@ref CapitalCost), lowering capital investment and financing requirements.
+
+#### Scenario database
+
+**Table: `MaxSubsidyPerRegion`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `y` | text  | Year |
+| `val` | real  | Maximum technology subsidies (scenario's cost [unit](@ref uoms)) |
+
 ## [Minimum annual transmission between nodes](@id MinAnnualTransmissionNodes)
 
 For the indicated [fuel](@ref fuel) and [year](@ref year), minimum energy that must be received at the second [node](@ref node) (`n2`) via transmission from the first node (`n1`). Energy received is net of any transmission losses.
@@ -676,6 +740,9 @@ Multiplier that defines the level of reserve production capacity for a [region](
 | `y` | text  | Year |
 | `val` | real  | Multiplier (e.g., 1.15 for a 15% reserve margin) |
 
+!!! note
+    If a reserve margin is set for a fuel, the fuel must be time-sliced (`FUEL.timesliced` = `1`).
+
 ## [Reserve margin tag technology](@id ReserveMarginTagTechnology)
 
 Fraction of a [technology's](@ref technology) installed capacity that counts toward the [reserve margin](@ref ReserveMargin).
@@ -740,6 +807,9 @@ Time-sliced exogenous demand. Use this parameter to specify the total demand in 
 | `f` | text  | Fuel |
 | `y` | text  | Year |
 | `val` | real  | Demand (region's energy [unit](@ref uoms)) |
+
+!!! note
+    If you define specified annual demand for a non time-sliced [fuel](@ref fuel), NEMO treats it as analogous to [accumulated annual demand](@ref AccumulatedAnnualDemand) (i.e., as demand at the annual level, ignoring the [specified demand profile](@ref SpecifiedDemandProfile)).
 
 ## [Specified demand profile](@id SpecifiedDemandProfile)
 
@@ -845,6 +915,39 @@ Indicator of whether a [technology](@ref technology) can discharge a [storage](@
 !!! tip
     It is not necessary to populate zeros in `TechnologyFromStorage` for technologies that aren't connected to a storage. NEMO assumes no connection if a technology isn't represented in the table.
 
+!!! note
+    If a technology is connected to storage via `TechnologyFromStorage`, the fuels it produces must be time-sliced (`FUEL.timesliced` = `1`).
+
+## [Technology group assignment](@id TTGroup)
+
+Map of [technologies](@ref technology) to [technology groups](@ref technologygroup). A technology can belong to zero or more groups.
+
+#### Scenario database
+
+**Table: `TTGroup`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `tg` | text  | Technology group |
+| `t` | text  | Technology |
+
+## [Technology subsidy](@id TechnologySubsidy)
+
+Maximum permissible subsidy amount per unit of endogenously built [technology](@ref technology) capacity. Subsidies function like a discount on technology [capital costs](@ref CapitalCost), lowering capital investment and financing requirements.
+
+#### Scenario database
+
+**Table: `TechnologySubsidy`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `t` | text  | Technology |
+| `y` | text  | Year |
+| `val` | real  | Maximum permissible subsidy (scenario's cost [unit](@ref uoms) / region's power unit) |
+
 ## [Technology to storage](@id TechnologyToStorage)
 
 Indicator of whether a [technology](@ref technology) can charge a [storage](@ref storage).
@@ -864,6 +967,9 @@ Indicator of whether a [technology](@ref technology) can charge a [storage](@ref
 
 !!! tip
     It is not necessary to populate zeros in `TechnologyToStorage` for technologies that aren't connected to a storage. NEMO assumes no connection if a technology isn't represented in the table.
+
+!!! note
+    If a technology is connected to storage via `TechnologyToStorage`, the fuels it consumes must be time-sliced (`FUEL.timesliced` = `1`).
 
 ## [Time slice group assignment](@id LTsGroup)
 
@@ -910,6 +1016,70 @@ Maximum addition of endogenously determined capacity for a [technology](@ref tec
 | `id` | integer | Unique identifier for row |
 | `r` | text  | Region |
 | `t` | text  | Technology |
+| `y` | text  | Year |
+| `val` | real  | Capacity (region's power [unit](@ref uoms)) |
+
+## [Total annual maximum capacity (by region group)](@id TotalAnnualMaxCapacityRG)
+
+Maximum capacity for a [technology](@ref technology) in a [year](@ref year) and [region group](@ref regiongroup) (including both exogenous and endogenous capacity). Only specify this parameter if you want to enforce a particular limit.
+
+#### Scenario database
+
+**Table: `TotalAnnualMaxCapacityRG`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `rg` | text  | Region group |
+| `t` | text  | Technology |
+| `y` | text  | Year |
+| `val` | real  | Capacity (region's power [unit](@ref uoms)) |
+
+## [Total annual maximum capacity investment (by region group)](@id TotalAnnualMaxCapacityInvestmentRG)
+
+Maximum addition of endogenously determined capacity for a [technology](@ref technology) in a [year](@ref year) and [region group](@ref regiongroup). Only specify this parameter if you want to enforce a particular limit. This parameter is scaled up to account for non-modeled years when [selected years are calculated](@ref selected_years).
+
+#### Scenario database
+
+**Table: `TotalAnnualMaxCapacityInvestmentRG`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `rg` | text  | Region group |
+| `t` | text  | Technology |
+| `y` | text  | Year |
+| `val` | real  | Capacity (region's power [unit](@ref uoms)) |
+
+## [Total annual maximum capacity (by technology group)](@id TotalAnnualMaxCapacityTG)
+
+Maximum capacity for a [technology group](@ref technologygroup) in a [year](@ref year) and [region](@ref region) (including both exogenous and endogenous capacity). Only specify this parameter if you want to enforce a particular limit.
+
+#### Scenario database
+
+**Table: `TotalAnnualMaxCapacityTG`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `tg` | text  | Technology group |
+| `y` | text  | Year |
+| `val` | real  | Capacity (region's power [unit](@ref uoms)) |
+
+## [Total annual maximum capacity investment (by technology group)](@id TotalAnnualMaxCapacityInvestmentTG)
+
+Maximum addition of endogenously determined capacity for a [technology group](@ref technologygroup) in a [year](@ref year) and [region](@ref region). Only specify this parameter if you want to enforce a particular limit. This parameter is scaled up to account for non-modeled years when [selected years are calculated](@ref selected_years).
+
+#### Scenario database
+
+**Table: `TotalAnnualMaxCapacityInvestmentTG`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region group |
+| `tg` | text  | Technology group |
 | `y` | text  | Year |
 | `val` | real  | Capacity (region's power [unit](@ref uoms)) |
 
@@ -974,6 +1144,70 @@ Minimum addition of endogenously determined capacity for a [technology](@ref tec
 | `id` | integer | Unique identifier for row |
 | `r` | text  | Region |
 | `t` | text  | Technology |
+| `y` | text  | Year |
+| `val` | real  | Capacity (region's power [unit](@ref uoms)) |
+
+## [Total annual minimum capacity (by region group)](@id TotalAnnualMinCapacityRG)
+
+Minimum capacity for a [technology](@ref technology) in a [year](@ref year) and [region group](@ref regiongroup) (including both exogenous and endogenous capacity). Only specify this parameter if you want to enforce a particular limit (other than 0, which NEMO assumes by default).
+
+#### Scenario database
+
+**Table: `TotalAnnualMinCapacityRG`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `rg` | text  | Region group |
+| `t` | text  | Technology |
+| `y` | text  | Year |
+| `val` | real  | Capacity (region's power [unit](@ref uoms)) |
+
+## [Total annual minimum capacity investment (by region group)](@id TotalAnnualMinCapacityInvestmentRG)
+
+Minimum addition of endogenously determined capacity for a [technology](@ref technology) in a [year](@ref year) and [region group](@ref regiongroup). Only specify this parameter if you want to enforce a particular limit (other than 0, which NEMO assumes by default). This parameter is scaled up to account for non-modeled years when [selected years are calculated](@ref selected_years).
+
+#### Scenario database
+
+**Table: `TotalAnnualMinCapacityInvestmentRG`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `rg` | text  | Region group |
+| `t` | text  | Technology |
+| `y` | text  | Year |
+| `val` | real  | Capacity (region's power [unit](@ref uoms)) |
+
+## [Total annual minimum capacity (by technology group)](@id TotalAnnualMinCapacityTG)
+
+Minimum capacity for a [technology group](@ref technologygroup) in a [year](@ref year) and [region](@ref region) (including both exogenous and endogenous capacity). Only specify this parameter if you want to enforce a particular limit (other than 0, which NEMO assumes by default).
+
+#### Scenario database
+
+**Table: `TotalAnnualMinCapacityTG`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region |
+| `tg` | text  | Technology group |
+| `y` | text  | Year |
+| `val` | real  | Capacity (region's power [unit](@ref uoms)) |
+
+## [Total annual minimum capacity investment (by technology group)](@id TotalAnnualMinCapacityInvestmentTG)
+
+Minimum addition of endogenously determined capacity for a [technology group](@ref technologygroup) in a [year](@ref year) and [region](@ref region). Only specify this parameter if you want to enforce a particular limit (other than 0, which NEMO assumes by default). This parameter is scaled up to account for non-modeled years when [selected years are calculated](@ref selected_years).
+
+#### Scenario database
+
+**Table: `TotalAnnualMinCapacityInvestmentTG`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `r` | text  | Region group |
+| `tg` | text  | Technology group |
 | `y` | text  | Year |
 | `val` | real  | Capacity (region's power [unit](@ref uoms)) |
 
@@ -1140,6 +1374,9 @@ Indicator of whether transmission modeling is enabled for a [region](@ref region
 
 !!! note
     At present, NEMO does not endogenously simulate line losses for types 1 and 2.
+
+!!! note
+    If transmission modeling is enabled for a fuel, the fuel must be time-sliced (`FUEL.timesliced` = `1`).
 
 #### Scenario database
 

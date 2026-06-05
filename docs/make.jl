@@ -1,5 +1,8 @@
 using Documenter
-using NemoMod
+
+if !(@isdefined NemoMod)
+    using NemoMod
+end
 
 """
     Documenter.Writers.HTMLWriter.analytics_script(line::String)

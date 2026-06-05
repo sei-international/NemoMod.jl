@@ -106,7 +106,7 @@ Path to a previously calculated scenario database that NEMO should copy over the
 
 **Type:** TOML String
 
-**Example:** `precalcresultspath = "c:/temp/precalc`
+**Example:** `precalcresultspath = "c:/temp/precalc"`
 
 ### `quiet`
 
