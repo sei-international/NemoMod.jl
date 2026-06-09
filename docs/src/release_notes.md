@@ -24,6 +24,9 @@ This page highlights key changes in NEMO since its initial public release. For a
 !!! warning
     NEMO requires a fuel to be time-sliced in a few cases: 1) if [transmission modeling is enabled](@ref TransmissionModelingEnabled) for the fuel; 2) if the fuel is stored in or released from [storage](@ref storage); and 3) if a [reserve margin](@ref ReserveMargin) is defined for production of the fuel. `data_validation` checks for these conditions.
 
+!!! note
+    The OSeMOSYS to NEMO converter is an initial release that the NEMO team expects to refine with user feedback. To provide feedback, please contact [Iain Morrow](https://github.com/IainDM) or [post an issue in NEMO's GitHub repository](https://github.com/sei-international/NemoMod.jl/issues).
+
 !!! tip
     To update a legacy scenario database to be compatible with NEMO 2.4, use the `db_v11_to_v12` function. This function applies the default value of `1` in `FUEL.timesliced`.
 
