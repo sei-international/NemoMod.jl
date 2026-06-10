@@ -36,7 +36,19 @@ makedocs(
         "Modeling concept" => "modeling_concept.md"
         "Inputs" => [
             "Dimensions" => "dimensions.md"
-            "Parameters" => "parameters.md"
+            "Parameters" => [
+                "Overview" => "parameters.md"
+                "Demands" => "parameters_demands.md"
+                "Technology performance and operation" => "parameters_technology.md"
+                "Costs, financing, and subsidies" => "parameters_costs.md"
+                "Capacity and investment limits" => "parameters_capacity_limits.md"
+                "Activity limits and production shares" => "parameters_activity_limits.md"
+                "Emissions" => "parameters_emissions.md"
+                "Reserve margins" => "parameters_reserve_margins.md"
+                "Storage" => "parameters_storage.md"
+                "Transmission, nodes, and trade" => "parameters_transmission.md"
+                "Model structure and groupings" => "parameters_structure.md"
+            ]
             "Time slicing" => "time_slicing.md"
             "Units of measure" => "units.md"
         ]
