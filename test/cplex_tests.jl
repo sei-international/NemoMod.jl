@@ -488,6 +488,28 @@ if @isdefined CPLEX
             SQLite.DBInterface.execute(db, "update FUEL set timesliced = 1 where val <> 'electricity'")
         end
 
+        # Test TransmissionAnnualMaxCapacityInvestment
+        testnumber += 1
+        @info "Running CPLEX test $(testnumber) on storage_transmission_test.sqlite: TransmissionAnnualMaxCapacityInvestment."
+
+        try
+            SQLite.DBInterface.execute(db, "insert into TransmissionAnnualMaxCapacityInvestment values (null, 2, 2020, 250.0)")
+            
+            NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())),
+                varstosave =
+                    "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
+                    * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
+                continuoustransmission=true, quiet = calculatescenario_quiet)
+
+            if !compilation
+                testqry = SQLite.DBInterface.execute(db, "select * from vtransmissionbuilt order by y") |> DataFrame
+                @test testqry[1,:y] == "2020"
+                @test isapprox(testqry[1,:val], 0.5; atol=0.01)
+            end
+        finally
+            SQLite.DBInterface.execute(db, "delete from TransmissionAnnualMaxCapacityInvestment")
+        end
+
         # Delete test results and re-compact test database
         NemoMod.dropresulttables(db)
         testqry = SQLite.DBInterface.execute(db, "VACUUM")
