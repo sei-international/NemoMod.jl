@@ -1361,6 +1361,48 @@ Multiplier to convert 1 megawatt-year to a [region's](@ref region) energy [unit]
 | `f` | text  | Fuel |
 | `val` | real  | Multiplier |
 
+## [Transmission maximum annual capacity investment](@id TransmissionAnnualMaxCapacityInvestment)
+
+Maximum addition of endogenously determined capacity for a [transmission line](@ref transmissionline) in a [year](@ref year). This parameter is scaled up to account for non-modeled years when [selected years are calculated](@ref selected_years). It only applies to candidate transmission lines (lines without an exogenously specified construction date).
+
+#### Scenario database
+
+**Table: `TransmissionAnnualMaxCapacityInvestment`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `tr` | text  | Transmission line |
+| `y` | text  | Year |
+| `val` | real  | Capacity (MW) |
+
+!!! warning
+    If a candidate transmission line's `TransmissionAnnualMaxCapacityInvestment` is less than its `maxflow` and you call [`calculatescenario`](@ref) with `continuoustransmission = false`, the line will never be built.
+
+## [Transmission minimum annual capacity investment](@id TransmissionAnnualMinCapacityInvestment)
+
+Minimum addition of endogenously determined capacity for a [transmission line](@ref transmissionline) in a [year](@ref year). This parameter is **_not_** scaled up to account for non-modeled years when [selected years are calculated](@ref selected_years). It only applies to candidate transmission lines (lines without an exogenously specified construction date).
+
+#### Scenario database
+
+**Table: `TransmissionAnnualMinCapacityInvestment`**
+
+| Name | Type | Description |
+|:--- | :--: |:----------- |
+| `id` | integer | Unique identifier for row |
+| `tr` | text  | Transmission line |
+| `y` | text  | Year |
+| `val` | real  | Capacity (MW) |
+
+!!! note
+    If you set `TransmissionAnnualMinCapacityInvestment` for a candidate transmission line and year and call [`calculatescenario`](@ref) with `continuoustransmission = false`, the line will be built in its entirety in the specified year.
+    
+!!! warning
+    If you set `TransmissionAnnualMinCapacityInvestment` for a candidate transmission line in more than one year and call `calculatescenario` with `continuoustransmission = false`, your model will be infeasible.
+
+!!! warning
+    If you set `TransmissionAnnualMinCapacityInvestment` for a candidate transmission line in more than one year and call `calculatescenario` with `continuoustransmission = true`, your model will be infeasible if the total minimum additions exceed the line's `maxflow`.
+
 ## [Transmission modeling enabled](@id TransmissionModelingEnabled)
 
 Indicator of whether transmission modeling is enabled for a [region](@ref region), [fuel](@ref fuel), and [year](@ref year). The `type` field specifies the approach to simulating energy flow:

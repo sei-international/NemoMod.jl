@@ -375,7 +375,8 @@ function calculatescenario(
         "InterestRateStorage", "MinShareProduction", "MinAnnualTransmissionNodes", "MaxAnnualTransmissionNodes", "TechnologySubsidy",
         "MaxSubsidyPerTechnology", "MaxSubsidyPerRegion", "MaxSubsidyPerTechnologyGroup", "MaxShareProduction", 
         "TotalAnnualMaxCapacityRG", "TotalAnnualMaxCapacityTG", "TotalAnnualMaxCapacityInvestmentRG", "TotalAnnualMaxCapacityInvestmentTG", 
-        "TotalAnnualMinCapacityRG", "TotalAnnualMinCapacityTG", "TotalAnnualMinCapacityInvestmentRG", "TotalAnnualMinCapacityInvestmentTG"]
+        "TotalAnnualMinCapacityRG", "TotalAnnualMinCapacityTG", "TotalAnnualMinCapacityInvestmentRG", "TotalAnnualMinCapacityInvestmentTG",
+        "TransmissionAnnualMaxCapacityInvestment", "TransmissionAnnualMinCapacityInvestment"]
 
         createviewwithdefaults(db, paramsneedingdefs)
         create_other_nemo_indices(db)
@@ -2897,6 +2898,66 @@ if transmissionmodeling
     logmsg("Queued constraint Tr11_MaxAnnualTransmissionNodes for creation.", quiet)
 end
 # END: Tr11_MaxAnnualTransmissionNodes.
+
+# BEGIN: Tr12_TransmissionAnnualMaxCapacityInvestment.
+# Limits capacity that can be endogenously added for tr in y; when selected years are modeled, limit is scaled up
+#   by the number of years in y's interval
+if transmissionmodeling
+    tr12_transmissionannualmaxcapacityinvestment::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+
+    t = Threads.@spawn(begin
+        for row in SQLite.DBInterface.execute(db, "select tl.id as tr, mxci.y as y, cast(tl.maxflow as real) as maxflow,
+            cast(mxci.val as real) as mxci
+            from TransmissionLine tl, TransmissionAnnualMaxCapacityInvestment_def mxci
+            where mxci.tr = tl.id
+            and tl.yconstruction is null and tl.maxflow is not null
+            $(restrictyears ? "and mxci.y in" * inyears : "")")
+            local tr = row[:tr]
+            local y = row[:y]
+            local scaledmxci = row[:mxci] * (restrictyears ? yearintervalsdict[y] : 1)  # Maximum capacity investment scaled to interval represented by y
+
+            # Constraint is omitted when it cannot bind
+            if scaledmxci < row[:maxflow]
+                push!(tr12_transmissionannualmaxcapacityinvestment, @build_constraint(row[:maxflow] * vtransmissionbuilt[tr,y] <= scaledmxci))
+            end
+        end
+
+        put!(cons_channel, tr12_transmissionannualmaxcapacityinvestment)
+    end)
+
+    numconsarrays += 1
+    logmsg("Queued constraint Tr12_TransmissionAnnualMaxCapacityInvestment for creation.", quiet)
+end
+# END: Tr12_TransmissionAnnualMaxCapacityInvestment.
+
+# BEGIN: Tr13_TransmissionAnnualMinCapacityInvestment.
+# Requires a minimum amount of capacity to be endogenously added for tr in y; minimum is not scaled up when
+#   selected years are modeled since total endogenous additions for tr are capped at tl.maxflow
+if transmissionmodeling
+    tr13_transmissionannualmincapacityinvestment::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+
+    t = Threads.@spawn(begin
+        for row in SQLite.DBInterface.execute(db, "select tl.id as tr, mnci.y as y, cast(tl.maxflow as real) as maxflow,
+            cast(mnci.val as real) as mnci
+            from TransmissionLine tl, TransmissionAnnualMinCapacityInvestment_def mnci
+            where mnci.tr = tl.id
+            and tl.yconstruction is null and tl.maxflow is not null
+            and mnci.val > 0
+            $(restrictyears ? "and mnci.y in" * inyears : "")"
+            * (limitedforesight && !isnothing(lastyearprevgroupyears) ? " and tl.id not in (select tr from vtransmissionbuilt group by tr having sum(val) >= 1)" : ""))
+            local tr = row[:tr]
+            local y = row[:y]
+
+            push!(tr13_transmissionannualmincapacityinvestment, @build_constraint(row[:maxflow] * vtransmissionbuilt[tr,y] >= row[:mnci]))
+        end
+
+        put!(cons_channel, tr13_transmissionannualmincapacityinvestment)
+    end)
+
+    numconsarrays += 1
+    logmsg("Queued constraint Tr13_TransmissionAnnualMinCapacityInvestment for creation.", quiet)
+end
+# END: Tr13_TransmissionAnnualMinCapacityInvestment.
 
 # BEGIN: EBa11Tr_EnergyBalanceEachTS5 and EBb4_EnergyBalanceEachYear.
 if transmissionmodeling

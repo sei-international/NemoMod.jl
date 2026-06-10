@@ -117,6 +117,8 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.DBInterface.execute(db,"drop table if exists TotalTechnologyAnnualActivityUpperLimit")
     SQLite.DBInterface.execute(db,"drop table if exists TotalTechnologyModelPeriodActivityLowerLimit")
     SQLite.DBInterface.execute(db,"drop table if exists TotalTechnologyModelPeriodActivityUpperLimit")
+    SQLite.DBInterface.execute(db,"drop table if exists TransmissionAnnualMaxCapacityInvestment")
+    SQLite.DBInterface.execute(db,"drop table if exists TransmissionAnnualMinCapacityInvestment")
     SQLite.DBInterface.execute(db,"drop table if exists TransmissionAvailabilityFactor")
     SQLite.DBInterface.execute(db,"drop table if exists TransmissionCapacityToActivityUnit")
     SQLite.DBInterface.execute(db,"drop table if exists TransmissionLine")
@@ -160,7 +162,7 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     #   - 9: Added REGIONGROUP, RRGroup, REMinProductionTargetRG.
     #   - 10: Added ReserveMargin.f and ReserveMarginTagTechnology.f. Deprecated ReserveMarginTagFuel. Dropped original AvailabilityFactor table and renamed CapacityFactor to AvailabilityFactor. Added TransmissionAvailabilityFactor.
     #   - 11: Added MinAnnualTransmissionNodes, MaxAnnualTransmissionNodes
-    #   - 12: Added FUEL.timesliced, TechnologySubsidy, MaxSubsidyPerTechnology, MaxSubsidyPerRegion, TECHNOLOGYGROUP, TTGroup, MaxSubsidyPerTechnologyGroup, MaxShareProduction, and region group (RG) and technology group (TG) variants of TotalAnnualMaxCapacity, TotalAnnualMaxCapacityInvestment, TotalAnnualMinCapacity, and TotalAnnualMinCapacityInvestment.
+    #   - 12: Added FUEL.timesliced, TechnologySubsidy, MaxSubsidyPerTechnology, MaxSubsidyPerRegion, TECHNOLOGYGROUP, TTGroup, MaxSubsidyPerTechnologyGroup, MaxShareProduction, TransmissionAnnualMaxCapacityInvestment, TransmissionAnnualMinCapacityInvestment, and region group (RG) and technology group (TG) variants of TotalAnnualMaxCapacity, TotalAnnualMaxCapacityInvestment, TotalAnnualMinCapacity, and TotalAnnualMinCapacityInvestment.
     SQLite.DBInterface.execute(db, "CREATE TABLE `Version` (`version` INTEGER, PRIMARY KEY(`version`))")
     SQLite.DBInterface.execute(db, "INSERT INTO Version VALUES($(NEMO_DB_VERSION))")
 
@@ -191,6 +193,8 @@ function createnemodb(path::String; defaultvals::Dict{String, Float64} = Dict{St
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionLine` ( `id` TEXT, `n1` TEXT, `n2` TEXT, `f` TEXT, `maxflow` REAL, `reactance` REAL, `yconstruction` INTEGER, `capitalcost` REAL, `fixedcost` REAL, `variablecost` REAL, `operationallife` INTEGER, `efficiency` REAL, `interestrate` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`n2`) REFERENCES `NODE`(`val`), FOREIGN KEY(`n1`) REFERENCES `NODE`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionCapacityToActivityUnit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `f` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionAvailabilityFactor` ( `id` INTEGER NOT NULL UNIQUE, `tr` TEXT, `l` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`tr`) REFERENCES `TransmissionLine`(`id`), FOREIGN KEY(`l`) REFERENCES `TIMESLICE`(`val`)" : "") * " )")
+    SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionAnnualMinCapacityInvestment` ( `id` INTEGER NOT NULL UNIQUE, `tr` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`tr`) REFERENCES `TransmissionLine`(`id`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
+    SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionAnnualMaxCapacityInvestment` ( `id` INTEGER NOT NULL UNIQUE, `tr` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`tr`) REFERENCES `TransmissionLine`(`id`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TradeRoute` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `rr` TEXT, `f` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`r`) REFERENCES `REGION`(`val`), FOREIGN KEY(`rr`) REFERENCES `REGION`(`val`), FOREIGN KEY(`y`) REFERENCES `YEAR`(`val`), FOREIGN KEY(`f`) REFERENCES `FUEL`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TotalTechnologyModelPeriodActivityUpperLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
     SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TotalTechnologyModelPeriodActivityLowerLimit` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `t` TEXT, `val` REAL, PRIMARY KEY(`id`)" * (foreignkeys ? ", FOREIGN KEY(`t`) REFERENCES `TECHNOLOGY`(`val`), FOREIGN KEY(`r`) REFERENCES `REGION`(`val`)" : "") * " )")
@@ -658,6 +662,7 @@ end  # db_v10_to_v11(db::SQLite.DB; quiet::Bool = false)
     - Adding MaxShareProduction
     - Adding region group (RG) and technology group (TG) variants of TotalAnnualMaxCapacity,
       TotalAnnualMaxCapacityInvestment, TotalAnnualMinCapacity, and TotalAnnualMinCapacityInvestment
+    - Adding TransmissionAnnualMaxCapacityInvestment and TransmissionAnnualMinCapacityInvestment
 =#
 function db_v11_to_v12(db::SQLite.DB; quiet::Bool = false)
     # BEGIN: Wrap database operations in try-catch block to allow rollback on error.
@@ -705,6 +710,12 @@ function db_v11_to_v12(db::SQLite.DB; quiet::Bool = false)
         SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMinCapacityInvestmentRG` ( `id` INTEGER NOT NULL UNIQUE, `rg` TEXT, `t` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`))")
 
         SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TotalAnnualMinCapacityInvestmentTG` ( `id` INTEGER NOT NULL UNIQUE, `r` TEXT, `tg` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`))")
+
+        # Add TransmissionAnnualMaxCapacityInvestment table
+        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionAnnualMaxCapacityInvestment` ( `id` INTEGER NOT NULL UNIQUE, `tr` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`))")
+
+        # Add TransmissionAnnualMinCapacityInvestment table
+        SQLite.DBInterface.execute(db, "CREATE TABLE IF NOT EXISTS `TransmissionAnnualMinCapacityInvestment` ( `id` INTEGER NOT NULL UNIQUE, `tr` TEXT, `y` TEXT, `val` REAL, PRIMARY KEY(`id`))")
 
         SQLite.DBInterface.execute(db, "update version set version = 12")
 

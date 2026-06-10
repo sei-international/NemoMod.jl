@@ -21,6 +21,8 @@ This page highlights key changes in NEMO since its initial public release. For a
 
   * **OSeMOSYS to NEMO converter:** Added a function for converting [OSeMOSYS](https://osemosys.org/) models to NEMO - [`convert_osemosys`](@ref). The function takes as an input an OSeMOSYS model's data (in either SQLite or CSV format, as produced by [OSeMOSYS tools for energy work](https://github.com/OSeMOSYS/otoole) (otoole)) and returns a [NEMO scenario database](@ref scenario_db) for the model. Many thanks to [Iain Morrow](https://github.com/IainDM) for this enhancement!
 
+  * **Minimum and maximum capacity additions for transmission lines:** Provided parameters to specify minimum and maximum endogenous capacity additions for [transmission lines](@ref transmissionline) ([`TransmissionAnnualMinCapacityInvestment`](@ref TransmissionAnnualMinCapacityInvestment) and [`TransmissionAnnualMaxCapacityInvestment`](@ref TransmissionAnnualMaxCapacityInvestment)). Both of these parameters are indexed by line and [year](@ref year). If you [calculate selected years only](@ref selected_years), `TransmissionAnnualMaxCapacityInvestment` is scaled up to account for non-modeled years. These parameters do not apply to lines with exogenously specified construction years.
+
 !!! warning
     NEMO requires a fuel to be time-sliced in a few cases: 1) if [transmission modeling is enabled](@ref TransmissionModelingEnabled) for the fuel; 2) if the fuel is stored in or released from [storage](@ref storage); and 3) if a [reserve margin](@ref ReserveMargin) is defined for production of the fuel. `data_validation` checks for these conditions.
 
