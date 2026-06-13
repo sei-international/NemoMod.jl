@@ -2,6 +2,11 @@
 
 # NEMO: Next Energy Modeling system for Optimization
 
+Copyright (c) 2018 - Stockholm Environment Institute U.S.
+
+The NemoMod.jl package is licensed under the Apache License, Version 2.0.
+
+[![license](https://img.shields.io/badge/License-Apache%202.0-black)](https://github.com/sei-international/NemoMod.jl/blob/main/LICENSE)
 [![](https://img.shields.io/badge/docs-stable-blue.svg)](https://sei-international.github.io/NemoMod.jl/stable)
 [![](https://img.shields.io/badge/docs-dev-blue.svg)](https://sei-international.github.io/NemoMod.jl/dev)
 
