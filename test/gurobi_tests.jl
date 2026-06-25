@@ -274,8 +274,8 @@ if @isdefined Gurobi
         NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(Gurobi.Optimizer, "NumericFocus" => 2)) : direct_model(optimizer_with_attributes(Gurobi.Optimizer, "NumericFocus" => 2))),
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
-                * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
-            restrictvars=false, quiet = calculatescenario_quiet)
+                * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual, vfuelprice, vfuelpricenodal, vfuelpriceannual, vfuelpricenodalannual",
+            quiet = calculatescenario_quiet)
 
         db = SQLite.DB(dbfile)
 
@@ -303,6 +303,11 @@ if @isdefined Gurobi
             @test isapprox(testqry[8,:val], 178.714986656564; atol=TOL)
             @test isapprox(testqry[9,:val], 170.204749196728; atol=TOL)
             @test isapprox(testqry[10,:val], 162.099761139741; atol=TOL)
+
+            testqry = SQLite.DBInterface.execute(db, "select * from vfuelpriceannual where f = 'gas' order by y") |> DataFrame
+            
+            @test testqry[1,:y] == "2020"
+            @test isapprox(testqry[1,:val], 150.0; atol=TOL)
         end
 
         # Test with non time sliced fuels

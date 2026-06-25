@@ -268,14 +268,14 @@ if @isdefined CPLEX
         dbfile = joinpath(dbfile_path, "storage_transmission_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
-        # Test with default outputs
+        # Test with default outputs and fuel prices
         testnumber += 1
         @info "Running CPLEX test $(testnumber) on storage_transmission_test.sqlite: default outputs."
         NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())),
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
-                * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
-            restrictvars=false, quiet = calculatescenario_quiet)
+                * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual, vfuelprice, vfuelpricenodal, vfuelpriceannual, vfuelpricenodalannual",
+            quiet = calculatescenario_quiet)
 
         db = SQLite.DB(dbfile)
 
@@ -303,6 +303,11 @@ if @isdefined CPLEX
             @test isapprox(testqry[8,:val], 178.714951753762; atol=TOL)
             @test isapprox(testqry[9,:val], 170.204748803116; atol=TOL)
             @test isapprox(testqry[10,:val], 162.099761418328; atol=TOL)
+
+            testqry = SQLite.DBInterface.execute(db, "select * from vfuelpriceannual where f = 'gas' order by y") |> DataFrame
+            
+            @test testqry[1,:y] == "2020"
+            @test isapprox(testqry[1,:val], 150.0; atol=TOL)
         end
 
         # Test with non time sliced fuels

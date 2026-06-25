@@ -5,6 +5,18 @@ CurrentModule = NemoMod
 
 This page highlights key changes in NEMO since its initial public release. For a full history of NEMO releases, including the code for each version, see the [Releases page on NEMO's GitHub site](https://github.com/sei-international/NemoMod.jl/releases).
 
+## Version 2.5
+
+  * **Fuel prices:** Added functionality to calculate [fuel](@ref fuel) prices based on the marginal cost of supplying fuels. Prices are computed from the dual values of NEMO's energy balance constraints and can be reported in four new variables:
+    * [`vfuelprice`](@ref vfuelprice) - the price of a fuel in a [region](@ref region), [time slice](@ref timeslice), and [year](@ref year). Available for time-sliced fuels that are not involved in transmission modeling.
+    * [`vfuelpricenodal`](@ref vfuelpricenodal) - the price of a fuel at a transmission network [node](@ref node) in a time slice and year. Available for fuels that are involved in transmission modeling.
+    * [`vfuelpricenodalannual`](@ref vfuelpricenodalannual) - the average price of a fuel at a transmission network node in a year. Available for fuels that are involved in transmission modeling. NEMO averages over the time slices in the year, weighting each slice's price by its production.
+    * [`vfuelpriceannual`](@ref vfuelpriceannual) - the average price of a fuel in a region and year. Available for all fuels. For time-sliced fuels, NEMO averages over the time slices in the year, weighting each slice's price by its production. For fuels involved in transmission modeling, the averaging operation covers prices and production at all transmission network nodes in the region.
+    To obtain fuel prices, simply request one or more of these variables when calculating a scenario (in the `varstosave` argument for [`calculatescenario`](@ref)). For more information, including details on the price calculation methodology, see [Fuel prices](@ref fuel_prices).
+
+!!! note
+    Prices cannot be calculated with the Cbc solver because it does not provide dual values. If you wish to calculate prices with an open-source solver, try HiGHS or GLPK. 
+
 ## Version 2.4
 
   * **Time-sliced fuels:** Added an option to designate [fuels](@ref fuel) as time-sliced or non time-sliced (via `FUEL.timesliced`: use `1` for a time-sliced fuel and `0` for a non time-sliced fuel). This determines whether NEMO simulates the production, consumption, and trade of a fuel in time slices or at the annual level only. Prior to NEMO 2.4, the production, consumption, and trade of all fuels was simulated in time slices. Designating fuels as non time-sliced can significantly improve the performance of complex models because it simplifies the underlying optimization problem. In many models, using non time-sliced fuels doesn't materially change the optimization results. The new `FUEL.timesliced` column has a default value of `1`, so NEMO's original behavior of simulating fuels in time slices has been retained.

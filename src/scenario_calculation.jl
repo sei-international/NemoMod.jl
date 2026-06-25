@@ -8,6 +8,29 @@
 =#
 
 """
+    CapturedConstraintGroup{N}
+
+A group of built constraints whose `ConstraintRef`s are retained when the constraints are added
+to a JuMP model. Used for energy balance constraints whose duals are needed to calculate fuel
+price outputs. `N` is the number of index values that identify each constraint.
+
+# Fields
+- `constraints::Array{AbstractConstraint,1}`: Built constraints (built with `JuMP.@build_constraint`).
+- `keys::Vector{NTuple{N,String}}`: Index values identifying each constraint in `constraints`
+    (in the same order as `constraints`).
+- `target::Dict{NTuple{N,String}, ConstraintRef}`: Dictionary in which `ConstraintRef`s are saved when
+    `constraints` are added to a model.
+"""
+struct CapturedConstraintGroup{N}
+    constraints::Array{AbstractConstraint,1}
+    keys::Vector{NTuple{N,String}}
+    target::Dict{NTuple{N,String}, ConstraintRef}
+end
+
+# Type of elements queued in the channel used to add constraints to a model in modelscenario().
+const ConstraintQueueElement = Union{Array{AbstractConstraint,1}, CapturedConstraintGroup{3}, CapturedConstraintGroup{4}}
+
+"""
     calculatescenario(
         dbpath::String;
         jumpmodel::JuMP.Model = Model(Cbc.Optimizer),
@@ -1211,10 +1234,18 @@ end
 # BEGIN: Define model constraints.
 
 # Variables used in constraint construction
-local cons_channel::Channel{Array{AbstractConstraint,1}} = Channel{Array{AbstractConstraint,1}}(Threads.nthreads() * 2)  # A channel used as a queue for built constraints that must be added to the model
+local cons_channel::Channel{ConstraintQueueElement} = Channel{ConstraintQueueElement}(Threads.nthreads() * 2)  # A channel used as a queue for built constraints that must be added to the model
 local numconsarrays::Int64 = 0  # Number of Array{AbstractConstraint,1} of built constraints that must be added to the model
 local numaddedconsarrays::Int64 = 0  # Number of Array{AbstractConstraint,1} of built constraints that have been added to the model
 local finishedqueuingcons::Bool = false  # Indicates whether all constraints have been queued for building (but not necessarily built or added to the model)
+
+# Variables used in fuel price calculations. References to energy balance constraints are captured when
+#   constraints are added to the model; the constraints' duals are the basis for fuel price outputs.
+local fuelpricesneeded::Bool = writefilename == "" && !isempty(intersect(varstosavearr, ["vfuelprice", "vfuelpricenodal", "vfuelpriceannual", "vfuelpricenodalannual"]))  # Indicates whether fuel price outputs will be calculated for scenario
+local eba11_refs::Dict{NTuple{4,String}, ConstraintRef} = Dict{NTuple{4,String}, ConstraintRef}()  # References to EBa11_EnergyBalanceEachTS5 constraints, keyed by (r,l,f,y); populated if fuelpricesneeded
+local eba11tr_refs::Dict{NTuple{4,String}, ConstraintRef} = Dict{NTuple{4,String}, ConstraintRef}()  # References to EBa11Tr_EnergyBalanceEachTS5 constraints, keyed by (n,l,f,y); populated if fuelpricesneeded
+local ebb5_refs::Dict{NTuple{3,String}, ConstraintRef} = Dict{NTuple{3,String}, ConstraintRef}()  # References to EBb5_EnergyBalanceEachYear constraints, keyed by (r,f,y); populated if fuelpricesneeded
+local ebb5tr_refs::Dict{NTuple{3,String}, ConstraintRef} = Dict{NTuple{3,String}, ConstraintRef}()  # References to EBb5Tr_EnergyBalanceEachYear constraints, keyed by (n,f,y); populated if fuelpricesneeded
 
 # BEGIN: Schedule task to add constraints to model asynchronously.
 addconstask::Task = @task begin
@@ -1222,8 +1253,19 @@ addconstask::Task = @task begin
         if isready(cons_channel)
             local a = take!(cons_channel)
             #@info "Performed take for numconsarrays = " * string(numconsarrays)
-            JuMP.add_constraint.(jumpmodel, a)
+
+            if a isa CapturedConstraintGroup
+                # Retain references to added constraints for use in fuel price calculations
+                local refs = JuMP.add_constraint.(jumpmodel, a.constraints)
+
+                for i in eachindex(a.keys)
+                    a.target[a.keys[i]] = refs[i]
+                end
+            else
+                JuMP.add_constraint.(jumpmodel, a)
+            end
             #@info "Created constraints for numconsarrays = " * string(numconsarrays)
+
             numaddedconsarrays += 1
             #@info "In while loop. numaddedconsarrays = " * string(numaddedconsarrays)
         else
@@ -2473,6 +2515,7 @@ end
 
 # BEGIN: EBa11_EnergyBalanceEachTS5.
 eba11_energybalanceeachts5::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+eba11_keys::Vector{NTuple{4,String}} = Vector{NTuple{4,String}}()  # Index values for constraints in eba11_energybalanceeachts5; maintained if fuelpricesneeded
 t = Threads.@spawn(let
     local lastkeys = Array{String, 1}(undef,4)  # lastkeys[1] = r, lastkeys[2] = l, lastkeys[3] = f, lastkeys[4] = y
     local sumexps = Array{AffExpr, 1}([AffExpr()]) # sumexps[1] = vtrade sum
@@ -2496,6 +2539,7 @@ t = Threads.@spawn(let
             # Note that this selection of vusenn excludes use of nodal fuels by non-nodal technologies
             push!(eba11_energybalanceeachts5, @build_constraint(vproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
                 vdemandnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]))
+            fuelpricesneeded && push!(eba11_keys, (lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4]))
             sumexps[1] = AffExpr()
         end
 
@@ -2519,9 +2563,10 @@ t = Threads.@spawn(let
     if isassigned(lastkeys, 1)
         push!(eba11_energybalanceeachts5, @build_constraint(vproductionnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
             vdemandnn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenn[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]))
+        fuelpricesneeded && push!(eba11_keys, (lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4]))
     end
 
-    put!(cons_channel, eba11_energybalanceeachts5)
+    put!(cons_channel, fuelpricesneeded ? CapturedConstraintGroup(eba11_energybalanceeachts5, eba11_keys, eba11_refs) : eba11_energybalanceeachts5)
 end)
 
 numconsarrays += 1
@@ -2962,6 +3007,7 @@ end
 # BEGIN: EBa11Tr_EnergyBalanceEachTS5 and EBb4_EnergyBalanceEachYear.
 if transmissionmodeling
     eba11tr_energybalanceeachts5::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+    eba11tr_keys::Vector{NTuple{4,String}} = Vector{NTuple{4,String}}()  # Index values for constraints in eba11tr_energybalanceeachts5; maintained if fuelpricesneeded
     ebb4_energybalanceeachyear::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
 
     t = Threads.@spawn(let
@@ -3037,6 +3083,7 @@ if transmissionmodeling
                 push!(eba11tr_energybalanceeachts5, @build_constraint(vproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
                     vdemandnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]
                     + vusenn[lastkeys[5],lastkeys[2],lastkeys[3],lastkeys[4]] * lastvals[1]))
+                fuelpricesneeded && push!(eba11tr_keys, (lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4]))
                 sumexps[1] = AffExpr()
             end
 
@@ -3080,11 +3127,12 @@ if transmissionmodeling
             push!(eba11tr_energybalanceeachts5, @build_constraint(vproductionnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] >=
             vdemandnodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + vusenodal[lastkeys[1],lastkeys[2],lastkeys[3],lastkeys[4]] + sumexps[1]
             + vusenn[lastkeys[5],lastkeys[2],lastkeys[3],lastkeys[4]] * lastvals[1]))
+            fuelpricesneeded && push!(eba11tr_keys, (lastkeys[1], lastkeys[2], lastkeys[3], lastkeys[4]))
 
             push!(ebb4_energybalanceeachyear, @build_constraint(vtransmissionannual[lastkeys[1],lastkeys[3],lastkeys[4]] == sumexps[2]))
         end
 
-        put!(cons_channel, eba11tr_energybalanceeachts5)
+        put!(cons_channel, fuelpricesneeded ? CapturedConstraintGroup(eba11tr_energybalanceeachts5, eba11tr_keys, eba11tr_refs) : eba11tr_energybalanceeachts5)
         put!(cons_channel, ebb4_energybalanceeachyear)
     end)
 
@@ -3340,6 +3388,7 @@ logmsg("Queued constraint EBb3_EnergyBalanceEachYear for creation.", quiet)
 
 # BEGIN: EBb5_EnergyBalanceEachYear.
 ebb5_energybalanceeachyear::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+ebb5_keys::Vector{NTuple{3,String}} = Vector{NTuple{3,String}}()  # Index values for constraints in ebb5_energybalanceeachyear; maintained if fuelpricesneeded
 
 t = Threads.@spawn(let
     local lastkeys = Array{String, 1}(undef,3)  # lastkeys[1] = r, lastkeys[2] = f, lastkeys[3] = y
@@ -3368,7 +3417,8 @@ t = Threads.@spawn(let
             push!(ebb5_energybalanceeachyear, @build_constraint(vproductionannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] >=
                 (lastvalsint[1] == 1 ? vdemandannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] : 0) + vuseannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] 
                 + sumexps[1] + lastvals[1] + lastvals[2]))
-            
+            fuelpricesneeded && push!(ebb5_keys, (lastkeys[1], lastkeys[2], lastkeys[3]))
+
             sumexps[1] = AffExpr()
             lastvals[1] = 0.0
             lastvals[2] = 0.0
@@ -3404,9 +3454,10 @@ t = Threads.@spawn(let
         push!(ebb5_energybalanceeachyear, @build_constraint(vproductionannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] >=
             (lastvalsint[1] == 1 ? vdemandannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] : 0) + vuseannualnn[lastkeys[1],lastkeys[2],lastkeys[3]] 
             + sumexps[1] + lastvals[1] + lastvals[2]))
+        fuelpricesneeded && push!(ebb5_keys, (lastkeys[1], lastkeys[2], lastkeys[3]))
     end
 
-    put!(cons_channel, ebb5_energybalanceeachyear)
+    put!(cons_channel, fuelpricesneeded ? CapturedConstraintGroup(ebb5_energybalanceeachyear, ebb5_keys, ebb5_refs) : ebb5_energybalanceeachyear)
 end)
 
 numconsarrays += 1
@@ -3417,6 +3468,7 @@ logmsg("Queued constraint EBb5_EnergyBalanceEachYear for creation.", quiet)
 # For nodal modeling, where there is no trade, this constraint accounts for AccumulatedAnnualDemand only.
 if transmissionmodeling
     ebb5tr_energybalanceeachyear::Array{AbstractConstraint, 1} = Array{AbstractConstraint, 1}()
+    ebb5tr_keys::Vector{NTuple{3,String}} = Vector{NTuple{3,String}}()  # Index values for constraints in ebb5tr_energybalanceeachyear; maintained if fuelpricesneeded
 
     t = Threads.@spawn(begin
         for row in SQLite.DBInterface.execute(db,
@@ -3435,9 +3487,10 @@ if transmissionmodeling
             push!(ebb5tr_energybalanceeachyear, @build_constraint(vproductionannualnodal[n,f,y] >=
                 vdemandannualnodal[n,f,y] + vuseannualnodal[n,f,y] + vtransmissionannual[n,f,y] 
                 + vuseannualnn[row[:r],f,y] * ndd + row[:aad] * ndd))
+            fuelpricesneeded && push!(ebb5tr_keys, (n, f, y))
         end
 
-        put!(cons_channel, ebb5tr_energybalanceeachyear)
+        put!(cons_channel, fuelpricesneeded ? CapturedConstraintGroup(ebb5tr_energybalanceeachyear, ebb5tr_keys, ebb5tr_refs) : ebb5tr_energybalanceeachyear)
     end)
 
     numconsarrays += 1
@@ -7850,6 +7903,9 @@ else
     # BEGIN: Save results to database.
     if saveresults
         savevarresults_threaded(varstosavearr, modelvarindices, db, solvedtmstr, reportzeros, quiet)
+        
+        fuelpricesneeded && calculatefuelprices(jumpmodel, eba11_refs, eba11tr_refs, ebb5_refs, ebb5tr_refs, modelvarindices, db, varstosavearr, syear, firstscenarioyear,lastscenarioyear, lastmodeledyear, yearintervalsdict, limitedforesight, finalgroupyears, solvedtmstr, reportzeros, quiet)
+
         logmsg("Finished saving results to database.", quiet)
     else
         logmsg("Solver did not find a solution for model. No results will be saved to database.", quiet)

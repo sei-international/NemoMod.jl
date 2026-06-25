@@ -275,7 +275,7 @@ if @isdefined MosekTools
         NemoMod.calculatescenario(dbfile; jumpmodel = Model(Mosek.Optimizer),
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
-                * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
+                * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual, vfuelprice, vfuelpricenodal, vfuelpriceannual, vfuelpricenodalannual",
             quiet = calculatescenario_quiet)
 
         db = SQLite.DB(dbfile)
@@ -304,6 +304,11 @@ if @isdefined MosekTools
             @test isapprox(testqry[8,:val], 178.714986656564; atol=TOL)
             @test isapprox(testqry[9,:val], 170.204749196728; atol=TOL)
             @test isapprox(testqry[10,:val], 162.099761139741; atol=TOL)
+
+            testqry = SQLite.DBInterface.execute(db, "select * from vfuelpriceannual where f = 'gas' order by y") |> DataFrame
+            
+            @test testqry[1,:y] == "2020"
+            @test isapprox(testqry[1,:val], 150.0; atol=TOL)
         end
 
         # Test with non time sliced fuels

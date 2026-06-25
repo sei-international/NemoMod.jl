@@ -31,7 +31,8 @@ include("db_structure.jl")  # Functions for manipulating structure of scenario d
 include("db_queries.jl")  # Functions for querying the scenario database when calculating a scenario
 include("other_functions.jl")  # Core NEMO functions
 include("scenario_calculation.jl")  # Functions for calculating a scenario with NEMO
-include("osemosys_converter.jl")  # Functions for converting OSeMOSYS databases to NemoMod format
+include("prices.jl")  # Functions for calculating fuel prices
+include("osemosys_converter.jl")  # Functions for converting OSeMOSYS databases to NEMO format
 # END: Access other modules and code files.
 
 end  # module NemoMod

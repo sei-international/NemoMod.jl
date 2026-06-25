@@ -12,9 +12,10 @@ NEMO is a high-performance, open-source energy system optimization modeling tool
 - Support for regional models with endogenously simulated trade
 - Modeling of energy storage
 - Nodal network simulations and modeling of power and pipeline flow
+- Fuel pricing
 - Modeling of emissions and emission constraints (including carbon prices and pollutant externalities)
 - Modeling of renewable energy targets
-- Optimization with perfect foresight or limited foresight
+- Optimization with perfect or limited foresight
 - Support for simulating selected years in a modeling period
 - Parallel processing
 - Verified compatibility with multiple solvers: [Cbc](https://github.com/coin-or/Cbc), [CPLEX](https://www.ibm.com/analytics/cplex-optimizer), [GLPK](https://www.gnu.org/software/glpk/), [Gurobi](https://www.gurobi.com/), [HiGHS](https://highs.dev/), [Mosek](https://www.mosek.com/), and [Xpress](https://www.fico.com/en/products/fico-xpress-optimization)
@@ -29,3 +30,5 @@ For more background on NEMO and its raison d'être, see the README at NEMO's [Gi
 # NEMO team
 
 NEMO is a project of the [Energy Modeling Program](https://www.sei.org/centres/us/research-areas/energy-modeling/) at the [Stockholm Environment Institute](https://www.sei.org/) (SEI). Key contributors include [Jason Veysey](https://www.sei.org/people/jason-veysey/), [Charlie Heaps](https://www.sei.org/people/charles-heaps/), and [Iain Morrow](https://github.com/IainDM). The project was started through an SEI Seed & Innovation grant funded by the [Swedish International Development Cooperation Agency](https://www.sida.se/English/) (Sida).
+
+Before his untimely passing, [Taylor Binnington](https://www.sei.org/features/in-memoriam-taylor-binnington/) was also an essential member of the NEMO team. He helped shape NEMO's design and made important contributions to the tool's code and development roadmap.
