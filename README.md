@@ -11,6 +11,7 @@ NEMO is a high performance, open-source energy system optimization modeling tool
 - Support for multiple regions and regional trade
 - Modeling of energy storage
 - Nodal network simulations and modeling of power and pipeline flow
+- Fuel pricing
 - Modeling of emissions and emission constraints (including carbon pricing and pollutant externalities)
 - Modeling of renewable energy targets
 - Support for simulating selected years in a modeling period
