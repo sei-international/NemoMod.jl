@@ -653,13 +653,11 @@ Total emissions during the modeling period (i.e., the period bounded by the firs
 
 ## [Fuel prices](@id fuel_prices)
 
-NEMO prices fuels using the marginal cost of supplying them at a particular place and time. Prices are calculated from the dual values of energy balance constraints and can be reported with the output variables in this section. When intepreting prices from NEMO, you should keep the following points in mind:
+NEMO defines the price of a fuel as the marginal cost of supplying the fuel at a particular place and time. Prices are calculated from the dual values of energy balance constraints and can be reported with the output variables in this section. When intepreting fuel prices from NEMO, you should keep the following points in mind:
 
 * Because prices are based on the dual values of NEMO's energy balance constraints, they capture the total cost of supplying another unit of a fuel - including, as applicable, capital costs, fixed and variable operating costs, emission penalties, and the shadow prices of any binding limits (e.g., [renewable energy minimum production targets](@ref REMinProductionTarget), [annual emission limits](@ref AnnualEmissionLimit)).
 
 * NEMO reports prices in nominal (undiscounted) terms. To convert from dual values (which represent marginal changes in total discounted costs) to nominal amounts, NEMO must reverse the cost discounting in its cost minimization objective. It does this following a convention that the marginal cost changes consist of changes in variable operating costs. When [selected years only are calculated](@ref selected_years), the logic for reversing discounting accounts for how estimated operating costs in non-modeled years enter NEMO's objective.
-
-* Prices are not computed for places and times where there is no production of a fuel.
 
 * NEMO allows surplus fuel production but does not impose costs to dispose of surpluses. This means fuel prices cannot be negative (apart from negligible values attributable to solver numerical tolerances). They can, however, be zero, in which case they are only reported if the `reportzeros` argument for [`calculatescenario`](@ref) is `true`.
 
@@ -667,25 +665,43 @@ NEMO prices fuels using the marginal cost of supplying them at a particular plac
 
 * If you request prices for a scenario that generates a mixed-integer optimization problem (see the note under [Solver compatibility](@ref solver_compatibility) for more information), dual values for the energy balance constraints will not be available. In this case, NEMO solves the mixed-integer problem, saves all requested output variables except the price variables, fixes integer and binary decision variables at their optimal values, and re-solves the model as a regular linear programming problem. Duals from the re-solve are used to compute prices, and the model is restored to its mixed-integer state before `calculatescenario` returns.
 
-### [Annual fuel price](@id vfuelpriceannual)
+* The prices that NEMO calculates may differ from real-world prices for various reasons, such as regulatory processes and the market power of producers.
 
-Average nominal (undiscounted) price of a [fuel](@ref fuel) in a [region](@ref region) and [year](@ref year). NEMO bases fuel prices on the marginal cost of supplying fuels (see the discussion above). This variable is available for all fuels. If a fuel is time-sliced, its annual fuel price is the production-weighted average of its time-sliced prices in the region. Unit: scenario's cost [unit](@ref uoms) / region's energy unit.
+### [Annual fuel price paid](@id vfuelpriceannualpaid)
 
-#### Julia code
-
-* Variable in JuMP model: `vfuelpriceannual[r,f,y]`
-
-### [Annual nodal fuel price](@id vfuelpricenodalannual)
-
-Average nominal (undiscounted) price of a [fuel](@ref fuel) at a [node](@ref node) in a [year](@ref year). NEMO bases fuel prices on the marginal cost of supplying fuels (see the discussion above). This variable is available for fuels for which [transmission modeling is enabled](@ref TransmissionModelingEnabled). It is a production-weighted average of a fuel's time-sliced prices at a node. Unit: scenario's cost [unit](@ref uoms) / energy unit of [region](@ref region) containing node.
+Average nominal (undiscounted) price of a [fuel](@ref fuel) paid by consumers in a [region](@ref region) and [year](@ref year). NEMO bases fuel prices on the marginal cost of supplying fuels (see the discussion above). This variable is available for all fuels. If a fuel is time-sliced, its annual fuel price paid is the consumption (demand + use)-weighted average of its time-sliced prices in a region. The variable is not computed in cases where there is no consumption of a fuel. Unit: scenario's cost [unit](@ref uoms) / region's energy unit.
 
 #### Julia code
 
-* Variable in JuMP model: `vfuelpricenodalannual[n,f,y]`
+* Variable in JuMP model: `vfuelpriceannualpaid[r,f,y]`
+
+### [Annual fuel price received](@id vfuelpriceannualreceived)
+
+Average nominal (undiscounted) price of a [fuel](@ref fuel) received by producers of the fuel in a [region](@ref region) and [year](@ref year). NEMO bases fuel prices on the marginal cost of supplying fuels (see the discussion above). This variable is available for all fuels. If a fuel is time-sliced, its annual fuel price received is the production-weighted average of its time-sliced prices in a region. The variable is not computed in cases where there is no production of a fuel. Unit: scenario's cost [unit](@ref uoms) / region's energy unit.
+
+#### Julia code
+
+* Variable in JuMP model: `vfuelpriceannualreceived[r,f,y]`
+
+### [Annual nodal fuel price paid](@id vfuelpricenodalannualpaid)
+
+Average nominal (undiscounted) price of a [fuel](@ref fuel) paid by consumers at a [node](@ref node) in a [year](@ref year). NEMO bases fuel prices on the marginal cost of supplying fuels (see the discussion above). This variable is available for fuels for which [transmission modeling is enabled](@ref TransmissionModelingEnabled). It is a consumption (demand + use)-weighted average of a fuel's time-sliced prices at a node. It is not computed in cases where there is no consumption of a fuel. Unit: scenario's cost [unit](@ref uoms) / energy unit of [region](@ref region) containing node.
+
+#### Julia code
+
+* Variable in JuMP model: `vfuelpricenodalannualpaid[n,f,y]`
+
+### [Annual nodal fuel price received](@id vfuelpricenodalannualreceived)
+
+Average nominal (undiscounted) price of a [fuel](@ref fuel) received by producers of the fuel at a [node](@ref node) in a [year](@ref year). NEMO bases fuel prices on the marginal cost of supplying fuels (see the discussion above). This variable is available for fuels for which [transmission modeling is enabled](@ref TransmissionModelingEnabled). It is a production-weighted average of a fuel's time-sliced prices at a node. It is not computed in cases where there is no production of a fuel. Unit: scenario's cost [unit](@ref uoms) / energy unit of [region](@ref region) containing node.
+
+#### Julia code
+
+* Variable in JuMP model: `vfuelpricenodalannualreceived[n,f,y]`
 
 ### [Fuel price](@id vfuelprice)
 
-Nominal (undiscounted) price of a [fuel](@ref fuel) in a [region](@ref region), [time slice](@ref timeslice), and [year](@ref year). NEMO bases fuel prices on the marginal cost of supplying fuels (see the discussion above). This variable is available for time-sliced fuels for which [transmission modeling is not enabled](@ref TransmissionModelingEnabled). Unit: scenario's cost [unit](@ref uoms) / region's energy unit.
+Nominal (undiscounted) price of a [fuel](@ref fuel) in a [region](@ref region), [time slice](@ref timeslice), and [year](@ref year). NEMO bases fuel prices on the marginal cost of supplying fuels (see the discussion above). This variable is available for time-sliced fuels for which [transmission modeling is not enabled](@ref TransmissionModelingEnabled). It is not computed in cases where there is no production or consumption (demand + use) of a fuel. Unit: scenario's cost [unit](@ref uoms) / region's energy unit.
 
 #### Julia code
 
@@ -693,7 +709,7 @@ Nominal (undiscounted) price of a [fuel](@ref fuel) in a [region](@ref region), 
 
 ### [Nodal fuel price](@id vfuelpricenodal)
 
-Nominal (undiscounted) price of a [fuel](@ref fuel) at a [node](@ref node) in a [time slice](@ref timeslice) and [year](@ref year). NEMO bases fuel prices on the marginal cost of supplying fuels (see the discussion above). This variable is available for fuels for which [transmission modeling is enabled](@ref TransmissionModelingEnabled). Unit: scenario's cost [unit](@ref uoms) / energy unit of [region](@ref region) containing node.
+Nominal (undiscounted) price of a [fuel](@ref fuel) at a [node](@ref node) in a [time slice](@ref timeslice) and [year](@ref year). NEMO bases fuel prices on the marginal cost of supplying fuels (see the discussion above). This variable is available for fuels for which [transmission modeling is enabled](@ref TransmissionModelingEnabled). It is not computed in cases where there is no production or consumption (demand + use) of a fuel. Unit: scenario's cost [unit](@ref uoms) / energy unit of [region](@ref region) containing node.
 
 #### Julia code
 

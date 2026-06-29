@@ -274,7 +274,7 @@ if @isdefined CPLEX
         NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())),
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
-                * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual, vfuelprice, vfuelpricenodal, vfuelpriceannual, vfuelpricenodalannual",
+                * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual, vfuelprice, vfuelpricenodal, vfuelpriceannualreceived, vfuelpriceannualpaid, vfuelpricenodalannualreceived, vfuelpricenodalannualpaid",
             quiet = calculatescenario_quiet)
 
         db = SQLite.DB(dbfile)
@@ -304,7 +304,7 @@ if @isdefined CPLEX
             @test isapprox(testqry[9,:val], 170.204748803116; atol=TOL)
             @test isapprox(testqry[10,:val], 162.099761418328; atol=TOL)
 
-            testqry = SQLite.DBInterface.execute(db, "select * from vfuelpriceannual where f = 'gas' order by y") |> DataFrame
+            testqry = SQLite.DBInterface.execute(db, "select * from vfuelpriceannualreceived where f = 'gas' order by y") |> DataFrame
             
             @test testqry[1,:y] == "2020"
             @test isapprox(testqry[1,:val], 150.0; atol=TOL)
@@ -502,8 +502,7 @@ if @isdefined CPLEX
             
             NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(CPLEX.Optimizer) : direct_model(CPLEX.Optimizer())),
                 varstosave =
-                    "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
-                    * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
+                    "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual",
                 continuoustransmission=true, quiet = calculatescenario_quiet)
 
             if !compilation

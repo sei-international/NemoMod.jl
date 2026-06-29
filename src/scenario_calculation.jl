@@ -1241,7 +1241,7 @@ local finishedqueuingcons::Bool = false  # Indicates whether all constraints hav
 
 # Variables used in fuel price calculations. References to energy balance constraints are captured when
 #   constraints are added to the model; the constraints' duals are the basis for fuel price outputs.
-local fuelpricesneeded::Bool = writefilename == "" && !isempty(intersect(varstosavearr, ["vfuelprice", "vfuelpricenodal", "vfuelpriceannual", "vfuelpricenodalannual"]))  # Indicates whether fuel price outputs will be calculated for scenario
+local fuelpricesneeded::Bool = writefilename == "" && !isempty(intersect(varstosavearr, ["vfuelprice", "vfuelpricenodal", "vfuelpriceannualreceived", "vfuelpriceannualpaid", "vfuelpricenodalannualreceived", "vfuelpricenodalannualpaid"]))  # Indicates whether fuel price outputs will be calculated for scenario
 local eba11_refs::Dict{NTuple{4,String}, ConstraintRef} = Dict{NTuple{4,String}, ConstraintRef}()  # References to EBa11_EnergyBalanceEachTS5 constraints, keyed by (r,l,f,y); populated if fuelpricesneeded
 local eba11tr_refs::Dict{NTuple{4,String}, ConstraintRef} = Dict{NTuple{4,String}, ConstraintRef}()  # References to EBa11Tr_EnergyBalanceEachTS5 constraints, keyed by (n,l,f,y); populated if fuelpricesneeded
 local ebb5_refs::Dict{NTuple{3,String}, ConstraintRef} = Dict{NTuple{3,String}, ConstraintRef}()  # References to EBb5_EnergyBalanceEachYear constraints, keyed by (r,f,y); populated if fuelpricesneeded

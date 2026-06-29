@@ -268,13 +268,13 @@ if @isdefined Gurobi
         dbfile = joinpath(dbfile_path, "storage_transmission_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
-        # Test with default outputs
+        # Test with default outputs and fuel prices
         testnumber += 1
         @info "Running Gurobi test $(testnumber) on storage_transmission_test.sqlite: default outputs."
         NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(optimizer_with_attributes(Gurobi.Optimizer, "NumericFocus" => 2)) : direct_model(optimizer_with_attributes(Gurobi.Optimizer, "NumericFocus" => 2))),
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
-                * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual, vfuelprice, vfuelpricenodal, vfuelpriceannual, vfuelpricenodalannual",
+                * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual, vfuelprice, vfuelpricenodal, vfuelpriceannualreceived, vfuelpriceannualpaid, vfuelpricenodalannualreceived, vfuelpricenodalannualpaid",
             quiet = calculatescenario_quiet)
 
         db = SQLite.DB(dbfile)
@@ -304,7 +304,7 @@ if @isdefined Gurobi
             @test isapprox(testqry[9,:val], 170.204749196728; atol=TOL)
             @test isapprox(testqry[10,:val], 162.099761139741; atol=TOL)
 
-            testqry = SQLite.DBInterface.execute(db, "select * from vfuelpriceannual where f = 'gas' order by y") |> DataFrame
+            testqry = SQLite.DBInterface.execute(db, "select * from vfuelpriceannualreceived where f = 'gas' order by y") |> DataFrame
             
             @test testqry[1,:y] == "2020"
             @test isapprox(testqry[1,:val], 150.0; atol=TOL)

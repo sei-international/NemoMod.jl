@@ -5,13 +5,21 @@ CurrentModule = NemoMod
 
 This page highlights key changes in NEMO since its initial public release. For a full history of NEMO releases, including the code for each version, see the [Releases page on NEMO's GitHub site](https://github.com/sei-international/NemoMod.jl/releases).
 
+## Version 2.6
+
+  * **Enhanced annual fuel price variables:** To improve clarity, replaced the `vfuelpricenodalannual` and `vfuelpriceannual` variables with four variables that differentiate between prices received by producers and prices paid by consumers:
+    * [`vfuelpricenodalannualreceived`](@ref vfuelpricenodalannualreceived) - the average price of a [fuel](@ref fuel) received by producers of the fuel at a transmission network [node](@ref node) in a [year](@ref year). Available for fuels that are involved in transmission modeling. NEMO averages over the time slices in the year, weighting each slice's price by its production.
+    * [`vfuelpricenodalannualpaid`](@ref vfuelpricenodalannualpaid) - the average price of a fuel paid by consumers at a transmission network node in a year. Available for fuels that are involved in transmission modeling. NEMO averages over the time slices in the year, weighting each slice's price by its consumption (including demand by final consumers and use for producing other fuels).
+    * [`vfuelpriceannualreceived`](@ref vfuelpriceannualreceived) - the average price of a fuel received by producers of the fuel in a [region](@ref region) and year. Available for all fuels. For time-sliced fuels, NEMO averages over the time slices in the year, weighting each slice's price by its production. For fuels involved in transmission modeling, the averaging operation covers prices and production at all transmission network [nodes](@ref node) in the region.
+    * [`vfuelpriceannualpaid`](@ref vfuelpriceannualpaid) - the average price of a fuel paid by consumers in a region and year. Available for all fuels. For time-sliced fuels, NEMO averages over the time slices in the year, weighting each slice's price by its consumption (including demand by final consumers and use for producing other fuels). For fuels involved in transmission modeling, the averaging operation covers prices and consumption at all transmission network nodes in the region.
+
 ## Version 2.5
 
   * **Fuel prices:** Added functionality to calculate [fuel](@ref fuel) prices based on the marginal cost of supplying fuels. Prices are computed from the dual values of NEMO's energy balance constraints and can be reported in four new variables:
     * [`vfuelprice`](@ref vfuelprice) - the price of a fuel in a [region](@ref region), [time slice](@ref timeslice), and [year](@ref year). Available for time-sliced fuels that are not involved in transmission modeling.
     * [`vfuelpricenodal`](@ref vfuelpricenodal) - the price of a fuel at a transmission network [node](@ref node) in a time slice and year. Available for fuels that are involved in transmission modeling.
-    * [`vfuelpricenodalannual`](@ref vfuelpricenodalannual) - the average price of a fuel at a transmission network node in a year. Available for fuels that are involved in transmission modeling. NEMO averages over the time slices in the year, weighting each slice's price by its production.
-    * [`vfuelpriceannual`](@ref vfuelpriceannual) - the average price of a fuel in a region and year. Available for all fuels. For time-sliced fuels, NEMO averages over the time slices in the year, weighting each slice's price by its production. For fuels involved in transmission modeling, the averaging operation covers prices and production at all transmission network nodes in the region.
+    * `vfuelpricenodalannual` - the average price of a fuel at a transmission network node in a year. Available for fuels that are involved in transmission modeling. NEMO averages over the time slices in the year, weighting each slice's price by its production.
+    * `vfuelpriceannual` - the average price of a fuel in a region and year. Available for all fuels. For time-sliced fuels, NEMO averages over the time slices in the year, weighting each slice's price by its production. For fuels involved in transmission modeling, the averaging operation covers prices and production at all transmission network nodes in the region.
     To obtain fuel prices, simply request one or more of these variables when calculating a scenario (in the `varstosave` argument for [`calculatescenario`](@ref)). For more information, including details on the price calculation methodology, see [Fuel prices](@ref fuel_prices).
 
 !!! note

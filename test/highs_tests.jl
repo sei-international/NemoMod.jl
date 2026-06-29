@@ -232,14 +232,14 @@ if @isdefined HiGHS
         dbfile = joinpath(dbfile_path, "storage_transmission_test.sqlite")
         chmod(dbfile, 0o777)  # Make dbfile read-write. Necessary because after Julia 1.0, Pkg.add makes all package files read-only
 
-        # Test with default outputs
+        # Test with default outputs and fuel prices
         testnumber += 1
         # Disable JuMP bridging as it has an outsized performance penalty for HiGHS
         @info "Running HiGHS test $(testnumber) on storage_transmission_test.sqlite: default outputs."
         NemoMod.calculatescenario(dbfile; jumpmodel = (reg_jumpmode ? Model(HiGHS.Optimizer, add_bridges=false) : direct_model(HiGHS.Optimizer())),
             varstosave =
                 "vdemandnn, vnewcapacity, vtotalcapacityannual, vproductionbytechnologyannual, vproductionnn, vusebytechnologyannual, vusenn, vtotaldiscountedcost, "
-                * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual, vfuelprice, vfuelpricenodal, vfuelpriceannual, vfuelpricenodalannual", quiet = calculatescenario_quiet)
+                * "vtransmissionbuilt, vtransmissionexists, vtransmissionbyline, vtransmissionannual, vfuelprice, vfuelpricenodal, vfuelpriceannualreceived, vfuelpriceannualpaid, vfuelpricenodalannualreceived, vfuelpricenodalannualpaid", quiet = calculatescenario_quiet)
 
         db = SQLite.DB(dbfile)
 
@@ -268,7 +268,7 @@ if @isdefined HiGHS
             @test isapprox(testqry[9,:val], 170.204748803116; atol=TOL)
             @test isapprox(testqry[10,:val], 162.099761418328; atol=TOL)
 
-            testqry = SQLite.DBInterface.execute(db, "select * from vfuelpriceannual where f = 'gas' order by y") |> DataFrame
+            testqry = SQLite.DBInterface.execute(db, "select * from vfuelpriceannualreceived where f = 'gas' order by y") |> DataFrame
 
             @test testqry[1,:y] == "2020"
             @test isapprox(testqry[1,:val], 150.0; atol=TOL)

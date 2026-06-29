@@ -123,25 +123,28 @@ function activitycostundiscountmultiplier(dr::Float64, y::String, syear::Vector{
 end  # activitycostundiscountmultiplier(...)
 
 """
-    prodweightedprice(slicekeys::Vector{NTuple{4,String}}, prices::Dict{NTuple{4,String},Float64},
-        prodvar) -> Float64
+    weightedprice(slicekeys::Vector{NTuple{4,String}}, prices::Dict{NTuple{4,String},Float64}, weight)
 
-Returns the production-weighted average of the prices in `prices` for the keys in `slicekeys`,
-using `value(prodvar[k...])` as the weight for each key `k`. `prodvar` is a JuMP variable
-container indexed identically to the keys (e.g. `vproductionnn` or `vproductionnodal`).
+Returns the weighted average of the prices in `prices` over the keys in `slicekeys`, using
+`weight(k)` as the weight for each key `k`. Returns `nothing` when the total weight is zero,
+signaling that there is no transaction of the relevant kind (e.g., no production for a
+production-weighted average, or no consumption for a consumption-weighted average) and hence no
+result to report. `weight` is a function mapping a key to a `Float64` (e.g. production or demand
+plus use).
 """
-function prodweightedprice(slicekeys::Vector{NTuple{4,String}}, prices::Dict{NTuple{4,String},Float64}, prodvar)
-    local wsum::Float64 = 0.0   # Sum of production weights
+function weightedprice(slicekeys::Vector{NTuple{4,String}}, prices::Dict{NTuple{4,String},Float64}, weight)
+    local wsum::Float64 = 0.0   # Sum of weights
     local pwsum::Float64 = 0.0  # Sum of price * weight
 
     for k in slicekeys
-        local w::Float64 = value(prodvar[k[1], k[2], k[3], k[4]])
+        local w::Float64 = weight(k)
         pwsum += prices[k] * w
         wsum += w
+        # @info "weightedprice: k = $k, price = $(prices[k]), weight = $w, pwsum = $pwsum, wsum = $wsum"
     end
 
-    return pwsum / wsum
-end  # prodweightedprice(...)
+    return wsum > 0.0 ? pwsum / wsum : nothing
+end  # weightedprice(...)
 
 """
     savefuelpricetable(db::SQLite.DB, tablename::String, indexcols::Vector{String},
@@ -173,37 +176,29 @@ end  # savefuelpricetable(...)
 
 """
     calculatefuelprices(jumpmodel::JuMP.Model,
-        eba11_refs::Dict{NTuple{4,String}, ConstraintRef},
-        eba11tr_refs::Dict{NTuple{4,String}, ConstraintRef},
-        ebb5_refs::Dict{NTuple{3,String}, ConstraintRef},
-        ebb5tr_refs::Dict{NTuple{3,String}, ConstraintRef},
-        modelvarindices::Dict{String, Tuple{AbstractArray,Array{String,1}}},
-        db::SQLite.DB,
-        varstosavearr::Vector{String},
-        syear::Vector{String},
-        firstscenarioyear::Int,
-        lastscenarioyear::Int,
-        lastmodeledyear::String,
-        yearintervalsdict::Dict{String, Int},
-        limitedforesight::Bool,
-        finalgroupyears::Bool,
-        solvedtmstr::String,
-        reportzeros::Bool = false,
-        quiet::Bool = false)
+        eba11_refs::Dict{NTuple{4,String}, ConstraintRef}, eba11tr_refs::Dict{NTuple{4,String}, ConstraintRef},
+        ebb5_refs::Dict{NTuple{3,String}, ConstraintRef}, ebb5tr_refs::Dict{NTuple{3,String}, ConstraintRef},
+        modelvarindices::Dict{String, Tuple{AbstractArray,Array{String,1}}}, db::SQLite.DB,
+        varstosavearr::Vector{String}, syear::Vector{String}, firstscenarioyear::Int, lastscenarioyear::Int,
+        lastmodeledyear::String, yearintervalsdict::Dict{String, Int}, limitedforesight::Bool,
+        finalgroupyears::Bool, solvedtmstr::String, reportzeros::Bool = false, quiet::Bool = false)
 
 Calculates fuel price outputs for a solved scenario from the duals of its energy balance
-constraints and saves the requested price tables to `db`. Recognized outputs in `varstosavearr`:
-- `vfuelprice` (region, time slice, fuel, year) and `vfuelpricenodal` (node, time slice, fuel,
-  year): the sum of the time slice and annual energy balance duals, converted to nominal currency.
-- `vfuelpriceannual` (region, fuel, year): a production-weighted annual price covering both
-  non-nodal and nodal fuels.
-- `vfuelpricenodalannual` (node, fuel, year): a production-weighted annual price per node.
+constraints and saves the requested price outputs to `db`. Recognized outputs in `varstosavearr`:
+- `vfuelprice` (r,l,f,y) / `vfuelpricenodal` (n,l,f,y): per-time-slice marginal prices — the sum of
+  the time sliced and annual energy balance duals, converted to nominal currency. Reported only for
+  slices with throughput (production, demand, or use); empty slices carry degenerate duals and are omitted.
+- `vfuelpriceannualreceived` (r,f,y) / `vfuelpricenodalannualreceived` (n,f,y): production-weighted
+  annual average of the slice prices — the average price received by producers.
+- `vfuelpriceannualpaid` (r,f,y) / `vfuelpricenodalannualpaid` (n,f,y): consumption-weighted annual
+  average — the average price paid by consumers.
+For the regional (non-nodal) annual tables, nodal fuels are rolled up to the region as a
+production- or consumption-weighted average of their nodal slice prices over the region's nodes.
 
-If `jumpmodel` contains integer or binary variables, they are fixed at their optimal values and
-the model is re-solved as an LP so that meaningful duals are available; the model's integrality
-is restored before the function returns. If the solver does not provide duals (e.g., Cbc), a
-warning is logged and no price tables are saved. `syear` must be the solve's modeled years sorted
-ascending; `lastmodeledyear` is its last element.
+If `jumpmodel` contains integer or binary variables, they are fixed at their optimal values and the
+model is re-solved as an LP so that meaningful duals are available; integrality is restored before
+the function returns. If the solver does not provide duals (e.g., Cbc), a warning is logged and no 
+outputs are saved.
 """
 function calculatefuelprices(jumpmodel::JuMP.Model,
     eba11_refs::Dict{NTuple{4,String}, ConstraintRef},
@@ -227,23 +222,25 @@ function calculatefuelprices(jumpmodel::JuMP.Model,
     # BEGIN: Determine which price outputs are requested.
     local saveslicenn::Bool = in("vfuelprice", varstosavearr)
     local saveslicenodal::Bool = in("vfuelpricenodal", varstosavearr)
-    local saveannualnn::Bool = in("vfuelpriceannual", varstosavearr)
-    local saveannualnodal::Bool = in("vfuelpricenodalannual", varstosavearr)
+    local savereceivednn::Bool = in("vfuelpriceannualreceived", varstosavearr)
+    local savepaidnn::Bool = in("vfuelpriceannualpaid", varstosavearr)
+    local savereceivednodal::Bool = in("vfuelpricenodalannualreceived", varstosavearr)
+    local savepaidnodal::Bool = in("vfuelpricenodalannualpaid", varstosavearr)
 
-    if !(saveslicenn || saveannualnn || saveslicenodal || saveannualnodal)
+    if !(saveslicenn || saveslicenodal || savereceivednn || savepaidnn || savereceivednodal || savepaidnodal)
         return
     end
 
-    local hasnodal::Bool = haskey(modelvarindices, "vproductionnodal")  # Indicates whether the scenario includes nodal (transmission-modeled) fuels
-    local needslicenn::Bool = saveslicenn || saveannualnn  # Non-nodal time slice prices feed both their own table and the annual table
-    local needslicenodal::Bool = (saveslicenodal || saveannualnodal || saveannualnn) && hasnodal  # Nodal time slice prices feed their own table, the nodal annual table, and the regional annual table (for nodal fuels)
+    local hasnodal::Bool = haskey(modelvarindices, "vproductionnodal")  # Scenario includes nodal (transmission-modeled) fuels
+    local needslicenn::Bool = saveslicenn || savereceivednn || savepaidnn  # Non-nodal slice prices feed their table and the regional annual tables
+    local needslicenodal::Bool = (saveslicenodal || savereceivednn || savepaidnn || savereceivednodal || savepaidnodal) && hasnodal  # Nodal slice prices feed their tables, the nodal annual tables, and the regional annual roll-up of nodal fuels
     # END: Determine which price outputs are requested.
 
     # BEGIN: If model is a MIP, fix discrete variables and re-solve as an LP to obtain duals.
-    local undo = nothing  # Function that restores model integrality; nothing if model is already an LP
+    local undo = nothing  # Restores model integrality; nothing if model is already an LP
 
     if any(v -> is_integer(v) || is_binary(v), all_variables(jumpmodel))
-        undo = fix_discrete_variables(jumpmodel)  # Fixes integer/binary variables at current values and relaxes integrality
+        undo = fix_discrete_variables(jumpmodel)
         optimize!(jumpmodel)
         logmsg("Re-solved model as an LP with discrete variables fixed at their optimal values in order to calculate fuel prices.")
     end
@@ -255,11 +252,7 @@ function calculatefuelprices(jumpmodel::JuMP.Model,
             return
         end
 
-        # Production variables used to limit prices to time slices with production
-        local prodnn = modelvarindices["vproductionnn"][1]  # vproductionnn container
-        local prodnodal = hasnodal ? modelvarindices["vproductionnodal"][1] : nothing  # vproductionnodal container (nothing if no nodal modeling)        
-
-        # BEGIN: Build per-region discount rates and node-to-region map for undiscounting.
+        # BEGIN: Build dictionaries for some parameters needed in fuel price calculations.
         local drdict::Dict{String, Float64} = Dict{String, Float64}()  # Maps regions to discount rates
 
         for row in SQLite.DBInterface.execute(db, "select r, cast(val as real) as val from DiscountRate_def")
@@ -273,7 +266,36 @@ function calculatefuelprices(jumpmodel::JuMP.Model,
                 noderegion[row[:val]] = row[:r]
             end
         end
-        # END: Build per-region discount rates and node-to-region map for undiscounting.
+
+        local nddict::Dict{NTuple{3,String}, Float64} = Dict{NTuple{3,String}, Float64}()  # NodalDistributionDemand by (n,f,y)
+
+        if needslicenodal
+            for row in SQLite.DBInterface.execute(db, "select n, f, y, cast(val as real) as val from NodalDistributionDemand_def")
+                nddict[(row[:n], row[:f], row[:y])] = row[:val]
+            end
+        end
+
+        local fueldict::Dict{String, Int} = Dict{String, Int}()  # Maps fuels to fuel.timesliced
+        local saddict::Dict{NTuple{3,String}, Float64} = Dict{NTuple{3,String}, Float64}()  # SpecifiedAnnualDemand by (r,f,y) for non time-sliced fuels
+        
+        if savepaidnn
+            for row in SQLite.DBInterface.execute(db, "select val, timesliced from FUEL")
+                fueldict[row[:val]] = row[:timesliced]
+            end
+
+            for row in SQLite.DBInterface.execute(db, "select sad.r, sad.f, sad.y, cast(sad.val as real) as val from SpecifiedAnnualDemand_def sad, fuel f where sad.f = f.val and f.timesliced = 0 and sad.val <> 0")
+                saddict[(row[:r], row[:f], row[:y])] = row[:val]
+            end
+        end
+
+        local aaddict::Dict{NTuple{3,String}, Float64} = Dict{NTuple{3,String}, Float64}()  # AccumulatedAnnualDemand by (r,f,y)
+        
+        if savepaidnn || savepaidnodal
+            for row in SQLite.DBInterface.execute(db, "select r, f, y, cast(val as real) as val from AccumulatedAnnualDemand_def where val <> 0")
+                aaddict[(row[:r], row[:f], row[:y])] = row[:val]
+            end
+        end
+        # END: Build dictionaries for some parameters needed in fuel price calculations.
 
         # BEGIN: Define function to cache undiscounting multipliers by (region, year).
         local multcache::Dict{NTuple{2,String}, Float64} = Dict{NTuple{2,String}, Float64}()
@@ -286,47 +308,66 @@ function calculatefuelprices(jumpmodel::JuMP.Model,
         end
         # END: Define function to cache undiscounting multipliers by (region, year).
 
-        # Note: Straight duals from JuMP are appropriate for pricing because all four constraints used (eba11, eba11tr, ebb5, ebb5tr) are formulated as (production - consumption) >= 0 (or a constant for exogenous demand). In JuMP, "a feasible dual on a >= constraint is nonnegative" (https://jump.dev/JuMP.jl/stable/manual/constraints/#constraint_duality). The duals thus represent the change in total discounted costs for a unit increase in demand.
+        # BEGIN: Fetch production and consumption variable containers.
+        local prodnn = needslicenn ? modelvarindices["vproductionnn"][1] : nothing
+        local demnn = needslicenn ? modelvarindices["vdemandnn"][1] : nothing
+        local usenn = (needslicenn || needslicenodal) ? modelvarindices["vusenn"][1] : nothing
+        local prodnodal = needslicenodal ? modelvarindices["vproductionnodal"][1] : nothing
+        local demnodal = needslicenodal ? modelvarindices["vdemandnodal"][1] : nothing
+        local usenodal = needslicenodal ? modelvarindices["vusenodal"][1] : nothing
+        local useannualnn = (savepaidnn || savepaidnodal) ? modelvarindices["vuseannualnn"][1] : nothing
+        # END: Fetch production and consumption variable containers.
 
-        # BEGIN: Calculate time slice prices (sum of time slice and annual balance duals, undiscounted).
-        local slicepricesnn::Dict{NTuple{4,String}, Float64} = Dict{NTuple{4,String}, Float64}()  # vfuelprice, keyed by (r,l,f,y)
+        # BEGIN: Define helper function to calculate nodal consumption in a time slice.
+        # Consumption of a nodal fuel at a node in a time slice, including non-nodal-technology use distributed
+        #   to the node via NodalDistributionDemand (the vusenn * ndd term in EBa11Tr_EnergyBalanceEachTS5)
+        local function nodalconsumption(k::NTuple{4,String})  # k = (n,l,f,y)
+            return value(demnodal[k[1], k[2], k[3], k[4]]) + value(usenodal[k[1], k[2], k[3], k[4]]) +
+                value(usenn[noderegion[k[1]], k[2], k[3], k[4]]) * get(nddict, (k[1], k[3], k[4]), 0.0)
+        end
+        # END: Define helper function to calculate nodal consumption in a time slice.
+
+        # BEGIN: Calculate time slice prices (omit slices with no throughput).
+        local slicepricesnn::Dict{NTuple{4,String}, Float64} = Dict{NTuple{4,String}, Float64}()  # Maps (r,l,f,y) to price
 
         if needslicenn
             for (k, con) in eba11_refs  # k = (r,l,f,y)
-                value(prodnn[k[1], k[2], k[3], k[4]]) == 0.0 && continue  # No production => degenerate dual and no price received; omit
-
                 local r = k[1]; local f = k[3]; local y = k[4]
+                
+                (value(prodnn[r,k[2],f,y]) == 0.0 && value(demnn[r,k[2],f,y]) == 0.0
+                    && value(usenn[r,k[2],f,y]) == 0.0) && continue
+                
                 local annualdual::Float64 = haskey(ebb5_refs, (r, f, y)) ? dual(ebb5_refs[(r, f, y)]) : 0.0
                 slicepricesnn[k] = (dual(con) + annualdual) * undiscmult(r, y)
-
-                #= if k[3] == ("gas")  # Example of logging a specific nodal price for debugging
-                    @info "dual(con) = $(dual(con)), annualdual = $annualdual, undiscmult = $(undiscmult(r, y)), slicepricesnn[$k] = $(slicepricesnn[k])"
-                    println(con)
-                end =#
             end
         end
 
-        local slicepricesnodal::Dict{NTuple{4,String}, Float64} = Dict{NTuple{4,String}, Float64}()  # vfuelpricenodal, keyed by (n,l,f,y)
+        local slicepricesnodal::Dict{NTuple{4,String}, Float64} = Dict{NTuple{4,String}, Float64}()  # Maps (n,l,f,y) to price
 
         if needslicenodal
             for (k, con) in eba11tr_refs  # k = (n,l,f,y)
-                value(prodnodal[k[1], k[2], k[3], k[4]]) == 0.0 && continue  # No production => degenerate dual and no price received; omit
-
                 local n = k[1]; local f = k[3]; local y = k[4]
+                
+                (value(prodnodal[n,k[2],f,y]) == 0.0 && nodalconsumption(k) == 0.0) && continue
+                
                 local annualdual::Float64 = haskey(ebb5tr_refs, (n, f, y)) ? dual(ebb5tr_refs[(n, f, y)]) : 0.0
                 slicepricesnodal[k] = (dual(con) + annualdual) * undiscmult(get(noderegion, n, ""), y)
             end
         end
         # END: Calculate time slice prices.
 
-        # BEGIN: Calculate regional annual prices (vfuelpriceannual) for non-nodal and nodal fuels.
-        local annualpricesnn::Dict{NTuple{3,String}, Float64} = Dict{NTuple{3,String}, Float64}()  # keyed by (r,f,y)
+        local receivednn::Dict{NTuple{3,String}, Float64} = Dict{NTuple{3,String}, Float64}()   # vfuelpriceannualreceived - maps (r,f,y) to price
+        local paidnn::Dict{NTuple{3,String}, Float64} = Dict{NTuple{3,String}, Float64}()       # vfuelpriceannualpaid - maps (r,f,y) to price
+        local receivednodal::Dict{NTuple{3,String}, Float64} = Dict{NTuple{3,String}, Float64}() # vfuelpricenodalannualreceived - maps (n,f,y) to price
+        local paidnodal::Dict{NTuple{3,String}, Float64} = Dict{NTuple{3,String}, Float64}()     # vfuelpricenodalannualpaid - maps (n,f,y) to price
 
-        if saveannualnn
+        # BEGIN: Calculate regional annual prices (received and paid), covering non-nodal and nodal fuels.
+        if savereceivednn || savepaidnn
             local prodannualnn = modelvarindices["vproductionannualnn"][1]
+            local demannualnn = modelvarindices["vdemandannualnn"][1]
 
-            # Non-nodal fuels: production-weighted average of non-nodal time slice prices; non-timesliced fuels take the annual dual directly; fuels without any production are omitted
-            local slicegroupsnn::Dict{NTuple{3,String}, Vector{NTuple{4,String}}} = Dict{NTuple{3,String}, Vector{NTuple{4,String}}}()  # Dictionary mapping (r,f,y) to a vector of (r,l,f,y) keys for the time slice prices in that region, fuel, and year
+            # Non-nodal fuels
+            local slicegroupsnn::Dict{NTuple{3,String}, Vector{NTuple{4,String}}} = Dict{NTuple{3,String}, Vector{NTuple{4,String}}}()  # Dictionary mapping (r,f,y) to a vector of (r,l,f,y) keys for the time slice prices for that region, fuel, and year
 
             for k in keys(slicepricesnn)
                 push!(get!(slicegroupsnn, (k[1], k[3], k[4]), Vector{NTuple{4,String}}()), k)
@@ -334,33 +375,56 @@ function calculatefuelprices(jumpmodel::JuMP.Model,
 
             for rfy in union(keys(slicegroupsnn), keys(ebb5_refs))
                 if haskey(slicegroupsnn, rfy)
-                    annualpricesnn[rfy] = prodweightedprice(slicegroupsnn[rfy], slicepricesnn, prodnn)
-                elseif value(prodannualnn[rfy[1], rfy[2], rfy[3]]) != 0.0
-                    annualpricesnn[rfy] = dual(ebb5_refs[rfy]) * undiscmult(rfy[1], rfy[3])
+                    # Time-sliced fuel: weighted average of slice prices
+                    if savereceivednn
+                        local p = weightedprice(slicegroupsnn[rfy], slicepricesnn, k -> value(prodnn[k[1],k[2],k[3],k[4]]))
+                        p !== nothing && (receivednn[rfy] = p)
+                    end
+                    if savepaidnn
+                        local p = weightedprice(slicegroupsnn[rfy], slicepricesnn, k -> value(demnn[k[1],k[2],k[3],k[4]]) + value(usenn[k[1],k[2],k[3],k[4]]))
+                        p !== nothing && (paidnn[rfy] = p)
+                    end
+                else
+                    # Non-time-sliced fuel: single annual dual, included where produced (received) / consumed (paid)
+                    local val = dual(ebb5_refs[rfy]) * undiscmult(rfy[1], rfy[3])
+                    if savereceivednn && value(prodannualnn[rfy[1],rfy[2],rfy[3]]) != 0.0
+                        receivednn[rfy] = val
+                    end
+                    if savepaidnn && ((fueldict[rfy[2]] == 1 ? value(demannualnn[rfy[1],rfy[2],rfy[3]]) : 0.0) + value(useannualnn[rfy[1],rfy[2],rfy[3]]) + get(aaddict, (rfy[1], rfy[2], rfy[3]), 0.0) + get(saddict, (rfy[1], rfy[2], rfy[3]), 0.0)) != 0.0
+                        paidnn[rfy] = val
+                    end
                 end
             end
 
-            # Nodal fuels: production-weighted average of nodal time slice prices over all nodes in the region
+            # Nodal fuels rolled up to their region
             if needslicenodal
-                local nodalgroups::Dict{NTuple{3,String}, Vector{NTuple{4,String}}} = Dict{NTuple{3,String}, Vector{NTuple{4,String}}}()  # Dictionary mapping (r,f,y) to a vector of (n,l,f,y) keys for the nodal time slice prices in that region, fuel, and year
+                local nodalgroups::Dict{NTuple{3,String}, Vector{NTuple{4,String}}} = Dict{NTuple{3,String}, Vector{NTuple{4,String}}}()  # Dictionary mapping (r,f,y) to a vector of (n,l,f,y) keys for the nodal time slice prices for that region, fuel, and year
 
-                for k in keys(slicepricesnodal)  # k = (n,l,f,y); group by (region of n, f, y)
+                for k in keys(slicepricesnodal)
                     push!(get!(nodalgroups, (noderegion[k[1]], k[3], k[4]), Vector{NTuple{4,String}}()), k)
                 end
 
                 for (rfy, ks) in nodalgroups
-                    annualpricesnn[rfy] = prodweightedprice(ks, slicepricesnodal, prodnodal)
+                    if savereceivednn
+                        local p = weightedprice(ks, slicepricesnodal, k -> value(prodnodal[k[1],k[2],k[3],k[4]]))
+                        p !== nothing && (receivednn[rfy] = p)
+                    end
+                    if savepaidnn
+                        local p = weightedprice(ks, slicepricesnodal, nodalconsumption)
+                        p !== nothing && (paidnn[rfy] = p)
+                    end
                 end
             end
         end
-        # END: Calculate regional annual prices.
+        # END: Calculate regional annual prices (received and paid), covering non-nodal and nodal fuels.
 
-        # BEGIN: Calculate nodal annual prices (vfuelpricenodalannual).
-        local annualpricesnodal::Dict{NTuple{3,String}, Float64} = Dict{NTuple{3,String}, Float64}()  # keyed by (n,f,y)
-
-        if saveannualnodal && hasnodal
+        # BEGIN: Calculate nodal annual prices (received and paid), per node.
+        if (savereceivednodal || savepaidnodal) && hasnodal
             local prodannualnodal = modelvarindices["vproductionannualnodal"][1]
-            local slicegroupsnodal::Dict{NTuple{3,String}, Vector{NTuple{4,String}}} = Dict{NTuple{3,String}, Vector{NTuple{4,String}}}()  # Dictionary mapping (n,f,y) to a vector of (n,l,f,y) keys for the time slice prices in that node, fuel, and year
+            local demannualnodal = modelvarindices["vdemandannualnodal"][1]
+            local useannualnodal = modelvarindices["vuseannualnodal"][1]
+
+            local slicegroupsnodal::Dict{NTuple{3,String}, Vector{NTuple{4,String}}} = Dict{NTuple{3,String}, Vector{NTuple{4,String}}}()  # Dictionary mapping (n,f,y) to a vector of (n,l,f,y) keys for the time slice prices for that node, fuel, and year
 
             for k in keys(slicepricesnodal)
                 push!(get!(slicegroupsnodal, (k[1], k[3], k[4]), Vector{NTuple{4,String}}()), k)
@@ -368,30 +432,34 @@ function calculatefuelprices(jumpmodel::JuMP.Model,
 
             for nfy in union(keys(slicegroupsnodal), keys(ebb5tr_refs))
                 if haskey(slicegroupsnodal, nfy)
-                    annualpricesnodal[nfy] = prodweightedprice(slicegroupsnodal[nfy], slicepricesnodal, prodnodal)
-                elseif value(prodannualnodal[nfy[1], nfy[2], nfy[3]]) != 0.0
-                    annualpricesnodal[nfy] = dual(ebb5tr_refs[nfy]) * undiscmult(get(noderegion, nfy[1], ""), nfy[3])
+                    if savereceivednodal
+                        local p = weightedprice(slicegroupsnodal[nfy], slicepricesnodal, k -> value(prodnodal[k[1],k[2],k[3],k[4]]))
+                        p !== nothing && (receivednodal[nfy] = p)
+                    end
+                    if savepaidnodal
+                        local p = weightedprice(slicegroupsnodal[nfy], slicepricesnodal, nodalconsumption)
+                        p !== nothing && (paidnodal[nfy] = p)
+                    end
+                else
+                    local val = dual(ebb5tr_refs[nfy]) * undiscmult(get(noderegion, nfy[1], ""), nfy[3])
+                    if savereceivednodal && value(prodannualnodal[nfy[1],nfy[2],nfy[3]]) != 0.0
+                        receivednodal[nfy] = val
+                    end
+                    if savepaidnodal && (value(demannualnodal[nfy[1],nfy[2],nfy[3]]) + value(useannualnodal[nfy[1],nfy[2],nfy[3]]) + value(useannualnn[noderegion[nfy[1]],nfy[2],nfy[3]]) * get(nddict, nfy, 0.0) + get(aaddict, (noderegion[nfy[1]], nfy[2], nfy[3]), 0.0) * get(nddict, nfy, 0.0)) != 0.0
+                        paidnodal[nfy] = val
+                    end
                 end
             end
         end
-        # END: Calculate nodal annual prices.
+        # END: Calculate nodal annual prices (received and paid), per node.
 
         # BEGIN: Save requested price tables.
-        if saveslicenn
-            savefuelpricetable(db, "vfuelprice", ["r", "l", "f", "y"], slicepricesnn, solvedtmstr, reportzeros, quiet)
-        end
-
-        if saveannualnn
-            savefuelpricetable(db, "vfuelpriceannual", ["r", "f", "y"], annualpricesnn, solvedtmstr, reportzeros, quiet)
-        end
-
-        if saveslicenodal
-            savefuelpricetable(db, "vfuelpricenodal", ["n", "l", "f", "y"], slicepricesnodal, solvedtmstr, reportzeros, quiet)
-        end
-
-        if saveannualnodal
-            savefuelpricetable(db, "vfuelpricenodalannual", ["n", "f", "y"], annualpricesnodal, solvedtmstr, reportzeros, quiet)
-        end
+        saveslicenn       && savefuelpricetable(db, "vfuelprice", ["r","l","f","y"], slicepricesnn, solvedtmstr, reportzeros, quiet)
+        saveslicenodal    && savefuelpricetable(db, "vfuelpricenodal", ["n","l","f","y"], slicepricesnodal, solvedtmstr, reportzeros, quiet)
+        savereceivednn    && savefuelpricetable(db, "vfuelpriceannualreceived", ["r","f","y"], receivednn, solvedtmstr, reportzeros, quiet)
+        savepaidnn        && savefuelpricetable(db, "vfuelpriceannualpaid", ["r","f","y"], paidnn, solvedtmstr, reportzeros, quiet)
+        savereceivednodal && savefuelpricetable(db, "vfuelpricenodalannualreceived", ["n","f","y"], receivednodal, solvedtmstr, reportzeros, quiet)
+        savepaidnodal     && savefuelpricetable(db, "vfuelpricenodalannualpaid", ["n","f","y"], paidnodal, solvedtmstr, reportzeros, quiet)
         # END: Save requested price tables.
     finally
         if !isnothing(undo)
